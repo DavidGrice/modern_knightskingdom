@@ -3558,3 +3558,75 @@ all in the `` ` `` debug overlay, so this is tunable rather than guessed at.
 exported and ready, but `Enemies.tsx`'s raider spawning still uses its own
 gate. Migrating it is the next step and must happen before two gating schemes
 settle in — that is the failure this system exists to end.
+
+**O6 · fixed, and it was never a data bug.** Read `ResourceNodes.tsx`,
+`InstancedProps.tsx` and every store path touching `nodes` (`seedNodes`,
+`harvestNode`, `tickRespawns`) end to end — nothing hides or removes a herb
+based on time, season or weather; `respawnAt`/`hitsLeft` only change on
+harvest and respawn. The likelier cause: night ambient drops from 0.75 to
+0.28 (`env.ts`), and a herb renders at 0.35m tall, the shortest and most
+ground-hugging prop in the game — the sort of thing a Night-Vision Brew (a
+real consumable this game already ships) exists to help with. `InstancedProp`
+gained an optional `selfLit` flag — a low always-on emissive (18% of its own
+baked colour) — wired on for herbs only, so they stay findable without
+depending entirely on scene lighting.
+
+Also fixed a real latent hazard found while touching this code:
+`useInstancedSubMeshes` mutated the GLTF loader's *cached* material object in
+place (`material.side = DoubleSide`), which silently leaked into any other
+consumer loading the same GLB. Now clones before mutating.
+
+**O3 · fixed, root cause traced through the actual road math rather than
+guessed.** `SIGNPOST` is at (-16, 36), which puts the road's westward cell
+`[-3,3]` at world (-38.4, 38.4). The verge-tree pass places trunks 4.4-6.0m
+off the carriageway, jittered along it — a band that lands almost exactly on
+Beda's hut at (-34, 44). Neither of `seedNodes`' two scatter passes had ever
+heard of Alric/Beda's corner: it sits outside `BUILD_REGION` and outside every
+`GROUNDS` section, so nothing in either pass's rejection list could reject a
+placement there. Added `STARTER_VILLAGE_CLEAR` to `data/world.ts` (plain
+data, kept out of the `'use client'` `StarterVillage.tsx` component the same
+way `road.ts` keeps its own route data out of the road renderer) and wired a
+shared `inStarterVillage()` check into both scatter passes.
+
+**O4 · fixed — a real rig cause for the floating prop, plus the travel
+behaviour asked for.** `minifiggenericgood00` has a *verified* rig map
+(`part_roles.json`) that includes a molded halberd, classified as a `prop`.
+With `keepProps=true` (the merchant's only setting), that mesh is kept and
+parented to the **body** joint, not the hand — but `rehangArm` then re-hangs
+the arm from its own torso socket (K57's fix), while the prop stays exactly
+where it was baked relative to the torso. The two drift apart: a weapon
+floating away from wherever the hand actually landed. Alric and Beda already
+set `keepProps: false` for the same donor for exactly this reason; the
+merchant now does too.
+
+Also replaces the instant `merchantPresent()` visibility toggle with an
+actual arrival/departure walk via `navSteer`. `PlayerController`'s interact
+check and `Minimap`'s icon both key off the static `MERCHANT_SPOT` constant
+plus `merchantPresent(time)`, unchanged by this — the walk happens entirely
+in a buffer just outside that window, and position is pinned exactly to
+`MERCHANT_SPOT` for the whole time he is actually interactable. The cart is
+parented under the same group as the merchant, so "along with the horses"
+needed no extra code. **Not built:** the walled camp / road extension N78
+originally proposed — that is content authoring, not a bugfix, and stays open.
+
+**O5 · fixed, and the real cost was not where it looked.**
+`preloadCommonAssets()` already warmed every buildable's GLB fetch+parse.
+The actual cost was `useNormalizedProp`'s expensive step (clone, two bbox
+passes, shadow/normal traversal, alpha-mask fix), which lived in a plain
+`useMemo` — and React's `useMemo` only memoizes across re-renders of the
+*same component instance*, not across different mount sites. Placing a
+second copy of a wall already standing elsewhere redid the full
+normalization from scratch, synchronously, on every single placement, not
+just the first. Two existing call sites (`ConstructionSite.tsx`,
+`Wildlife.tsx`) already carried comments asserting this function "shares" /
+"hands out a cached model" — that described the intent, not what the code
+did. A module-level cache, keyed the same way React's own memo key already
+was, makes it true: the first placement of a given `(url, height)` pair pays
+the cost once, every other instance gets a cache hit.
+
+**O8 · fixed.** Supersedes N75. The gold boundary strips in `Grounds.tsx`
+are now a run of the existing fence buildable (`l607900.glb`, the same asset
+the player places), walking each ground's four edges in evenly-spaced
+segments through one shared `InstancedProp` call across every ground — same
+reasoning `ResourceNodes.tsx`'s `TreeGroup` already uses. Open/locked state
+keeps the same legibility the strips had, now as a tint on real wood.
