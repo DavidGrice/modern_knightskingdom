@@ -1,0 +1,29 @@
+{
+  "_doc": [
+    "NPC_AI_SPEC §5.1 / §12 — which intrinsic actions an archetype offers and",
+    "which need profile (needs.json) drives it.",
+    "`intrinsic` is CONTENT, not code: phase 1 stores the list on the agent and",
+    "the debug overlay prints it. The UtilityReasoner (phase 5) is what turns",
+    "these ids into scored candidates, alongside affordance-derived actions."
+  ],
+  "villager": {
+    "label": "Villager",
+    "needProfile": "villager",
+    "intrinsic": ["wander", "socialize", "idle"]
+  },
+  "guard": {
+    "label": "Guard",
+    "needProfile": "guard",
+    "intrinsic": ["engage_threat", "take_cover", "flee", "wander", "idle"]
+  },
+  "companion": {
+    "label": "Companion",
+    "needProfile": "companion",
+    "intrinsic": ["follow_leader", "assist_leader", "engage_threat", "socialize", "idle"]
+  },
+  "ambient": {
+    "label": "Ambient",
+    "needProfile": "villager",
+    "intrinsic": ["wander", "idle"]
+  }
+}

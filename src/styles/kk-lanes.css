@@ -1,0 +1,258 @@
+/* ============================================================
+   LANE THEMES (2026-07-25, from the UI handoff pack)
+
+   Four approved surface treatments over ONE set of metrics — swapping the
+   lane never reflows a panel, it only restyles the surface. The lane is set
+   on <html> by components/ui/UiTheme.tsx from the `uiTheme` setting.
+
+   Everything below re-skins the game's EXISTING classes (.game-panel,
+   .build-menu, .rank-badge, .quest-tracker, the tab bars) rather than asking
+   every component to know which lane it is in. The default (`glass`) is
+   deliberate: the world renders bright saturated green, and an opaque
+   near-black panel reads as a hole punched in it — which is precisely the
+   problem Aero Glass exists to solve.
+   ============================================================ */
+
+/* ---- C · AERO GLASS (core theme) ---- */
+:root[data-kk-lane='glass'] .game-panel,
+:root[data-kk-lane='glass'] .build-menu,
+:root[data-kk-lane='glass'] .rank-badge,
+:root[data-kk-lane='glass'] .quest-tracker {
+  background: linear-gradient(rgba(16, 24, 20, 0.70), rgba(8, 14, 11, 0.82));
+  backdrop-filter: blur(20px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), var(--kk-sh-panel);
+  border-radius: 18px;
+}
+:root[data-kk-lane='glass'] .menu-tabs button.active,
+:root[data-kk-lane='glass'] .station-tabs button.active,
+:root[data-kk-lane='glass'] .build-tabs button.active {
+  background: linear-gradient(rgba(168, 245, 205, 0.30), rgba(110, 231, 168, 0.10));
+  border-color: var(--kk-aero);
+  color: #eafaf0;
+  box-shadow: 0 0 14px rgba(110, 231, 168, 0.30);
+}
+
+/* ---- A · METALHEART FORGE: clipped steel, zero radii, accent hairline ---- */
+:root[data-kk-lane='metal'] .game-panel,
+:root[data-kk-lane='metal'] .build-menu {
+  position: relative;
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  background: linear-gradient(104deg,
+    rgba(30, 33, 43, 0.95), rgba(15, 17, 23, 0.96) 40%,
+    rgba(38, 42, 56, 0.94) 62%, rgba(13, 15, 20, 0.96));
+  border: none;
+}
+:root[data-kk-lane='metal'] .game-panel::after,
+:root[data-kk-lane='metal'] .build-menu::after {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--kk-a-400), transparent);
+  box-shadow: 0 0 10px var(--kk-a-500);
+  pointer-events: none;
+}
+:root[data-kk-lane='metal'] .rank-badge,
+:root[data-kk-lane='metal'] .quest-tracker {
+  border-radius: 0;
+  background: linear-gradient(104deg, #252833, #15171e);
+  border: 1px solid var(--kk-n-800);
+}
+:root[data-kk-lane='metal'] .menu-tabs button.active,
+:root[data-kk-lane='metal'] .station-tabs button.active,
+:root[data-kk-lane='metal'] .build-tabs button.active {
+  background: linear-gradient(104deg, #2a2440, #171426);
+  box-shadow: inset 0 0 0 1px var(--kk-a-400);
+  color: var(--kk-a-400);
+  border-color: transparent;
+}
+
+/* ---- B · MILLENNIUM CHROME: translucent plastic, hard bevel, gloss ---- */
+:root[data-kk-lane='chrome'] .game-panel,
+:root[data-kk-lane='chrome'] .build-menu,
+:root[data-kk-lane='chrome'] .rank-badge,
+:root[data-kk-lane='chrome'] .quest-tracker {
+  border-radius: 18px;
+  background: linear-gradient(rgba(238, 247, 255, 0.94), rgba(186, 212, 232, 0.92));
+  border: 1px solid #4f7191;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2c4256, 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+/* This is the one lane that INVERTS text polarity, and the rest of the UI is
+   built light-on-dark — so patching individual classes here is a losing game
+   (the first pass left every inactive tab label and equipment-slot name
+   invisible: white text on pale blue).
+   Instead, re-point the game's own colour TOKENS inside a chrome surface.
+   Every descendant that reads var(--parchment) / var(--gold) / var(--chrome-2)
+   flips automatically, while hardcoded SEMANTIC colours — affordable green,
+   missing red, done-objective green — are deliberately left alone, because
+   those still need to mean the same thing on a light panel. */
+:root[data-kk-lane='chrome'] .game-panel,
+:root[data-kk-lane='chrome'] .build-menu,
+:root[data-kk-lane='chrome'] .rank-badge,
+:root[data-kk-lane='chrome'] .quest-tracker {
+  --parchment: #12293d;
+  --parchment-dark: #43617c;
+  --gold: #6d5111;
+  --gold-dim: #91a8bb;
+  --chrome-2: #8fa8bd;
+  --chrome-glow: rgba(60, 90, 114, 0.35);
+  --wood: #cfe0ee;
+  --wood-light: #eaf3fb;
+  color: #12293d;
+}
+/* the panel's own inputs/buttons sit on the light surface too */
+:root[data-kk-lane='chrome'] .game-panel input,
+:root[data-kk-lane='chrome'] .build-menu input {
+  background: rgba(255, 255, 255, 0.6);
+  color: #12293d;
+}
+:root[data-kk-lane='chrome'] .menu-tabs button.active,
+:root[data-kk-lane='chrome'] .station-tabs button.active,
+:root[data-kk-lane='chrome'] .build-tabs button.active {
+  background: linear-gradient(#e2fb72, #8fb81c);
+  border: 1px solid #566f00;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.8), 0 3px 0 #435800;
+  color: #243100;
+}
+
+/* ---- D · GUILD LEATHER: tooled hide, saddle stitch, brass ---- */
+:root[data-kk-lane='leather'] .game-panel,
+:root[data-kk-lane='leather'] .build-menu,
+:root[data-kk-lane='leather'] .rank-badge,
+:root[data-kk-lane='leather'] .quest-tracker {
+  position: relative;
+  border-radius: var(--kk-r-lg);
+  background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
+  border: 1px solid #150d06;
+  color: #f0dcb0;
+  box-shadow: inset 0 1px 0 rgba(224, 196, 138, 0.16), var(--kk-sh-panel);
+}
+:root[data-kk-lane='leather'] .game-panel::before {
+  content: '';
+  position: absolute; inset: 7px;
+  border: 1.5px dashed rgba(224, 196, 138, 0.28);
+  border-radius: 11px;
+  pointer-events: none;
+}
+:root[data-kk-lane='leather'] .menu-tabs button.active,
+:root[data-kk-lane='leather'] .station-tabs button.active,
+:root[data-kk-lane='leather'] .build-tabs button.active {
+  background: linear-gradient(#e6cf9c, #b18f4e);
+  color: #2a1c11;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 2px 0 #6f5526;
+  border-color: #6f5526;
+}
+
+/* the token sheet's own perf hatch, driven from the graphics-quality setting:
+   the handoff budgets at most four blurred surfaces on screen at once */
+:root[data-kk-quality='low'] .game-panel,
+:root[data-kk-quality='low'] .build-menu,
+:root[data-kk-quality='low'] .rank-badge,
+:root[data-kk-quality='low'] .quest-tracker { backdrop-filter: none !important; }
+
+/* ---- theme picker (Options) ---- */
+.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+.theme-card {
+  text-align: left; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--chrome-2); background: rgba(0, 0, 0, 0.3);
+  color: var(--parchment); cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.theme-card:hover { border-color: var(--gold); }
+.theme-card.selected { border-color: var(--gold); box-shadow: 0 0 12px var(--chrome-glow); }
+.theme-card .tc-name { font-size: 14px; color: var(--gold); letter-spacing: 0.5px; }
+.theme-card .tc-blurb { font-size: 11.5px; color: var(--parchment-dark); margin-top: 3px; line-height: 1.4; }
+.theme-card .tc-swatch { height: 26px; border-radius: 5px; margin-bottom: 8px; }
+.tc-swatch.glass {
+  background: linear-gradient(rgba(16, 24, 20, 0.7), rgba(8, 14, 11, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.28); border-top-color: rgba(255, 255, 255, 0.5);
+}
+.tc-swatch.metal {
+  background: linear-gradient(104deg, #1e212b, #0f1117 40%, #262a38 62%, #0d0f14);
+  border-top: 1px solid var(--kk-a-400);
+}
+.tc-swatch.chrome {
+  background: linear-gradient(rgba(238, 247, 255, 0.94), rgba(186, 212, 232, 0.92));
+  border: 1px solid #4f7191;
+}
+.tc-swatch.leather {
+  background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
+  border: 1px solid #150d06;
+}
+
+/* ============================================================
+   The HUD clusters (kk-screens.css) all wear `.kk-glass`, which is the
+   Aero Glass recipe hardcoded. The four lanes have to reach it too —
+   that IS the point of the setting — so each one re-skins `.kk-glass`
+   here. Metrics (radii, insets, bar heights) are deliberately left
+   alone so switching lanes never reflows a cluster.
+   ============================================================ */
+
+/* --- A · METALHEART: clipped steel plate, accent hairline --- */
+:root[data-kk-lane='metal'] .kk-glass {
+  background: linear-gradient(104deg,
+    rgba(30, 33, 43, .95), rgba(15, 17, 23, .96) 40%,
+    rgba(38, 42, 56, .94) 62%, rgba(13, 15, 20, .96));
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: inset 0 0 0 1px #3f424d, var(--kk-sh-panel);
+  color: var(--kk-text);
+}
+:root[data-kk-lane='metal'] .kk-vitals,
+:root[data-kk-lane='metal'] .kk-objective,
+:root[data-kk-lane='metal'] .kk-minimap-frame {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+:root[data-kk-lane='metal'] .kk-slot { border-radius: 3px; }
+
+/* --- B · MILLENNIUM CHROME: translucent plastic, hard bevel, gloss --- */
+:root[data-kk-lane='chrome'] .kk-glass {
+  background: linear-gradient(rgba(238, 247, 255, .94), rgba(186, 212, 232, .92));
+  backdrop-filter: none;
+  border: 1px solid #4f7191;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2c4256, 0 18px 44px rgba(0, 0, 0, .45);
+  color: #12293d;
+}
+/* chrome is the one lane that inverts text polarity, so the cluster's own
+   light-on-dark values have to be re-pointed rather than patched one by one */
+:root[data-kk-lane='chrome'] .kk-glass .kk-vitals-name,
+:root[data-kk-lane='chrome'] .kk-glass .kk-objective-title,
+:root[data-kk-lane='chrome'] .kk-glass .kk-prompt-verb { color: #12293d; }
+:root[data-kk-lane='chrome'] .kk-glass .kk-step { color: #3b6183; }
+:root[data-kk-lane='chrome'] .kk-glass .kk-step.active { color: #12293d; }
+:root[data-kk-lane='chrome'] .kk-glass .kk-step .dot { box-shadow: inset 0 0 0 1px rgba(18, 41, 61, .35); }
+:root[data-kk-lane='chrome'] .kk-glass .kk-ledger .chip,
+:root[data-kk-lane='chrome'] .kk-glass .kk-bar-num,
+:root[data-kk-lane='chrome'] .kk-compass-ticks { color: #12293d; text-shadow: none; }
+:root[data-kk-lane='chrome'] .kk-compass-ticks > span.n { color: #12293d; }
+:root[data-kk-lane='chrome'] .kk-clock,
+:root[data-kk-lane='chrome'] .kk-toast { color: #12293d; }
+:root[data-kk-lane='chrome'] .kk-objective-kicker { color: #6d5111; }
+:root[data-kk-lane='chrome'] .kk-vitals-crest,
+:root[data-kk-lane='chrome'] .kk-slot {
+  background: rgba(255, 255, 255, .55);
+  box-shadow: inset 0 0 0 1px #5d7f9c;
+  color: #12293d;
+}
+:root[data-kk-lane='chrome'] .kk-bar { background: rgba(40, 70, 100, .22); box-shadow: inset 0 0 0 1px #5d7f9c; }
+
+/* --- D · GUILD LEATHER: tooled hide, brass, parchment --- */
+:root[data-kk-lane='leather'] .kk-glass {
+  background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
+  backdrop-filter: none;
+  border: 1px solid #150d06;
+  box-shadow: inset 0 1px 0 rgba(224, 196, 138, .16), var(--kk-sh-panel);
+  color: #f0dcb0;
+}
+:root[data-kk-lane='leather'] .kk-vitals-crest,
+:root[data-kk-lane='leather'] .kk-slot {
+  background: linear-gradient(#2a1c11, #180f07);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .85), 0 0 0 1px #4a3520;
+  color: #e0c48a;
+}
+:root[data-kk-lane='leather'] .kk-slot.on { box-shadow: inset 0 3px 6px rgba(0, 0, 0, .85), 0 0 0 2px #e0c48a; }
+:root[data-kk-lane='leather'] .kk-vitals-name,
+:root[data-kk-lane='leather'] .kk-objective-title,
+:root[data-kk-lane='leather'] .kk-prompt-verb { color: #f0dcb0; }

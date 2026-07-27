@@ -1,0 +1,1518 @@
+/* ============================================================
+   Knights' Kingdom — front-door screens + field HUD clusters
+   Ported from the Omelette mockups (`Knights Kingdom UI.dc.html`,
+   turns 3a–3d and 1a–1d) per HANDOFF.md §5.
+
+   Structure only. Every colour comes from kk-tokens.css; the four
+   lane treatments live in kk-lanes.css. Each screen keeps the lane
+   the mockup assigned it (title = Millennium Chrome, menu/options =
+   Metalheart, hero forge = Guild Leather, HUD = whatever the player
+   picked in Options), because those pairings are what was approved.
+   ============================================================ */
+
+/* ---------- shared screen shell ---------- */
+.kk-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  font-family: var(--kk-font);
+  overflow: hidden;
+}
+.kk-screen-scroll { overflow-y: auto; }
+/* every screen paints its own ground; the shell only positions */
+.kk-screen-metal {
+  background: linear-gradient(150deg, #161926, #0c0e15 55%, #1a1e2c);
+}
+.kk-screen-metal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(70% 60% at 22% 16%, rgba(150, 138, 224, .16), transparent 66%);
+}
+.kk-screen-metal::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--kk-a-400), transparent);
+  box-shadow: 0 0 14px var(--kk-a-500);
+}
+.kk-screen-leather { background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509); }
+.kk-screen-leather::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(37deg, rgba(0, 0, 0, .14) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(-51deg, rgba(255, 255, 255, .025) 0 1px, transparent 1px 4px);
+}
+
+/* ---------- 3a · TITLE & SIGN IN ---------- */
+.kk-title-screen {
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 24px;
+  background: #0b0d14;
+}
+.kk-title-sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 70% at 50% 10%, rgba(160, 200, 235, .2), transparent 62%),
+    linear-gradient(rgba(8, 12, 20, .4), rgba(6, 9, 16, .88)),
+    linear-gradient(#1c3348, #0b0d14 70%);
+}
+/* the moulded chrome wordmark plaque */
+.kk-plaque {
+  position: relative;
+  padding: 18px 42px;
+  border-radius: 20px;
+  background: linear-gradient(#f6fbff, #cfe1f0 44%, #9dbcd6 46%, #e4eff9);
+  border: 1px solid #4f7191;
+  box-shadow: inset 0 2px 0 #fff, 0 3px 0 #2c4256, 0 16px 40px rgba(0, 0, 0, .6);
+}
+.kk-plaque::before {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px; top: 5px;
+  height: 38%;
+  border-radius: 14px;
+  background: linear-gradient(rgba(255, 255, 255, .85), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.kk-plaque-word {
+  position: relative;
+  font: 700 40px/1 var(--kk-font-display);
+  letter-spacing: -.03em;
+  color: #12293d;
+  text-shadow: 0 1px 0 #fff;
+  white-space: nowrap;
+}
+.kk-plaque-rule {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 8px;
+}
+.kk-plaque-rule span:first-child,
+.kk-plaque-rule span:last-child { width: 40px; height: 1px; }
+.kk-plaque-rule span:first-child { background: linear-gradient(90deg, transparent, rgba(18, 41, 61, .4)); }
+.kk-plaque-rule span:last-child { background: linear-gradient(90deg, rgba(18, 41, 61, .4), transparent); }
+.kk-plaque-tag {
+  font: 500 11.5px/1 var(--kk-font);
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: #3b6183;
+}
+
+/* the sign-in card (Millennium Chrome) */
+.kk-signin {
+  position: relative;
+  width: 382px;
+  padding: 20px;
+  border-radius: 18px;
+  background: linear-gradient(rgba(238, 247, 255, .94), rgba(186, 212, 232, .92));
+  border: 1px solid #4f7191;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2c4256, 0 18px 44px rgba(0, 0, 0, .55);
+}
+.kk-signin-tabs {
+  display: flex;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1px solid #5d7f9c;
+  margin-bottom: 16px;
+}
+.kk-signin-tabs button {
+  flex: 1;
+  padding: 11px 0;
+  border: 0;
+  cursor: pointer;
+  font: 500 12.5px/1 var(--kk-font);
+  color: #3b6183;
+  background: linear-gradient(rgba(255, 255, 255, .6), rgba(255, 255, 255, .15));
+}
+.kk-signin-tabs button.on {
+  font-weight: 600;
+  color: #12293d;
+  background: linear-gradient(#d9f75e, #a8cc33);
+}
+.kk-field { margin-bottom: 12px; }
+.kk-field-label {
+  font: 600 10px/1 var(--kk-font);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #3b6183;
+  margin-bottom: 6px;
+}
+.kk-field input {
+  display: block;
+  width: 100%;
+  height: 38px;
+  padding: 0 13px;
+  border-radius: 10px;
+  background: linear-gradient(#f9fcff, #e2edf7);
+  border: 1px solid #5d7f9c;
+  box-shadow: inset 0 2px 4px rgba(40, 70, 100, .22);
+  font: 500 13.5px/1 var(--kk-font);
+  color: #12293d;
+  caret-color: #ff8a00;
+}
+.kk-field input:focus-visible { outline: 2px solid #ff8a00; outline-offset: 1px; }
+/* lime = confirm. Exactly one primary per surface (HANDOFF §2). */
+.kk-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(#e2fb72, #8fb81c);
+  border: 1px solid #566f00;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .8), 0 3px 0 #435800;
+  font: 700 14px/1 var(--kk-font);
+  color: #243100;
+  cursor: pointer;
+}
+.kk-primary:disabled { opacity: .45; cursor: not-allowed; }
+.kk-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 38px;
+  margin-top: 9px;
+  border-radius: 11px;
+  background: linear-gradient(rgba(255, 255, 255, .55), rgba(255, 255, 255, .12));
+  border: 1px solid #5d7f9c;
+  font: 500 12.5px/1 var(--kk-font);
+  color: #12293d;
+  cursor: pointer;
+}
+.kk-secondary .dim { color: #5d7f9c; margin-left: 5px; }
+.kk-signin-error {
+  min-height: 16px;
+  margin: 2px 0 9px;
+  font: 500 11.5px/1.3 var(--kk-font);
+  color: #a3260f;
+}
+.kk-version {
+  position: absolute;
+  left: 20px;
+  bottom: 16px;
+  pointer-events: none;
+  font: 400 10.5px/1 var(--kk-font);
+  color: rgba(255, 255, 255, .32);
+}
+
+/* ---------- 3b · MAIN MENU & SAVES (Metalheart) ---------- */
+/* the mockup frames every screen at 860x600; at desktop widths the layout
+   must stay a comfortable measure rather than stretching to 1440+ */
+.kk-screen-metal, .kk-screen-leather { align-items: center; justify-content: center; }
+.kk-menu-body {
+  position: relative;
+  display: flex;
+  width: min(1120px, 100%);
+  height: min(660px, 100%);
+  min-height: 0;
+}
+.kk-menu-rail {
+  flex: none;
+  width: 330px;
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+}
+.kk-menu-word {
+  font: 700 30px/1.05 var(--kk-font-display);
+  letter-spacing: -.03em;
+  color: var(--kk-text);
+  text-shadow: 0 0 22px rgba(181, 171, 252, .4);
+}
+.kk-menu-welcome {
+  margin-top: 11px;
+  font: 600 10.5px/1 var(--kk-font);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--kk-a-500);
+}
+.kk-menu-items { margin-top: 34px; display: flex; flex-direction: column; gap: 8px; }
+/* sheared steel plate — the Metalheart signature */
+.kk-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  background: linear-gradient(104deg, #252833, #15171e);
+  font: 600 12.5px/1 var(--kk-font);
+  color: var(--kk-n-300);
+}
+.kk-menu-item:hover { background: linear-gradient(104deg, #2c3040, #1b1e27); color: var(--kk-n-200); }
+.kk-menu-item svg { color: var(--kk-n-500); flex: none; }
+.kk-menu-item.primary {
+  background: linear-gradient(104deg, #2f2a4a, #1a172c);
+  box-shadow: inset 0 0 0 1px var(--kk-a-400);
+  font: 700 13px/1 var(--kk-font);
+  letter-spacing: .05em;
+  color: var(--kk-text);
+}
+.kk-menu-item.primary svg { color: var(--kk-a-400); }
+.kk-menu-item .kk-menu-key {
+  margin-left: auto;
+  font: 700 9.5px/1 var(--kk-font-num);
+  color: var(--kk-text-faint);
+}
+.kk-menu-item.primary .kk-menu-key { color: var(--kk-a-500); }
+.kk-menu-signout {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 6px 0;
+  font: 500 11.5px/1 var(--kk-font);
+  color: var(--kk-text-faint);
+}
+.kk-menu-signout:hover { color: var(--kk-n-400); }
+
+.kk-menu-saves {
+  flex: 1;
+  padding: 40px 32px 40px 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kk-rule-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.kk-rule-head > span:first-child {
+  font: 700 9.5px/1 var(--kk-font);
+  letter-spacing: .2em;
+  color: var(--kk-n-600);
+}
+.kk-rule-head > .rule { flex: 1; height: 1px; background: linear-gradient(90deg, #43485a, transparent); }
+.kk-save-list { display: flex; flex-direction: column; gap: 10px; }
+.kk-save {
+  display: flex;
+  gap: 13px;
+  padding: 12px;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+  background: linear-gradient(104deg, #252833, #15171e);
+}
+.kk-save.current {
+  background: linear-gradient(104deg, #2f2a4a, #1a172c);
+  box-shadow: inset 0 0 0 1px var(--kk-a-400);
+}
+.kk-save-thumb {
+  flex: none;
+  width: 106px;
+  height: 74px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #0e1017;
+  display: grid;
+  place-items: center;
+  color: var(--kk-n-700);
+}
+.kk-save-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.kk-save-main { flex: 1; min-width: 0; }
+.kk-save-name-row { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.kk-save-name {
+  font: 700 15px/1 var(--kk-font-display);
+  letter-spacing: -.01em;
+  color: var(--kk-text);
+}
+.kk-save-rank {
+  font: 700 9.5px/1 var(--kk-font);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--kk-n-500);
+  padding: 3px 7px;
+  background: var(--kk-n-900);
+}
+.kk-save.current .kk-save-rank { color: var(--kk-a-400); background: var(--kk-a-900); }
+.kk-save-chapter {
+  margin-top: 6px;
+  font: 400 11.5px/1.45 var(--kk-font);
+  color: var(--kk-text-dim);
+}
+.kk-save-stats {
+  display: flex;
+  gap: 13px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  font: 700 10px/1 var(--kk-font-num);
+  color: var(--kk-n-600);
+}
+.kk-save-stats .gold { color: var(--kk-renown); }
+.kk-save-cta {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 17px;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  background: linear-gradient(104deg, #2a2d38, #171a22);
+  box-shadow: inset 0 0 0 1px #43485a;
+  font: 700 11px/1 var(--kk-font);
+  letter-spacing: .11em;
+  color: var(--kk-n-500);
+}
+.kk-save.current .kk-save-cta {
+  background: linear-gradient(104deg, #3a3560, #221f38);
+  box-shadow: inset 0 0 0 1px var(--kk-a-400);
+  color: var(--kk-a-400);
+}
+.kk-save-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  height: 68px;
+  border: 0;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+  background: rgba(37, 40, 51, .4);
+  box-shadow: inset 0 0 0 1px #2b2d3a;
+  font: 600 12px/1 var(--kk-font);
+  letter-spacing: .06em;
+  color: var(--kk-text-faint);
+}
+.kk-save-empty:hover { color: var(--kk-n-500); background: rgba(37, 40, 51, .7); }
+.kk-menu-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  font: 400 11px/1.5 var(--kk-font);
+  color: var(--kk-text-faint);
+}
+
+/* ---------- shared screen chrome (title bar + section labels) ---------- */
+.kk-screen-pad {
+  position: relative;
+  /* basis, not grow: `flex: 1` would zero the basis and stretch the pad to
+     the full viewport, which is exactly what the width cap is here to stop */
+  flex: 0 1 min(1120px, 100%);
+  width: min(1120px, 100%);
+  height: min(760px, 100%);
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 34px;
+  min-height: 0;
+}
+.kk-screen-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.kk-screen-head h2 {
+  margin: 0;
+  font: 700 24px/1 var(--kk-font-display);
+  letter-spacing: -.02em;
+  color: var(--kk-text);
+}
+.kk-screen-leather .kk-screen-head h2 {
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: .06em;
+  color: #f0dcb0;
+}
+.kk-screen-head .rule { flex: 1; height: 1px; background: var(--kk-divider); }
+.kk-screen-head .hint {
+  font: 700 10px/1 var(--kk-font);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--kk-text-faint);
+}
+.kk-screen-leather .kk-screen-head .hint {
+  font: 400 11px/1 var(--kk-font);
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(240, 220, 176, .55);
+}
+.kk-sec-label {
+  font: 700 9.5px/1 var(--kk-font);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--kk-n-600);
+  margin-bottom: 12px;
+}
+.kk-screen-leather .kk-sec-label { color: rgba(240, 220, 176, .6); letter-spacing: .18em; }
+
+/* ---------- 3d · OPTIONS (two columns, sliders read their value) ---------- */
+.kk-opt-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 26px;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+@media (max-width: 900px) { .kk-opt-grid { grid-template-columns: 1fr; } }
+.kk-opt-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.kk-opt-rows { display: flex; flex-direction: column; gap: 13px; }
+.kk-opt-row { display: flex; align-items: center; gap: 12px; min-height: 24px; }
+.kk-opt-row > .name {
+  width: 132px;
+  flex: none;
+  font: 400 12px/1.3 var(--kk-font);
+  color: var(--kk-n-300);
+}
+.kk-opt-row > .name.wide { flex: 1; width: auto; }
+.kk-opt-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  border-radius: 99px;
+  background: var(--kk-n-800);
+  cursor: pointer;
+}
+.kk-opt-row input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--kk-a-400);
+  box-shadow: 0 0 8px var(--kk-a-500);
+  cursor: pointer;
+}
+.kk-opt-row > .readout {
+  width: 44px;
+  flex: none;
+  text-align: right;
+  font: 700 11px/1 var(--kk-font-num);
+  color: var(--kk-a-400);
+}
+/* switch */
+.kk-switch {
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 20px;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 99px;
+  background: var(--kk-n-800);
+}
+.kk-switch::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--kk-n-500);
+  transition: left .13s ease, background .13s ease;
+}
+.kk-switch[aria-checked='true'] { background: var(--kk-a-800); }
+.kk-switch[aria-checked='true']::after { left: 20px; background: var(--kk-a-400); }
+/* segmented control */
+.kk-seg { flex: 1; display: flex; border-radius: 7px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--kk-n-800); }
+.kk-seg button {
+  flex: 1;
+  padding: 8px 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  font: 700 10px/1 var(--kk-font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--kk-n-600);
+}
+.kk-seg button.on { background: var(--kk-a-900); color: var(--kk-a-400); box-shadow: inset 0 0 0 1px var(--kk-a-400); }
+.kk-opt-note {
+  padding: 9px 11px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .04);
+  font: 400 10.5px/1.5 var(--kk-font);
+  color: var(--kk-text-dim);
+}
+/* keybind rows */
+.kk-keys { display: flex; flex-direction: column; gap: 5px; }
+.kk-key-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .03);
+}
+.kk-key-row > span:first-child { flex: 1; font: 400 11.5px/1 var(--kk-font); color: var(--kk-n-300); }
+.kk-cap {
+  font: 700 10px/1 var(--kk-font-num);
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--kk-n-900);
+  color: var(--kk-n-400);
+  box-shadow: inset 0 0 0 1px var(--kk-n-800);
+}
+.kk-cap.listening { background: var(--kk-a-900); color: var(--kk-a-400); box-shadow: inset 0 0 0 1px var(--kk-a-400); }
+.kk-link-btn {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 600 10px/1 var(--kk-font);
+  letter-spacing: .08em;
+  color: var(--kk-n-500);
+}
+.kk-link-btn:hover { color: var(--kk-a-400); }
+
+/* screen footer actions */
+.kk-screen-actions {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 18px;
+  flex: none;
+}
+.kk-btn-wide {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 44px;
+  border: 0;
+  cursor: pointer;
+  font: 600 13px/1 var(--kk-font);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border-radius: 8px;
+  background: linear-gradient(#e6cf9c, #b18f4e);
+  color: #2a1c11;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 #6f5526;
+}
+.kk-btn-wide:disabled { opacity: .45; cursor: not-allowed; }
+.kk-btn-quiet {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  border: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px var(--kk-divider);
+  font: 600 12px/1 var(--kk-font);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--kk-n-300);
+}
+.kk-screen-leather .kk-btn-quiet { color: #f0dcb0; box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .28); }
+
+/* ---------- 3c · FORGE YOUR HERO (Guild Leather) ---------- */
+.kk-forge-body { flex: 1; display: flex; gap: 20px; min-height: 0; }
+.kk-forge-doll {
+  flex: none;
+  width: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.kk-forge-stage {
+  position: relative;
+  /* fixed 3:4 stage: the turntable camera frames a whole minifig at this
+     aspect, and letting it stretch to the column height crops the legs */
+  flex: none;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 10px;
+  background: linear-gradient(#2a1c11, #180f07);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .85), 0 0 0 1px #4a3520;
+}
+.kk-forge-canvas { position: absolute; inset: 0; }
+.kk-forge-stage canvas { display: block; }
+.kk-forge-hint { font: 400 10.5px/1.4 var(--kk-font); color: rgba(240, 220, 176, .5); }
+.kk-forge-form { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; overflow-y: auto; }
+.kk-forge-label {
+  font: 600 10px/1 var(--kk-font);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(240, 220, 176, .62);
+  margin-bottom: 6px;
+}
+.kk-forge-input {
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: linear-gradient(#2a1c11, #180f07);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .85), 0 0 0 1px #4a3520;
+  border: 0;
+  font: 500 13.5px/1 var(--kk-font);
+  letter-spacing: .03em;
+  color: #f0dcb0;
+  caret-color: #e0c48a;
+}
+/* brass two-up toggle (gender, body, pose) */
+.kk-toggle { display: flex; border-radius: 8px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .28); }
+.kk-toggle button {
+  flex: 1;
+  padding: 10px 12px;
+  border: 0;
+  cursor: pointer;
+  background: rgba(0, 0, 0, .25);
+  font: 600 11.5px/1 var(--kk-font);
+  color: rgba(240, 220, 176, .62);
+}
+.kk-toggle button.on {
+  background: linear-gradient(#e6cf9c, #b18f4e);
+  color: #2a1c11;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55);
+}
+/* all eight callings visible at once — a 4x2 grid, never a carousel */
+.kk-callings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+@media (max-width: 900px) { .kk-callings { grid-template-columns: repeat(2, 1fr); } }
+.kk-calling {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 6px;
+  border: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .25);
+  box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .18);
+  color: rgba(240, 220, 176, .72);
+}
+.kk-calling:hover { background: rgba(0, 0, 0, .12); }
+.kk-calling.on {
+  background: linear-gradient(#e6cf9c, #b18f4e);
+  color: #2a1c11;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 #6f5526;
+}
+.kk-calling .nm { font: 600 10.5px/1.2 var(--kk-font); text-align: center; }
+.kk-calling .kit { font: 400 9px/1.2 var(--kk-font); opacity: .72; text-align: center; }
+/* every long text block goes on parchment */
+.kk-parchment {
+  padding: 11px 14px;
+  margin-top: 8px;
+  border-radius: 12px;
+  background: linear-gradient(#efe3c4, #ded0a8 55%, #cfbf95);
+  color: #2e2007;
+  box-shadow: inset 0 0 40px rgba(150, 120, 70, .3), inset 0 2px 6px rgba(90, 70, 40, .32);
+  font: 400 12px/1.55 var(--kk-font);
+}
+.kk-swatch-group { flex: 1 1 300px; min-width: 0; }
+.kk-swatches { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.kk-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .45);
+}
+.kk-swatch.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .45), 0 0 0 2px #e0c48a; }
+.kk-faces { display: flex; gap: 6px; flex-wrap: wrap; }
+.kk-face {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(#2a1c11, #180f07);
+  box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .22);
+}
+.kk-face img { width: 100%; height: 100%; object-fit: contain; }
+.kk-face.on { box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .22), 0 0 0 2px #e0c48a; }
+.kk-face:disabled { cursor: not-allowed; color: rgba(240, 220, 176, .45); }
+.kk-face:disabled svg { display: block; margin: auto; }
+
+/* ============================================================
+   FIELD HUD — nine clusters, each anchored to a viewport edge.
+   Rule (HANDOFF §5.8): while a side panel is open nothing in the
+   HUD may be horizontally centred; every cluster stacks from an
+   edge at var(--kk-hud-inset).
+   ============================================================ */
+
+/* --- vitals, top-left: one vigour bar with a numeric readout --- */
+.kk-vitals {
+  position: absolute;
+  left: var(--kk-hud-inset);
+  top: var(--kk-hud-inset);
+  border-radius: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 18px 11px 11px;
+  overflow: hidden;
+}
+.kk-vitals-crest {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+  color: var(--kk-renown);
+}
+.kk-vitals-main { position: relative; display: flex; flex-direction: column; gap: 7px; width: 240px; }
+.kk-vitals-name-row { display: flex; align-items: baseline; gap: 8px; }
+.kk-vitals-name {
+  font: 500 16px/1 var(--kk-font-display);
+  letter-spacing: -.015em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kk-vitals-lv {
+  flex: none;
+  font: 600 9.5px/1 var(--kk-font);
+  letter-spacing: .1em;
+  padding: 3px 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .12);
+  color: var(--kk-renown);
+}
+/* the vigour bar replaces the row of heart glyphs — a row of 8 hearts
+   cannot show 178/240 and does not scale past 10 (HANDOFF §5.1) */
+.kk-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, .45);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  overflow: hidden;
+}
+.kk-bar > i {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  bottom: 1px;
+  display: block;
+  border-radius: 99px;
+  transition: width .18s ease;
+}
+.kk-bar.vigour > i { background: linear-gradient(90deg, color-mix(in oklch, var(--kk-vigour) 70%, #000), var(--kk-vigour)); }
+.kk-bar.stamina { height: 8px; }
+.kk-bar.stamina > i { background: linear-gradient(90deg, color-mix(in oklch, var(--kk-stamina) 70%, #000), var(--kk-stamina)); }
+.kk-bar.stamina.blocking > i { background: linear-gradient(90deg, #8a5c12, var(--kk-renown)); }
+.kk-bar.xp { height: 8px; }
+.kk-bar.xp > i { background: linear-gradient(90deg, color-mix(in oklch, var(--kk-renown) 65%, #000), var(--kk-renown)); }
+.kk-bar-num {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 700 9px/1 var(--kk-font-num);
+  color: rgba(255, 255, 255, .92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+  pointer-events: none;
+}
+.kk-vitals-sub { display: flex; gap: 7px; }
+.kk-vitals-sub .kk-bar:first-child { flex: 1; }
+.kk-vitals-sub .kk-bar.xp { width: 92px; flex: none; }
+.kk-vitals-flags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font: 500 10.5px/1 var(--kk-font);
+  color: rgba(255, 255, 255, .8);
+}
+.kk-vitals-flags .warn { color: var(--kk-warn); }
+.kk-vitals-flags .ok { color: var(--kk-ok); }
+.kk-vitals-flags .gold { color: var(--kk-renown); }
+
+/* --- compass strip + world clock, top-right --- */
+.kk-topright {
+  position: absolute;
+  right: var(--kk-hud-inset);
+  top: var(--kk-hud-inset);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+.kk-compass {
+  position: relative;
+  width: 250px;
+  height: 32px;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.kk-compass-ticks {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  font: 600 10px/1 var(--kk-font);
+  letter-spacing: .14em;
+  color: rgba(255, 255, 255, .55);
+}
+/* absolutely-positioned children ignore the flex alignment of their
+   container, so the ticks need their own vertical centring */
+.kk-compass-ticks > span { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.kk-compass-ticks > span.n { color: #fff; }
+.kk-compass-bearing {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  transform: translateX(-1px);
+  background: var(--kk-a-400);
+  box-shadow: 0 0 8px var(--kk-a-500);
+}
+.kk-compass-pip {
+  position: absolute;
+  top: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-left: -4.5px;
+  box-shadow: 0 0 8px currentColor;
+  background: currentColor;
+}
+.kk-compass-pip.objective { color: var(--kk-renown); }
+.kk-compass-pip.threat { color: var(--kk-taint); }
+.kk-clock {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border-radius: 99px;
+  font: 500 10px/1 var(--kk-font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .9);
+}
+.kk-clock .pips { display: flex; gap: 4px; }
+.kk-clock .pips span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .22);
+}
+.kk-clock .pips span.on { background: var(--kk-renown); box-shadow: 0 0 6px var(--kk-renown); }
+
+/* --- objective card, right rail under the compass --- */
+.kk-objective {
+  position: absolute;
+  right: var(--kk-hud-inset);
+  top: 100px;
+  width: 262px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.kk-objective-in { position: relative; padding: 13px 16px 15px; }
+.kk-objective-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 9.5px/1 var(--kk-font);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--kk-renown);
+}
+.kk-objective-kicker button {
+  margin-left: auto;
+  border: 0;
+  background: rgba(255, 255, 255, .1);
+  border-radius: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .8);
+  display: grid;
+  place-items: center;
+}
+.kk-objective-title {
+  margin-top: 7px;
+  font: 500 15px/1.25 var(--kk-font-display);
+  letter-spacing: -.012em;
+  color: #fff;
+}
+.kk-objective-steps { margin-top: 11px; display: flex; flex-direction: column; gap: 8px; }
+.kk-step {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font: 400 12px/1.3 var(--kk-font);
+  color: rgba(255, 255, 255, .72);
+}
+.kk-step .dot {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3);
+}
+.kk-step .num { margin-left: auto; font: 600 11px/1 var(--kk-font-num); }
+.kk-step.active { font-weight: 500; color: #fff; }
+.kk-step.active .dot { box-shadow: inset 0 0 0 1px var(--kk-renown); }
+.kk-step.done { color: rgba(255, 255, 255, .45); }
+.kk-step.done .dot { background: var(--kk-ok); color: #06210f; box-shadow: none; }
+
+/* --- reticle + hold-E ring, centre --- */
+.kk-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  pointer-events: none;
+}
+.kk-reticle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #fff;
+}
+.kk-prompt {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 42px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px 9px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+/* one element, no DOM churn per frame — the ring is a conic-gradient
+   whose stop is driven by a CSS custom property */
+.kk-prompt-ring {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--kk-renown) calc(var(--kk-hold, 0) * 360deg), rgba(255, 255, 255, .14) 0);
+}
+.kk-prompt-ring > span {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(12, 18, 14, .92);
+  color: #fff;
+}
+.kk-prompt-verb { font: 500 15px/1.15 var(--kk-font-display); color: #fff; }
+.kk-prompt-key {
+  font: 600 9px/1 var(--kk-font);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .68);
+  margin-bottom: 4px;
+}
+.kk-prompt-key b {
+  display: inline-block;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .16);
+  color: #fff;
+  font-family: var(--kk-font-num);
+  letter-spacing: 0;
+}
+
+/* --- bottom band: ONE flow row, never three independent clusters --- */
+.kk-bottom {
+  position: absolute;
+  left: var(--kk-hud-inset);
+  right: var(--kk-hud-inset);
+  bottom: var(--kk-hud-inset);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px;
+  pointer-events: none;
+}
+.kk-bottom > * { pointer-events: auto; }
+.kk-ledger {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 99px;
+  flex-wrap: wrap;
+}
+.kk-ledger .chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 5px;
+  font: 600 11.5px/1 var(--kk-font-num);
+  color: rgba(255, 255, 255, .92);
+}
+.kk-ledger .chip.gold { color: var(--kk-renown); }
+.kk-hotbar { display: flex; gap: var(--kk-slot-gap); padding: 8px; border-radius: 20px; }
+.kk-slot {
+  position: relative;
+  width: var(--kk-slot);
+  height: var(--kk-slot);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13);
+  color: rgba(255, 255, 255, .92);
+}
+.kk-slot::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 3px;
+  height: 38%;
+  border-radius: 99px;
+  background: linear-gradient(rgba(255, 255, 255, .22), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.kk-slot.on { box-shadow: inset 0 0 0 1px var(--kk-renown), 0 0 14px rgba(232, 193, 65, .35); }
+.kk-slot.empty { opacity: .38; }
+.kk-slot .digit {
+  position: absolute;
+  left: 5px;
+  bottom: 2px;
+  font: 600 9px/1 var(--kk-font-num);
+  color: rgba(255, 255, 255, .6);
+}
+.kk-slot .count {
+  position: absolute;
+  right: 5px;
+  bottom: 2px;
+  font: 600 10px/1 var(--kk-font-num);
+  color: #fff;
+}
+
+/* the minimap keeps one shape per lane; glass gets the rounded slab */
+.kk-minimap-frame {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.kk-minimap-label {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  font: 600 8.5px/1 var(--kk-font);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .75);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+  pointer-events: none;
+}
+
+/* --- toasts, right-middle --- */
+.kk-toasts {
+  position: absolute;
+  right: var(--kk-hud-inset);
+  top: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.kk-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 15px 9px 10px;
+  border-radius: 99px;
+  font: 500 12.5px/1.3 var(--kk-font);
+  color: #fff;
+  max-width: 300px;
+}
+.kk-toast .mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .14);
+}
+.kk-toast.gold { color: var(--kk-renown); }
+
+/* --- build-mode control hints: left-aligned UNDER the vitals cluster.
+       Never centred — while the build palette is open the top band has
+       fixed clusters pinned at both edges (HANDOFF §5.8). --- */
+.kk-buildhint {
+  position: absolute;
+  left: var(--kk-hud-inset);
+  top: 132px;
+  max-width: 340px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font: 400 11.5px/1.6 var(--kk-font);
+  color: rgba(255, 255, 255, .85);
+}
+.kk-buildhint b { color: var(--kk-renown); font-family: var(--kk-font-num); font-size: 11px; }
+
+/* glass is the default surface for anything floating over the render:
+   the world renders BRIGHT, so an opaque panel reads as a hole in it */
+.kk-glass {
+  background: linear-gradient(rgba(16, 24, 20, .70), rgba(8, 14, 11, .82));
+  backdrop-filter: blur(20px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-top-color: rgba(255, 255, 255, .46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), var(--kk-sh-panel);
+  color: #fff;
+}
+[data-kk-quality='low'] .kk-glass { backdrop-filter: none; background: rgba(10, 16, 12, .92); }
+
+/* ---------- 5.9 · How to Play / Credits (Metalheart shell) ----------
+   Both keep their existing copy verbatim — the Credits attributions in
+   particular must stay exactly as written — and only change shell. */
+.kk-doc {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 12px;
+}
+.kk-doc-lead {
+  font: 400 12.5px/1.55 var(--kk-font);
+  color: var(--kk-text-dim);
+  margin: 0 0 12px;
+}
+.kk-doc h3 {
+  margin: 20px 0 5px;
+  font: 700 9.5px/1 var(--kk-font);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--kk-a-400);
+}
+.kk-doc p {
+  margin: 0 0 10px;
+  font: 400 12.5px/1.55 var(--kk-font);
+  color: var(--kk-n-300);
+  max-width: 68ch;
+}
+/* numbered steps with a real screenshot each, in a consistent 16:10 frame
+   and a display-size step number (HANDOFF §5.9) */
+.kk-step-row {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--kk-divider);
+}
+.kk-step-row:last-of-type { border-bottom: 0; }
+.kk-step-shot {
+  flex: none;
+  width: 320px;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0e1017;
+  box-shadow: inset 0 0 0 1px var(--kk-n-800);
+}
+.kk-step-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kk-step-body { flex: 1; min-width: 0; }
+.kk-step-no {
+  font: 700 34px/1 var(--kk-font-display);
+  letter-spacing: -.03em;
+  color: var(--kk-a-500);
+  opacity: .55;
+}
+.kk-step-title {
+  margin: 2px 0 7px;
+  font: 500 17px/1.2 var(--kk-font-display);
+  color: var(--kk-text);
+}
+.kk-step-text { font: 400 12.5px/1.6 var(--kk-font); color: var(--kk-n-300); }
+@media (max-width: 820px) {
+  .kk-step-row { flex-direction: column; }
+  .kk-step-shot { width: 100%; }
+}
+
+/* ---------- D14/D15 · aim readout + standing-aware crosshair ---------- */
+/* The reticle tells you WHO is under it before you commit a shot: green for
+   an ally, red for a foe. Colour alone is not the only cue — the readout
+   below names them — so this stays readable without relying on hue. */
+.kk-reticle.hostile { box-shadow: inset 0 0 0 1.5px var(--kk-warn), 0 0 10px rgba(0, 0, 0, .5); }
+.kk-reticle.hostile::after { background: var(--kk-warn); }
+.kk-reticle.friendly { box-shadow: inset 0 0 0 1.5px var(--kk-ok), 0 0 10px rgba(0, 0, 0, .5); }
+.kk-reticle.friendly::after { background: var(--kk-ok); }
+
+.kk-aim {
+  /* K61 · pinned over the target's head: left/top stay at the origin and
+     PlayerController's projected screen point arrives as a transform, so
+     moving the plate never touches layout */
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: 190px;
+  padding: 5px 9px 6px;
+  border-radius: 10px;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity .12s ease;
+  /* clear of the head, and never so wide it becomes the view */
+  margin-top: -6px;
+}
+.kk-aim-name {
+  font: 500 12px/1.2 var(--kk-font-display);
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kk-aim-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 2px;
+}
+.kk-aim-standing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 8px/1 var(--kk-font);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.kk-aim-standing.hostile { color: var(--kk-warn); }
+.kk-aim-standing.friendly { color: var(--kk-ok); }
+.kk-aim-standing.neutral { color: var(--kk-text-dim); }
+.kk-aim .kk-bar { margin-top: 5px; height: 5px; }
+.kk-aim-meta {
+  font: 400 9.5px/1 var(--kk-font);
+  color: rgba(255, 255, 255, .68);
+}
+.kk-aim-scan {
+  margin-top: 4px;
+  font: 600 8px/1 var(--kk-font);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--kk-renown);
+}
+.kk-aim-scan.known { color: rgba(255, 255, 255, .45); }
+
+/* ---------- D16 · collection book ---------- */
+.kk-book { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.kk-book-card {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .25);
+  box-shadow: inset 0 0 0 1px var(--kk-divider);
+}
+.kk-book-card.unknown { opacity: .55; }
+.kk-book-name { font: 600 13px/1.2 var(--kk-font-display); color: var(--parchment); }
+.kk-book-card.unknown .kk-book-name { color: var(--kk-text-faint); }
+.kk-book-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 5px;
+  font: 400 11px/1.4 var(--kk-font);
+  color: var(--parchment-dark);
+}
+.kk-book-row b { font-family: var(--kk-font-num); color: var(--gold); }
+.kk-book-loot { margin-top: 6px; font: 400 10.5px/1.45 var(--kk-font); color: var(--parchment-dark); }
+
+/* ---------- E19 · the allegiance meter ----------
+   Both houses always visible, because the axis is a choice between two
+   banners rather than a score you accumulate. The fill grows from the
+   neutral centre toward whichever side you lean, in that house's own
+   colours — Leo's blue/gold/white, the Bull's red/black/brown. */
+.kk-alleg { display: flex; align-items: stretch; gap: 12px; }
+.kk-alleg-banner {
+  flex: none;
+  width: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  opacity: .45;
+  transition: opacity .2s ease;
+}
+.kk-alleg-banner.lean { opacity: 1; }
+.kk-alleg-flag {
+  width: 40px;
+  height: 52px;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  /* the pennant notch at the bottom, so it reads as a banner not a swatch */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+}
+.kk-alleg-flag i {
+  position: absolute;
+  left: 0; right: 0;
+  height: 34%;
+  display: block;
+}
+.kk-alleg-flag i:nth-child(1) { top: 22%; }
+.kk-alleg-flag i:nth-child(2) { top: 52%; height: 14%; }
+.kk-alleg-house {
+  font: 600 8.5px/1.15 var(--kk-font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--parchment-dark);
+}
+.kk-alleg-banner.lean .kk-alleg-house { color: var(--parchment); }
+
+.kk-alleg-track {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  position: relative;
+  height: 18px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(143, 31, 31, .22), rgba(0, 0, 0, .3) 50%, rgba(47, 95, 184, .22));
+  box-shadow: inset 0 0 0 1px var(--chrome-2);
+  overflow: hidden;
+}
+/* the fill runs from the centre outward toward the leaning house */
+.kk-alleg-fill { position: absolute; top: 2px; bottom: 2px; border-radius: 99px; transition: all .3s ease; }
+/* the neutral centre mark stays visible so "unsworn" reads as a real place */
+.kk-alleg-mid {
+  position: absolute;
+  left: 50%;
+  top: 0; bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, .38);
+}
+.kk-alleg-knob {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .5), 0 0 10px currentColor;
+  background: currentColor;
+  transition: left .3s ease;
+}
+.kk-alleg-caption { margin-top: 8px; }
+.kk-alleg-title { font: 600 13.5px/1.2 var(--kk-font-display); color: var(--parchment); }
+.kk-alleg-blurb { margin-top: 3px; font: 400 11.5px/1.5 var(--kk-font); color: var(--parchment-dark); }
+.kk-alleg-value { font: 700 11px/1 var(--kk-font-num); color: var(--gold); margin-left: 6px; }
+
+/* The Quest Log is an aged-parchment surface, so the meter's default
+   light-on-dark caption vanished into it — the same light-on-light trap the
+   Millennium Chrome lane hit. Re-point the ink where it sits on parchment
+   rather than patching each element at the call site. */
+.quest-journal .kk-alleg-title { color: #2e2007; }
+.quest-journal .kk-alleg-blurb { color: #5f4d2a; }
+.quest-journal .kk-alleg-value { color: #7a5a12; }
+.quest-journal .kk-alleg-house { color: #7a6947; }
+.quest-journal .kk-alleg-banner.lean .kk-alleg-house { color: #2e2007; }
+.quest-journal .kk-alleg-track {
+  background: linear-gradient(90deg, rgba(143, 31, 31, .16), rgba(120, 100, 60, .22) 50%, rgba(47, 95, 184, .16));
+  box-shadow: inset 0 0 0 1px rgba(90, 70, 40, .45);
+}
+.quest-journal .kk-alleg-mid { background: rgba(90, 70, 40, .5); }
+
+/* ---------- I41 · the order radial ----------
+   Held open, steered by the pointer without releasing pointer lock, and each
+   sector sizes to its own copy instead of clipping inside a fixed tile. */
+.kk-radial {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+.kk-radial-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 168px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  text-align: center;
+  background: rgba(8, 14, 11, .88);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18), 0 10px 30px rgba(0, 0, 0, .6);
+}
+.kk-radial-hub-title {
+  font: 600 14px/1.2 var(--kk-font-display);
+  color: var(--kk-renown);
+}
+.kk-radial-hub-desc {
+  margin-top: 5px;
+  font: 400 10.5px/1.45 var(--kk-font);
+  color: rgba(255, 255, 255, .72);
+}
+.kk-radial-slice {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 118px;                 /* wide enough for the longest label */
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  border-radius: 14px;
+  background: rgba(8, 14, 11, .82);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .82);
+  font: 600 11.5px/1.25 var(--kk-font);
+  text-align: center;
+  transition: background .1s ease, box-shadow .1s ease, color .1s ease;
+}
+.kk-radial-slice.on {
+  background: rgba(46, 78, 58, .95);
+  box-shadow: inset 0 0 0 1px var(--kk-renown), 0 0 18px rgba(232, 193, 65, .35);
+  color: #fff;
+}

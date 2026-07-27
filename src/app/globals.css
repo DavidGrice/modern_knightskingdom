@@ -1,0 +1,737 @@
+/* Design-system tokens from the UI handoff pack (2026-07-25): every colour,
+   size, radius, shadow and the four lane recipes. Imported FIRST so the
+   game's own rules below can read var(--kk-*) and override where the two
+   systems genuinely differ. */
+@import '../styles/kk-tokens.css';
+/* The four lane themes, applied to this game's own panel classes. Order here
+   doesn't matter: every lane rule is `:root[data-kk-lane=…] .thing`, which
+   outranks the bare `.thing` rules below on specificity, so the active lane
+   always wins without needing !important or a particular import position. */
+@import '../styles/kk-lanes.css';
+/* Front-door screens (title/menu/hero forge/options) and the field HUD
+   clusters, ported from the mockups' turns 3a-3d and 1a-1d. */
+@import '../styles/kk-screens.css';
+
+/* Dark-ages chrome (Phase 20 styling v2): cold castle stone and forged
+   iron replace the old warm parchment-brown. The stone itself is the
+   original game's own rough-hewn wall sprite (spr187), tiled darkly behind
+   every panel. Gold stays the one warm note — both factions genuinely wear
+   it (Leo's crown, Cedric's horns). The chrome triad (--chrome/--chrome-2)
+   swears allegiance via [data-faction] set by FactionTheme.tsx:
+   unsworn aged gold-iron, the crown blue/gold/white, the Bull red/grey/black. */
+:root {
+  --parchment: #d9d4c5;      /* cold aged linen, not warm cream */
+  --parchment-dark: #a09a89;
+  --wood: #232730;           /* token kept for its ~30 call sites, re-forged as iron */
+  --wood-light: #363c48;
+  --gold: #d8b74a;
+  --chrome: #6f5a26;         /* structural borders/frames — the allegiance layer */
+  --chrome-2: #3c4049;       /* secondary structure: dividers, quiet borders */
+  --chrome-glow: rgba(216, 183, 74, 0.3);
+  --gold-dim: var(--chrome); /* legacy alias: every old border site follows the chrome */
+  --ink: #10131a;
+  --danger: #b03a2e;
+  --ok: #3f8f4a;
+  --stone: url('/assets/textures/ui/spr187_256x256.png');
+}
+:root[data-faction='leo'] {
+  --chrome: #3b52c9;
+  --chrome-2: #dfe4f0;
+  --chrome-glow: rgba(80, 110, 235, 0.38);
+}
+:root[data-faction='cedric'] {
+  --chrome: #a02318;
+  --chrome-2: #8d939c;
+  --chrome-glow: rgba(190, 40, 25, 0.38);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0d12;
+  color: var(--parchment);
+  font-family: Georgia, 'Times New Roman', serif;
+  user-select: none;
+}
+
+#__next, main { width: 100%; height: 100%; }
+
+button { font-family: inherit; cursor: pointer; }
+input {
+  font-family: inherit;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--gold-dim);
+  color: var(--parchment);
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 15px;
+  outline: none;
+  width: 100%;
+}
+input:focus { border-color: var(--gold); }
+
+/* ---------- full-screen menu stacks ---------- */
+.stack-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* a torch-lit castle wall: the original game's own stone sprite under a
+     cold night vignette — the first thing a player sees is the dark ages */
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(48, 42, 26, 0.5), rgba(4, 5, 9, 0.94) 78%),
+    var(--stone) repeat;
+  background-size: auto, 256px 256px;
+  z-index: 20;
+}
+
+.panel {
+  /* cut stone: the real wall sprite under a dark glaze, chiseled bevel */
+  background:
+    linear-gradient(180deg, rgba(11, 13, 18, 0.87), rgba(7, 9, 13, 0.93)),
+    var(--stone) repeat;
+  background-size: auto, 256px 256px;
+  border: 2px solid var(--chrome);
+  border-radius: 10px;
+  box-shadow:
+    0 0 60px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -3px 12px rgba(0, 0, 0, 0.65);
+  padding: 32px 40px;
+  min-width: 380px;
+  max-width: 92vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.game-title {
+  font-size: 44px;
+  letter-spacing: 3px;
+  font-variant: small-caps;
+  color: var(--gold);
+  text-shadow: 0 2px 0 #4a3a12, 0 6px 18px rgba(0, 0, 0, 0.9);
+  margin-bottom: 6px;
+  text-align: center;
+}
+.game-subtitle {
+  text-align: center;
+  color: var(--parchment-dark);
+  font-style: italic;
+  margin-bottom: 28px;
+  font-size: 15px;
+}
+
+.menu-btn {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 13px 18px;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: var(--parchment);
+  background: linear-gradient(180deg, var(--wood-light), var(--wood));
+  border: 1px solid var(--gold-dim);
+  border-radius: 6px;
+  transition: all 0.12s ease;
+}
+.menu-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #454c5a, #2b303b);
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 12px var(--chrome-glow);
+  transform: translateY(-1px);
+}
+.menu-btn:disabled { opacity: 0.45; cursor: default; }
+.menu-btn.small { font-size: 14px; padding: 8px 12px; }
+.menu-btn.danger { border-color: var(--danger); }
+
+.form-row { margin: 12px 0; }
+.form-label { display: block; font-size: 13px; color: var(--parchment-dark); margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }
+.form-error { color: #ff8a7a; font-size: 14px; margin-top: 10px; min-height: 18px; }
+.tab-row { display: flex; gap: 6px; margin-bottom: 18px; }
+.tab-row button {
+  flex: 1; padding: 9px; font-size: 15px; border-radius: 5px;
+  background: rgba(0,0,0,0.3); color: var(--parchment-dark); border: 1px solid var(--chrome-2);
+}
+.tab-row button.active { background: var(--wood-light); color: var(--gold); border-color: var(--gold); }
+
+/* ---------- options ---------- */
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 14px 0; }
+.opt-row label { font-size: 15px; }
+.opt-row input[type='range'] { width: 190px; }
+.opt-value { width: 46px; text-align: right; color: var(--gold); font-size: 14px; }
+
+/* ---------- credits ---------- */
+.credits-scroll { max-height: 55vh; overflow-y: auto; line-height: 1.75; font-size: 15px; padding-right: 10px; }
+.credits-scroll h3 { color: var(--gold); margin: 18px 0 4px; letter-spacing: 1px; }
+.credits-scroll p { color: var(--parchment-dark); }
+
+/* ---------- character creator ---------- */
+.creator-layout { display: flex; gap: 26px; align-items: stretch; }
+.creator-preview { width: 380px; height: 480px; border: 2px solid var(--gold-dim); border-radius: 8px; background: radial-gradient(ellipse at 50% 40%, #252932, #0e1015); position: relative; }
+.creator-controls { width: 420px; display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding-right: 8px; }
+.creator-section { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); border-bottom: 1px solid var(--gold-dim); padding-bottom: 3px; margin-top: 8px; }
+.part-row { display: flex; align-items: center; gap: 10px; }
+.part-row .part-name { flex: 1; text-align: center; font-size: 16px; }
+.arrow-btn {
+  width: 38px; height: 38px; font-size: 20px; border-radius: 5px;
+  background: var(--wood-light); color: var(--gold); border: 1px solid var(--gold-dim);
+}
+.arrow-btn:hover { border-color: var(--gold); }
+.pose-toggle { display: flex; gap: 8px; }
+.pose-toggle button { flex: 1; padding: 6px 0; font-size: 13px; border-radius: 5px; background: var(--wood-light); color: var(--parchment-dark); border: 1px solid var(--gold-dim); }
+.pose-toggle button.selected { color: var(--gold); border-color: var(--gold); background: linear-gradient(180deg, #454c5a, #2b303b); }
+.swatch-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- equipment paperdoll ---------- */
+.equip-layout { display: flex; gap: 22px; align-items: flex-start; }
+.equip-preview { width: 230px; height: 310px; flex-shrink: 0; border: 2px solid var(--gold-dim); border-radius: 8px; background: radial-gradient(ellipse at 50% 40%, #252932, #0e1015); position: relative; }
+.equip-slots { flex: 1; min-width: 240px; }
+.equip-tile-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.equip-tile {
+  flex: 1; padding: 10px 6px; text-align: center; border-radius: 6px; cursor: pointer;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2); opacity: 0.55;
+}
+.equip-tile .icon { font-size: 22px; }
+.equip-tile .name { font-size: 11.5px; color: var(--parchment-dark); margin-top: 3px; }
+.equip-tile.owned { opacity: 1; cursor: pointer; }
+.equip-tile.locked { cursor: default; }
+.equip-tile.selected { border-color: var(--gold); box-shadow: 0 0 8px rgba(212,175,55,0.4); background: rgba(212,175,55,0.12); }
+.equip-tile.selected .name { color: var(--gold); }
+.equip-tile[draggable="true"] { cursor: grab; }
+.equip-tile[draggable="true"]:active { cursor: grabbing; }
+/* Armory tiles (NpcEquipPanel): draggable spare gear, dragged onto a slot */
+.inv-slot.armory-draggable { cursor: grab; border-color: var(--gold-dim); }
+.inv-slot.armory-draggable:active { cursor: grabbing; }
+.swatch { width: 26px; height: 26px; border-radius: 4px; border: 2px solid rgba(255,255,255,0.15); cursor: pointer; }
+.swatch.selected { border-color: var(--gold); box-shadow: 0 0 8px var(--gold); }
+
+.gender-toggle { display: flex; gap: 8px; }
+.gender-toggle button {
+  flex: 1; padding: 8px 0; background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2);
+  color: var(--parchment-dark); border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.gender-toggle button.selected { border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12); }
+
+.face-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.face-tile {
+  width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; padding: 4px; border: 2px solid transparent; border-radius: 8px;
+}
+.face-tile img { width: 52px; height: 52px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,0.3); }
+.face-tile .face-label { font-size: 10px; color: var(--parchment-dark); text-align: center; line-height: 1.15; }
+.face-tile.selected { border-color: var(--gold); box-shadow: 0 0 8px rgba(232,193,65,0.5); }
+.face-tile.selected .face-label { color: var(--gold); }
+/* villager nature & mastery chips (Phase 24A) */
+.attr-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.attr-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+  color: var(--parchment-dark); background: rgba(0,0,0,0.3);
+  border: 1px solid var(--chrome-2); border-radius: 5px; padding: 2px 6px;
+}
+.attr-chip.gifted { border-color: var(--gold); color: var(--gold); }
+.attr-bar { width: 34px; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; }
+.attr-bar span { display: block; height: 100%; background: var(--chrome); border-radius: 3px; }
+.attr-chip.gifted .attr-bar span { background: var(--gold); }
+
+.calling-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.calling-tile {
+  padding: 6px 10px; background: rgba(0,0,0,0.35); border: 2px solid var(--chrome-2);
+  color: var(--parchment-dark); border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.calling-tile:hover { border-color: var(--chrome); color: var(--parchment); }
+.calling-tile.selected { border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12); }
+.calling-desc { font-size: 12px; color: var(--parchment-dark); font-style: italic; margin-top: 6px; line-height: 1.5; }
+
+.face-tile.locked { cursor: default; position: relative; opacity: 0.55; }
+.face-tile.locked img { filter: grayscale(0.9) brightness(0.7); }
+.face-tile .face-lock {
+  position: absolute; top: 20px; left: 0; right: 0; text-align: center;
+  font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,0.9); pointer-events: none;
+}
+
+/* ---------- one-stop menu tabs (Phase 22) ---------- */
+.menu-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 26px 12px 0; }
+.menu-tabs button {
+  padding: 5px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2);
+  color: var(--parchment-dark); border-radius: 6px; cursor: pointer; font-size: 12.5px;
+  display: flex; align-items: center; gap: 5px;
+}
+.menu-tabs button:hover { border-color: var(--chrome); color: var(--parchment); }
+.menu-tabs button.active {
+  border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12);
+}
+.menu-tabs .mt-key {
+  font-size: 10px; color: var(--parchment-dark); border: 1px solid var(--chrome-2);
+  border-radius: 3px; padding: 0 4px; line-height: 1.5;
+}
+.menu-tabs button.active .mt-key { color: var(--gold); border-color: var(--gold); }
+
+/* ---------- HUD ---------- */
+.hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+.hud > * { pointer-events: none; }
+.hud .clickable, .hud .clickable * { pointer-events: auto; }
+
+.crosshair {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.85); box-shadow: 0 0 4px rgba(0,0,0,0.9);
+}
+.interact-prompt {
+  position: absolute; left: 50%; top: 56%; transform: translateX(-50%);
+  background: rgba(11,13,18,0.85); border: 1px solid var(--gold-dim); border-radius: 6px;
+  padding: 8px 16px; font-size: 15px; color: var(--parchment);
+}
+.interact-prompt b { color: var(--gold); }
+
+.action-progress {
+  position: absolute; left: 50%; top: 62%; transform: translateX(-50%);
+  width: 220px; height: 12px; background: rgba(0,0,0,0.6); border: 1px solid var(--gold-dim); border-radius: 6px; overflow: hidden;
+}
+.action-progress > div { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); }
+
+.hud-topleft { position: absolute; top: 14px; left: 14px; display: flex; flex-direction: column; gap: 8px; }
+.rank-badge {
+  background: rgba(11,13,18,0.85); border: 1px solid var(--gold-dim); border-radius: 8px;
+  padding: 10px 16px; min-width: 230px;
+}
+.rank-badge .rank-name { color: var(--gold); font-size: 19px; letter-spacing: 1px; }
+.rank-badge .rank-sub { font-size: 12.5px; color: var(--parchment-dark); margin-top: 2px; }
+.xpbar { height: 7px; background: rgba(255,255,255,0.12); border-radius: 4px; margin-top: 7px; overflow: hidden; }
+.xpbar > div { height: 100%; background: linear-gradient(90deg, #7c9f3f, #b7d94e); }
+
+.quest-tracker {
+  background: rgba(11,13,18,0.82); border: 1px solid var(--gold-dim); border-radius: 8px;
+  padding: 10px 16px; max-width: 320px; font-size: 14px;
+}
+.quest-tracker .q-title { color: var(--gold); font-size: 15px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.quest-tracker .q-obj { color: var(--parchment-dark); }
+.quest-tracker .q-obj.done { color: #9fce6a; text-decoration: line-through; }
+.quest-track-swap {
+  background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2); border-radius: 5px;
+  font-size: 12px; padding: 1px 6px; color: var(--parchment); cursor: pointer; line-height: 1.6;
+}
+.quest-track-swap:hover { border-color: var(--gold); color: var(--gold); }
+
+.hud-topright { position: absolute; top: 14px; right: 14px; text-align: right; font-size: 13px; color: rgba(232,217,176,0.75); }
+.hud-topright b { color: var(--gold); }
+
+/* the keyboard reference used to sit permanently in hud-topright; it now
+   lives behind a collapsed toggle in the Satchel panel instead, so the HUD
+   itself stays clean of anything but the minimap */
+.controls-ref {
+  background: rgba(11,13,18,0.7); border: 1px solid var(--chrome-2); border-radius: 6px;
+  padding: 8px 12px; margin-top: 8px; line-height: 1.7; font-size: 13px; color: rgba(232,217,176,0.85);
+}
+.controls-ref b { color: var(--gold); }
+
+.notifications { position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.notif {
+  background: rgba(11,13,18,0.9); border: 1px solid var(--gold-dim); color: var(--parchment);
+  border-radius: 6px; padding: 7px 16px; font-size: 14.5px; animation: notifIn 0.25s ease;
+}
+.notif.gold { color: var(--gold); border-color: var(--gold); }
+@keyframes notifIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+.ceremony-banner {
+  position: absolute; left: 50%; top: 20%; transform: translate(-50%, 0);
+  text-align: center; pointer-events: none; animation: ceremonyIn 1.1s ease;
+}
+.ceremony-banner .c-rank {
+  font-size: 46px; letter-spacing: 4px; color: var(--gold); text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(232,193,65,0.75), 0 2px 4px rgba(0,0,0,0.8);
+}
+.ceremony-banner .c-sub {
+  font-size: 16px; color: var(--parchment); margin-top: 6px; letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+}
+@keyframes ceremonyIn {
+  0% { opacity: 0; transform: translate(-50%, -14px) scale(0.92); }
+  20% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
+  30% { transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 1; }
+}
+
+/* ---------- in-game panels ---------- */
+.game-panel {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background:
+    linear-gradient(180deg, rgba(11, 13, 18, 0.9), rgba(7, 9, 13, 0.95)),
+    var(--stone) repeat;
+  background-size: auto, 256px 256px;
+  border: 2px solid var(--chrome); border-radius: 10px; padding: 22px 26px;
+  box-shadow:
+    0 0 50px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -3px 12px rgba(0, 0, 0, 0.6);
+  min-width: 460px; max-width: 86vw; max-height: 82vh; overflow-y: auto; z-index: 15;
+}
+/* the six MenuTabs-family panels (Satchel/Crafting/Quests/Abilities/Roster/
+   Lore, plus the Equip-villager sub-panel) share one tab bar, so switching
+   tabs or toggling an internal filter/tab/collapsible region used to resize
+   and re-center the whole box every time — a fixed footprint with an inner
+   scroll region keeps it planted in one spot regardless of content height */
+.game-panel.menu-family {
+  display: flex; flex-direction: column;
+  width: min(760px, 92vw); min-width: 0;
+  height: min(78vh, 720px); max-height: 78vh; overflow: hidden;
+}
+.game-panel.menu-family > .panel-scroll {
+  flex: 1 1 auto; overflow-y: auto; min-height: 0;
+}
+/* heraldic banding: the header's underline carries the sworn faction's
+   tricolor — unsworn gold-iron, the crown blue→gold→white, the Bull
+   red→gold→grey */
+.game-panel h2 {
+  color: var(--gold); letter-spacing: 2px; font-size: 21px; margin-bottom: 14px;
+  font-variant: small-caps;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, var(--chrome), var(--gold), var(--chrome-2)) 1;
+  padding-bottom: 7px;
+}
+.panel-close { position: absolute; top: 10px; right: 14px; background: none; border: none; color: var(--parchment-dark); font-size: 21px; }
+.panel-close:hover { color: var(--gold); }
+
+.inv-grid { display: grid; grid-template-columns: repeat(6, 74px); gap: 8px; }
+.inv-slot {
+  width: 74px; height: 74px; background: rgba(0,0,0,0.4); border: 1px solid var(--chrome-2); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; position: relative;
+}
+.inv-slot .icon { font-size: 26px; }
+/* J45 · a parts-bin slot shows the piece itself, rendered, not an emoji */
+.inv-slot.brick { border-color: var(--gold-dim); background: rgba(232, 193, 65, 0.06); justify-content: flex-start; padding-top: 6px; }
+.inv-slot.brick .count { top: 3px; right: 4px; bottom: auto; }
+.inv-slot.brick .iname { line-height: 1.15; }
+.inv-slot .brick-thumb {
+  width: 42px; height: 42px; object-fit: contain;
+  image-rendering: auto; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6));
+}
+/* and a build cost is a bill of those same pieces */
+.build-item .b-cost-part { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }
+/* J51 · the socket panel: what can stand on this corner */
+.keep-options { display: flex; flex-direction: column; gap: 8px; }
+.keep-option {
+  display: flex; gap: 12px; align-items: center; text-align: left; width: 100%;
+  padding: 10px 12px; background: rgba(0, 0, 0, .4); border: 1px solid var(--chrome-2);
+  border-radius: 8px; color: var(--parchment); cursor: pointer;
+}
+.keep-option:hover:not(:disabled) { border-color: var(--gold); background: rgba(232, 193, 65, .1); }
+.keep-option:disabled, .keep-option.short { opacity: .55; cursor: not-allowed; }
+.keep-option-thumb { width: 56px; height: 56px; object-fit: contain; flex: none; }
+.keep-option-body { flex: 1; min-width: 0; }
+.keep-option-name { font-size: 14px; color: var(--gold); }
+.keep-option-blurb { font-size: 11.5px; color: var(--parchment-dark); margin: 2px 0 5px; }
+.keep-option-cost { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; }
+.keep-option-cost .b-cost-part.short { color: var(--danger, #c9553d); }
+.build-item .b-cost-thumb { width: 16px; height: 16px; object-fit: contain; }
+.inv-slot .iname { font-size: 10.5px; color: var(--parchment-dark); text-align: center; line-height: 1.1; padding: 0 2px; }
+.inv-slot .count { position: absolute; bottom: 3px; right: 6px; color: var(--gold); font-size: 13px; font-weight: bold; }
+
+.recipe-row {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px; border: 1px solid var(--chrome-2);
+  border-radius: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.28);
+}
+.recipe-row .icon { font-size: 24px; width: 34px; text-align: center; }
+.recipe-row .r-main { flex: 1; }
+.recipe-row .r-name { font-size: 15.5px; }
+.recipe-row .r-cost { font-size: 12.5px; color: var(--parchment-dark); margin-top: 2px; }
+.recipe-row .r-station { font-size: 11px; color: #8fb0d0; }
+.recipe-row button { padding: 7px 14px; font-size: 13.5px; border-radius: 5px; background: var(--wood-light); color: var(--parchment); border: 1px solid var(--gold-dim); }
+.recipe-row button:disabled { opacity: 0.4; cursor: default; }
+.recipe-row button:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+.recipe-row.locked { opacity: 0.55; }
+
+/* ---------- station-specific crafting menus (2026-07-20) ---------- */
+.station-tabs { display: flex; gap: 6px; margin: 2px 0 14px; flex-wrap: wrap; border-bottom: 1px solid var(--chrome-2); padding-bottom: 12px; }
+.station-tabs button {
+  padding: 6px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--chrome-2); border-radius: 6px;
+  color: var(--parchment-dark); font-size: 13px; display: flex; align-items: center; gap: 5px;
+}
+.station-tabs button:hover { border-color: var(--chrome); color: var(--parchment); }
+.station-tabs button.active { border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12); }
+.station-tab-here { color: #7fce6a; font-size: 9px; }
+
+.craft-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.craft-search { width: auto; flex: 1 1 160px; padding: 7px 10px; font-size: 13px; }
+.craft-sort { display: flex; gap: 4px; }
+.craft-sort button {
+  font-size: 11px; padding: 5px 9px; background: rgba(0,0,0,0.3); border: 1px solid var(--chrome-2);
+  border-radius: 5px; color: var(--parchment-dark); white-space: nowrap;
+}
+.craft-sort button.selected { border-color: var(--gold); color: var(--gold); }
+.craft-filter-toggle { font-size: 12px; color: var(--parchment-dark); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+.skill-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.skill-row .s-ico { font-size: 24px; width: 34px; text-align: center; }
+.skill-row .s-body { flex: 1; }
+.skill-row .s-name { font-size: 15px; }
+.skill-row .s-name span { color: var(--gold); }
+.skill-row .s-locked { color: var(--parchment-dark); font-size: 12.5px; font-style: italic; }
+
+.quest-item { border: 1px solid var(--chrome-2); border-radius: 6px; padding: 10px 14px; margin-bottom: 9px; background: rgba(0,0,0,0.28); }
+.quest-item .q-name { color: var(--gold); font-size: 15.5px; }
+.quest-item .q-desc { font-size: 13px; color: var(--parchment-dark); margin: 4px 0; }
+.quest-item.completed { opacity: 0.55; }
+.quest-item.completed .q-name { color: #9fce6a; }
+
+/* ---------- Quest Log: an aged-parchment journal page (2026-07-20) ----------
+   Deliberate exception to the dark-stone chrome shell: the panel FRAME
+   around it stays the same castle stone every other panel uses (tab bar,
+   close button, h2 heraldry), but the journal content reads as a real page
+   of vellum you've opened inside it — warm, mottled, hand-ruled, ink-brown
+   text — the one place in the UI that's allowed to feel like paper. */
+.quest-journal {
+  position: relative;
+  margin-top: 4px;
+  padding: 20px 22px;
+  border-radius: 3px;
+  color: #3a2c1a;
+  background:
+    radial-gradient(ellipse at 15% 8%, rgba(120,86,40,0.10), transparent 45%),
+    radial-gradient(ellipse at 85% 92%, rgba(100,70,30,0.13), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(140,110,60,0.06), transparent 70%),
+    linear-gradient(160deg, #ecdfc0 0%, #e0d0a4 45%, #e6d8b3 100%);
+  box-shadow:
+    inset 0 0 50px rgba(90,60,20,0.22),
+    inset 0 0 3px rgba(60,40,10,0.5),
+    0 6px 18px rgba(0,0,0,0.45);
+  border: 1px solid #8a7245;
+}
+/* a faint fibrous grain, so it doesn't read as a flat color fill */
+.quest-journal::before {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(3deg, rgba(70,50,20,0.035) 0px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(93deg, rgba(70,50,20,0.03) 0px, transparent 1px, transparent 4px);
+}
+
+.quest-journal-toolbar { display: flex; gap: 8px; margin-bottom: 14px; position: relative; }
+.journal-filter {
+  font-family: Georgia, serif; font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.5px;
+  padding: 5px 12px; border-radius: 3px; cursor: pointer;
+  background: rgba(255,250,235,0.4); border: 1px solid rgba(90,60,20,0.4); color: #5a4326;
+}
+.journal-filter:hover { background: rgba(255,250,235,0.65); }
+.journal-filter.selected { background: #d8b74a; border-color: #8a6a20; color: #2a1e0e; font-weight: bold; }
+
+.quest-region { position: relative; margin-bottom: 10px; }
+.quest-region-header {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+  font-family: Georgia, serif; font-variant: small-caps; letter-spacing: 1px;
+  font-size: 16.5px; color: #4a331a; padding: 7px 10px; border-radius: 3px;
+  background: linear-gradient(180deg, rgba(150,110,55,0.16), rgba(150,110,55,0.03));
+  border: 1px solid rgba(110,80,40,0.4); border-bottom: 1px dashed rgba(110,80,40,0.5);
+}
+.quest-region-header:hover { background: rgba(150,110,55,0.26); }
+.quest-region-arrow { width: 12px; display: inline-block; color: #8a6a2a; }
+.quest-region-icon { font-size: 15px; }
+.quest-region-body { padding: 10px 6px 4px 16px; }
+
+.quest-giver { margin-bottom: 14px; }
+.quest-giver-name {
+  font-family: Georgia, serif; font-size: 14.5px; font-weight: bold; color: #5a3d1a;
+  border-bottom: 1px dotted rgba(90,60,20,0.4); padding-bottom: 4px; margin-bottom: 6px;
+}
+.quest-giver-title { font-weight: normal; font-style: italic; color: #8a6a3a; font-size: 12.5px; margin-left: 6px; }
+.quest-giver-locked { opacity: 0.65; }
+.quest-giver-hint { font-size: 12.5px; color: #7a6244; font-style: italic; }
+
+.quest-entry { padding: 6px 0 6px 10px; border-left: 3px solid #a08050; margin: 4px 0 8px; }
+.quest-entry-name { font-size: 14.5px; color: #3a2c1a; }
+.quest-entry-tag {
+  font-size: 11px; color: #8a6a2a; border: 1px solid rgba(120,90,40,0.4); border-radius: 3px;
+  padding: 1px 6px; margin-left: 8px; font-variant: small-caps;
+}
+.quest-entry-meta { font-size: 12.5px; color: #6a5535; margin: 3px 0; }
+.quest-entry-hint { font-size: 11.5px; color: #8a7250; font-style: italic; }
+.quest-obj-line { font-size: 12.5px; color: #5a4a30; padding-left: 4px; }
+.quest-obj-line.done { color: #4d7038; text-decoration: line-through; }
+
+.quest-entry.done { border-left-color: #6b8f5a; opacity: 0.68; }
+.quest-entry.done .quest-entry-name { color: #4d7038; }
+.quest-entry.active { border-left-color: #b8862f; background: rgba(216,183,74,0.16); }
+.quest-entry.locked { opacity: 0.6; font-style: italic; }
+.quest-entry.available { border-left-color: #8a7245; }
+
+.quest-track-pin {
+  font-size: 11px; color: #6a5228; background: rgba(255,255,255,0.35);
+  border: 1px solid rgba(120,90,40,0.5); border-radius: 4px; padding: 1px 7px;
+  margin-left: 10px; cursor: pointer; font-family: inherit;
+}
+.quest-track-pin:hover:not(:disabled) { border-color: #8a6a2a; color: #3a2c1a; }
+.quest-track-pin:disabled { color: #8a6a2a; font-weight: 600; cursor: default; opacity: 0.85; }
+
+/* ---------- build mode (moved to the right rail 2026-07-20 — the minimap
+   already hides during build mode, so that whole side sat empty for a
+   cramped bottom bar) ---------- */
+.build-menu {
+  position: absolute; top: 118px; right: 14px; bottom: 16px;
+  background: rgba(11,13,18,0.92); border: 1px solid var(--gold-dim);
+  border-radius: 10px; padding: 12px; width: 300px;
+  display: flex; flex-direction: column;
+}
+.build-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; flex-shrink: 0;
+}
+.build-tabs button {
+  padding: 6px 8px; font-size: 12.5px; border-radius: 6px; text-align: left;
+  background: rgba(0,0,0,0.3); color: var(--parchment-dark); border: 1px solid var(--chrome-2);
+  display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden;
+}
+.build-tabs button.active { background: var(--wood-light); color: var(--gold); border-color: var(--gold); }
+.build-tab-count { margin-left: auto; font-size: 10px; color: var(--parchment-dark); opacity: 0.8; }
+.build-tabs button.active .build-tab-count { color: var(--gold); }
+.build-search {
+  width: 100%; padding: 6px 10px; font-size: 13px; margin-bottom: 8px; flex-shrink: 0;
+}
+.build-toolbar {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; flex-shrink: 0;
+}
+.build-sort { display: flex; gap: 4px; }
+.build-sort button {
+  flex: 1; font-size: 10.5px; padding: 5px 4px; background: rgba(0,0,0,0.3); border: 1px solid var(--chrome-2);
+  border-radius: 5px; color: var(--parchment-dark);
+}
+.build-sort button.selected { border-color: var(--gold); color: var(--gold); }
+.build-filter-toggle { font-size: 11.5px; color: var(--parchment-dark); display: flex; align-items: center; gap: 5px; }
+.build-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  overflow-y: auto; flex: 1 1 auto; min-height: 0; align-content: start;
+}
+/* Pinned last in flow, NOT absolutely positioned (HANDOFF §5.8): the grid
+   above is `flex:1; min-height:0`, so the footer keeps its place without
+   being sliced by the panel's own clip. */
+.build-foot {
+  flex: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--chrome-2);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: 11px; color: var(--parchment-dark);
+}
+.build-foot b { color: var(--gold); font-family: var(--kk-font-num); font-size: 12px; }
+.build-item {
+  border: 1px solid var(--chrome-2); border-radius: 7px; background: rgba(0,0,0,0.35);
+  padding: 6px 4px; text-align: center; cursor: pointer; color: var(--parchment);
+}
+.build-item img { width: 100%; max-width: 48px; height: 40px; object-fit: contain; image-rendering: auto; }
+.build-item .b-ico { font-size: 30px; line-height: 40px; }
+.build-item .b-name { font-size: 10.5px; line-height: 1.15; margin-top: 2px; }
+.build-item .b-cost { font-size: 9.5px; color: var(--parchment-dark); margin-top: 2px; }
+.build-item.selected { border-color: var(--gold); box-shadow: 0 0 10px rgba(232,193,65,0.5); }
+.build-item.unaffordable { opacity: 0.5; }
+.build-item.locked { opacity: 0.35; }
+/* Left-aligned UNDER the vitals cluster (HANDOFF §5.8). Never centred:
+   while the build palette is open the top band has fixed clusters pinned at
+   both edges, leaving a corridor too narrow for a key list — a centred hint
+   slides under one or the other. */
+.build-hint {
+  position: absolute; top: 132px; left: 22px; max-width: 340px;
+  background: rgba(11,13,18,0.85); border: 1px solid var(--gold-dim); border-radius: 12px;
+  padding: 10px 14px; font-size: 12px; line-height: 1.6; text-align: left;
+}
+.build-hint b { color: var(--gold); }
+
+/* ---------- pause ---------- */
+.pause-overlay {
+  position: absolute; inset: 0; background: rgba(8,5,2,0.72); z-index: 18;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-note { color: var(--parchment-dark); font-style: italic; text-align: center; padding: 20px; }
+
+/* ---------- touch controls (mobile-friendly pass, 2026-07-20) ---------- */
+.touch-look-surface {
+  position: absolute; inset: 0; touch-action: none;
+}
+.touch-joystick-base {
+  position: absolute; left: 26px; bottom: 26px; width: 120px; height: 120px;
+  border-radius: 50%; background: rgba(0,0,0,0.35); border: 2px solid var(--chrome-2);
+  touch-action: none;
+}
+.touch-joystick-knob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  border-radius: 50%; background: rgba(216,183,74,0.35); border: 2px solid var(--gold);
+  pointer-events: none; will-change: transform;
+}
+.touch-buttons {
+  position: absolute; right: 22px; bottom: 22px; display: flex; align-items: flex-end; gap: 14px;
+}
+.touch-btn {
+  border-radius: 50%; background: rgba(0,0,0,0.4); border: 2px solid var(--gold-dim);
+  color: var(--parchment); font-size: 20px; touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.touch-btn:active { background: rgba(232,193,65,0.25); border-color: var(--gold); }
+.touch-btn-interact { width: 76px; height: 76px; font-size: 24px; color: var(--gold); }
+.touch-btn-jump { width: 60px; height: 60px; margin-bottom: 8px; }
+.touch-btn-sprint { width: 56px; height: 56px; margin-bottom: 20px; }
+
+/* ---------- NPC AI debug overlay (NPC_AI_SPEC §9) ----------
+   Deliberately NOT themed like the rest of the UI: a developer tool that
+   looks like game furniture is a tool that ships by accident. Monospace,
+   flat black, no stone, no chrome. Toggled with ` (see AIDebugOverlay.tsx). */
+.ai-debug {
+  position: absolute; top: 10px; right: 10px; z-index: 40;
+  width: 430px; max-width: 46vw; max-height: 76vh; overflow-y: auto;
+  padding: 8px 10px; border-radius: 4px;
+  /* fully opaque: the HUD's objective card sits directly under this, and even
+     at 0.94 its gold text ghosted through the readouts */
+  background: #03060a; border: 1px solid #2f6f4f;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px; line-height: 1.55; color: #cfe8d8;
+  pointer-events: auto; -webkit-user-select: none; user-select: none;
+}
+.ai-debug-head {
+  display: flex; gap: 8px; align-items: baseline;
+  border-bottom: 1px solid #2f6f4f; padding-bottom: 4px; margin-bottom: 4px;
+  color: #7dffb0; text-transform: uppercase; letter-spacing: 0.08em;
+}
+.ai-debug-head b { color: #7dffb0; }
+.ai-debug-head span { font-size: 10px; }
+.ai-debug-head2 { color: #7dffb0; margin-top: 5px; }
+.ai-debug-row { white-space: normal; word-break: break-word; }
+.ai-debug-row b { color: #ffffff; }
+.ai-debug-dim { color: #7f9a8b; }
+.ai-debug-hint { margin-top: 5px; border-top: 1px solid #1d3f2e; padding-top: 3px; }
+.ai-need { display: inline-block; margin-left: 8px; }
+.ai-need.urgent { color: #ffb060; }
+.ai-warn { color: #ffb060; }
+.ai-debug-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
+.ai-debug-tabs button {
+  font: inherit; padding: 0 5px; cursor: pointer; border-radius: 3px;
+  background: transparent; border: 1px solid #2f6f4f; color: #7f9a8b;
+}
+.ai-debug-tabs button.on { color: #7dffb0; border-color: #7dffb0; }
+.ai-debug-score { padding-left: 6px; text-indent: -6px; }
+.ai-debug-score.gated { color: #7f9a8b; }
+.ai-debug-score .v { color: #ffffff; margin-right: 6px; }
+.ai-debug-score .a { color: #7dffb0; margin-right: 6px; }
+.ai-debug-score .c { color: #7f9a8b; margin-right: 4px; }
+.ai-debug-score .g { color: #ffb060; }
+
+/* ---------- responsive layout (mobile-friendly pass, 2026-07-20) ----------
+   Below this breakpoint, every panel/HUD element sized in fixed px would
+   overflow a phone-width viewport — switch to viewport-relative sizing and
+   loosen the pixel-perfect corner layout instead of hand-tuning every panel
+   individually. Desktop sizing (all the rules above) is untouched. */
+@media (max-width: 720px) {
+  .game-panel, .panel {
+    min-width: 0; width: 94vw; max-width: 94vw; padding: 16px 14px;
+  }
+  .equip-layout { flex-direction: column; align-items: center; }
+  .equip-preview { width: 200px; height: 260px; }
+  .inv-grid { grid-template-columns: repeat(4, 1fr); }
+  .build-menu {
+    top: auto; bottom: 8px; right: 8px; left: 8px; width: auto;
+    max-height: 46vh; padding: 8px;
+  }
+  .build-tabs button { font-size: 11px; padding: 5px 6px; }
+  .build-grid { grid-template-columns: repeat(4, 1fr); }
+  .hud-topleft, .hud-topright { transform: scale(0.85); transform-origin: top left; }
+  .hud-topright { transform-origin: top right; }
+  .controls-ref, .controls-toggle { display: none; } /* keyboard reference is meaningless on touch */
+  .quest-journal { padding: 12px 10px; }
+}

@@ -1,0 +1,183 @@
+/* ============================================================
+   Knights' Kingdom — UI tokens
+   Generated from the Omelette mockups (project "Lego Knights Kingdom RPG Mockup").
+   Drop this in as a global stylesheet (app/globals.css or a module import)
+   and read every color/size from a var(). Do not hard-code hexes in components.
+   ============================================================ */
+
+:root {
+  /* ---------- ground + text (Nocturne base) ---------- */
+  --kk-bg:            #161826;
+  --kk-surface:       #232532;
+  --kk-text:          #e9e9ed;
+  --kk-text-dim:      #9397ab;
+  --kk-text-faint:    #595d6c;
+  --kk-divider:       rgba(233,233,237,.16);
+
+  /* ---------- neutral ramp (surfaces, borders, chrome) ---------- */
+  --kk-n-100:#f3f5fe; --kk-n-200:#e4e7f5; --kk-n-300:#cfd3e5; --kk-n-400:#b2b6ca;
+  --kk-n-500:#9397ab; --kk-n-600:#75798c; --kk-n-700:#595d6c; --kk-n-800:#3f424d;
+  --kk-n-900:#292b31;
+
+  /* ---------- accent ramp (selection, focus, resolve) ---------- */
+  --kk-a-100:#f5f4ff; --kk-a-200:#e7e5fe; --kk-a-300:#d2cefd; --kk-a-400:#b5abfc;
+  --kk-a-500:#968ae0; --kk-a-600:#796cbf; --kk-a-700:#5d5294; --kk-a-800:#423a6a;
+  --kk-a-900:#2b2741;
+  --kk-accent: var(--kk-a-500);
+
+  /* ---------- game roles: derived in OKLCH at the accent's own
+       lightness + chroma, so no role shouts louder than another ---------- */
+  --kk-vigour:   oklch(0.62 0.135 22);   /* hearts / health           */
+  --kk-stamina:  oklch(0.68 0.135 145);  /* stamina / sprint          */
+  --kk-resolve:  var(--kk-a-500);        /* mana / focus              */
+  --kk-renown:   oklch(0.75 0.125 84);   /* gold, rank, rewards       */
+  --kk-taint:    oklch(0.58 0.150 350);  /* enemy, threat, corruption */
+  --kk-ok:       oklch(0.78 0.140 145);  /* "you can afford this"     */
+  --kk-warn:     oklch(0.68 0.150 25);   /* "you cannot / danger"     */
+
+  /* ---------- houses (proposal — not yet in the build) ---------- */
+  --kk-house-lion:  oklch(0.75 0.125 84);
+  --kk-house-wyrm:  oklch(0.58 0.150 350);
+  --kk-house-wold:  oklch(0.68 0.135 145);
+  --kk-house-frost: oklch(0.72 0.110 235);
+
+  /* ---------- type ---------- */
+  --kk-font: Inter, system-ui, sans-serif;
+  --kk-font-num: ui-monospace, Menlo, monospace;
+  /* if you keep your gold serif for display, set ONLY this one: */
+  --kk-font-display: Inter, system-ui, sans-serif;
+
+  /* ---------- spacing: Nocturne 0.7x density ---------- */
+  --kk-s1:2.8px; --kk-s2:5.6px; --kk-s3:8.4px; --kk-s4:11.2px;
+  --kk-s6:16.8px; --kk-s8:22.4px;
+  --kk-hud-inset: 22px;   /* every HUD cluster sits this far from the viewport edge */
+  --kk-slot: 52px;        /* hotbar + satchel slot                                */
+  --kk-slot-gap: 7px;
+  --kk-hit-min: 44px;     /* never smaller for anything clickable                 */
+
+  /* ---------- radii per lane ---------- */
+  --kk-r-sm:4px; --kk-r-md:8px; --kk-r-lg:14px; --kk-r-pill:999px;
+
+  /* ---------- elevation ---------- */
+  --kk-sh-sm: 0 0 0 1px #3f424d;
+  --kk-sh-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0,0,0,.55);
+  --kk-sh-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0,0,0,.65);
+  --kk-sh-panel: 0 26px 60px rgba(0,0,0,.55);
+}
+
+/* ============================================================
+   LANE RECIPES — four surface treatments over the SAME metrics.
+   Pick one per surface family; never mix two on one panel.
+   ============================================================ */
+
+/* --- A · METALHEART: clipped steel plate, zero radii, accent hairline --- */
+.kk-a-panel {
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  background: linear-gradient(104deg,
+    rgba(30,33,43,.95), rgba(15,17,23,.96) 40%,
+    rgba(38,42,56,.94) 62%, rgba(13,15,20,.96));
+  color: var(--kk-text);
+}
+.kk-a-panel::before {            /* brushed-metal grain */
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background: repeating-linear-gradient(104deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
+}
+.kk-a-panel::after {             /* the accent hairline + glow */
+  content:""; position:absolute; left:0; right:0; top:0; height:1px;
+  background: linear-gradient(90deg, transparent, var(--kk-a-400), transparent);
+  box-shadow: 0 0 10px var(--kk-a-500);
+}
+.kk-a-chip {                     /* sheared tab / resource chip */
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  background: linear-gradient(104deg,#252833,#15171e);
+  font: 700 11px/1 var(--kk-font); letter-spacing:.08em; color: var(--kk-n-500);
+}
+.kk-a-chip[aria-selected="true"] {
+  background: linear-gradient(104deg,#2a2440,#171426);
+  box-shadow: inset 0 0 0 1px var(--kk-a-400); color: var(--kk-a-400);
+}
+.kk-a-bar { position:relative; height:12px; transform:skewX(-14deg);
+  background:#0c0d13; box-shadow: inset 0 0 0 1px #43485a; }
+.kk-a-bar > i { position:absolute; inset:1px; display:block; }
+
+/* --- B · MILLENNIUM CHROME: translucent plastic, hard bevel, gloss cap --- */
+.kk-b-panel {
+  border-radius: 18px;
+  background: linear-gradient(rgba(238,247,255,.94), rgba(186,212,232,.92));
+  border: 1px solid #4f7191; color: #12293d;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2c4256, 0 18px 44px rgba(0,0,0,.55);
+}
+.kk-b-gloss {                    /* absolutely-positioned specular sweep */
+  position:absolute; left:5px; right:5px; top:3px; height:36%;
+  border-radius: var(--kk-r-pill);
+  background: linear-gradient(rgba(255,255,255,.85), rgba(255,255,255,0));
+  pointer-events:none;
+}
+.kk-b-primary { background: linear-gradient(#e2fb72,#8fb81c); border:1px solid #566f00;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.8), 0 3px 0 #435800; color:#243100; }
+/* lime = confirm, orange (#ff8a00) = active/selected. Both are Y2K, used sparingly. */
+
+/* --- C · AERO GLASS: blurred slab, one lit top edge, bloom (DEFAULT for
+       in-world panels — your world renders BRIGHT, so glass beats opaque) --- */
+.kk-c-panel {
+  position: relative; border-radius: 18px; overflow: hidden;
+  background: linear-gradient(rgba(16,24,20,.70), rgba(8,14,11,.82));
+  backdrop-filter: blur(20px) saturate(1.25);
+  border: 1px solid rgba(255,255,255,.18);
+  border-top-color: rgba(255,255,255,.46);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), var(--kk-sh-panel);
+  color: #fff;
+}
+.kk-c-panel::before {            /* top gloss — keep it a child, not a filter */
+  content:""; position:absolute; left:1px; right:1px; top:1px; height:120px;
+  background: linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,0));
+  pointer-events:none;
+}
+.kk-c-tab { border-radius: var(--kk-r-md); background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.11); color: rgba(255,255,255,.70); }
+.kk-c-tab[aria-selected="true"] {
+  background: linear-gradient(rgba(168,245,205,.30), rgba(110,231,168,.10));
+  border-color: #a8f5cd; color: #eafaf0; box-shadow: 0 0 14px rgba(110,231,168,.30);
+}
+/* Aero's own accent is a lush green, distinct from the blurple system accent: */
+:root { --kk-aero: #a8f5cd; --kk-aero-deep: #6ee7a8; }
+
+/* --- D · GUILD LEATHER: tooled hide, saddle stitch, brass, parchment --- */
+.kk-d-panel {
+  position:relative; border-radius: var(--kk-r-lg);
+  background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
+  border: 1px solid #150d06; color: #f0dcb0;
+  box-shadow: inset 0 1px 0 rgba(224,196,138,.16), var(--kk-sh-panel);
+}
+.kk-d-panel::before {            /* leather grain */
+  content:""; position:absolute; inset:0; border-radius: inherit; pointer-events:none;
+  background: repeating-linear-gradient(37deg, rgba(0,0,0,.14) 0 2px, transparent 2px 5px),
+              repeating-linear-gradient(-51deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);
+}
+.kk-d-stitch { position:absolute; inset:7px; border:1.5px dashed rgba(224,196,138,.28);
+  border-radius:11px; pointer-events:none; }
+.kk-d-well {                     /* recessed slot — inventory, armory */
+  background: linear-gradient(#2a1c11,#180f07);
+  box-shadow: inset 0 3px 6px rgba(0,0,0,.85), 0 0 0 1px #4a3520;
+  border-radius: 8px;
+}
+.kk-d-well[data-rarity]  { box-shadow: inset 0 3px 6px rgba(0,0,0,.85), 0 0 0 2px #e0c48a; }
+.kk-d-parchment {                /* every long text block goes on parchment */
+  background: linear-gradient(#efe3c4, #ded0a8 55%, #cfbf95); color:#2e2007;
+  box-shadow: inset 0 0 40px rgba(150,120,70,.30), inset 0 2px 6px rgba(90,70,40,.32);
+  border-radius: 12px;
+}
+.kk-d-brass { background: linear-gradient(#e6cf9c,#b18f4e); color:#2a1c11;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 2px 0 #6f5526; border-radius:8px; }
+
+/* ============================================================
+   STATES — themed, never browser defaults
+   ============================================================ */
+.kk-interactive:focus-visible { outline: 2px solid var(--kk-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--kk-accent) 30%, transparent); }
+[disabled], [aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+
+/* Reduced-motion + perf escape hatch: kill the blur on low quality preset */
+[data-kk-quality="low"] .kk-c-panel { backdrop-filter: none; background: rgba(10,16,12,.92); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.001s !important; } }

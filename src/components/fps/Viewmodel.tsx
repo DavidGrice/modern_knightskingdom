@@ -1,0 +1,503 @@
+'use client';
+// First-person viewmodel: the player's minifig arm holding the contextual
+// tool (axe / pickaxe / fishing rod / sword), with walk bob and swing.
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
+import { useGameStore } from '@/game/store/gameStore';
+import { loadPalette, paletteColor } from '@/lib/minifig';
+import { loadFpsArms, type FpsArm, type FpsArms } from '@/lib/rigExtract';
+import { labHands } from '@/game/data/labCapabilities';
+import { playerState } from './PlayerController';
+import { combatState, FULL_DRAW_TIME } from '@/game/combat';
+import RealWeapon from '../character/RealWeapon';
+import RealShield from '../character/RealShield';
+
+function Axe() {
+  return (
+    <group>
+      <mesh position={[0, 0.16, 0]}>
+        <cylinderGeometry args={[0.022, 0.026, 0.4, 8]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={0.9} />
+      </mesh>
+      <mesh position={[0.05, 0.33, 0]}>
+        <boxGeometry args={[0.14, 0.1, 0.03]} />
+        <meshStandardMaterial color="#c2c6ce" metalness={0.4} roughness={0.45} />
+      </mesh>
+    </group>
+  );
+}
+
+// Procedural builder's mallet — no dedicated hammer mold exists in the
+// extraction, same "procedural where the original has no equivalent" rule
+// as the axe/pickaxe/rod.
+function Hammer() {
+  return (
+    <group>
+      <mesh position={[0, 0.16, 0]}>
+        <cylinderGeometry args={[0.022, 0.026, 0.38, 8]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.34, 0]} rotation-z={Math.PI / 2}>
+        <cylinderGeometry args={[0.055, 0.055, 0.2, 8]} />
+        <meshStandardMaterial color="#8a6234" roughness={0.85} />
+      </mesh>
+    </group>
+  );
+}
+
+function Pickaxe() {
+  return (
+    <group>
+      <mesh position={[0, 0.16, 0]}>
+        <cylinderGeometry args={[0.022, 0.026, 0.42, 8]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.36, 0]} rotation-z={Math.PI / 2}>
+        <cylinderGeometry args={[0.02, 0.045, 0.3, 6]} />
+        <meshStandardMaterial color="#8a8a90" metalness={0.6} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+function Rod() {
+  return (
+    <group rotation-x={-0.35}>
+      <mesh position={[0, 0.3, 0]}>
+        <cylinderGeometry args={[0.012, 0.02, 0.75, 6]} />
+        <meshStandardMaterial color="#7a5a34" roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 0.66, -0.02]}>
+        <sphereGeometry args={[0.018, 6, 6]} />
+        <meshStandardMaterial color="#e8e8e8" />
+      </mesh>
+    </group>
+  );
+}
+
+function Crossbow() {
+  return (
+    <group rotation-x={-1.35}>
+      {/* stock */}
+      <mesh position={[0, 0.18, 0]}>
+        <boxGeometry args={[0.05, 0.42, 0.06]} />
+        <meshStandardMaterial color="#5d3d20" roughness={0.85} />
+      </mesh>
+      {/* bow arms */}
+      <mesh position={[0, 0.34, 0]} rotation-z={Math.PI / 2}>
+        <boxGeometry args={[0.03, 0.4, 0.03]} />
+        <meshStandardMaterial color="#3a3a40" metalness={0.5} roughness={0.4} />
+      </mesh>
+      {/* string */}
+      <mesh position={[-0.1, 0.28, 0]} rotation-z={0.45}>
+        <cylinderGeometry args={[0.006, 0.006, 0.24, 4]} />
+        <meshStandardMaterial color="#d8d0b8" />
+      </mesh>
+      <mesh position={[0.1, 0.28, 0]} rotation-z={-0.45}>
+        <cylinderGeometry args={[0.006, 0.006, 0.24, 4]} />
+        <meshStandardMaterial color="#d8d0b8" />
+      </mesh>
+      {/* loaded bolt */}
+      <mesh position={[0, 0.3, 0.01]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.3, 5]} />
+        <meshStandardMaterial color="#8a6234" roughness={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
+// H29/H33 · A REAL longbow. The rig lab found the mold on John of Mayne
+// (`minifigjohnmayne01` → role `bow`), together with the `arrow` he carries,
+// so the draw nocks an actual arrow instead of a hand-built stand-in.
+//
+// The bowstring is still procedural, and honestly so: it is a LEGO mold and
+// there is no string in the plastic. It is drawn between the two limb tips
+// and pulled back with the draw, which is what sells the motion.
+function Longbow({ draw }: { draw: number }) {
+  const pull = 0.02 + draw * 0.26;      // how far the nock travels toward you
+  const limb = 0.42;                    // half the bow's height, for the string
+  return (
+    <group>
+      {/* K56 · the bow and the arrow were BOTH inside one rotated group, so
+          the arrow inherited the bow's cross-body turn and ended up aimed
+          back at the player while the bow's belly faced outward — the two
+          read as swapped. They are siblings now: the bow keeps its
+          cross-body presentation, and the arrow is aimed downrange in the
+          MOUNT's own frame where -Z is forward, independent of however the
+          bow is turned. */}
+      <group rotation={[0.1, -Math.PI / 2, 0]}>
+      <RealWeapon
+        id="bow"
+        fallback={(
+          <mesh rotation-z={0.5}>
+            <cylinderGeometry args={[0.014, 0.02, 0.34, 6]} />
+            <meshStandardMaterial color="#6b4a2a" roughness={0.85} />
+          </mesh>
+        )}
+      />
+      {/* string: two segments meeting at the nock, so it forms a real V as
+          it is drawn rather than sliding about as one straight bar */}
+      {[1, -1].map((side) => {
+        const dx = -pull;
+        const dy = side * limb;
+        const len = Math.hypot(dx, dy);
+        return (
+          <mesh
+            key={side}
+            position={[dx / 2, dy / 2, 0]}
+            rotation-z={Math.atan2(dy, dx) - Math.PI / 2}
+          >
+            <cylinderGeometry args={[0.004, 0.004, len, 4]} />
+            <meshStandardMaterial color="#e8ddc0" />
+          </mesh>
+        );
+      })}
+      </group>
+      {/* the nocked arrow: pointing DOWNRANGE (-Z), riding back toward the
+          archer along +Z as the draw deepens */}
+      <group position={[0, 0, pull]} rotation-x={-Math.PI / 2}>
+        <RealWeapon id="arrow" scale={0.85} fallback={null} />
+      </group>
+    </group>
+  );
+}
+
+function Sword() {
+  return (
+    <group>
+      <mesh position={[0, 0.08, 0]}>
+        <cylinderGeometry args={[0.02, 0.024, 0.14, 8]} />
+        <meshStandardMaterial color="#3a3a40" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.165, 0]}>
+        <boxGeometry args={[0.16, 0.03, 0.03]} />
+        <meshStandardMaterial color="#c8a43c" metalness={0.7} roughness={0.35} />
+      </mesh>
+      <mesh position={[0, 0.42, 0]}>
+        <boxGeometry args={[0.05, 0.48, 0.016]} />
+        <meshStandardMaterial color="#c9ccd4" metalness={0.75} roughness={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+function BlockShield() {
+  return (
+    // +Math.PI from the third-person ArmShield's outward-facing angle: the
+    // wielder's own eyes see the INSIDE of a raised shield (the arm strap/
+    // hook), not the painted lion face an enemy in front of them would see.
+    <group rotation={[0.1, 0.5 + Math.PI, 0]}>
+      <RealShield
+        fallback={
+          <>
+            <mesh>
+              <boxGeometry args={[0.34, 0.44, 0.04]} />
+              <meshStandardMaterial color="#9aa0aa" metalness={0.4} roughness={0.45} />
+            </mesh>
+            <mesh position-z={0.015}>
+              <boxGeometry args={[0.26, 0.34, 0.02]} />
+              <meshStandardMaterial color="#b03a2e" roughness={0.7} />
+            </mesh>
+            <mesh position-z={0.035}>
+              <sphereGeometry args={[0.05, 8, 8]} />
+              <meshStandardMaterial color="#c8a43c" metalness={0.7} roughness={0.3} />
+            </mesh>
+          </>
+        }
+      />
+    </group>
+  );
+}
+
+/**
+ * Where each weapon POINTS once mounted. Every real mold now arrives grip-at-
+ * origin with its length along +Y (see lib/weaponParts), so these are
+ * statements of intent rather than per-weapon fudge factors:
+ *   sword     — blade up and angled forward, carried at the ready
+ *   crossbow  — levelled downrange, +Y turned a quarter onto -Z
+ *   tool      — haft up and forward, the shared pose for the procedural set
+ */
+/** how high the hands sit in the frame, and how far out the off hand is.
+ *  The weapon hand used to sit at -0.42, low enough that it read as hanging
+ *  below the viewport rather than being carried. */
+const HAND_Y = -0.34;
+const OFFHAND_X = 0.36;
+/** L73 · how far left the bow hand sits — inboard of the off hand, because a
+ *  drawn bow is held toward the centre of the view, not out at the shoulder */
+const BOW_X = 0.2;
+
+const MOUNT = {
+  sword: [-0.45, 0, -0.12] as [number, number, number],
+  crossbow: [-Math.PI / 2, 0, 0] as [number, number, number],
+  //   tool — H34. There is no pickaxe or hammer mold anywhere in the
+  //          extraction (the lab's only `pickaxe` is a trait on a defence
+  //          tower, not a held part), so these four stay procedural. What
+  //          was wrong was the POSE: their hafts sat nearly upright while
+  //          the hand angles in toward the camera, so the head pointed up
+  //          and away instead of out in front where a swing starts. Pitched
+  //          forward to lie along the forearm.
+  tool: [-0.78, 0.12, -0.16] as [number, number, number],
+};
+
+/** the viewmodel is much smaller than a 1.75m figure */
+const ARM_SCALE = 0.62;
+/** Where the arm should point in CAMERA space, from shoulder to hand: up,
+ *  forward and inward, so the shoulder sits off the bottom-outer corner of
+ *  the frame and the hand arrives at the tool mount. */
+const ARM_DIR = new THREE.Vector3(-0.39, 0.65, -0.65).normalize();
+const UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * The player's real minifig arm.
+ *
+ * Rather than hand-tuning a pitch (which only works for one donor's
+ * proportions), the arm is PINNED BY ITS HAND: the inner group translates so
+ * the measured wrist point lands on this group's origin — which is the same
+ * point the held tool mounts at — and the outer rotation is solved from the
+ * arm's own hang direction to ARM_DIR. Any donor's arm therefore arrives
+ * with its hand exactly where the sword is, whatever its mold looks like.
+ */
+function RigArm({ arm, side }: { arm: FpsArm; side: 1 | -1 }) {
+  const instance = useMemo(() => arm.group.clone(true), [arm]);
+  const { quat, offset } = useMemo(() => {
+    const dir = ARM_DIR.clone();
+    if (side > 0) dir.x = -dir.x;               // mirror for the other arm
+    const q = new THREE.Quaternion().setFromUnitVectors(arm.hand.clone().normalize(), dir);
+    // roll so the elbow bows outward rather than through the view
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(UP, side * 0.25));
+    return {
+      quat: q,
+      offset: arm.hand.clone().multiplyScalar(-ARM_SCALE),
+    };
+  }, [arm, side]);
+  return (
+    <group quaternion={quat}>
+      <group position={offset} scale={ARM_SCALE}>
+        <primitive object={instance} />
+      </group>
+    </group>
+  );
+}
+
+export default function Viewmodel() {
+  const camera = useThree((s) => s.camera);
+  const character = useGameStore((s) => s.character);
+  const cameraMode = useGameStore((s) => s.cameraMode);
+  const buildMode = useGameStore((s) => s.buildMode);
+  const targetKind = useGameStore((s) => s.targetKind);
+  const inventory = useGameStore((s) => s.inventory);
+  const outer = useRef<THREE.Group>(null);
+  const inner = useRef<THREE.Group>(null);
+  const offhand = useRef<THREE.Group>(null);
+  const swingPhase = useRef(0);
+  const bobPhase = useRef(0);
+  const [colors, setColors] = useState<{ arm: THREE.Color; hand: THREE.Color } | null>(null);
+  // the player's OWN arms, assembled from their donor's real molds — the
+  // procedural cylinders below stay as the fallback for a donor whose arms
+  // could not be classified, so the hand is never empty
+  const [arms, setArms] = useState<FpsArms | null>(null);
+
+  useEffect(() => {
+    if (!character) return;
+    loadPalette().then((pal) => {
+      setColors({
+        arm: paletteColor(pal, character.armColor),
+        hand: paletteColor(pal, character.handColor),
+      });
+    });
+  }, [character]);
+
+  useEffect(() => {
+    if (!character) return;
+    let alive = true;
+    setArms(null);
+    loadFpsArms(character).then((a) => { if (alive) setArms(a); }).catch(() => {});
+    return () => { alive = false; };
+    // re-assemble whenever the look changes, so recolouring in the menu shows
+  }, [character?.headDonor, character?.bodyDonor, character?.armColor,
+    character?.handColor, character?.legColor, character?.hipColor]);
+
+  const [rangedMode, setRangedMode] = useState(false);
+  const [bowMode, setBowMode] = useState(false);
+  const [drawProgress, setDrawProgress] = useState(0);
+  const [blockShield, setBlockShield] = useState(false);
+  const [bolts, setBolts] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const inv = useGameStore.getState().inventory;
+      const bow = combatState.rangedWeapon === 'longbow';
+      setRangedMode(
+        combatState.weapon === 'ranged'
+        && (bow ? (inv.longbow ?? 0) > 0 : (inv.crossbow ?? 0) > 0),
+      );
+      setBowMode(bow);
+      setDrawProgress(
+        combatState.drawStart > 0
+          ? Math.min(1, (performance.now() - combatState.drawStart) / (FULL_DRAW_TIME * 1000))
+          : 0,
+      );
+      setBlockShield(combatState.blocking && (inv.shield ?? 0) > 0);
+      setBolts(inv.bolt ?? 0);
+    }, 50);
+    return () => clearInterval(t);
+  }, []);
+
+  // bare-handed start (2026-07-20): no tool/weapon is ever guaranteed to be
+  // owned anymore, so the viewmodel must actually check ownership before
+  // showing one — 'fist' (no matching render branch below, just the bare
+  // arm+hand mesh already drawn unconditionally) is the honest default.
+  const tool = useMemo(() => {
+    if (rangedMode) return bowMode ? 'longbow' : 'crossbow';
+    if (targetKind === 'rock' && (inventory.pickaxe ?? 0) > 0) return 'pickaxe';
+    if (targetKind === 'fishing' && (inventory.fishing_rod ?? 0) > 0) return 'rod';
+    if (targetKind === 'tree' && (inventory.axe ?? 0) > 0) return 'axe';
+    if (targetKind === 'construct' && (inventory.hammer ?? 0) > 0) return 'hammer';
+    if ((inventory.sword ?? 0) > 0) return 'sword';
+    return 'fist';
+  }, [rangedMode, bowMode, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
+
+  useFrame((_, dt) => {
+    const o = outer.current;
+    const i = inner.current;
+    if (!o || !i) return;
+    o.position.copy(camera.position);
+    o.quaternion.copy(camera.quaternion);
+    // walk bob
+    bobPhase.current += dt * (playerState.speed > 5 ? 11 : 7.5);
+    const moving = playerState.speed > 0 && playerState.grounded;
+    const bobAmp = moving ? 0.012 : 0;
+    const bobY = Math.abs(Math.sin(bobPhase.current)) * -bobAmp;
+    // H32 · running arm swing. The two arms counter-phase off the SAME
+    // bob phase that drives the footfall, so the swing lands with the step
+    // instead of drifting against it — one arm forward as the other goes
+    // back, easing to rest when you stop.
+    const swingAmp = moving ? Math.min(0.5, 0.16 + playerState.speed * 0.045) : 0;
+    const swing = Math.sin(bobPhase.current) * swingAmp;
+    // combat swing (quick chop after an attack click)
+    const sinceAttack = (performance.now() - combatState.attackAt) / 1000;
+    if (sinceAttack < 0.3) {
+      const p = sinceAttack / 0.3;
+      i.rotation.set(-1.3 * Math.sin(p * Math.PI), 0.25 * Math.sin(p * Math.PI * 2), 0.1);
+    } else if (playerState.acting) {
+      // swing while gathering
+      swingPhase.current += dt * 9;
+      const s = Math.sin(swingPhase.current);
+      i.rotation.set(-0.55 - 0.55 * Math.max(0, s), 0.15 * s, 0.1);
+    } else {
+      swingPhase.current = 0;
+      i.rotation.x += (0 - i.rotation.x) * Math.min(1, dt * 10);
+      i.rotation.y += (0 - i.rotation.y) * Math.min(1, dt * 10);
+      i.rotation.z += (0 - i.rotation.z) * Math.min(1, dt * 10);
+    }
+    i.position.set(0.36, HAND_Y + bobY, -0.74);
+    // the swing rides on top of whatever the attack/gather pose set
+    i.rotation.x += swing * 0.55;
+
+    const off = offhand.current;
+    if (off) {
+      off.position.set(-OFFHAND_X, HAND_Y + bobY, -0.78);
+      // opposite phase — as the weapon hand comes forward this one goes back
+      off.rotation.set(-swing * 0.8, 0, 0);
+    }
+  });
+
+  // where a held item sits: the real hand's wrist point when the rig loaded,
+  // otherwise the old hand-tuned offset for the procedural fallback
+  // RigArm pins the hand to its own origin, so a real arm needs no offset at
+  // all; the procedural fallback keeps its old hand-tuned one
+  const handMount: [number, number, number] = arms ? [0, 0, 0] : [0.02, 0.05, 0];
+  // -1 = the shield rides the LEFT of the view (the lab's usual answer)
+  const shieldSide = labHands(character?.bodyDonor).shield === 'left' ? -1 : 1;
+
+  if (!character || cameraMode !== 'fps' || buildMode || !colors) return null;
+
+  return (
+    <group ref={outer}>
+      <group ref={inner} position={[0.34, -0.42, -0.62]} rotation={[0, 0, 0]}>
+        {/* The player's OWN arm, from their donor's real mold (lib/fpsArms).
+            Falls back to the two procedural cylinders only when a donor's
+            arms could not be classified, so the hand is never empty. */}
+        {arms ? (
+          <RigArm arm={arms.right} side={-1} />
+        ) : (
+          <>
+            <mesh position={[0.02, -0.09, 0.14]} rotation-x={0.8}>
+              <cylinderGeometry args={[0.055, 0.065, 0.34, 10]} />
+              <meshPhongMaterial color={colors.arm} />
+            </mesh>
+            <mesh position={[0.02, 0.04, 0.02]} rotation-x={1.2}>
+              <cylinderGeometry args={[0.05, 0.05, 0.09, 10]} />
+              <meshPhongMaterial color={colors.hand} />
+            </mesh>
+          </>
+        )}
+        {/* Whatever is actually equipped, seated in that hand.
+            H29 gave every real mold the same convention — grip at the
+            origin, weapon pointing +Y — so each mount below is now just a
+            statement of where that weapon should POINT in view space,
+            rather than an offset tuned by eye per weapon. */}
+        <group position={handMount} scale={0.78}>
+          {/* procedural tools (no mold exists for these in the extraction —
+              see weaponParts) keep the shared haft-up-and-forward pose */}
+          <group rotation={MOUNT.tool}>
+            {tool === 'axe' && <Axe />}
+            {tool === 'pickaxe' && <Pickaxe />}
+            {tool === 'hammer' && <Hammer />}
+            {tool === 'rod' && <Rod />}
+          </group>
+          {/* blade up and angled forward, as a sword is carried at the ready */}
+          {tool === 'sword' && (
+            <group rotation={MOUNT.sword}>
+              <RealWeapon id="sword" fallback={<Sword />} />
+            </group>
+          )}
+          {/* levelled downrange: +Y rotated a quarter turn onto -Z */}
+          {tool === 'crossbow' && (
+            <group rotation={MOUNT.crossbow}>
+              <RealWeapon id="crossbow" fallback={<Crossbow />} />
+              {/* the bolt sitting in the groove, from the same donor */}
+              {bolts > 0 && (
+                <group position={[0, 0.16, 0]}>
+                  <RealWeapon id="bolt" scale={0.9} fallback={null} />
+                </group>
+              )}
+            </group>
+          )}
+        </group>
+      </group>
+      {/* L73 · A BOW IS HELD IN THE OFF HAND. It was mounted in the same
+          group as the sword and the crossbow — the drawing hand — so it sat
+          out at the right edge of the view, half off-screen, with the string
+          hand nowhere near it. It hangs off the off-hand side now, pulled in
+          toward the middle of the view the way a bow is actually held: limbs
+          vertical, belly to the target, the arrow riding the string at eye
+          level rather than crossing it. */}
+      {tool === 'longbow' && (
+        <group position={[-BOW_X, HAND_Y + 0.3, -0.72]} scale={0.78}>
+          <Longbow draw={drawProgress} />
+        </group>
+      )}
+      {/* H31 · the OFF hand. A first-person view with one arm in it reads as
+          a floating prop; the second hand is most of what makes it read as a
+          body. Hidden while blocking, because the shield arm below takes
+          that side over, and while a two-handed pose is in play. */}
+      {arms && !blockShield && (
+        <group ref={offhand} position={[-OFFHAND_X, HAND_Y, -0.78]}>
+          <RigArm arm={arms.left} side={1} />
+        </group>
+      )}
+      {/* raised shield fills the shield-hand side of the view while blocking.
+          Which side that is comes from the rig lab's own per-donor
+          `shieldHand`, not a hardcoded left (see labHands). */}
+      {blockShield && (
+        <group position={[shieldSide * 0.28, -0.22, -0.55]}>
+          {arms && (
+            <RigArm arm={shieldSide < 0 ? arms.left : arms.right} side={shieldSide < 0 ? 1 : -1} />
+          )}
+          <BlockShield />
+        </group>
+      )}
+    </group>
+  );
+}
