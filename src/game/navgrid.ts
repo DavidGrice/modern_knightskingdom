@@ -124,6 +124,93 @@ const NEIGHBOURS: [number, number, number][] = [
   [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
 ];
 
+// Phase 2, iteration 2.2 — search scratch state, allocated ONCE rather than
+// per findPath call. §0.4 (zero allocation in per-frame code) applies here:
+// navSteer calls findPath on every villager's staggered repath, up to 20
+// agents doing it within the same few-second window, and each call used to
+// allocate three DIM*DIM typed arrays (g, f, came) plus an `open` array that
+// grew and shrank via splice(). At this grid size (12,544 cells) that is
+// cheap in isolation but adds up to real GC churn exactly when it matters
+// least — mid-raid, per PHASE_2_NAVIGATION_AND_GATHERING.md §0's argument for
+// why rebuildNav's own cost matters. Search hygiene (§2.5): 200 consecutive
+// findPath calls should show flat heap allocation — verified in
+// scripts/smoke134.mjs.
+//
+// Lazy-clear via generation stamp instead of reallocating/filling per call:
+// a cell is "fresh" for the current search iff stamp[i] !== searchId.
+// Touching a cell for the first time in a search sets stamp[i] = searchId
+// and initializes its g/f/came entries; "clearing" between searches is just
+// searchId++, an O(1) reset instead of an O(DIM²) fill.
+const DIM2 = DIM * DIM;
+const gScore = new Float32Array(DIM2);
+const fScore = new Float32Array(DIM2);
+const cameFrom = new Int32Array(DIM2);
+const stamp = new Uint32Array(DIM2);
+let searchId = 0;
+
+/** First touch of `i` in the current search: stamp it and give it fresh
+ *  g/f/came/heapPos values. A no-op on every subsequent touch this search.
+ *  heapPos = -1 means "not currently in the heap" — Int32Array defaults
+ *  every entry to 0, which is a valid heap POSITION, so "not in the heap"
+ *  needs its own explicit sentinel rather than relying on the zero-value
+ *  default the way gScore/fScore can rely on Infinity-via-fresh-touch. */
+function touch(i: number) {
+  if (stamp[i] === searchId) return;
+  stamp[i] = searchId;
+  gScore[i] = Infinity;
+  fScore[i] = Infinity;
+  cameFrom[i] = -1;
+  heapPos[i] = -1;
+}
+
+// Binary min-heap on fScore, with an index map (heapPos) for O(log n)
+// decrease-key instead of the O(n) "scan open for the smallest f" the
+// previous linear-array version did. heapPos validity rides on the SAME
+// stamp as gScore/fScore/cameFrom — a stale heapPos from a previous search
+// is never trusted, because a cell that hasn't been touched(...) this search
+// cannot be "in the heap" this search, so there is nothing to reset between
+// calls beyond bumping searchId. No explicit closed-set: a cell is only ever
+// in the heap once (fresh push OR decrease-key, never both), and the
+// existing `tentative >= gScore[n]` dominance check already rejects any
+// worse re-relaxation of an already-finalized cell — the same guarantee a
+// closed-set would provide, without a fourth array to maintain.
+const heap = new Int32Array(DIM2);
+const heapPos = new Int32Array(DIM2);
+
+function heapSiftUp(i: number) {
+  while (i > 0) {
+    const parent = (i - 1) >> 1;
+    if (fScore[heap[parent]] <= fScore[heap[i]]) return;
+    const tmp = heap[parent]; heap[parent] = heap[i]; heap[i] = tmp;
+    heapPos[heap[parent]] = parent;
+    heapPos[heap[i]] = i;
+    i = parent;
+  }
+}
+
+function heapSiftDown(size: number, i: number) {
+  for (;;) {
+    const l = i * 2 + 1;
+    const r = i * 2 + 2;
+    let smallest = i;
+    if (l < size && fScore[heap[l]] < fScore[heap[smallest]]) smallest = l;
+    if (r < size && fScore[heap[r]] < fScore[heap[smallest]]) smallest = r;
+    if (smallest === i) return;
+    const tmp = heap[smallest]; heap[smallest] = heap[i]; heap[i] = tmp;
+    heapPos[heap[smallest]] = smallest;
+    heapPos[heap[i]] = i;
+    i = smallest;
+  }
+}
+
+/** Fresh push (cell not currently in the heap) — appends and sifts up. */
+function heapPush(size: number, cell: number): number {
+  heap[size] = cell;
+  heapPos[cell] = size;
+  heapSiftUp(size);
+  return size + 1;
+}
+
 /**
  * A* from one world point to another. Returns waypoints in world space
  * (already string-pulled to drop collinear runs), or null when there is no
@@ -141,10 +228,8 @@ export function findPath(
   const [gi, gj] = goal;
   if (si === gi && sj === gj) return [];
 
-  const g = new Float32Array(DIM * DIM).fill(Infinity);
-  const came = new Int32Array(DIM * DIM).fill(-1);
-  const open: number[] = [];
-  const f = new Float32Array(DIM * DIM).fill(Infinity);
+  searchId++;
+  let heapSize = 0;
   const h = (i: number, j: number) => {
     const dx = Math.abs(i - gi);
     const dz = Math.abs(j - gj);
@@ -152,20 +237,29 @@ export function findPath(
   };
 
   const s = idx(si, sj);
-  g[s] = 0;
-  f[s] = h(si, sj);
-  open.push(s);
+  const goalIdx = idx(gi, gj);
+  touch(s);
+  gScore[s] = 0;
+  fScore[s] = h(si, sj);
+  heapSize = heapPush(heapSize, s);
   let visited = 0;
 
-  while (open.length) {
-    // small grids and short paths — a linear scan beats the bookkeeping of a
-    // real heap here, and keeps this module dependency-free
-    let bestAt = 0;
-    for (let k = 1; k < open.length; k++) if (f[open[k]] < f[open[bestAt]]) bestAt = k;
-    const cur = open.splice(bestAt, 1)[0];
-    if (cur === idx(gi, gj)) {
+  while (heapSize > 0) {
+    const cur = heap[0];
+    heapSize--;
+    heapPos[cur] = -1;
+    // when the heap has just emptied, heap[0] is still `cur` in memory —
+    // skip touching it again so the -1 just written is not immediately
+    // clobbered back to a stale 0
+    if (heapSize > 0) {
+      heap[0] = heap[heapSize];
+      heapPos[heap[0]] = 0;
+      heapSiftDown(heapSize, 0);
+    }
+
+    if (cur === goalIdx) {
       const cells: [number, number][] = [];
-      for (let n = cur; n !== -1; n = came[n]) cells.push([Math.floor(n / DIM), n % DIM]);
+      for (let n = cur; n !== -1; n = cameFrom[n]) cells.push([Math.floor(n / DIM), n % DIM]);
       cells.reverse();
       // drop the interior of straight runs: the follower only needs corners
       const out: { x: number; z: number }[] = [];
@@ -189,12 +283,19 @@ export function findPath(
       if (blocked[n]) continue;
       // no cutting a corner diagonally between two blocked cells
       if (di && dj && (blocked[idx(ci + di, cj)] || blocked[idx(ci, cj + dj)])) continue;
-      const tentative = g[cur] + cost;
-      if (tentative >= g[n]) continue;
-      came[n] = cur;
-      g[n] = tentative;
-      f[n] = tentative + h(ni, nj);
-      if (!open.includes(n)) open.push(n);
+      touch(n);
+      const tentative = gScore[cur] + cost;
+      if (tentative >= gScore[n]) continue;
+      cameFrom[n] = cur;
+      gScore[n] = tentative;
+      fScore[n] = tentative + h(ni, nj);
+      if (heapPos[n] === -1) {
+        heapSize = heapPush(heapSize, n);
+      } else {
+        // already in the heap this search — f just decreased, so it can
+        // only need to move up, never down (decrease-key)
+        heapSiftUp(heapPos[n]);
+      }
     }
   }
   return null;
