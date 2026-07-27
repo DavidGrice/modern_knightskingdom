@@ -3428,104 +3428,45 @@ reasoner, where the spec says the time actually goes) → 6 (perception) → 7
 and last. One phase per session, and no phase starts before the previous one's
 debug view works.
 
-# BLOCK O — playtest round, 2026-07-27
+## Block O — fix log
 
-Eight items off a live session. Logged first, fixed one at a time with
-verification, per the standing workflow. **These now go through branches and
-PRs — `main` is protected.** Working order and branch names in `## Order` at
-the end of this block.
+**O2 · fixed, and the real cause was not either logged suspect.**
+`navSteer`'s `Math.hypot(gdx, gdz) || 1` put a divide-by-zero guard on the
+*reported distance* rather than the divisor. An agent standing exactly on its
+target got `dist = 1`, so every caller's arrival check (`d < 0.4` / `0.6` /
+`1.2`) failed, they took the keep-walking branch with a zero-length direction
+vector, and never re-rolled the target because arrival never fired.
+`VillagerFigure` seeds `x/z` **and** `tx/tz` to the same home spot, so anyone
+who spawned rather than walked in began life in that state. A raid broke it by
+physically displacing them — exactly what was reported.
 
-**O1 · Alric and Beda leave a ghost at their post after joining.** Recruiting
-them should retire the static flavour figure. `recruitVillageFolk` does create
-the Villager with the *same id* as the NpcDef (`farmer_alric`/`miller_beda`),
-and `Npc.tsx` filters on exactly that (`!villagers.some(v => v.id === n.id)`),
-so the intended mechanism is present and the filter looks right. **Root cause
-not yet found** — `StarterVillage.tsx` renders only huts (`mc001.glb`), no
-figures, so the duplicate is coming from somewhere else. Needs a repro with
-`__kk.getState().villagers` and `NPCS` both dumped at the moment the ghost is
-visible, before guessing at a fix.
+Second fault in the same area: `recruitVillageFolk`'s road arrival was a silent
+no-op. It read `villagerMobs[npcId]`, which does not exist until
+`VillagerFigure` mounts, so `if (m)` never ran. Now uses `arriveByRoad()`,
+which creates the entry — so Alric and Beda walk the road in like every other
+newcomer, as asked.
 
-**O2 · Alric and Beda walk on the spot near the homestead centre instead of
-working nodes.** Two suspects, both in `Villagers.tsx`, and they are not
-exclusive. (a) Alric is recruited as `farmer`, whose worksite lookup is
-`buildings.find(b => b.type === 'farmplot')` — with no farmplot built, `wx/wz`
-stay null and he falls through to the generic wander branch. Beda is `miner`
-and wants a live `rock` node, which should exist, so this does not explain both.
-(b) The night branch with **no beds placed** sends every villager to their own
-`home` spot and idles there, which matches the reported "no beds" trigger.
-Confirm which by watching `villagerProgress` and the active branch before
-touching either.
+**Worth keeping:** the `|| 1` bug was latent for every caller, not just these
+two. Anything that starts on its own target hits it.
 
-**O3 · A tree spawns inside Beda's post.** `seedNodes` places resource nodes
-without testing them against building footprints. Needs a rejection pass
-against `collisionBoxesFor` — the same volumes the nav grid and the player
-already use — rather than a hardcoded keep-out box.
+**O7 · fixed, with the difficulty system it needed.** New leaf module
+`game/difficulty.ts` (carts.ts pattern — reads the store one-directionally,
+nothing in the store imports it). One `TIER_RULES` table, tiers 0-5, each
+requiring **all** of: lifetime structures, total skill level, lifetime kills,
+days elapsed. An AND rather than a score, so a builder is not handed a war and
+a fighter is not handed a siege of a homestead that is not there.
 
-**O4 · The merchant's hands float, and he should travel rather than stand.**
-The floating hands are N77 (a donor/config mismatch, same fault Alric and Beda
-had — see K57). The second half supersedes N78: the merchant and his horses
-should arrive, trade, and leave, rather than being permanently parked.
+Every input is monotonic by construction — `stats.buildingsPlaced` is the
+lifetime counter, not the current building list, so razing your own walls (or
+a raider doing it) cannot walk difficulty back down. That is what makes the
+tier persist through a save with no new field and no high-water hack.
 
-**O5 · Placing a building stalls the frame.** `PropModel` resolves its GLB on
-demand at placement time. `preloadCommonAssets()` exists and runs on
-GameScreen mount but does not cover the buildable catalog. Extend it to warm
-every placeable piece — ideally driven off the build menu's own list so a new
-buildable cannot be forgotten.
+The dragon now needs `tier >= 3` **and** `rangedReady()` — a bow or crossbow
+*with ammunition for it*. Both, deliberately: a tier-3 player with no bow is
+still a spectator. Tier, its inputs, and what the next tier is waiting on are
+all in the `` ` `` debug overlay, so this is tunable rather than guessed at.
 
-**O6 · Herbs appear, then vanish at nightfall.** `ResourceNodes` filters herbs
-on `respawnAt === null`, which is a harvest state and has nothing to do with
-the clock, so the visible symptom and the visible filter disagree. Suspect the
-instanced path (`HerbGroup` rebuilds its `instances` array on every render with
-no memo, feeding `InstancedProp`). Resource nodes must persist across
-day/night, weather and season unconditionally — the only thing that may hide
-one is being harvested.
-
-**O7 · The dragon arrives far too early.** The entire gate is
-`DragonSiege.tsx:192`: `if (!st.dragonSeen || st.buildings.filter(isBuilt).length < 2) return;`
-Two finished buildings is reachable in the first minutes, long before a bow, a
-crossbow or any ammunition is craftable — so the first dragon is an unwinnable
-encounter. This is the worst item in the block.
-
-**O8 · Replace the yellow ground outline with real fence.** Supersedes N75.
-The gold boundary strips in `Grounds.tsx` become a run of the existing fence
-buildable, instanced.
-
-## The missing system, and why O7 is not a one-line fix
-
-O7's real cause is that **the game has no difficulty curve** — it has one
-`dragonSeen` flag and a building count. Raiders, camp guards and the dragon
-each gate on their own ad-hoc condition, so nothing scales together and
-nothing can be reasoned about.
-
-Raising the dragon's threshold alone just moves the same cliff. What is needed
-is a single derived **threat tier** — computed from the things that already
-track progression (`stats` lifetime counters, skill levels, rank, built
-structures, whether ranged weapons and ammunition are actually obtainable) —
-that every spawner reads. Persisted, monotonic where it should be, and
-surfaced in the debug overlay so it can be tuned rather than guessed at.
-
-That is a real system, not a bug fix, and it should be built as one: a leaf
-module (`game/difficulty.ts`, following the `carts.ts`/`playerState.ts`
-pattern), tier thresholds in JSON, every existing spawner migrated onto it in
-the same pass so two gating schemes never coexist.
-
-## Order
-
-Fix in this order, one branch and one PR each, each verified before the next
-starts. Grouped so related files are not touched twice.
-
-1. `bugfix/dragon-difficulty-gate` — **O7 + the threat-tier module.** Worst
-   player-facing item; everything else is cosmetic beside an unwinnable fight.
-2. `bugfix/villager-recruitment-ghost` — **O1**, after a repro. Small if the
-   repro is clear, unknown if not.
-3. `bugfix/villager-work-routine` — **O2**, same file as O1's likely fix.
-4. `bugfix/herb-persistence` — **O6**. Self-contained.
-5. `bugfix/node-seeding-collision` — **O3**. Wants the same footprint test
-   O8 will use.
-6. `enhancement/build-asset-preload` — **O5**. Measure the stall before and
-   after; a fix nobody can feel is not a fix.
-7. `enhancement/merchant-travel` — **O4**. Largest scope; the rig fault and
-   the travel behaviour are separable and may want splitting.
-8. `enhancement/grounds-fence` — **O8**. Pure polish, last.
-
-O1 and O2 both need a repro first. Do not start either by guessing.
+**Not done in this pass:** only the dragon is migrated. `raidStrength()` is
+exported and ready, but `Enemies.tsx`'s raider spawning still uses its own
+gate. Migrating it is the next step and must happen before two gating schemes
+settle in — that is the failure this system exists to end.

@@ -17,6 +17,7 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt } from '@/game/types';
+import { dragonAllowed } from '@/game/difficulty';
 import { dragonAir, loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
@@ -189,7 +190,12 @@ export default function DragonSiege() {
     // the siege only comes after the omen has been seen, deep at night, to a
     // homestead worth burning — one roll per night, never two dragons at once
     if (worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current && !dragonAir.busy) {
-      if (!st.dragonSeen || st.buildings.filter((b) => isBuilt(b)).length < 2) return;
+      // O7 · the gate used to be `builtBuildings < 2`, which clears in the
+      // first minutes — long before a bow or a single arrow is craftable, so
+      // the first dragon was an unwinnable fight. It now reads the shared
+      // threat tier (game/difficulty.ts), which also requires the player to
+      // actually own a ranged weapon AND ammunition for it.
+      if (!st.dragonSeen || !dragonAllowed()) return;
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < ROLL_CHANCE) {
         dragonAir.busy = true;
