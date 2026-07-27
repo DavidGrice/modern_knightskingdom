@@ -17,12 +17,19 @@ npm run dev              # http://localhost:3000
 ### This repository is source only
 
 No game assets are committed. `public/assets/` — models, textures, sounds,
-animations and rigs, all derived from the original 2000 title — is generated
-by `npm run prepare-assets` from a local copy of the extraction, and is not
-redistributable. A fresh clone compiles, but will not render anything
-recognisable until that step has run against the source files. `data/`
-(accounts, sessions, saves) and the UI design-pack deliverables are excluded
-for the same kinds of reason. See `.gitignore`.
+animations and rigs, all derived from the original 2000 title — is not
+redistributable, and `data/` (accounts, sessions, saves) and the UI
+design-pack deliverables are excluded for their own reasons.
+
+`scripts/` is excluded too, which means **the asset pipeline itself is not in
+this repo**: `npm run prepare-assets`, `gen-collision` and the browser smoke
+tests all live there and are local-only, because the pipeline hardcodes paths
+into a local copy of the extraction.
+
+So a fresh clone type-checks and builds, but cannot produce the assets and
+will not render anything recognisable. This repository is the application
+source, kept for history and portability — not a runnable distribution.
+See `.gitignore`.
 
 ## Features
 

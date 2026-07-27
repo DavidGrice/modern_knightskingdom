@@ -37,9 +37,12 @@ Knights Kingdom UI - Brief.dc.html
 /kk-tokens.css
 /kk-icons.svg
 
-# --- test output ---
-# 222 MB of smoke-test screenshots. The scripts themselves are committed.
-scripts/shots/
+# --- tooling & test harness ---
+# Not published: the asset pipeline hardcodes local extraction paths, and
+# scripts/shots/ is 222 MB of smoke-test screenshots. Both are local-only
+# concerns. Note this means `npm run prepare-assets` cannot run from a fresh
+# clone — see the README.
+scripts/
 
 # --- editor / OS ---
 .vscode/
