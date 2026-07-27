@@ -3428,7 +3428,95 @@ reasoner, where the spec says the time actually goes) → 6 (perception) → 7
 and last. One phase per session, and no phase starts before the previous one's
 debug view works.
 
+# BLOCK O — playtest round, 2026-07-27
+
+Eight items off a live session. Logged first, fixed one at a time with
+verification, per the standing workflow. These go through branches and PRs —
+`main` is protected.
+
+**O1 · resolved as a duplicate of O2, not a separate bug — see the fix log
+below.** What looked like a leftover flavour figure at Alric/Beda's post after
+recruiting them turned out to be the recruited villager itself, frozen at a
+new position with no visible transition, because of the same `navSteer` bug
+O2 fixes.
+
+**O2 · villagers (confirmed on Alric) walk on the spot near the homestead
+centre instead of working nodes, until a raid displaces them and it looks
+fixed.** Reported as tied to no beds being placed. See the fix log below —
+root cause was in shared steering code, not the beds/worksite branches
+originally suspected.
+
+**O3 · a tree spawns inside Beda's post.** `seedNodes` places resource nodes
+without testing them against building footprints. Needs a rejection pass
+against `collisionBoxesFor` — the same volumes the nav grid and the player
+already use — rather than a hardcoded keep-out box.
+
+**O4 · the merchant's hands float, and he should travel rather than stand.**
+The floating hands are N77 (a donor/config mismatch, same fault Alric and Beda
+had — see K57). The second half supersedes N78: the merchant and his horses
+should arrive, trade, and leave, rather than being permanently parked.
+
+**O5 · placing a building stalls the frame.** `PropModel` resolves its GLB on
+demand at placement time. `preloadCommonAssets()` exists and runs on
+GameScreen mount but does not cover the buildable catalog. Extend it to warm
+every placeable piece — ideally driven off the build menu's own list so a new
+buildable cannot be forgotten.
+
+**O6 · herbs appear, then vanish at nightfall.** `ResourceNodes` filters herbs
+on `respawnAt === null`, which is a harvest state and has nothing to do with
+the clock, so the visible symptom and the visible filter disagree. Suspect the
+instanced path (`HerbGroup` rebuilds its `instances` array on every render with
+no memo, feeding `InstancedProp`). Resource nodes must persist across
+day/night, weather and season unconditionally — the only thing that may hide
+one is being harvested.
+
+**O7 · the dragon arrives far too early.** The gate was
+`if (!st.dragonSeen || st.buildings.filter(isBuilt).length < 2) return;` — two
+finished buildings is reachable in the first minutes, long before a bow, a
+crossbow or any ammunition is craftable, so the first dragon was an
+unwinnable encounter.
+
+**O8 · replace the yellow ground outline with real fence.** Supersedes N75.
+The gold boundary strips in `Grounds.tsx` become a run of the existing fence
+buildable, instanced.
+
+## The missing system, and why O7 was not a one-line fix
+
+O7's real cause was that the game had no difficulty curve — it had one
+`dragonSeen` flag and a building count. Raiders, camp guards and the dragon
+each gate on their own ad-hoc condition, so nothing scales together and
+nothing can be reasoned about. See the fix log below for the threat-tier
+system this became.
+
+## Order
+
+1. `bugfix/dragon-difficulty-gate` — O7 + the threat-tier module. Worst
+   player-facing item; everything else is cosmetic beside an unwinnable fight.
+2. `bugfix/villager-recruitment-ghost` — O1, after a repro.
+3. `bugfix/villager-work-routine` — O2, same file as O1's likely fix.
+4. `bugfix/herb-persistence` — O6. Self-contained.
+5. `bugfix/node-seeding-collision` — O3. Wants the same footprint test
+   O8 will use.
+6. `enhancement/build-asset-preload` — O5. Measure the stall before and
+   after; a fix nobody can feel is not a fix.
+7. `enhancement/merchant-travel` — O4. Largest scope; the rig fault and
+   the travel behaviour are separable and may want splitting.
+8. `enhancement/grounds-fence` — O8. Pure polish, last.
+
 ## Block O — fix log
+
+**O1 · resolved as a duplicate of O2, not a separate bug.** Read `Npc.tsx`'s
+unmount filter and `recruitVillageFolk` end to end: the retirement mechanism
+is correct (`!villagers.some(v => v.id === n.id)` matches the exact id the
+Villager is created with), and `StarterVillage.tsx` renders only huts, no
+figures — there was never a second renderer to produce a real duplicate.
+What actually happened: before O2's fix, a freshly recruited Alric/Beda
+snapped straight to a hashed spot near the homestead centre (not their old
+hut) and immediately froze there via the `navSteer` divide-guard bug, with
+no visible walk transition (the road-arrival call was also a no-op at the
+time — see O2). Standing motionless at a new position, having never visibly
+left the old one, reads exactly like "the placeholder is still there." No
+separate fix needed.
 
 **O2 · fixed, and the real cause was not either logged suspect.**
 `navSteer`'s `Math.hypot(gdx, gdz) || 1` put a divide-by-zero guard on the
