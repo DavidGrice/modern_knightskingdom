@@ -51,7 +51,11 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # set -e: an unexpected failure here must show up as a red job, not
+        # a silently "successful" run that quietly opened nothing (this bit
+        # on the very first run — see below).
         run: |
+          set -euo pipefail
           branch="${{ github.ref_name }}"
 
           existing=$(gh pr list --head "$branch" --base main --state open --json url --jq '.[0].url // empty')
@@ -61,7 +65,12 @@ jobs:
             exit 0
           fi
 
-          if [ -z "$(git log main..HEAD --oneline)" ]; then
+          # NOT `main..HEAD` — actions/checkout leaves no LOCAL branch called
+          # main (only the remote-tracking origin/main), so that comparison
+          # silently resolved to nothing and this step reported "success"
+          # having opened no PR at all. Cost a live debug pass to catch.
+          ahead=$(git rev-list --count origin/main..HEAD)
+          if [ "$ahead" = "0" ]; then
             echo "$branch has no commits ahead of main yet — nothing to open a PR for."
             exit 0
           fi
