@@ -13,8 +13,8 @@ one's debug view works.*
 | # | Phase | Status | Debug view |
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
-| 2 | Navigation | not started — **spec complete, 4 gaps resolved** | navmesh/path gizmos |
-| 3 | Actuation | not started — **spec verified, 20-iteration plan set** | current-intent readout |
+| 2 | Navigation | **1/10 iterations done** — see below | navmesh/path gizmos |
+| 3 | Actuation | **1/7 iterations done, then paused for phase 2** | current-intent readout |
 | 4 | Smart objects | not started — **spec verified, plan set** | anchor axes |
 | 5 | Utility reasoner | not started — **spec verified, plan set** | ✅ renderer already built |
 | 6 | Perception | not started | belief markers, vision cones |
@@ -103,6 +103,39 @@ All four are now corrected in place in the spec doc:
 
 None of these are fundamental — each is a small, now-resolved decision, not a
 redesign. The "extend navgrid" call stays right.
+
+### Phase 2 must be implemented before phase 3 resumes — sequencing note, 2026-07-27
+
+Phase 3's iteration plan (below) was written and iteration 3.1 was built
+before Phase 2's actual code existed — spec verification is not
+implementation, and this file's own dependency ordering said phase 3 needs
+phase 2 *merged*, not just planned. Caught mid-session; iteration 3.1 (Agent
+lifecycle) is kept because it genuinely never touches navigation — pure
+`agentManager.spawn`/`despawn` bookkeeping — so it created no coupling to
+undo. **Phase 3 iterations 3.2 onward do not resume until the phase-2
+iterations below are merged.** Do not repeat the sequencing mistake in a
+future session: check this file's table, not just whether a spec exists.
+
+### Phase 2 — 10-iteration build plan
+
+Ordered by real dependency, not by the spec doc's own section numbers —
+terrain exclusions and search internals need nothing else and go first;
+`TargetRegistry` doesn't depend on `NavGrid` at all and could run in
+parallel with 2.3–2.7 if you want to split effort, but is sequenced last
+before verification here for a single linear path.
+
+| # | Branch | What | Depends on |
+|---|---|---|---|
+| 2.1 | `feature/phase2-1-water-exclusion` | `game/navTerrain.ts` leaf module (`TerrainExclusion[]`, `blocked` only); `POND` registered; `rebuildNav`/`findPath` consult it. Fixes a real, currently-shipped bug (villagers/NPCs can path straight through water) | phase 1 merged |
+| 2.2 | `feature/phase2-2-search-internals` | Binary heap (index map for decrease-key) replacing the linear open-set scan; generation-stamped `g`/`f`/`parent` arrays (`stamp: Uint32Array` + monotonic `searchId`) instead of allocating per search. Pure perf, zero API change | phase 1 merged (independent of 2.1) |
+| 2.3 | `feature/phase2-3-navgrid-class` | Extract the module-level singleton into an instantiable `NavGrid` class; `getNavGrid(null)` returns the home grid, behaviourally identical to today. **The risky one — must be behavior-preserving,** provable by every existing caller (`Villagers.tsx`, `Npc.tsx`) compiling and behaving unchanged | 2.1, 2.2 |
+| 2.4 | `feature/phase2-4-destination-window` | Window-mode grids for destinations (96 m window, recentre at 24 m player movement, path-chaining beyond the edge) | 2.3 |
+| 2.5 | `feature/phase2-5-height-rasterization` | Export `mountedRoot` from `TemplateWorld.tsx`; runtime max-Y-per-cell rasterization for destination grids (no offline bake, no per-cell raycast — see the spec's §2.3 corrections) | 2.4 |
+| 2.6 | `feature/phase2-6-crypt-grid` | Fixed-mode grid for the Sealed Crypt, sized from an AABB over `game/dungeon.ts`'s actual generated `layout.rooms[]` — **not** `WORLD_DESTINATIONS`'s static `radius: 140` (the wander clamp, a different number — see the resolved gap above) | 2.3 |
+| 2.7 | `feature/phase2-7-lod-tier-b-fix` | `AgentManager.refreshTiers` actually reads and enforces a tier-B outer radius for windowed regions only (fixed regions — home, Crypt — stay unbounded), sourced from the *same* `windowHalf` config value as 2.4, not a second number. This is what makes `NPC_AI_SPEC.md` §8's corrected table true in code, not just on paper | 2.4 |
+| 2.8 | `feature/phase2-8-target-registry` | `TargetRegistry`: composite `TargetId` (`'node:17' \| 'bldg:42'`) unifying `st.nodes` and the building array; `queryNearby`/`reserve`/`release`/`get`; every node reports `region: null` | phase 1 merged (independent of 2.1–2.7) |
+| 2.9 | `feature/phase2-9-anchor-resolution` | Expose `nearestOpen` as `nearestWalkable(x, z, maxRadius)`; radial/fixed anchor resolution; `fishing`'s `fallbackRadius` derived from the `POND` entry in `navTerrain.ts`, not hardcoded | 2.1, 2.3, 2.8 |
+| 2.10 | `feature/phase2-10-verification` | Full §2.5 suite: gate-vs-wall path length, mid-raid rebuild (destroy a building mid-path, confirm repath not a stall or a walk-through), water routing, window sizing/recentre, Crypt chamber-to-chamber pathing, `maxStep` cliff rejection, 200-call search-hygiene (flat heap allocation) | 2.1–2.9 |
 
 ---
 
