@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run build",
     "prepare-assets": "node scripts/prepare-assets.mjs && node scripts/gen-collision.mjs"
   },
   "dependencies": {

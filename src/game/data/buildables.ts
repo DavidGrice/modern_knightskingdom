@@ -1,0 +1,643 @@
+import type { Buildable, ClaimedPlot } from '../types';
+import GENERATED from './bricks.generated.json';
+import { FIXED_WORLD_PROPS } from './world';
+import { shapeFor } from '../collisionShapes';
+
+// Grid pitches in meters: big structures snap to GRID, brick-scale pieces to STUD.
+export const GRID = 2;
+export const STUD = 0.35;
+// ---------------------------------------------------------------------------
+// F19/F20 · The homestead's buildable ground, sized so a castle actually TILES.
+//
+// A straight wall is 8m and a corner is 4m, so one finished side is
+// `corner + N×wall + corner` = 8N + 8 metres. The old region was a flat 60m
+// across, which is not one of those numbers — a four-wall run plus corners
+// came to 40 and left a ragged 20m of grid with no piece that fitted it.
+// Every tier below is a real 8N+8, so a run always closes on a corner.
+//
+// The tiers are also the land you buy (F20): you start on a small holding and
+// push the fence out, and each expansion brings whatever was standing on that
+// ground — trees, ore — inside the fold.
+export const LAND_TIERS: { walls: number; half: number; cost: number; name: string }[] = [
+  { walls: 3, half: 16, cost: 0, name: 'Smallholding' },
+  { walls: 4, half: 20, cost: 120, name: 'Freehold' },
+  { walls: 5, half: 24, cost: 320, name: 'Manor' },
+  { walls: 6, half: 28, cost: 700, name: 'Estate' },
+  { walls: 7, half: 32, cost: 1400, name: 'Barony' },
+];
+export const MAX_LAND_TIER = LAND_TIERS.length - 1;
+
+/** half-extent of the homestead at a given tier */
+export function landHalf(tier: number): number {
+  return LAND_TIERS[Math.max(0, Math.min(MAX_LAND_TIER, tier))].half;
+}
+
+// The widest the homestead ever gets. Anything that needs a fixed outer bound
+// (the nav grid, the "is this prop inside the build area" guard) uses this,
+// and it is deliberately LARGER than the old flat 60m so no existing save can
+// have a building stranded outside its own region by this change.
+export const BUILD_REGION = {
+  minX: -LAND_TIERS[MAX_LAND_TIER].half, maxX: LAND_TIERS[MAX_LAND_TIER].half,
+  minZ: -LAND_TIERS[MAX_LAND_TIER].half, maxZ: LAND_TIERS[MAX_LAND_TIER].half,
+};
+export const MAX_STACK_HEIGHT = 14;
+
+// A claimed template-world plot (Phase 13): smaller than the home region — a
+// modest outpost, not a second full homestead — centered wherever the player
+// stood when they claimed it, leveled to that one sampled ground height
+// rather than following the bake's real slope (a deliberate simplification;
+// see ROADMAP.md's Phase 13 notes).
+export const CLAIM_RADIUS = 14;
+
+/** the active build region + ground level: the home plot, or a claimed
+ *  template-world plot while visiting one (falls back to the home region if
+ *  the current destination hasn't been claimed, so evalPlacement always has
+ *  *some* bounds to check even before build mode becomes reachable there) */
+export function activeBuildRegion(claim: ClaimedPlot | undefined | null, landTier = MAX_LAND_TIER) {
+  if (!claim) {
+    const h = landHalf(landTier);
+    return { minX: -h, maxX: h, minZ: -h, maxZ: h, groundY: 0 };
+  }
+  return {
+    minX: claim.x - CLAIM_RADIUS, maxX: claim.x + CLAIM_RADIUS,
+    minZ: claim.z - CLAIM_RADIUS, maxZ: claim.z + CLAIM_RADIUS,
+    groundY: claim.groundY,
+  };
+}
+
+const P = '/assets/props';
+
+// Hand-crafted gameplay structures. size = [width, height, depth] meters at rotation 0.
+const CRAFTED: Buildable[] = [
+  {
+    id: 'campfire', name: 'Campfire', icon: '🔥', category: 'essentials',
+    size: [2, 0.9, 2], snap: GRID, stackable: false,
+    cost: { wood: 4 }, station: 'campfire', buildXp: 10,
+  },
+  {
+    // real model (l301500) is a wooden storage crate, not a bench, but reads
+    // fine as a rustic crafting-station stand-in; the declared 2x2 square
+    // footprint didn't match its real 24x19.2x32 (roughly 1.1x1.5) box
+    // proportions though (Phase 18's wall/brick scale audit) -- tightened to
+    // match what's actually rendered.
+    id: 'workbench', name: 'Workbench', thumb: `${P}/scenery/l301500.png`, model: `${P}/scenery/l301500.glb`,
+    category: 'essentials', size: [1.1, 0.9, 1.5], snap: GRID, stackable: false,
+    cost: { plank: 6 }, station: 'workbench', buildXp: 15,
+  },
+  {
+    id: 'forge', name: 'Forge', icon: '🏭', category: 'essentials',
+    size: [4, 1.8, 4], snap: GRID, stackable: false,
+    cost: { stone: 8, wood: 2 }, station: 'forge', buildXp: 30,
+    requiresUnlock: 'mining',
+  },
+  {
+    id: 'torch', name: 'Torch', icon: '🕯️', category: 'essentials',
+    size: [0.7, 1.5, 0.7], snap: 1, stackable: false,
+    cost: { wood: 2 }, buildXp: 4,
+  },
+  {
+    id: 'bed', name: 'Bed', icon: '🛏️', category: 'essentials',
+    size: [1.6, 0.7, 3.2], snap: 1, stackable: false,
+    cost: { plank: 4, flowers: 1 }, buildXp: 12,
+  },
+  {
+    id: 'barrel', name: 'Barrel', thumb: `${P}/scenery/l248900.png`, model: `${P}/scenery/l248900.glb`,
+    category: 'essentials', size: [1, 1, 1], snap: 1, stackable: true,
+    cost: { plank: 2 }, buildXp: 5,
+  },
+  {
+    // Phase 24B: the labor deposit point — villagers haul their goods here
+    // (or to the homestead center when none is built). Same real crate mold
+    // as the workbench, placed bigger so it reads as stores, not a station.
+    id: 'stockpile', name: 'Stockpile', thumb: `${P}/scenery/l301500.png`, model: `${P}/scenery/l301500.glb`,
+    category: 'essentials', size: [1.4, 1.1, 1.9], snap: GRID, stackable: false,
+    cost: { wood: 6 }, buildXp: 10,
+  },
+  {
+    id: 'flowerbed', name: 'Flower Bed', thumb: `${P}/scenery/l374100.png`, model: `${P}/scenery/l374100.glb`,
+    category: 'essentials', size: [1.4, 0.5, 1.4], snap: 1, stackable: false,
+    cost: { flowers: 1 }, buildXp: 4,
+  },
+  {
+    id: 'tree', name: 'Garden Tree', thumb: `${P}/scenery/l243500.png`, model: `${P}/scenery/l243500.glb`,
+    category: 'essentials', size: [2, 3.2, 2], snap: 1, stackable: false,
+    cost: { wood: 6 }, buildXp: 8,
+  },
+  {
+    id: 'fence', name: 'Wooden Fence', icon: '🚧', model: `${P}/scenery/l607900.glb`,
+    category: 'essentials', size: [2.4, 1.1, 0.4], snap: 1, stackable: false,
+    cost: { plank: 2 }, buildXp: 5,
+  },
+  {
+    // real proportions (34.2 wide x 13.2 tall x 39.2 deep) are a low,
+    // sprawling cluster of fronds, not an upright potted plant -- the old
+    // 1.6m declared height stretched it into a tall stubby pot with two
+    // giant flat blades splayed out to ~4m (Phase 18's wall/brick scale
+    // audit, extended to scenery). The only other unused Scenery-category
+    // model turned out to be a checkered barrel/cone, not a plant either
+    // (l606400 is already Cedric's camp scenery, l347100 is already a tree
+    // variant in gameStore's treeModels) -- so this stays the least-wrong
+    // option available; sized to its own real (short, wide) proportions
+    // instead of forcing potted-plant height onto it.
+    id: 'plant', name: 'Palm Plant', icon: '🌴', model: `${P}/scenery/l625500.glb`,
+    category: 'essentials', size: [1.3, 0.5, 1.5], snap: 1, stackable: false,
+    cost: { wood: 2 }, buildXp: 5,
+  },
+  {
+    // was `00_l407000` — real LDraw part 4070 ("Brick 1 x 1 with Headlight"),
+    // a tiny near-cubic utility brick with a round headlight socket on one
+    // face, stretched to a 4×2×2 wall footprint. It rendered as an isolated
+    // roughly-square block per segment (the round socket reading as an odd
+    // bullseye/target face) with visible gaps between placed segments —
+    // Phase 18's wall-piece scale audit, extended past the stonewall/tower
+    // fix already shipped. `l607900` is the same real wooden lattice fence
+    // panel already used for the `fence` decor item (confirmed correctly
+    // proportioned there); reused here at wall height for the early wood
+    // defensive tier, with size re-derived from its real bbox aspect ratio
+    // (64 × 25.6 × 8 raw) at this piece's 4m width so the footprint matches
+    // what's actually rendered.
+    id: 'palisade', name: 'Palisade Wall', thumb: `${P}/scenery/l607900.png`, model: `${P}/scenery/l607900.glb`,
+    category: 'walls', size: [4, 1.6, 0.5], snap: GRID, stackable: true,
+    cost: { plank: 4, stone: 1 }, buildXp: 12,
+    requiresUnlock: 'building2',
+  },
+  {
+    // was `02_l3013600` (catalog category "Brick", raw bbox depth *2×* its
+    // width — a deep block, not a wall panel; using it as one is exactly
+    // the "backwards" wall-rotation bug reported in Phase 18). `mc007` is a
+    // real wide, thin crenellated wall panel from the actual
+    // main_interface/buildings catalog (raw bbox 160×105.6×56, correctly
+    // wide-and-thin), scaled to an 8m-wide segment.
+    id: 'stonewall', name: 'Castle Wall (Crenellated)', thumb: `${P}/buildings/mc007.png`, model: `${P}/buildings/mc007.glb`,
+    category: 'walls', size: [8, 5.28, 2.8], snap: GRID, stackable: true,
+    // priced with the rest of the 8m wall family below (2026-07-20): this
+    // used to cost 6 while the identically-sized mc006 wall cost 12
+    cost: { stone: 10 }, buildXp: 20,
+    requiresUnlock: 'mining',
+  },
+  {
+    // was `04_l609100` (also catalog category "Brick", not remotely
+    // tower-shaped). `mc003` is a real square-footprint turret with a
+    // conical roof from main_interface/buildings (raw bbox 80×163×80).
+    id: 'tower', name: 'Watch Tower', thumb: `${P}/buildings/mc003.png`, model: `${P}/buildings/mc003.glb`,
+    category: 'defense', size: [4, 8.16, 4], snap: GRID, stackable: true,
+    cost: { stone: 10, plank: 2 }, buildXp: 35,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'gate', name: 'Castle Gate', thumb: `${P}/windows_doors/06_l318500.png`, model: `${P}/windows_doors/06_l318500.glb`,
+    category: 'defense', size: [4, 3.2, 2], snap: GRID, stackable: true,
+    cost: { stone: 4, iron_bar: 1 }, buildXp: 25,
+    requiresUnlock: 'smithing',
+  },
+  {
+    // J51 · this is the FOUNDATION, not the castle. Placing it marks out a
+    // 16m courtyard with nine named sockets; the corners, wall runs and
+    // bailey are then chosen and raised one at a time (game/data/keep.ts),
+    // so the castle that ends up standing there is the one you laid out.
+    // The bill here is the groundwork only — each piece is paid for as it
+    // is raised, which is why it is a fraction of the old all-in cost.
+    id: 'keep', name: 'Castle Foundation', thumb: `${P}/buildings/mc001.png`, model: `${P}/buildings/mc001.glb`,
+    category: 'defense', size: [16, 0.3, 16], snap: GRID, stackable: false,
+    cost: { stone: 12, plank: 6 }, buildXp: 60,
+    requiresUnlock: 'keep',
+  },
+  {
+    id: 'farmplot', name: 'Farm Plot', icon: '🌾', category: 'essentials',
+    size: [2, 0.5, 2], snap: 1, stackable: false,
+    cost: { wood: 2, stone: 1 }, buildXp: 8,
+  },
+  {
+    id: 'quintain', name: 'Quintain', icon: '🎯', category: 'defense',
+    size: [1.2, 2.3, 1.2], snap: 1, stackable: false,
+    cost: { plank: 3, stone: 1 }, buildXp: 10,
+    requiresUnlock: 'building2',
+  },
+  {
+    id: 'cannon', name: 'Cannon', icon: '💣', model: `${P}/cannon.glb`, category: 'defense',
+    size: [1.6, 1.5, 2.4], snap: GRID, stackable: false,
+    cost: { stone: 6, iron_bar: 2 }, buildXp: 30,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'warcart', name: 'Battering Cart', icon: '🛞', model: `${P}/oc4806.glb`, category: 'defense',
+    size: [2.4, 2.4, 3.2], snap: GRID, stackable: false,
+    cost: { plank: 6, iron_bar: 1 }, buildXp: 25,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'bladecart', name: 'Blade Cart', icon: '⚙️', model: `${P}/oc4807.glb`, category: 'defense',
+    size: [2.4, 2.2, 3.2], snap: GRID, stackable: false,
+    cost: { plank: 5, iron_bar: 1 }, buildXp: 25,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'market_stall', name: 'Market Stall', icon: '🪙', category: 'essentials',
+    size: [2.6, 2.4, 1.8], snap: GRID, stackable: false,
+    cost: { plank: 8, stone: 4 }, buildXp: 30,
+    requiresUnlock: 'smithing',
+  },
+];
+
+// Generated brick-scale pieces (real proportions from the extraction metadata).
+interface GeneratedPiece {
+  id: string; name: string; cat: string; model: string; thumb: string;
+  size: [number, number, number];
+  cost: Record<string, number>;
+}
+
+const GENERATED_BUILDABLES: Buildable[] = (GENERATED as unknown as GeneratedPiece[]).map((g) => ({
+  id: g.id,
+  name: g.name,
+  thumb: g.thumb,
+  model: g.model,
+  category: g.cat as Buildable['category'],
+  size: g.size,
+  snap: STUD,
+  stackable: true,
+  cost: g.cost as Buildable['cost'],
+  buildXp: 3,
+  requiresUnlock: g.cat === 'castle' || g.cat === 'walls' ? 'mining' : 'building2',
+}));
+
+// Phase 25 — Prefab structures, promoted straight from the user's own Grok
+// capability-labeling pass (grok/blender/movie/07082026/reports/
+// PAK_CAPABILITY_OVERRIDES.json): the mc-series bespoke castle meshes with
+// HUMAN-VERIFIED roles (wall_straight / wall_corner / wall_tower, plus the
+// damaged and ruined phases labeled there as destruction stages — placeable
+// here as battle-scarred flavor), and two verified prop stands.
+//
+// SCALE UNIFICATION (2026-07-20): the wall family used to be authored at TWO
+// different scale factors — the `walls`/`defense` entries above at k=0.05
+// world-metres per raw GLB unit, these prefabs at k=0.04375 — which is why
+// nothing tiled. k=0.04375 produces 7 / 2.8 / 3.5-wide pieces, none of them a
+// multiple of GRID (2), so the grid snap could never line two of them up
+// flush and every run of wall left gaps. Everything in the family now uses
+// **k = 0.05**, straight off the real GLB accessor bounds, which lands every
+// piece exactly on the grid:
+//   straights mc005/6/8/9/10  160 × …  × 48  ->  8   wide (4 cells), 2.4 deep
+//   crenellated mc007         160 × 105.6 × 56 ->  8   wide,           2.8 deep
+//   corner      mc004          80 × 86.4  × 80 ->  4   square (2 cells)
+//   corner      mc001          64 × 76.8  × 64 ->  3.2 square — the one piece
+//     that ISN'T a grid multiple at true scale, so it keeps a 4×4 footprint
+//     (its mesh simply sits a little loose inside the cell) and mc004 is the
+//     corner to reach for when you want a flush run.
+//   tower       mc003          80 × 163.2 × 80 ->  4   square, matching mc004
+//     so a corner and a turret are interchangeable at any wall junction.
+// Costs are normalised by size/role in the same pass — an 8m wall is 10 stone
+// whichever mesh it uses, instead of 6 for one and 12 for another.
+const B = '/assets/props/buildings';
+const PREFABS: Buildable[] = [
+  // G27 · somewhere to keep a captured horse. Built from the same barn mold
+  // the starter village uses, so it reads as a working outbuilding rather
+  // than a new invented shape.
+  // K55 · this pointed at mc008, which is a straight WALL SECTION — a stable
+  // that looked like a fence. There is no barn mold anywhere in the
+  // extraction (checked the lab's 86 verified assets), so it uses the same
+  // piece the starter village's huts already use to read as an outbuilding,
+  // at a barn's proportions.
+  { id: 'stable', name: 'Stable', thumb: `${B}/mc001.png`, model: `${B}/mc001.glb`,
+    category: 'essentials', size: [6, 3.4, 6], snap: GRID, stackable: false,
+    cost: { wood: 14, plank: 8 }, buildXp: 45 },
+  { id: 'mc005', name: 'Castle Wall (Low)', thumb: `${B}/mc005.png`, model: `${B}/mc005.glb`,
+    category: 'walls', size: [8, 3.84, 2.4], snap: GRID, stackable: true,
+    cost: { stone: 7 }, buildXp: 28, requiresUnlock: 'mining' },
+  { id: 'mc006', name: 'Castle Wall (Plain)', thumb: `${B}/mc006.png`, model: `${B}/mc006.glb`,
+    category: 'walls', size: [8, 5.28, 2.4], snap: GRID, stackable: true,
+    cost: { stone: 10 }, buildXp: 40, requiresUnlock: 'mining' },
+  { id: 'mc004', name: 'Wall Corner', thumb: `${B}/mc004.png`, model: `${B}/mc004.glb`,
+    category: 'walls', size: [4, 4.32, 4], snap: GRID, stackable: true,
+    cost: { stone: 8 }, buildXp: 30, requiresUnlock: 'mining' },
+  { id: 'mc001', name: 'Wall Corner (Small)', thumb: `${B}/mc001.png`, model: `${B}/mc001.glb`,
+    // true scale is 3.2 square; declared 4×4 so it still snaps flush against
+    // the 8m walls and the 4m corner/turret rather than half-straddling a cell
+    category: 'walls', size: [4, 3.84, 4], snap: GRID, stackable: true,
+    cost: { stone: 6 }, buildXp: 26, requiresUnlock: 'mining' },
+  { id: 'mc003', name: 'Wall Turret', thumb: `${B}/mc003.png`, model: `${B}/mc003.glb`,
+    // same mesh and footprint as the Watch Tower in Defense — that one is the
+    // stationable version (a defender can be posted on it); this one is the
+    // plain decorative run-of-wall turret, priced to match so the two never
+    // read as an arbitrary price difference for the same thing
+    category: 'walls', size: [4, 8.16, 4], snap: GRID, stackable: true,
+    cost: { stone: 10, plank: 2 }, buildXp: 35, requiresUnlock: 'mining' },
+  { id: 'mc009', name: 'Breached Wall', thumb: `${B}/mc009.png`, model: `${B}/mc009.glb`,
+    category: 'walls', size: [8, 5.28, 2.4], snap: GRID, stackable: true,
+    cost: { stone: 7 }, buildXp: 25, requiresUnlock: 'mining' },
+  { id: 'mc010', name: 'Ruined Wall', thumb: `${B}/mc010.png`, model: `${B}/mc010.glb`,
+    category: 'walls', size: [8, 5.28, 2.4], snap: GRID, stackable: true,
+    cost: { stone: 5 }, buildXp: 15, requiresUnlock: 'mining' },
+  { id: 'oc6094-1', name: 'Weapons Rack', thumb: `${B}/oc6094-1.png`, model: `${B}/oc6094-1.glb`,
+    category: 'prefab', size: [0.9, 2.4, 1], snap: GRID, stackable: false,
+    cost: { wood: 3, iron_bar: 1 }, buildXp: 15 },
+  { id: 'oc6032b4', name: 'Armory Stand', thumb: `${B}/oc6032b4.png`, model: `${B}/oc6032b4.glb`,
+    category: 'prefab', size: [1.4, 2.2, 0.9], snap: GRID, stackable: false,
+    cost: { wood: 4, iron_bar: 2 }, buildXp: 18 },
+  { id: 'banner', name: 'War Banner', thumb: `${P}/castle_accessories/18_l7196300.png`, model: `${P}/castle_accessories/18_l7196300.glb`,
+    category: 'decor', size: [1.2, 2.4, 0.4], snap: 1, stackable: false,
+    cost: { wood: 2, flowers: 1 }, buildXp: 8 },
+];
+
+// Siege engines and explosives (2026-07-20), promoted straight from the rig
+// lab's verified capability pass. These meshes were sitting unused in the
+// extraction the whole time: `traits.vehicle` marks nine of them as real siege
+// engines (`isSiegeEngine`, `canFire`, `siegeRole`), and `traits.explosive`
+// marks four as charges that damage walls and vehicles. The game had exactly
+// one hand-built `cannon` standing in for all of it.
+//
+// Sizes are the real GLB accessor bounds at the same k = 0.05 the wall family
+// uses, so a catapult sits at a believable scale next to a castle wall.
+// Whether a piece can be fired is NOT hardcoded here — it's read back from the
+// lab data at runtime (see labCanFire in data/labCapabilities.ts consumers),
+// so the trait file stays the single source of truth.
+const L = '/assets/props/lab';
+const SIEGE: Buildable[] = [
+  { id: 'oc6096-4', name: 'Catapult', thumb: `${L}/oc6096-4.png`, model: `${L}/oc6096-4.glb`,
+    category: 'siege', size: [2.8, 3.96, 5.49], snap: GRID, stackable: false,
+    cost: { wood: 12, plank: 8, iron_bar: 2 }, buildXp: 55, requiresUnlock: 'smithing' },
+  { id: 'oc6096-3', name: 'Stone Thrower', thumb: `${L}/oc6096-3.png`, model: `${L}/oc6096-3.glb`,
+    category: 'siege', size: [6.8, 7.2, 2.56], snap: GRID, stackable: false,
+    cost: { wood: 16, plank: 10, iron_bar: 3 }, buildXp: 70, requiresUnlock: 'smithing' },
+  { id: 'oc1289', name: 'Stone Thrower (Small)', thumb: `${L}/oc1289.png`, model: `${L}/oc1289.glb`,
+    category: 'siege', size: [1.6, 2.14, 2.72], snap: GRID, stackable: false,
+    cost: { wood: 8, plank: 4, iron_bar: 1 }, buildXp: 35, requiresUnlock: 'smithing' },
+  { id: 'oc4806b2', name: 'Crossbow Station', thumb: `${L}/oc4806b2.png`, model: `${L}/oc4806b2.glb`,
+    category: 'siege', size: [5.24, 3.92, 2.24], snap: GRID, stackable: false,
+    cost: { wood: 10, plank: 6, iron_bar: 2 }, buildXp: 45, requiresUnlock: 'smithing' },
+  { id: 'oc4806b3', name: 'Crossbow Turret', thumb: `${L}/oc4806b3.png`, model: `${L}/oc4806b3.glb`,
+    category: 'siege', size: [4, 4, 2.22], snap: GRID, stackable: false,
+    cost: { wood: 8, plank: 5, iron_bar: 2 }, buildXp: 40, requiresUnlock: 'smithing' },
+  { id: 'oc4801', name: 'Turntable Turret', thumb: `${L}/oc4801.png`, model: `${L}/oc4801.glb`,
+    category: 'siege', size: [3.2, 2.2, 2.22], snap: GRID, stackable: false,
+    cost: { wood: 6, plank: 4, iron_bar: 1 }, buildXp: 32, requiresUnlock: 'smithing' },
+  { id: 'oc6032b2', name: 'Defense Catapult', thumb: `${L}/oc6032b2.png`, model: `${L}/oc6032b2.glb`,
+    category: 'siege', size: [3.4, 4.1, 5.08], snap: GRID, stackable: false,
+    cost: { wood: 12, plank: 6, iron_bar: 2 }, buildXp: 50, requiresUnlock: 'smithing' },
+  { id: 'oc6096b4', name: 'Wall Cannon', thumb: `${L}/oc6096b4.png`, model: `${L}/oc6096b4.glb`,
+    category: 'siege', size: [3.2, 3.84, 4.8], snap: GRID, stackable: false,
+    cost: { stone: 8, iron_bar: 3 }, buildXp: 48, requiresUnlock: 'smithing' },
+  { id: 'oc6096b3', name: 'Siege Tower', thumb: `${L}/oc6096b3.png`, model: `${L}/oc6096b3.glb`,
+    category: 'siege', size: [7.84, 10.56, 7.78], snap: GRID, stackable: false,
+    cost: { wood: 30, plank: 20, iron_bar: 6 }, buildXp: 110, requiresUnlock: 'keep' },
+  // explosives: `traits.explosive.damagesWalls` — set one down, strike it,
+  // and it takes out what's around it
+  { id: 'l248901', name: 'Powder Barrel', thumb: `${L}/l248901.png`, model: `${L}/l248901.glb`,
+    category: 'siege', size: [0.8, 0.96, 0.8], snap: 1, stackable: false,
+    cost: { wood: 4, stone: 2 }, buildXp: 18, requiresUnlock: 'smithing' },
+  { id: 'l473801', name: 'Powder Chest', thumb: `${L}/l473801.png`, model: `${L}/l473801.glb`,
+    category: 'siege', size: [0.8, 0.96, 2], snap: 1, stackable: false,
+    cost: { wood: 6, stone: 3 }, buildXp: 22, requiresUnlock: 'smithing' },
+  { id: 'l394101', name: 'Powder Charge', thumb: `${L}/l394101.png`, model: `${L}/l394101.glb`,
+    category: 'siege', size: [0.8, 0.48, 0.8], snap: 1, stackable: false,
+    cost: { wood: 2, stone: 2 }, buildXp: 12, requiresUnlock: 'smithing' },
+];
+
+export const BUILDABLES: Buildable[] = [...CRAFTED, ...PREFABS, ...SIEGE, ...GENERATED_BUILDABLES];
+export const BUILDABLE_BY_ID: Record<string, Buildable> = Object.fromEntries(
+  BUILDABLES.map((b) => [b.id, b]),
+);
+
+/**
+ * Buildable id -> the rig lab's ASSET id, which are not the same thing: the
+ * Castle Wall's buildable id is `stonewall` while the lab knows that mesh as
+ * `mc007`, the Watch Tower is `tower` vs `mc003`, and so on. Derived from the
+ * model filename so it stays right automatically as pieces are added, rather
+ * than being a second table to keep in sync. Pieces with no model (procedural
+ * campfire, torch…) just answer with their own id and find no lab entry,
+ * which is correct — the lab never charted them.
+ */
+export function labAssetId(type: string): string {
+  const b = BUILDABLE_BY_ID[type];
+  if (!b?.model) return type;
+  const base = b.model.split('/').pop() ?? '';
+  return base.replace(/\.glb$/i, '') || type;
+}
+
+/** the reverse: which buildable renders a given lab asset (used to turn a
+ *  destruction-phase answer back into something placeable) */
+export function buildableForLabAsset(labId: string): string | null {
+  if (BUILDABLE_BY_ID[labId]) return labId;
+  for (const b of BUILDABLES) if (b.model && labAssetId(b.id) === labId) return b.id;
+  return null;
+}
+
+export const BUILD_CATEGORIES: { id: Buildable['category']; label: string; icon: string }[] = [
+  { id: 'essentials', label: 'Essentials', icon: '🏕️' },
+  { id: 'prefab', label: 'Prefabs', icon: '🏯' },
+  { id: 'defense', label: 'Defense', icon: '🗡️' },
+  { id: 'siege', label: 'Siege', icon: '💥' },
+  { id: 'walls', label: 'Walls', icon: '🧱' },
+  { id: 'bricks', label: 'Bricks', icon: '🟫' },
+  { id: 'decor', label: 'Windows & Decor', icon: '🪟' },
+  { id: 'castle', label: 'Towers & Roofs', icon: '🏰' },
+];
+
+/** footprint (x, z) in meters after rotation */
+export function sizeFor(type: string, rot: number): [number, number] {
+  const b = BUILDABLE_BY_ID[type];
+  if (!b) return [1, 1];
+  return rot % 2 === 1 ? [b.size[2], b.size[0]] : [b.size[0], b.size[2]];
+}
+
+export function heightOf(type: string): number {
+  return BUILDABLE_BY_ID[type]?.size[1] ?? 1;
+}
+
+// Real wall collision (2026-07-20): the mc-series prefab walls/towers were
+// colliding as one solid box spanning their full declared footprint at every
+// height, so a player could never get closer than the WIDEST point anywhere
+// on the piece — usually a corbelled ledge or a tower's projecting upper
+// gallery — even though the actual wall/tower SHAFT a player walks up to is
+// much narrower. Verified against the real GLBs (Y-sliced vertex sampling,
+// scripts/yslice one-off): mc006's core shaft is roughly half its declared
+// depth; mc003 (Wall Tower)'s base shaft is ~80% of its declared width/depth,
+// with a genuine projecting gallery starting around 2 world units up — right
+// where a standing player's own overhead-pass threshold already kicks in
+// below. So each entry here is just a NARROWER "core" box for the lower
+// portion (where a walking player's body actually is); above `coreHeight`,
+// collision falls back to the existing single-box passesOverhead escape
+// hatch, which already lets you walk under anything whose base clears you —
+// no second box needed up there. Pieces absent from this table keep the
+// original single full-footprint box exactly as before (zero risk elsewhere).
+export interface WallCoreBox {
+  coreHeight: number; // world units — collision uses the narrow core up to here
+  depthFrac: number;  // fraction of the piece's own declared depth (sz), centered
+  widthFrac: number;  // fraction of the piece's own declared width (sx), centered
+}
+const WALL_CORE: Record<string, WallCoreBox> = {
+  mc006: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
+  mc007: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
+  mc008: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
+  mc009: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
+  mc010: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
+  mc001: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
+  mc004: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
+  mc005: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
+  mc003: { coreHeight: 2.0, depthFrac: 0.8, widthFrac: 0.8 },
+};
+
+/** Wall pieces the rig lab flags `traits.wall.hasHole` — a breach you can see
+ *  straight through, so you should be able to walk through it too. mc009 is
+ *  destruction phase 2/3 (holed), mc010 phase 3/3 (ruined). Their lower core
+ *  becomes two side pillars with an opening between, instead of one solid
+ *  slab that stops you at an invisible edge in the middle of a visible gap. */
+const WALL_HOLE = new Set(['mc009', 'mc010']);
+/** fraction of the piece's length left open at the breach */
+const HOLE_FRAC = 0.44;
+
+export interface CollisionBox {
+  hx: number; hz: number; yBase: number; yTop: number;
+  /** centre offset from the building origin, in already-rotated world axes */
+  ox?: number; oz?: number;
+}
+
+/** the stack of collision sub-boxes for a building type at a given base Y
+ *  (relative, i.e. yBase/yTop are offsets ABOVE the building's own `b.y`) —
+ *  one box spanning the full height for anything not in WALL_CORE (identical
+ *  to the old single-box behavior), or two stacked boxes (narrow core below,
+ *  full declared footprint above) for a piece with an override. */
+/**
+ * L65 · Where a piece's SOLID mass sits inside its declared footprint.
+ *
+ * A crenellated wall is a 0.86m slab of stone at the back of a 2.8m footprint
+ * with the battlement overhanging forward. Both the mesh and the footprint are
+ * centred on the cell, so the stone itself sits at the back of the cell at one
+ * facing and at the front when you turn the piece around — the wall face
+ * jumped a metre and a half and no longer met its neighbour on the grid line.
+ *
+ * This is the offset that re-centres the STONE on the cell, letting the
+ * decorative overhang hang outside the footprint where it belongs. It is
+ * measured from the piece's own collision volumes, so it costs no new data and
+ * cannot drift from the geometry.
+ */
+const solidOffsetCache: Record<string, [number, number]> = {};
+
+export function solidOffset(type: string): [number, number] {
+  const cached = solidOffsetCache[type];
+  if (cached) return cached;
+  const shape = shapeFor(type);
+  let out: [number, number] = [0, 0];
+  if (shape && shape.length) {
+    let vol = 0; let cx = 0; let cz = 0;
+    for (const b of shape) {
+      const v = b.hx * b.hy * b.hz;
+      vol += v; cx += b.cx * v; cz += b.cz * v;
+    }
+    if (vol > 0) out = [cx / vol, cz / vol];
+  }
+  solidOffsetCache[type] = out;
+  return out;
+}
+
+/** the same offset, turned to face the way the piece is placed */
+export function solidOffsetRotated(type: string, rot: number): [number, number] {
+  const [ox, oz] = solidOffset(type);
+  let x = ox; let z = oz;
+  for (let i = 0; i < ((rot % 4) + 4) % 4; i++) {
+    const nx = z; const nz = -x;
+    x = nx; z = nz;
+  }
+  return [x, z];
+}
+
+export function collisionBoxesFor(type: string, rot: number): CollisionBox[] {
+  const [sx, sz] = sizeFor(type, rot);
+  const fullTop = heightOf(type);
+
+  // Real geometry first: scripts/gen-collision.mjs emits per-piece boxes
+  // voxelised from the source OBJ, which is the only way an arch gets an
+  // actual hole instead of being a solid slab you cannot walk under. The
+  // boxes are authored in the piece's UNROTATED local frame, so a quarter
+  // turn swaps the axes exactly the way sizeFor already swaps the footprint.
+  const shape = shapeFor(type);
+  if (shape && shape.length) {
+    const quarter = ((rot % 4) + 4) % 4;
+    // re-centre on the solid (L65) before turning, so the volumes move with
+    // the mesh — Buildings.tsx applies the same shift when it draws
+    const [sox, soz] = solidOffset(type);
+    return shape.map((b) => {
+      // L63 · rotate the centre offset and the half-extents together, THE
+      // SAME WAY THE MESH TURNS. This turned the other way: a three.js yaw of
+      // +90° sends a local (x, z) to world (z, -x) — its Y-rotation matrix is
+      // [cos 0 sin / 0 1 0 / -sin 0 cos] — while this loop was computing
+      // (-z, x), which is -90°. At 180° the two agree, which is why the error
+      // hid; at a quarter turn the solid stone of a wall ended up on the far
+      // side from where it was drawn, so you were stopped under the overhang
+      // and walked through the stone.
+      let ox = b.cx - sox; let oz = b.cz - soz; let hx = b.hx; let hz = b.hz;
+      for (let i = 0; i < quarter; i++) {
+        const nx = oz; const nz = -ox;
+        ox = nx; oz = nz;
+        const th = hx; hx = hz; hz = th;
+      }
+      return { hx, hz, ox, oz, yBase: b.cy - b.hy, yTop: b.cy + b.hy };
+    });
+  }
+
+  const core = WALL_CORE[type];
+  if (!core) return [{ hx: sx / 2, hz: sz / 2, yBase: 0, yTop: fullTop }];
+  // widthFrac/depthFrac are authored against the UNROTATED size; sizeFor
+  // already swapped sx/sz for a 90°/270° rotation, so swap the fractions too
+  const [wFrac, dFrac] = rot % 2 === 1 ? [core.depthFrac, core.widthFrac] : [core.widthFrac, core.depthFrac];
+  const coreTop = Math.min(core.coreHeight, fullTop);
+  const coreHx = (sx * wFrac) / 2;
+  const coreHz = (sz * dFrac) / 2;
+  const boxes: CollisionBox[] = [];
+
+  if (WALL_HOLE.has(type)) {
+    // breached: two pillars flanking an opening. The length axis is X for an
+    // unrotated piece and Z once turned 90°, matching sizeFor's own swap.
+    const alongX = rot % 2 === 0;
+    const halfLen = alongX ? coreHx : coreHz;
+    const gapHalf = (alongX ? sx : sz) * HOLE_FRAC / 2;
+    const pillar = (halfLen - gapHalf) / 2;
+    if (pillar > 0.05) {
+      const centre = gapHalf + pillar;
+      for (const sign of [-1, 1]) {
+        boxes.push(alongX
+          ? { hx: pillar, hz: coreHz, yBase: 0, yTop: coreTop, ox: sign * centre }
+          : { hx: coreHx, hz: pillar, yBase: 0, yTop: coreTop, oz: sign * centre });
+      }
+    }
+    // no `else`: a breach wider than the core leaves the base fully open
+  } else {
+    boxes.push({ hx: coreHx, hz: coreHz, yBase: 0, yTop: coreTop });
+  }
+
+  if (coreTop < fullTop) boxes.push({ hx: sx / 2, hz: sz / 2, yBase: coreTop, yTop: fullTop });
+  return boxes;
+}
+
+/** structural HP, derived from a piece's own resource cost — pricier
+ *  structures (the keep, stone walls) shrug off far more than a cheap
+ *  torch or a single brick before siege damage reduces them to rubble. */
+export function maxHpFor(type: string): number {
+  const b = BUILDABLE_BY_ID[type];
+  if (!b) return 20;
+  const totalCost = Object.values(b.cost).reduce((s: number, n) => s + (n ?? 0), 0);
+  return Math.max(15, Math.round(totalCost * 3));
+}
+
+// Dev-only guard for the rule above: nothing fixed in the world may stand
+// inside the buildable region. The signpost did for a long while, silently
+// eating a grid square, and the region is due to grow — so this fails loudly
+// at import time in development rather than being re-discovered by eye.
+if (process.env.NODE_ENV !== 'production') {
+  const bad = FIXED_WORLD_PROPS.filter(
+    (p) => p.x >= BUILD_REGION.minX && p.x <= BUILD_REGION.maxX
+      && p.z >= BUILD_REGION.minZ && p.z <= BUILD_REGION.maxZ,
+  );
+  if (bad.length) {
+    console.warn(
+      '[buildables] fixed world prop(s) inside BUILD_REGION — they will occupy '
+      + 'build squares the player cannot clear: '
+      + bad.map((p) => `${p.name} (${p.x}, ${p.z})`).join(', '),
+    );
+  }
+}
+
+// debug handle: lets a smoke test compare the collision volumes against the
+// mesh that is actually drawn (see scripts/smoke123.mjs)
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__kkcollideFor = (type: string, rot: number) =>
+    collisionBoxesFor(type, rot);
+}

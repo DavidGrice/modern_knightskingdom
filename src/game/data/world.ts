@@ -1,0 +1,80 @@
+// Static world layout constants (meters).
+export const WORLD_HALF = 200;          // world spans ±200 on x/z
+export const SPAWN: [number, number, number] = [0, 0, 26];
+export const EYE_HEIGHT = 1.6;
+
+export const POND = { x: 52, z: 42, radius: 8 };
+// A short wooden dock from the old shore-side fishing sign running along
+// the pond's edge, so fishing means standing at the water's edge looking
+// out over it rather than interacting with a signpost on dry land (see
+// ResourceNodes.tsx's FishingSpot and PlayerController's pond-collision
+// corridor exception). Both ends sit at the same ~8.5m radius from POND's
+// center (right at the bank) — a straight radial dock plunged toward the
+// pond's middle instead (old endpoint sat at radius ~4, well inside the
+// water), which is exactly the "goes into the pond" bug reported in
+// Phase 18; this one runs tangentially alongside the shore instead.
+export const FISHING_DOCK = {
+  startX: 45.5, startZ: 36.5, // shore end (the old sign spot)
+  endX: 49.33, endZ: 33.91,   // far end, along the bank, not toward the center
+  yaw: 2.1643,                // faces along the shoreline from start to end
+  halfWidth: 0.6,
+};
+// Phase 20: the King holds court at his own castle (template-01, The King's
+// Approach) — must match his NpcDef in data/npcs.ts; the knighting ceremony
+// teleports the player before him here.
+export const NPC_KING = { x: 1000, z: 962, yaw: Math.PI };
+
+export const INTERACT_RANGE = 3.4;
+export const STATION_RANGE = 4.5;
+
+// The Grand Keep's great hall: a fixed, always-present interior fixture
+// tucked in an empty corner of the map (outside the tree ring, mining field,
+// pond and homestead). Entering/exiting is a teleport (see gameStore
+// enterKeep/exitKeep), not a walk-through door, so the room stays fully
+// sealed and can't be stumbled into from outside.
+export const KEEP_INTERIOR = { x: 85, z: 85, halfX: 6, halfZ: 5 };
+export const KEEP_ENTER_SPAWN = {
+  x: KEEP_INTERIOR.x, z: KEEP_INTERIOR.z - (KEEP_INTERIOR.halfZ - 2), yaw: Math.PI,
+};
+export const KEEP_CHEST_POS = { x: KEEP_INTERIOR.x + 3.3, z: KEEP_INTERIOR.z + 2.6 };
+// beside the throne (see KeepInteriorRoom.tsx's Throne(), at local (0, halfZ-1.2))
+export const KEEP_THRONE_POS = { x: KEEP_INTERIOR.x + 1.6, z: KEEP_INTERIOR.z + (KEEP_INTERIOR.halfZ - 1.2) };
+export const KEEP_ENTER_RANGE = 6; // the keep footprint is large; allow reaching it from its base
+// where the court NPCs (Phase 15's day/night schedule) gather at night —
+// clear of the exterior entrance (KEEP_ENTER_SPAWN) so they don't block it
+export const NIGHT_GATHER_SPOT = { x: KEEP_INTERIOR.x, z: KEEP_INTERIOR.z - 14 };
+
+// A travel signpost near spawn opens the map of the nine original template
+// worlds (see game/data/worlds.ts) as visitable destinations.
+// Deliberately OUTSIDE the homestead build region (BUILD_REGION spans
+// x/z ±30 — see data/buildables.ts): it used to stand at (-14, 18), inside
+// the grid, occupying a build square the player could never clear. Kept a
+// short walk from SPAWN (0, 26) so it is still the first thing you meet.
+// FIXED_WORLD_PROPS below asserts this stays true.
+export const SIGNPOST = { x: -16, z: 36 };
+
+// Cedric the Bull's camp (Phase 20: relocated to The Rival Castle,
+// template-05 — the rebellion's seat, pitched on the terrain-probed flat
+// ground at the foot of his castle). See CedricCamp.tsx; still the game's
+// capstone boss encounter, now reached by actually traveling there.
+export const CEDRIC_CAMP = { x: 2185, z: 945 };
+export const CEDRIC_WORLD = 'template-05';
+export const CEDRIC_REVEAL_QUEST = 'knights_arms';
+export const CEDRIC_INTERACT_RANGE = 5;
+
+// Princess Storm's Battle Dome (Phase 20: relocated to The Sister Keep,
+// template-06, on its terrain-probed flat ground), grounded in Queen
+// Leonora's own line about her daughter's swordsmanship (see game/data/
+// npcs.ts's 'storm' NpcDef).
+export const BATTLE_DOME = { x: 2500, z: 955, radius: 9 };
+export const STORM_WORLD = 'template-06';
+
+/** Fixed world props that must never stand inside the buildable region.
+ *  Checked once in development — a prop inside the grid silently eats a
+ *  build square the player has no way to clear, and the region is due to
+ *  grow, so this needs to fail loudly rather than be re-found by eye. */
+export const FIXED_WORLD_PROPS: { name: string; x: number; z: number }[] = [
+  { name: 'SIGNPOST', x: SIGNPOST.x, z: SIGNPOST.z },
+  { name: 'POND', x: POND.x, z: POND.z },
+  { name: 'FISHING_DOCK', x: FISHING_DOCK.startX, z: FISHING_DOCK.startZ },
+];

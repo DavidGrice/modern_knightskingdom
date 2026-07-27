@@ -1,0 +1,66 @@
+name: CI
+
+# Runs on every pull request into main, and on main itself after a merge.
+# Deliberately NOT on every branch push as well — that would double-run the
+# same commit while a PR is open.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A new push to a PR cancels the run still going for the old commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  branch-name:
+    name: Branch name
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the branch prefix
+        run: |
+          branch="${{ github.head_ref }}"
+          echo "Branch: $branch"
+          if [[ "$branch" =~ ^(feature|enhancement|bugfix|chore|docs)/[a-z0-9._-]+$ ]]; then
+            echo "OK"
+          else
+            echo "::error::'$branch' does not match <type>/<slug>."
+            echo "::error::Allowed types: feature, enhancement, bugfix, chore, docs."
+            echo "::error::Slug must be lowercase: letters, digits, dot, underscore, hyphen."
+            exit 1
+          fi
+
+  verify:
+    name: Typecheck & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # `npm ci` needs package-lock.json to be in sync with package.json;
+      # it fails loudly rather than silently resolving something else.
+      - name: Install
+        run: npm ci
+
+      # The repo is strict TypeScript with no lint config, so tsc IS the
+      # linter. It runs before the build because its errors are far more
+      # legible than the ones the bundler produces for the same mistake.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Note this passes without public/assets: the extracted models,
+      # textures and sounds are runtime fetches from public/, not build
+      # inputs. The catalog JSON that IS a build input lives in
+      # src/game/data/*.generated.json and is committed.
+      - name: Build
+        run: npx next build

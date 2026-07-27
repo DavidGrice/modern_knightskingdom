@@ -1,0 +1,45 @@
+name: Auto-merge
+
+# Turns on GitHub's native auto-merge for your own PRs. The PR then merges
+# itself the moment every required check is green and the branch is
+# conflict-free — and sits there untouched if it is not.
+#
+# TWO REPO SETTINGS ARE REQUIRED or this does nothing useful:
+#
+#   1. Settings > General > Pull Requests > "Allow auto-merge" must be ON,
+#      or the `gh pr merge --auto` call below fails.
+#   2. A ruleset/branch protection on `main` must REQUIRE the CI checks.
+#      Without a required check there is nothing to wait for, so auto-merge
+#      merges the PR immediately — which is just pushing to main with extra
+#      steps. See CONTRIBUTING.md for the exact settings.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable:
+    name: Enable auto-merge
+    # Only the repo owner's own non-draft PRs. A fork PR must never be able
+    # to arm its own merge.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Arm auto-merge (squash)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if gh pr merge --auto --squash "$PR_URL"; then
+            echo "Auto-merge armed. Merges when required checks pass."
+          else
+            echo "::warning::Could not arm auto-merge."
+            echo "::warning::Most likely 'Allow auto-merge' is off in Settings > General."
+            echo "::warning::Merge manually, or enable it and re-run this job."
+          fi

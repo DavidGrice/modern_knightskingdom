@@ -1,0 +1,2402 @@
+[
+ {
+  "id": "gen_00_l300500",
+  "name": "Brick 1×1",
+  "cat": "bricks",
+  "model": "/assets/props/basic/00_l300500.glb",
+  "thumb": "/assets/props/basic/00_l300500.png",
+  "size": [
+   0.35,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_02_l245300",
+  "name": "Brick 1×1",
+  "cat": "bricks",
+  "model": "/assets/props/basic/02_l245300.glb",
+  "thumb": "/assets/props/basic/02_l245300.png",
+  "size": [
+   0.35,
+   2.1,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_04_l300400",
+  "name": "Brick 1×2",
+  "cat": "bricks",
+  "model": "/assets/props/basic/04_l300400.glb",
+  "thumb": "/assets/props/basic/04_l300400.png",
+  "size": [
+   0.35,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_06_l324500",
+  "name": "Brick 1×2",
+  "cat": "bricks",
+  "model": "/assets/props/basic/06_l324500.glb",
+  "thumb": "/assets/props/basic/06_l324500.png",
+  "size": [
+   0.35,
+   0.84,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_08_l245400",
+  "name": "Brick 2×1",
+  "cat": "bricks",
+  "model": "/assets/props/basic/08_l245400.glb",
+  "thumb": "/assets/props/basic/08_l245400.png",
+  "size": [
+   0.7,
+   2.1,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_10_l362200",
+  "name": "Brick 1×3",
+  "cat": "bricks",
+  "model": "/assets/props/basic/10_l362200.glb",
+  "thumb": "/assets/props/basic/10_l362200.png",
+  "size": [
+   0.35,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_12_l301000",
+  "name": "Brick 1×4",
+  "cat": "bricks",
+  "model": "/assets/props/basic/12_l301000.glb",
+  "thumb": "/assets/props/basic/12_l301000.png",
+  "size": [
+   0.35,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_14_l300900",
+  "name": "Brick 1×6",
+  "cat": "bricks",
+  "model": "/assets/props/basic/14_l300900.glb",
+  "thumb": "/assets/props/basic/14_l300900.png",
+  "size": [
+   0.35,
+   0.42,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_16_l375400",
+  "name": "Brick 6×1",
+  "cat": "bricks",
+  "model": "/assets/props/basic/16_l375400.glb",
+  "thumb": "/assets/props/basic/16_l375400.png",
+  "size": [
+   2.1,
+   2.1,
+   0.35
+  ],
+  "cost": {
+   "plank": 2
+  }
+ },
+ {
+  "id": "gen_18_l300800",
+  "name": "Brick 1×8",
+  "cat": "bricks",
+  "model": "/assets/props/basic/18_l300800.glb",
+  "thumb": "/assets/props/basic/18_l300800.png",
+  "size": [
+   0.35,
+   0.424,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_20_l611100",
+  "name": "Brick 1×10",
+  "cat": "bricks",
+  "model": "/assets/props/basic/20_l611100.glb",
+  "thumb": "/assets/props/basic/20_l611100.png",
+  "size": [
+   0.35,
+   0.42,
+   3.5
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_22_l611200",
+  "name": "Brick 1×12",
+  "cat": "bricks",
+  "model": "/assets/props/basic/22_l611200.glb",
+  "thumb": "/assets/props/basic/22_l611200.png",
+  "size": [
+   0.35,
+   0.42,
+   4.2
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_24_l246500",
+  "name": "Brick 1×16",
+  "cat": "bricks",
+  "model": "/assets/props/basic/24_l246500.glb",
+  "thumb": "/assets/props/basic/24_l246500.png",
+  "size": [
+   0.35,
+   0.42,
+   5.6
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_26_l300300",
+  "name": "Brick 2×2",
+  "cat": "bricks",
+  "model": "/assets/props/basic/26_l300300.glb",
+  "thumb": "/assets/props/basic/26_l300300.png",
+  "size": [
+   0.7,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_28_l3014500",
+  "name": "Brick 2×2",
+  "cat": "bricks",
+  "model": "/assets/props/basic/28_l3014500.glb",
+  "thumb": "/assets/props/basic/28_l3014500.png",
+  "size": [
+   0.7,
+   1.26,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_30_l300200",
+  "name": "Brick 2×3",
+  "cat": "bricks",
+  "model": "/assets/props/basic/30_l300200.glb",
+  "thumb": "/assets/props/basic/30_l300200.png",
+  "size": [
+   0.7,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_32_l621500",
+  "name": "Brick 2×3",
+  "cat": "bricks",
+  "model": "/assets/props/basic/32_l621500.glb",
+  "thumb": "/assets/props/basic/32_l621500.png",
+  "size": [
+   0.7,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_34_l300100",
+  "name": "Brick 2×4",
+  "cat": "bricks",
+  "model": "/assets/props/basic/34_l300100.glb",
+  "thumb": "/assets/props/basic/34_l300100.png",
+  "size": [
+   0.7,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_36_l245600",
+  "name": "Brick 2×6",
+  "cat": "bricks",
+  "model": "/assets/props/basic/36_l245600.glb",
+  "thumb": "/assets/props/basic/36_l245600.png",
+  "size": [
+   0.7,
+   0.42,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_38_l300700",
+  "name": "Brick 2×8",
+  "cat": "bricks",
+  "model": "/assets/props/basic/38_l300700.glb",
+  "thumb": "/assets/props/basic/38_l300700.png",
+  "size": [
+   0.7,
+   0.42,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_40_l300600",
+  "name": "Brick 2×10",
+  "cat": "bricks",
+  "model": "/assets/props/basic/40_l300600.glb",
+  "thumb": "/assets/props/basic/40_l300600.png",
+  "size": [
+   0.7,
+   0.42,
+   3.5
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_42_l235600",
+  "name": "Brick 4×6",
+  "cat": "bricks",
+  "model": "/assets/props/basic/42_l235600.glb",
+  "thumb": "/assets/props/basic/42_l235600.png",
+  "size": [
+   1.4,
+   0.42,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_44_l3018100",
+  "name": "Brick 4×10",
+  "cat": "bricks",
+  "model": "/assets/props/basic/44_l3018100.glb",
+  "thumb": "/assets/props/basic/44_l3018100.png",
+  "size": [
+   1.4,
+   0.42,
+   3.5
+  ],
+  "cost": {
+   "plank": 2
+  }
+ },
+ {
+  "id": "gen_46_l621200",
+  "name": "Brick 4×10",
+  "cat": "bricks",
+  "model": "/assets/props/basic/46_l621200.glb",
+  "thumb": "/assets/props/basic/46_l621200.png",
+  "size": [
+   1.4,
+   0.42,
+   3.5
+  ],
+  "cost": {
+   "plank": 2
+  }
+ },
+ {
+  "id": "gen_48_l420100",
+  "name": "Brick 8×8",
+  "cat": "bricks",
+  "model": "/assets/props/basic/48_l420100.glb",
+  "thumb": "/assets/props/basic/48_l420100.png",
+  "size": [
+   2.8,
+   0.42,
+   2.8
+  ],
+  "cost": {
+   "plank": 4
+  }
+ },
+ {
+  "id": "gen_50_l420400",
+  "name": "Brick 8×16",
+  "cat": "bricks",
+  "model": "/assets/props/basic/50_l420400.glb",
+  "thumb": "/assets/props/basic/50_l420400.png",
+  "size": [
+   2.8,
+   0.42,
+   5.6
+  ],
+  "cost": {
+   "plank": 6
+  }
+ },
+ {
+  "id": "gen_00_l3004400",
+  "name": "Window/Door 1×2",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/00_l3004400.glb",
+  "thumb": "/assets/props/windows_doors/00_l3004400.png",
+  "size": [
+   0.35,
+   1.12,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_02_l3004500",
+  "name": "Window/Door 1×2",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/02_l3004500.glb",
+  "thumb": "/assets/props/windows_doors/02_l3004500.png",
+  "size": [
+   0.35,
+   1.12,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_04_l3005500",
+  "name": "Window/Door 4×1",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/04_l3005500.glb",
+  "thumb": "/assets/props/windows_doors/04_l3005500.png",
+  "size": [
+   1.4,
+   0.84,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_08_l403300",
+  "name": "Window/Door 1×4",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/08_l403300.glb",
+  "thumb": "/assets/props/windows_doors/08_l403300.png",
+  "size": [
+   0.35,
+   1.26,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_10_l403301",
+  "name": "Window/Door 1×4",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/10_l403301.glb",
+  "thumb": "/assets/props/windows_doors/10_l403301.png",
+  "size": [
+   0.35,
+   1.26,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_12_l407100",
+  "name": "Window/Door 6×2",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/12_l407100.glb",
+  "thumb": "/assets/props/windows_doors/12_l407100.png",
+  "size": [
+   2.1,
+   2.94,
+   0.84
+  ],
+  "cost": {
+   "plank": 6
+  }
+ },
+ {
+  "id": "gen_14_l453201",
+  "name": "Window/Door 2×3",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/14_l453201.glb",
+  "thumb": "/assets/props/windows_doors/14_l453201.png",
+  "size": [
+   0.77,
+   0.84,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_16_l453202",
+  "name": "Window/Door 2×3",
+  "cat": "decor",
+  "model": "/assets/props/windows_doors/16_l453202.glb",
+  "thumb": "/assets/props/windows_doors/16_l453202.png",
+  "size": [
+   0.77,
+   0.84,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_00_l3015300",
+  "name": "Ornament 1×1",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/00_l3015300.glb",
+  "thumb": "/assets/props/castle_accessories/00_l3015300.png",
+  "size": [
+   0.35,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_02_l626900",
+  "name": "Ornament 1×1",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/02_l626900.glb",
+  "thumb": "/assets/props/castle_accessories/02_l626900.png",
+  "size": [
+   0.35,
+   0.7,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_04_l395700",
+  "name": "Ornament 1×1",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/04_l395700.glb",
+  "thumb": "/assets/props/castle_accessories/04_l395700.png",
+  "size": [
+   0.35,
+   1.68,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_06_l449500",
+  "name": "Ornament 4×1",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/06_l449500.glb",
+  "thumb": "/assets/props/castle_accessories/06_l449500.png",
+  "size": [
+   1.396,
+   1.68,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_08_l7253400",
+  "name": "Ornament 9×1",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/08_l7253400.glb",
+  "thumb": "/assets/props/castle_accessories/08_l7253400.png",
+  "size": [
+   3.041,
+   3.22,
+   0.35
+  ],
+  "cost": {
+   "stone": 4
+  }
+ },
+ {
+  "id": "gen_10_l407900",
+  "name": "Ornament 2×3",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/10_l407900.glb",
+  "thumb": "/assets/props/castle_accessories/10_l407900.png",
+  "size": [
+   0.7,
+   0.84,
+   0.875
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_12_l3207401",
+  "name": "Ornament 4×9",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/12_l3207401.glb",
+  "thumb": "/assets/props/castle_accessories/12_l3207401.png",
+  "size": [
+   1.4,
+   2.03,
+   2.975
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_14_l415100",
+  "name": "Ornament 8×8",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/14_l415100.glb",
+  "thumb": "/assets/props/castle_accessories/14_l415100.png",
+  "size": [
+   2.8,
+   0.14,
+   2.8
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_16_l244401",
+  "name": "Ornament 8×14",
+  "cat": "decor",
+  "model": "/assets/props/castle_accessories/16_l244401.glb",
+  "thumb": "/assets/props/castle_accessories/16_l244401.png",
+  "size": [
+   2.8,
+   0.56,
+   4.9
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_06_l3013700",
+  "name": "Wall Section 1×4",
+  "cat": "walls",
+  "model": "/assets/props/castle/06_l3013700.glb",
+  "thumb": "/assets/props/castle/06_l3013700.png",
+  "size": [
+   0.35,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_08_l3009900",
+  "name": "Wall Section 1×5",
+  "cat": "walls",
+  "model": "/assets/props/castle/08_l3009900.glb",
+  "thumb": "/assets/props/castle/08_l3009900.png",
+  "size": [
+   0.35,
+   1.68,
+   1.75
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_10_l235700",
+  "name": "Wall Section 2×2",
+  "cat": "walls",
+  "model": "/assets/props/castle/10_l235700.glb",
+  "thumb": "/assets/props/castle/10_l235700.png",
+  "size": [
+   0.7,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_12_l3027400",
+  "name": "Wall Section 2×3",
+  "cat": "walls",
+  "model": "/assets/props/castle/12_l3027400.glb",
+  "thumb": "/assets/props/castle/12_l3027400.png",
+  "size": [
+   0.7,
+   1.26,
+   1.05
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_14_l444400",
+  "name": "Wall Section 2×5",
+  "cat": "walls",
+  "model": "/assets/props/castle/14_l444400.glb",
+  "thumb": "/assets/props/castle/14_l444400.png",
+  "size": [
+   0.7,
+   2.52,
+   1.75
+  ],
+  "cost": {
+   "stone": 4
+  }
+ },
+ {
+  "id": "gen_16_l246200",
+  "name": "Wall Section 3×3",
+  "cat": "walls",
+  "model": "/assets/props/castle/16_l246200.glb",
+  "thumb": "/assets/props/castle/16_l246200.png",
+  "size": [
+   1.05,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_18_l3024600",
+  "name": "Wall Section 4×3",
+  "cat": "walls",
+  "model": "/assets/props/castle/18_l3024600.glb",
+  "thumb": "/assets/props/castle/18_l3024600.png",
+  "size": [
+   1.4,
+   2.52,
+   1.05
+  ],
+  "cost": {
+   "stone": 4
+  }
+ },
+ {
+  "id": "gen_20_l606600",
+  "name": "Wall Section 8×4",
+  "cat": "walls",
+  "model": "/assets/props/castle/20_l606600.glb",
+  "thumb": "/assets/props/castle/20_l606600.png",
+  "size": [
+   2.8,
+   0.98,
+   1.4
+  ],
+  "cost": {
+   "stone": 5
+  }
+ },
+ {
+  "id": "gen_22_l610700",
+  "name": "Wall Section 5×5",
+  "cat": "walls",
+  "model": "/assets/props/castle/22_l610700.glb",
+  "thumb": "/assets/props/castle/22_l610700.png",
+  "size": [
+   1.75,
+   0.42,
+   1.75
+  ],
+  "cost": {
+   "stone": 2
+  }
+ },
+ {
+  "id": "gen_24_l607200",
+  "name": "Wall Section 7×7",
+  "cat": "walls",
+  "model": "/assets/props/castle/24_l607200.glb",
+  "thumb": "/assets/props/castle/24_l607200.png",
+  "size": [
+   2.45,
+   0.98,
+   2.45
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_00_l449000",
+  "name": "Arch 1×3",
+  "cat": "decor",
+  "model": "/assets/props/arches/00_l449000.glb",
+  "thumb": "/assets/props/arches/00_l449000.png",
+  "size": [
+   0.35,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_02_l365900",
+  "name": "Arch 1×4",
+  "cat": "decor",
+  "model": "/assets/props/arches/02_l365900.glb",
+  "thumb": "/assets/props/arches/02_l365900.png",
+  "size": [
+   0.35,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_04_l618200",
+  "name": "Arch 1×4",
+  "cat": "decor",
+  "model": "/assets/props/arches/04_l618200.glb",
+  "thumb": "/assets/props/arches/04_l618200.png",
+  "size": [
+   0.35,
+   0.84,
+   1.4
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_06_l233900",
+  "name": "Arch 1×5",
+  "cat": "decor",
+  "model": "/assets/props/arches/06_l233900.glb",
+  "thumb": "/assets/props/arches/06_l233900.png",
+  "size": [
+   0.35,
+   1.68,
+   1.75
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_08_l345500",
+  "name": "Arch 1×6",
+  "cat": "decor",
+  "model": "/assets/props/arches/08_l345500.glb",
+  "thumb": "/assets/props/arches/08_l345500.png",
+  "size": [
+   0.35,
+   0.42,
+   2.1
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_10_l330700",
+  "name": "Arch 1×6",
+  "cat": "decor",
+  "model": "/assets/props/arches/10_l330700.glb",
+  "thumb": "/assets/props/arches/10_l330700.png",
+  "size": [
+   0.35,
+   0.84,
+   2.1
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_12_l330800",
+  "name": "Arch 1×8",
+  "cat": "decor",
+  "model": "/assets/props/arches/12_l330800.glb",
+  "thumb": "/assets/props/arches/12_l330800.png",
+  "size": [
+   0.35,
+   0.84,
+   2.8
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_14_l302720",
+  "name": "Arch 4×12",
+  "cat": "decor",
+  "model": "/assets/props/arches/14_l302720.glb",
+  "thumb": "/assets/props/arches/14_l302720.png",
+  "size": [
+   1.4,
+   2.52,
+   4.2
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_16_l302721",
+  "name": "Arch 4×12",
+  "cat": "decor",
+  "model": "/assets/props/arches/16_l302721.glb",
+  "thumb": "/assets/props/arches/16_l302721.png",
+  "size": [
+   1.4,
+   4.34,
+   4.2
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_00_l306200",
+  "name": "Tower Piece 1×1",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/00_l306200.glb",
+  "thumb": "/assets/props/cylindrical/00_l306200.png",
+  "size": [
+   0.35,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_02_l458900",
+  "name": "Tower Piece 1×1",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/02_l458900.glb",
+  "thumb": "/assets/props/cylindrical/02_l458900.png",
+  "size": [
+   0.35,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_04_l614100",
+  "name": "Tower Piece 1×1",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/04_l614100.glb",
+  "thumb": "/assets/props/cylindrical/04_l614100.png",
+  "size": [
+   0.35,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_06_l394100",
+  "name": "Tower Piece 2×2",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/06_l394100.glb",
+  "thumb": "/assets/props/cylindrical/06_l394100.png",
+  "size": [
+   0.7,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_08_l474000",
+  "name": "Tower Piece 2×2",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/08_l474000.glb",
+  "thumb": "/assets/props/cylindrical/08_l474000.png",
+  "size": [
+   0.7,
+   0.14,
+   0.7
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_10_l394200",
+  "name": "Tower Piece 2×2",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/10_l394200.glb",
+  "thumb": "/assets/props/cylindrical/10_l394200.png",
+  "size": [
+   0.7,
+   0.84,
+   0.7
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_12_l603700",
+  "name": "Tower Piece 2×2",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/12_l603700.glb",
+  "thumb": "/assets/props/cylindrical/12_l603700.png",
+  "size": [
+   0.7,
+   1.4,
+   0.7
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_14_l257700",
+  "name": "Tower Piece 4×4",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/14_l257700.glb",
+  "thumb": "/assets/props/cylindrical/14_l257700.png",
+  "size": [
+   1.4,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_16_l622200",
+  "name": "Tower Piece 4×4",
+  "cat": "castle",
+  "model": "/assets/props/cylindrical/16_l622200.glb",
+  "thumb": "/assets/props/cylindrical/16_l622200.png",
+  "size": [
+   1.4,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "stone": 1
+  }
+ },
+ {
+  "id": "gen_00_l302400",
+  "name": "Trim 1×1",
+  "cat": "decor",
+  "model": "/assets/props/slim/00_l302400.glb",
+  "thumb": "/assets/props/slim/00_l302400.png",
+  "size": [
+   0.35,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_02_l302300",
+  "name": "Trim 1×2",
+  "cat": "decor",
+  "model": "/assets/props/slim/02_l302300.glb",
+  "thumb": "/assets/props/slim/02_l302300.png",
+  "size": [
+   0.35,
+   0.14,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_04_l379400",
+  "name": "Trim 2×1",
+  "cat": "decor",
+  "model": "/assets/props/slim/04_l379400.glb",
+  "thumb": "/assets/props/slim/04_l379400.png",
+  "size": [
+   0.7,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_06_l362300",
+  "name": "Trim 1×3",
+  "cat": "decor",
+  "model": "/assets/props/slim/06_l362300.glb",
+  "thumb": "/assets/props/slim/06_l362300.png",
+  "size": [
+   0.35,
+   0.14,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_08_l371000",
+  "name": "Trim 1×4",
+  "cat": "decor",
+  "model": "/assets/props/slim/08_l371000.glb",
+  "thumb": "/assets/props/slim/08_l371000.png",
+  "size": [
+   0.35,
+   0.14,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_10_l366600",
+  "name": "Trim 1×6",
+  "cat": "decor",
+  "model": "/assets/props/slim/10_l366600.glb",
+  "thumb": "/assets/props/slim/10_l366600.png",
+  "size": [
+   0.35,
+   0.14,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_12_l346000",
+  "name": "Trim 1×8",
+  "cat": "decor",
+  "model": "/assets/props/slim/12_l346000.glb",
+  "thumb": "/assets/props/slim/12_l346000.png",
+  "size": [
+   0.35,
+   0.14,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_14_l302200",
+  "name": "Trim 2×2",
+  "cat": "decor",
+  "model": "/assets/props/slim/14_l302200.glb",
+  "thumb": "/assets/props/slim/14_l302200.png",
+  "size": [
+   0.7,
+   0.14,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_16_l302100",
+  "name": "Trim 2×3",
+  "cat": "decor",
+  "model": "/assets/props/slim/16_l302100.glb",
+  "thumb": "/assets/props/slim/16_l302100.png",
+  "size": [
+   0.7,
+   0.14,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_18_l302000",
+  "name": "Trim 2×4",
+  "cat": "decor",
+  "model": "/assets/props/slim/18_l302000.glb",
+  "thumb": "/assets/props/slim/18_l302000.png",
+  "size": [
+   0.7,
+   0.14,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_20_l379500",
+  "name": "Trim 2×6",
+  "cat": "decor",
+  "model": "/assets/props/slim/20_l379500.glb",
+  "thumb": "/assets/props/slim/20_l379500.png",
+  "size": [
+   0.7,
+   0.14,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_22_l303400",
+  "name": "Trim 2×8",
+  "cat": "decor",
+  "model": "/assets/props/slim/22_l303400.glb",
+  "thumb": "/assets/props/slim/22_l303400.png",
+  "size": [
+   0.7,
+   0.14,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_24_l383200",
+  "name": "Trim 2×10",
+  "cat": "decor",
+  "model": "/assets/props/slim/24_l383200.glb",
+  "thumb": "/assets/props/slim/24_l383200.png",
+  "size": [
+   0.7,
+   0.14,
+   3.5
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_26_l244500",
+  "name": "Trim 2×12",
+  "cat": "decor",
+  "model": "/assets/props/slim/26_l244500.glb",
+  "thumb": "/assets/props/slim/26_l244500.png",
+  "size": [
+   0.7,
+   0.14,
+   4.2
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_28_l428200",
+  "name": "Trim 2×16",
+  "cat": "decor",
+  "model": "/assets/props/slim/28_l428200.glb",
+  "thumb": "/assets/props/slim/28_l428200.png",
+  "size": [
+   0.7,
+   0.14,
+   5.6
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_30_l245000",
+  "name": "Trim 3×3",
+  "cat": "decor",
+  "model": "/assets/props/slim/30_l245000.glb",
+  "thumb": "/assets/props/slim/30_l245000.png",
+  "size": [
+   1.05,
+   0.14,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_32_l241900",
+  "name": "Trim 6×3",
+  "cat": "decor",
+  "model": "/assets/props/slim/32_l241900.glb",
+  "thumb": "/assets/props/slim/32_l241900.png",
+  "size": [
+   2.1,
+   0.14,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_34_l303100",
+  "name": "Trim 4×4",
+  "cat": "decor",
+  "model": "/assets/props/slim/34_l303100.glb",
+  "thumb": "/assets/props/slim/34_l303100.png",
+  "size": [
+   1.4,
+   0.14,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_36_l303200",
+  "name": "Trim 4×6",
+  "cat": "decor",
+  "model": "/assets/props/slim/36_l303200.glb",
+  "thumb": "/assets/props/slim/36_l303200.png",
+  "size": [
+   1.4,
+   0.14,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_38_l303500",
+  "name": "Trim 4×8",
+  "cat": "decor",
+  "model": "/assets/props/slim/38_l303500.glb",
+  "thumb": "/assets/props/slim/38_l303500.png",
+  "size": [
+   1.4,
+   0.14,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_40_l303000",
+  "name": "Trim 4×10",
+  "cat": "decor",
+  "model": "/assets/props/slim/40_l303000.glb",
+  "thumb": "/assets/props/slim/40_l303000.png",
+  "size": [
+   1.4,
+   0.14,
+   3.5
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_42_l302900",
+  "name": "Trim 4×12",
+  "cat": "decor",
+  "model": "/assets/props/slim/42_l302900.glb",
+  "thumb": "/assets/props/slim/42_l302900.png",
+  "size": [
+   1.4,
+   0.14,
+   4.2
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_44_l395800",
+  "name": "Trim 6×6",
+  "cat": "decor",
+  "model": "/assets/props/slim/44_l395800.glb",
+  "thumb": "/assets/props/slim/44_l395800.png",
+  "size": [
+   2.1,
+   0.14,
+   2.1
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_46_l303600",
+  "name": "Trim 6×8",
+  "cat": "decor",
+  "model": "/assets/props/slim/46_l303600.glb",
+  "thumb": "/assets/props/slim/46_l303600.png",
+  "size": [
+   2.1,
+   0.14,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_48_l303300",
+  "name": "Trim 6×10",
+  "cat": "decor",
+  "model": "/assets/props/slim/48_l303300.glb",
+  "thumb": "/assets/props/slim/48_l303300.png",
+  "size": [
+   2.1,
+   0.14,
+   3.5
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_50_l302800",
+  "name": "Trim 6×12",
+  "cat": "decor",
+  "model": "/assets/props/slim/50_l302800.glb",
+  "thumb": "/assets/props/slim/50_l302800.png",
+  "size": [
+   2.1,
+   0.14,
+   4.2
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_52_l345600",
+  "name": "Trim 6×14",
+  "cat": "decor",
+  "model": "/assets/props/slim/52_l345600.glb",
+  "thumb": "/assets/props/slim/52_l345600.png",
+  "size": [
+   2.1,
+   0.14,
+   4.9
+  ],
+  "cost": {
+   "plank": 2
+  }
+ },
+ {
+  "id": "gen_00_l307000",
+  "name": "Tile 1×1",
+  "cat": "decor",
+  "model": "/assets/props/tiles/00_l307000.glb",
+  "thumb": "/assets/props/tiles/00_l307000.png",
+  "size": [
+   0.35,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_02_l306900",
+  "name": "Tile 2×1",
+  "cat": "decor",
+  "model": "/assets/props/tiles/02_l306900.glb",
+  "thumb": "/assets/props/tiles/02_l306900.png",
+  "size": [
+   0.7,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_04_l243100",
+  "name": "Tile 4×1",
+  "cat": "decor",
+  "model": "/assets/props/tiles/04_l243100.glb",
+  "thumb": "/assets/props/tiles/04_l243100.png",
+  "size": [
+   1.4,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_06_l663600",
+  "name": "Tile 6×1",
+  "cat": "decor",
+  "model": "/assets/props/tiles/06_l663600.glb",
+  "thumb": "/assets/props/tiles/06_l663600.png",
+  "size": [
+   2.1,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_08_l416200",
+  "name": "Tile 8×1",
+  "cat": "decor",
+  "model": "/assets/props/tiles/08_l416200.glb",
+  "thumb": "/assets/props/tiles/08_l416200.png",
+  "size": [
+   2.8,
+   0.14,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_10_l306800",
+  "name": "Tile 2×2",
+  "cat": "decor",
+  "model": "/assets/props/tiles/10_l306800.glb",
+  "thumb": "/assets/props/tiles/10_l306800.png",
+  "size": [
+   0.7,
+   0.14,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_00_l304000",
+  "name": "Roof Slope 2×1",
+  "cat": "castle",
+  "model": "/assets/props/wedge/00_l304000.glb",
+  "thumb": "/assets/props/wedge/00_l304000.png",
+  "size": [
+   0.7,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_02_l304800",
+  "name": "Roof Slope 2×1",
+  "cat": "castle",
+  "model": "/assets/props/wedge/02_l304800.glb",
+  "thumb": "/assets/props/wedge/02_l304800.png",
+  "size": [
+   0.7,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_04_l366500",
+  "name": "Roof Slope 1×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/04_l366500.glb",
+  "thumb": "/assets/props/wedge/04_l366500.png",
+  "size": [
+   0.35,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_06_l244900",
+  "name": "Roof Slope 1×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/06_l244900.glb",
+  "thumb": "/assets/props/wedge/06_l244900.png",
+  "size": [
+   0.35,
+   1.26,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_08_l446000",
+  "name": "Roof Slope 2×1",
+  "cat": "castle",
+  "model": "/assets/props/wedge/08_l446000.glb",
+  "thumb": "/assets/props/wedge/08_l446000.png",
+  "size": [
+   0.7,
+   1.26,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_10_l428600",
+  "name": "Roof Slope 3×1",
+  "cat": "castle",
+  "model": "/assets/props/wedge/10_l428600.glb",
+  "thumb": "/assets/props/wedge/10_l428600.png",
+  "size": [
+   1.05,
+   0.42,
+   0.35
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_12_l428700",
+  "name": "Roof Slope 1×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/12_l428700.glb",
+  "thumb": "/assets/props/wedge/12_l428700.png",
+  "size": [
+   0.35,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_14_l303900",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/14_l303900.glb",
+  "thumb": "/assets/props/wedge/14_l303900.png",
+  "size": [
+   0.7,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_16_l304300",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/16_l304300.glb",
+  "thumb": "/assets/props/wedge/16_l304300.png",
+  "size": [
+   0.7,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_18_l366000",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/18_l366000.glb",
+  "thumb": "/assets/props/wedge/18_l366000.png",
+  "size": [
+   0.7,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_20_l367800",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/20_l367800.glb",
+  "thumb": "/assets/props/wedge/20_l367800.png",
+  "size": [
+   0.7,
+   0.84,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_22_l368800",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/22_l368800.glb",
+  "thumb": "/assets/props/wedge/22_l368800.png",
+  "size": [
+   0.7,
+   0.84,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_24_l330000",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/24_l330000.glb",
+  "thumb": "/assets/props/wedge/24_l330000.png",
+  "size": [
+   0.7,
+   0.28,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_26_l368400",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/26_l368400.glb",
+  "thumb": "/assets/props/wedge/26_l368400.png",
+  "size": [
+   0.7,
+   1.26,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_28_l368500",
+  "name": "Roof Slope 2×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/28_l368500.glb",
+  "thumb": "/assets/props/wedge/28_l368500.png",
+  "size": [
+   0.7,
+   1.26,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_30_l303800",
+  "name": "Roof Slope 2×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/30_l303800.glb",
+  "thumb": "/assets/props/wedge/30_l303800.png",
+  "size": [
+   0.7,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_32_l329800",
+  "name": "Roof Slope 3×2",
+  "cat": "castle",
+  "model": "/assets/props/wedge/32_l329800.glb",
+  "thumb": "/assets/props/wedge/32_l329800.png",
+  "size": [
+   1.05,
+   0.42,
+   0.7
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_34_l374700",
+  "name": "Roof Slope 2×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/34_l374700.glb",
+  "thumb": "/assets/props/wedge/34_l374700.png",
+  "size": [
+   0.7,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_36_l656400",
+  "name": "Roof Slope 2×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/36_l656400.glb",
+  "thumb": "/assets/props/wedge/36_l656400.png",
+  "size": [
+   0.7,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_38_l656500",
+  "name": "Roof Slope 2×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/38_l656500.glb",
+  "thumb": "/assets/props/wedge/38_l656500.png",
+  "size": [
+   0.7,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_40_l303700",
+  "name": "Roof Slope 2×4",
+  "cat": "castle",
+  "model": "/assets/props/wedge/40_l303700.glb",
+  "thumb": "/assets/props/wedge/40_l303700.png",
+  "size": [
+   0.7,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_42_l329900",
+  "name": "Roof Slope 2×4",
+  "cat": "castle",
+  "model": "/assets/props/wedge/42_l329900.glb",
+  "thumb": "/assets/props/wedge/42_l329900.png",
+  "size": [
+   0.7,
+   0.28,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_44_l444500",
+  "name": "Roof Slope 2×8",
+  "cat": "castle",
+  "model": "/assets/props/wedge/44_l444500.glb",
+  "thumb": "/assets/props/wedge/44_l444500.png",
+  "size": [
+   0.7,
+   0.42,
+   2.8
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_46_l367500",
+  "name": "Roof Slope 3×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/46_l367500.glb",
+  "thumb": "/assets/props/wedge/46_l367500.png",
+  "size": [
+   1.05,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_48_l416100",
+  "name": "Roof Slope 3×3",
+  "cat": "castle",
+  "model": "/assets/props/wedge/48_l416100.glb",
+  "thumb": "/assets/props/wedge/48_l416100.png",
+  "size": [
+   1.05,
+   0.42,
+   1.05
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_50_l329700",
+  "name": "Roof Slope 3×4",
+  "cat": "castle",
+  "model": "/assets/props/wedge/50_l329700.glb",
+  "thumb": "/assets/props/wedge/50_l329700.png",
+  "size": [
+   1.05,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_52_l3018200",
+  "name": "Roof Slope 4×4",
+  "cat": "castle",
+  "model": "/assets/props/wedge/52_l3018200.glb",
+  "thumb": "/assets/props/wedge/52_l3018200.png",
+  "size": [
+   1.4,
+   0.42,
+   1.4
+  ],
+  "cost": {
+   "plank": 1
+  }
+ },
+ {
+  "id": "gen_54_l451500",
+  "name": "Roof Slope 8×6",
+  "cat": "castle",
+  "model": "/assets/props/wedge/54_l451500.glb",
+  "thumb": "/assets/props/wedge/54_l451500.png",
+  "size": [
+   2.8,
+   0.42,
+   2.1
+  ],
+  "cost": {
+   "plank": 3
+  }
+ },
+ {
+  "id": "gen_oc6032b1",
+  "name": "Castle Piece 13×7",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6032b1.glb",
+  "thumb": "/assets/props/buildings/oc6032b1.png",
+  "size": [
+   4.55,
+   4.681,
+   2.339
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6032b4",
+  "name": "Castle Piece 8×5",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6032b4.glb",
+  "thumb": "/assets/props/buildings/oc6032b4.png",
+  "size": [
+   2.791,
+   3.85,
+   1.815
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6094-1",
+  "name": "Castle Piece 8×9",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6094-1.glb",
+  "thumb": "/assets/props/buildings/oc6094-1.png",
+  "size": [
+   2.8,
+   7.7,
+   3.15
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6094-2",
+  "name": "Castle Piece 8×9",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6094-2.glb",
+  "thumb": "/assets/props/buildings/oc6094-2.png",
+  "size": [
+   2.8,
+   5.6,
+   3.15
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6094b5",
+  "name": "Castle Piece 12×9",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6094b5.glb",
+  "thumb": "/assets/props/buildings/oc6094b5.png",
+  "size": [
+   4.2,
+   11.06,
+   3.15
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6095-1",
+  "name": "Castle Piece 12×9",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6095-1.glb",
+  "thumb": "/assets/props/buildings/oc6095-1.png",
+  "size": [
+   4.2,
+   6.3,
+   3.18
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6095-2",
+  "name": "Castle Piece 6×21",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6095-2.glb",
+  "thumb": "/assets/props/buildings/oc6095-2.png",
+  "size": [
+   1.925,
+   2.485,
+   7.35
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6095b4",
+  "name": "Castle Piece 20×13",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6095b4.glb",
+  "thumb": "/assets/props/buildings/oc6095b4.png",
+  "size": [
+   7.171,
+   7.35,
+   4.55
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6095b5",
+  "name": "Castle Piece 18×12",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6095b5.glb",
+  "thumb": "/assets/props/buildings/oc6095b5.png",
+  "size": [
+   6.3,
+   4.27,
+   4.2
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6096-5",
+  "name": "Castle Piece 6×5",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6096-5.glb",
+  "thumb": "/assets/props/buildings/oc6096-5.png",
+  "size": [
+   2.1,
+   2.8,
+   1.75
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6096b5",
+  "name": "Castle Piece 13×23",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6096b5.glb",
+  "thumb": "/assets/props/buildings/oc6096b5.png",
+  "size": [
+   4.569,
+   3.883,
+   8.05
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098-1",
+  "name": "Castle Piece 48×35",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098-1.glb",
+  "thumb": "/assets/props/buildings/oc6098-1.png",
+  "size": [
+   16.8,
+   4.886,
+   12.254
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098-2",
+  "name": "Castle Piece 25×23",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098-2.glb",
+  "thumb": "/assets/props/buildings/oc6098-2.png",
+  "size": [
+   8.921,
+   15.47,
+   7.875
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098-3",
+  "name": "Castle Piece 8×13",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098-3.glb",
+  "thumb": "/assets/props/buildings/oc6098-3.png",
+  "size": [
+   2.8,
+   6.93,
+   4.63
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098-4",
+  "name": "Castle Piece 8×11",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098-4.glb",
+  "thumb": "/assets/props/buildings/oc6098-4.png",
+  "size": [
+   2.8,
+   4.34,
+   3.85
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098-5",
+  "name": "Castle Piece 13×11",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098-5.glb",
+  "thumb": "/assets/props/buildings/oc6098-5.png",
+  "size": [
+   4.677,
+   2.726,
+   3.739
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098-6",
+  "name": "Castle Piece 8×9",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098-6.glb",
+  "thumb": "/assets/props/buildings/oc6098-6.png",
+  "size": [
+   2.8,
+   10.22,
+   3.22
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098b1",
+  "name": "Castle Piece 22×13",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098b1.glb",
+  "thumb": "/assets/props/buildings/oc6098b1.png",
+  "size": [
+   7.871,
+   6.16,
+   4.625
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098b2",
+  "name": "Castle Piece 24×21",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098b2.glb",
+  "thumb": "/assets/props/buildings/oc6098b2.png",
+  "size": [
+   8.4,
+   11.62,
+   7.35
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_oc6098b3",
+  "name": "Castle Piece 8×10",
+  "cat": "castle",
+  "model": "/assets/props/buildings/oc6098b3.glb",
+  "thumb": "/assets/props/buildings/oc6098b3.png",
+  "size": [
+   2.8,
+   13.86,
+   3.5
+  ],
+  "cost": {
+   "stone": 6
+  }
+ },
+ {
+  "id": "gen_l347100",
+  "name": "Scenery 4×4",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l347100.glb",
+  "thumb": "/assets/props/scenery/l347100.png",
+  "size": [
+   1.444,
+   2.66,
+   1.444
+  ],
+  "cost": {
+   "wood": 6
+  }
+ },
+ {
+  "id": "gen_l4109610",
+  "name": "Scenery 32×32",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l4109610.glb",
+  "thumb": "/assets/props/scenery/l4109610.png",
+  "size": [
+   11.2,
+   0.07,
+   11.2
+  ],
+  "cost": {
+   "wood": 6
+  }
+ },
+ {
+  "id": "gen_l4109611",
+  "name": "Scenery 32×32",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l4109611.glb",
+  "thumb": "/assets/props/scenery/l4109611.png",
+  "size": [
+   11.2,
+   0.07,
+   11.2
+  ],
+  "cost": {
+   "wood": 6
+  }
+ },
+ {
+  "id": "gen_l4109612",
+  "name": "Scenery 32×32",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l4109612.glb",
+  "thumb": "/assets/props/scenery/l4109612.png",
+  "size": [
+   11.2,
+   0.07,
+   11.2
+  ],
+  "cost": {
+   "wood": 6
+  }
+ },
+ {
+  "id": "gen_l4109613",
+  "name": "Scenery 32×32",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l4109613.glb",
+  "thumb": "/assets/props/scenery/l4109613.png",
+  "size": [
+   11.2,
+   0.07,
+   11.2
+  ],
+  "cost": {
+   "wood": 6
+  }
+ },
+ {
+  "id": "gen_l473800",
+  "name": "Scenery 2×6",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l473800.glb",
+  "thumb": "/assets/props/scenery/l473800.png",
+  "size": [
+   0.7,
+   0.84,
+   1.96
+  ],
+  "cost": {
+   "wood": 1
+  }
+ },
+ {
+  "id": "gen_l606400",
+  "name": "Scenery 4×4",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l606400.glb",
+  "thumb": "/assets/props/scenery/l606400.png",
+  "size": [
+   1.4,
+   1.82,
+   1.4
+  ],
+  "cost": {
+   "wood": 4
+  }
+ },
+ {
+  "id": "gen_l606500",
+  "name": "Scenery 4×4",
+  "cat": "decor",
+  "model": "/assets/props/scenery/l606500.glb",
+  "thumb": "/assets/props/scenery/l606500.png",
+  "size": [
+   1.4,
+   1.26,
+   1.4
+  ],
+  "cost": {
+   "wood": 3
+  }
+ }
+]

@@ -1,0 +1,101 @@
+name: Smoke tests (self-hosted)
+
+# ---------------------------------------------------------------------------
+# THIS CANNOT RUN ON A GITHUB-HOSTED RUNNER, and that is not a configuration
+# problem — it is four separate missing preconditions:
+#
+#   1. `scripts/` is untracked (.gitignore), so the tests are not in the repo.
+#   2. `public/assets/` is untracked — 48 MB of extracted models, textures
+#      and sounds. Without them the game boots to a blank world, so every
+#      test that clicks past character creation fails on a missing minifig.
+#   3. `playwright-core` is not a declared dependency; the scripts rely on it
+#      being present locally.
+#   4. The tests launch Chrome from a hardcoded Windows path with
+#      --enable-unsafe-swiftshader for software GL.
+#
+# All four are satisfied on the development machine and nowhere else. So this
+# workflow targets a SELF-HOSTED runner there, and is manual-only so it never
+# puts a spurious red X on a pull request.
+#
+# To use it:
+#   Settings > Actions > Runners > New self-hosted runner (Windows x64),
+#   follow the install steps, and run it from the repo working copy so
+#   scripts/ and public/assets/ are present. Then trigger this from the
+#   Actions tab.
+#
+# Until then, smoke tests stay a LOCAL pre-merge step. See CONTRIBUTING.md.
+# ---------------------------------------------------------------------------
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: 'Smoke script to run (e.g. smoke131.mjs)'
+        required: true
+        default: 'smoke131.mjs'
+      port:
+        description: 'Dev server port'
+        required: false
+        default: '3789'
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Run ${{ inputs.script }}
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false # keep the untracked scripts/ and public/assets/
+
+      - name: Confirm the untracked prerequisites are actually here
+        shell: bash
+        run: |
+          missing=0
+          [ -d scripts ]       || { echo "::error::scripts/ missing";       missing=1; }
+          [ -d public/assets ] || { echo "::error::public/assets/ missing"; missing=1; }
+          [ -f "scripts/${{ inputs.script }}" ] || { echo "::error::scripts/${{ inputs.script }} missing"; missing=1; }
+          if [ "$missing" = "1" ]; then
+            echo "::error::This runner is not a full working copy. See the header of this file."
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      # The dev server, not a production build: the smoke scripts drive
+      # `next dev` and reach into window.__kk / __kkp / __kke / __kkai.
+      - name: Start dev server
+        shell: bash
+        run: |
+          npx next dev -p ${{ inputs.port }} &
+          echo $! > .devserver.pid
+          for i in $(seq 1 60); do
+            curl -sf "http://localhost:${{ inputs.port }}" >/dev/null && break
+            sleep 2
+          done
+
+      # Headless SwiftShader renders at roughly 8 fps and the game clamps dt
+      # to 0.05/frame, so real elapsed time is about 2.4x game time. The
+      # scripts already account for this; do not "fix" a slow run by
+      # shortening their waits.
+      - name: Run smoke script
+        run: node scripts/${{ inputs.script }}
+
+      - name: Stop dev server
+        if: always()
+        shell: bash
+        run: |
+          [ -f .devserver.pid ] && kill "$(cat .devserver.pid)" 2>/dev/null || true
+          rm -f .devserver.pid
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-shots
+          path: scripts/shots/
+          retention-days: 7
+          if-no-files-found: ignore
