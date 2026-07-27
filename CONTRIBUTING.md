@@ -102,16 +102,26 @@ extra steps.
 - ✅ Allow squash merging (and, if you like, uncheck merge commits + rebase)
 - ✅ Automatically delete head branches
 
-**Settings > Rules > Rulesets > New branch ruleset**
-- Target: `main` (Include default branch)
+**Settings > Rules > Rulesets** — the ruleset is called
+`auto-merge-with-claude`, targets the default branch (`main`), enforcement
+**Active**, bypass list empty:
 - ✅ Restrict deletions
 - ✅ Block force pushes
 - ✅ Require a pull request before merging — Required approvals: **0**
-  (a solo repo cannot approve its own PR; the CI check is the gate)
-- ✅ Require status checks to pass, and add:
+  (a solo repo cannot approve its own PR, so anything higher deadlocks; the
+  CI check is the gate instead)
+- ✅ Require status checks to pass:
   - `Typecheck & build`
   - `Branch name`
-- ✅ Require branches to be up to date before merging
 
-Set **Enforcement status: Active**. As repo owner you may still hold a bypass
-— that is fine, it is a guard rail, not a lock.
+**Deliberately OFF: "Require branches to be up to date before merging."** On
+with more than one PR open, every one of them needs an *Update branch* click
+and a full CI re-run each time `main` moves. Off, a PR can merge having been
+tested against a slightly older `main` — the exposure is a *semantic* conflict
+(two branches that pass alone and break together), which git will not flag as
+a text conflict because there isn't one. At one PR in flight that risk is
+negligible. **Turn it on if you start stacking parallel work.**
+
+Note the ruleset's name describes the workflow it supports, not what it does:
+it is the branch protection. The auto-merge behaviour itself lives in
+`.github/workflows/auto-merge.yml`.
