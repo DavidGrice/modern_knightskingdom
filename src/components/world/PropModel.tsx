@@ -48,9 +48,30 @@ function fixAlphaMasks(root: THREE.Object3D) {
   });
 }
 
+// O5 · this used to be nothing but a per-instance `useMemo`, which only
+// memoizes across RE-RENDERS of the SAME component instance — it does not
+// share across different mount sites. So placing a second copy of a wall
+// already standing elsewhere redid the full clone + two bbox passes +
+// shadow/normal traversal + alpha-mask check from scratch, synchronously,
+// on every single placement forever, not just the first. That is the
+// "significant pause when building" — preloadCommonAssets() already warms
+// the raw GLTF fetch+parse, but nothing warmed THIS.
+//
+// Two existing call sites (ConstructionSite.tsx, Wildlife.tsx) already carry
+// comments asserting this function "shares" / "hands out a cached model" —
+// that was the intent, not what the code actually did. A module-level cache,
+// keyed the same way React's own memo key already was, makes it true: the
+// first placement of a given (url, height) pair pays the normalization cost
+// once, and every other instance — a different building, a different
+// component, a save reload with 40 of the same piece — gets a cache hit.
+const normalizedPropCache = new Map<string, THREE.Group>();
+
 export function useNormalizedProp(url: string, targetHeight: number): THREE.Group {
   const { scene } = useGLTF(url);
   return useMemo(() => {
+    const cacheKey = `${url}::${targetHeight}`;
+    const cached = normalizedPropCache.get(cacheKey);
+    if (cached) return cached;
     const inner = scene.clone(true);
     inner.rotation.x = Math.PI; // stand upright (see resources README)
     const holder = new THREE.Group();
@@ -81,6 +102,7 @@ export function useNormalizedProp(url: string, targetHeight: number): THREE.Grou
     // rendering as a black-and-white card
     const assetId = url.split('/').pop()?.replace(/\.glb$/i, '') ?? '';
     if (ALPHA_MASK_ASSETS.has(assetId)) fixAlphaMasks(wrapper);
+    normalizedPropCache.set(cacheKey, wrapper);
     return wrapper;
   }, [scene, targetHeight, url]);
 }
