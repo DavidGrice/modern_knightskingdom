@@ -13,7 +13,7 @@ one's debug view works.*
 | # | Phase | Status | Debug view |
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
-| 2 | Navigation | not started — **spec written, decision made** | navmesh/path gizmos |
+| 2 | Navigation | not started — **spec complete, 4 gaps resolved** | navmesh/path gizmos |
 | 3 | Actuation | not started | — |
 | 4 | Smart objects | not started — **open design question** | anchor axes |
 | 5 | Utility reasoner | not started | ✅ renderer already built |
@@ -58,34 +58,51 @@ exactly as hungry as a 10 Hz tier-A one with no separate statistical path.
 
 ---
 
-## Phase 2 — decided, spec written, not implemented
+## Phase 2 — spec complete (rev 3), not implemented
 
-**`PHASE_2_NAVIGATION_AND_GATHERING.md` now supersedes `NPC_AI_SPEC.md` §7 in
-full and is the thing to build against.** It resolves the adopt-vs-extend
-question below in favour of **extending `navgrid`**, on the grounds that this
-world is player-mutable mid-session — every building placement would invalidate
-a baked navmesh, and a tile cache would need a second obstacle representation
-maintained alongside `collisionBoxesFor()`, which is the exact desync the
-current design avoids.
+**`PHASE_2_NAVIGATION_AND_GATHERING.md` supersedes `NPC_AI_SPEC.md` §7 in full
+and is the thing to build against.** It resolves adopt-vs-extend in favour of
+**extending `navgrid`**, on the grounds that this world is player-mutable
+mid-session — every building placement would invalidate a baked navmesh, and a
+tile cache would need a second obstacle representation maintained alongside
+`collisionBoxesFor()`, which is the exact desync the current design avoids.
+Strengthened further in rev 3: buildings are destroyed *mid-combat* (cannon
+splash, rams), so `rebuildNav` runs during the most demanding scene in the
+game — a navmesh tile rebuild there is a real hitch, not a hypothetical one.
 
-No phase 2 code exists yet. The original framing is kept below for the record.
+No phase 2 code exists yet.
 
-### The question, as it stood
+### Four gaps found verifying rev 3 against current code, resolved 2026-07-27
 
-`src/game/navgrid.ts` already exists and every actor in the game steers with
-it: a 1 m A\* grid whose obstacles are derived from the *same* collision
-volumes that stop the player, which is why an archway or a breached wall is
-automatically walkable with nobody maintaining a second obstacle list.
+Checked against the codebase as it stands today, not as it stood when rev 3
+was written — `navgrid.ts` itself changed under it (the O2 divide-guard fix).
+All four are now corrected in place in the spec doc:
 
-§7.1 says navcat + Blender-authored `NAV_` meshes + offline navmesh JSON.
-That buys off-mesh links (doors, stairs), coverage of the nine destination
-worlds, and funnel smoothing. It costs the derived-from-real-collision
-property above.
+1. **Destination radii are 213–352, not 224–245** — rev 3's own number came
+   from reading only the first two of nine templates. Doesn't change the
+   window-mode decision; if anything the real worst case (293, excluding
+   home-repurposed template-09) makes the case against content-bounding
+   stronger, not weaker.
+2. **The 96 m window's justification didn't match `lod.json`** — tier B has
+   no outer radius at all (frustum-only), so "exceeds the LOD tier-A/B
+   radius" wasn't actually true of anything in config. Resolution: give tier
+   B an explicit outer radius matching the window, so the two configs agree
+   by construction. One-line config change; do it before §2.0 ships.
+3. **The Sealed Crypt has two different "bounds"** — a static `radius: 140`
+   in `WORLD_DESTINATIONS` (the wander clamp, same field every destination
+   has) versus the real procedurally-generated room layout in
+   `game/dungeon.ts`. The fixed grid must size from the actual generated
+   layout's AABB, not the static 140.
+4. **`TemplateWorld.tsx`'s `mountedRoot` isn't exported** — §2.3's
+   rasterization pass needs it and it's currently a private ref. Needs a
+   small accessor. Also: there's no isolated "terrain mesh" in a bake to
+   traverse — rasterizing the whole scene is the right call anyway (matches
+   what the existing raycast already does), but it means baked building
+   rooftops become walkable ground for ambient agents. Stated as accepted
+   behaviour, not a surprise to find later.
 
-**Decide adopt-vs-extend before writing any phase 2 code.** Do not assume the
-spec wins. If navcat does win, the `NAV_` Blender authoring pass over the
-existing rooms happens *first* — regenerating per-room navmesh JSON later is
-worse than authoring it alongside. Full detail in `PROJECT_CONTEXT.md` §5.
+None of these are fundamental — each is a small, now-resolved decision, not a
+redesign. The "extend navgrid" call stays right.
 
 ---
 

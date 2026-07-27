@@ -1,9 +1,11 @@
 # Phase 2 — Navigation, and the resource-gathering loop
 
 **rev 3 — consolidated. Replaces rev 1, rev 2 and Addendum A entirely.**
-Delete `PHASE_2_NAVIGATION_AND_GATHERING_rev2.md` and `ADDENDUM_A.md`.
-This file now occupies the plain filename every prompt already names.
-Supersedes `NPC_AI_SPEC.md` §7 in full — ignore §7.
+`PHASE_2_NAVIGATION_AND_GATHERING_rev2.md` and `ADDENDUM_A.md` are deleted;
+this file occupies the plain filename every prompt already names.
+Supersedes `NPC_AI_SPEC.md` §7 in full — ignore §7. Four small corrections
+against current code folded in 2026-07-27 — see the "Correction:" callouts
+in §2.0 and §2.3, and `PHASE_STATUS.md`'s Phase 2 section for the summary.
 
 **Section phases.**
 
@@ -109,7 +111,16 @@ in §3.4 until settled.
 Rev 2 proposed bounding destination grids to their content AABB. That fails
 exactly where it is needed: an unclaimed destination has no nodes (§1.1) and no
 player buildings (a plot only exists after planting a claim flag), so the AABB
-is empty and it falls back to `radius` — 224–245, i.e. 448×448 = 200,704 cells.
+is empty and it falls back to `radius`.
+
+**Correction, checked against the full list (rev 3 cited only the first two
+entries):** the nine templates' declared radii actually range **213–352**, not
+224–245 — `template-04` (Siege Camp) is 293, `template-09` (Far Meadow) is 352.
+template-09 is excluded from this concern; it is the home terrain now, not a
+travel destination (see `PROJECT_CONTEXT.md`'s instance-separation note). So
+the real worst case among the eight real destinations is 293 → 586×586 =
+343,396 cells, not 200,704 — the content-bounding rejection above is *more*
+correct than the original number made it look, not less.
 
 | Context | Mode | Extent | Cells |
 |---|---|---|---|
@@ -121,10 +132,28 @@ Keep `cellSize: 1.0` everywhere — at these counts there is no reason to
 coarsen, which retires rev 2's `cellSize: 2.0` proposal and its fidelity caveat.
 
 **Window mode.** Recentre with hysteresis: rebuild when the player moves more
-than a quarter window (24 m) from centre. 96 m is chosen to exceed the LOD
-tier-A/B radius — agents beyond it are tier C/D by construction and use
-simplified steering or teleport-along-path, so they never wanted a fine grid
-path. Sizing the window from the LOD tiers keeps the two from drifting apart.
+than a quarter window (24 m) from centre.
+
+**Correction: the stated justification for 96 m does not hold.** Rev 3 claimed
+it "exceeds the LOD tier-A/B radius." Checked against the actual
+`src/ai/config/lod.json`: tier B has **no outer radius at all** — it is
+frustum-only (`nearDistance: 15` is the A/B split; anything farther but still
+in frustum is B, unbounded). So in an open destination, a tier-B agent (wants
+full steering) can legitimately be 90 m away and still past a 48 m half-window
+edge. Two ways to actually close this, pick one before implementing:
+
+1. Add an explicit outer radius to tier B in `lod.json` (e.g. 48 m, matching
+   the window), so an agent beyond it demotes to tier C (simplified steering,
+   which path-chaining already degrades to gracefully) — the two configs then
+   agree by construction instead of by two people remembering to keep them in
+   sync.
+2. Keep tier B unbounded and accept that a distant-but-visible agent
+   occasionally steers off stale path-chain data until the next recentre —
+   bounded by `recentreAt`, so the staleness window is small, but real.
+
+(1) is recommended: it is a one-line config change, and it is the same
+"derive the number, don't duplicate it" principle §2.3 already applies to
+ground height.
 
 **Paths beyond the window** use path-chaining: target the window-edge cell
 minimising `travelled + straightLineRemainder`, re-request after recentre.
@@ -133,8 +162,20 @@ minimising `travelled + straightLineRemainder`, re-request after recentre.
 concavity larger than the window, and both are concave — home from dense
 building placement, the Crypt explicitly so, being a chain of stone chambers
 joined by real corridors. Destination dioramas are open terrain, which is the
-only place chaining is safe. The Crypt's bounds are known at generation time;
-size a fixed grid to them and rebuild on each descent.
+only place chaining is safe.
+
+**Correction: "the Crypt's bounds are known at generation time" is true, but
+not from where this implied.** `WORLD_DESTINATIONS` carries a static
+`radius: 140` entry for `id: 'dungeon'` — the same field every other
+destination has, used for the player's wander clamp. That is **not** the
+navigable shape. The real layout comes from `game/dungeon.ts`: 4–6 combat
+rooms plus a boss room, procedurally placed and corridor-joined per
+`generateDungeonLayout`'s seed, a different footprint every descent. Size the fixed
+grid from the *actual generated layout* — an AABB over `layout.rooms[]` after
+generation, padded by a few metres — not from the static 140, which would
+either waste cells around a small layout or clip a large one. Rebuild on each
+descent either way, since the seed (and therefore the shape) changes every
+time.
 
 ```json
 // src/ai/config/navgrid.json
@@ -252,6 +293,27 @@ runtime.
 index buffer once and rasterize triangles into the height field. O(triangles),
 single pass, milliseconds — and because it reads `mountedRoot` *after*
 normalization, there is no constant to keep in sync.
+
+**Two things this plan needs that were not called out as required changes:**
+
+1. **`mountedRoot` is not exported.** It is a private module-level ref inside
+   `TemplateWorld.tsx`; only `sampleTemplateGroundY`/`destinationGroundY`
+   (which close over it) are exported. Add an accessor —
+   `export function getMountedRoot(): THREE.Object3D | null` is enough — the
+   nav-grid module cannot reach it otherwise.
+2. **There is no isolated "terrain mesh."** The mounted bake is one normalized
+   scene graph containing terrain *and* whatever buildings/props are baked
+   into that template, with no naming convention distinguishing them (checked
+   — nothing in the extraction marks a mesh as terrain-specific). "Traverse
+   the terrain mesh's index buffer" has to mean "traverse every mesh in the
+   bake" in practice. This is not actually a problem: max-Y-per-cell over the
+   whole scene gives the same "topmost surface" result the existing raycast
+   already relies on (`sampleTemplateGroundY`'s raycast hits whatever is on
+   top today, terrain or not) — so this is a **deliberate, existing-precedent
+   choice**, not a shortcut: a building's rooftop baked into a template
+   becomes walkable ground for ambient agents, same as it already is for the
+   ground-height *sample* the player's own footing already uses. State it as
+   accepted rather than let it surprise someone later.
 
 - Cells with no triangle coverage **hold the last sampled value**, matching
   `sampleTemplateGroundY`'s existing behaviour. Addendum A said mark them
@@ -579,14 +641,25 @@ should not arrive as a side effect of an implementation.
 
 > Read `NPC_AI_SPEC.md` and `PHASE_2_NAVIGATION_AND_GATHERING.md` (rev 3).
 > Rev 3 supersedes spec §7 entirely — ignore §7, add no navmesh library.
-> Rev 1, rev 2 and Addendum A are deleted; do not look for them.
+> Rev 1, rev 2 and Addendum A are deleted; do not look for them. Read the
+> "Correction:" callouts in §2.0 and §2.3 as part of the spec, not as
+> commentary on it — they are corrections found by checking rev 3 against the
+> code as it stands now, not a hypothetical.
 >
 > Implement the phase-2 sections only: §0.1 layer-indexed cells (layer 0 only),
-> §2.0 three-mode extent config, §2.1 terrain exclusions (`blocked` only),
-> §2.2 region support, §2.3 runtime height-field rasterization, §2.4 heap +
-> generation stamps + link API (unused), §3.1 TargetRegistry, §3.2 anchor
-> resolution via `nearestOpen` exposed as `nearestWalkable`. Plus §2.5 tests and
-> the §3.1 registry tests.
+> §2.0 three-mode extent config **including the `lod.json` tier-B outer-radius
+> fix** (the correction's option 1 — do this before window mode, or the two
+> configs disagree by construction), §2.1 terrain exclusions (`blocked` only),
+> §2.2 region support, §2.3 runtime height-field rasterization **including
+> exporting `mountedRoot` from `TemplateWorld.tsx`** (it is currently private;
+> add an accessor), §2.4 heap + generation stamps + link API (unused), §3.1
+> TargetRegistry, §3.2 anchor resolution via `nearestOpen` exposed as
+> `nearestWalkable`. Plus §2.5 tests and the §3.1 registry tests.
+>
+> The Sealed Crypt's fixed grid sizes from an AABB over the actual generated
+> `layout.rooms[]` (`game/dungeon.ts`'s `generateDungeonLayout`), padded a few
+> metres — **not** from `WORLD_DESTINATIONS`'s static `radius: 140` for
+> `id: 'dungeon'`, which is the player's wander clamp and an unrelated number.
 >
 > Do not implement §3.3–3.7 or §4. Do not touch `tickVillagers`.
 >
