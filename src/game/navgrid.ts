@@ -202,7 +202,16 @@ export function navSteer(
 ): { nx: number; nz: number; dist: number } {
   const gdx = tx - agent.x;
   const gdz = tz - agent.z;
-  const dist = Math.hypot(gdx, gdz) || 1;
+  // Guard the DIVISOR only. This used to be `Math.hypot(...) || 1`, which
+  // reported a distance of 1 for an agent standing exactly on its target —
+  // so every caller's arrival check (`d < 0.4`, `d < 0.6`, `d < 1.2`) failed,
+  // they took the keep-walking branch with a zero-length direction vector,
+  // and never re-rolled the target because arrival never happened. That is
+  // the "walks on the spot forever" bug: a villager whose spawn position
+  // equals its first wander target could never leave the degenerate point,
+  // and only a raid (which physically displaces them) broke the deadlock.
+  const dist = Math.hypot(gdx, gdz);
+  const inv = dist || 1;
 
   const n = agent.nav ?? (agent.nav = { pts: [], i: 0, t: 0, tx: 0, tz: 0 });
   n.t -= dt;
@@ -217,7 +226,7 @@ export function navSteer(
   while (n.i < n.pts.length
     && Math.hypot(n.pts[n.i].x - agent.x, n.pts[n.i].z - agent.z) < 1.1) n.i++;
 
-  if (n.i >= n.pts.length) return { nx: gdx / dist, nz: gdz / dist, dist };
+  if (n.i >= n.pts.length) return { nx: gdx / inv, nz: gdz / inv, dist };
   const w = n.pts[n.i];
   const wd = Math.hypot(w.x - agent.x, w.z - agent.z) || 1;
   return { nx: (w.x - agent.x) / wd, nz: (w.z - agent.z) / wd, dist };

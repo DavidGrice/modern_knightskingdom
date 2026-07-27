@@ -1533,11 +1533,16 @@ function createGameStore() {
       const job: VillagerJob = isAlric ? 'farmer' : 'miner';
       const name = isAlric ? 'Alric' : 'Beda';
       const villager: Villager = { id: npcId, name, job, tradeXp: { [job]: 120 } }; // a real head start, not a green recruit
-      // Alric and Beda have their own place in the world already, so they
-      // walk to the homestead from wherever they were standing rather than
-      // being teleported to the road's end like a stranger off it
-      const m = villagerMobs[npcId];
-      if (m) m.arriving = true;
+      // They walk the road in like every other newcomer. This used to read
+      // `const m = villagerMobs[npcId]; if (m) m.arriving = true;` on the
+      // theory that they should set off from wherever they already stood —
+      // but `villagerMobs[npcId]` does not exist yet at this point
+      // (registerVillagerMob runs in VillagerFigure's useMemo, which only
+      // mounts once they ARE a villager), so `m` was always undefined and the
+      // whole thing was a silent no-op. They spawned on the doorstep instead.
+      // arriveByRoad creates the entry as well as setting the flag.
+      const entry = roadEntry();
+      arriveByRoad(npcId, entry.x, entry.z);
       set({
         inventory: inv,
         villagers: [...st.villagers, villager],
