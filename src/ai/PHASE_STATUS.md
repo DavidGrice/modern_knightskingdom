@@ -14,9 +14,9 @@ one's debug view works.*
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
 | 2 | Navigation | not started — **spec complete, 4 gaps resolved** | navmesh/path gizmos |
-| 3 | Actuation | not started | — |
-| 4 | Smart objects | not started — **open design question** | anchor axes |
-| 5 | Utility reasoner | not started | ✅ renderer already built |
+| 3 | Actuation | not started — **spec verified, 20-iteration plan set** | current-intent readout |
+| 4 | Smart objects | not started — **spec verified, plan set** | anchor axes |
+| 5 | Utility reasoner | not started — **spec verified, plan set** | ✅ renderer already built |
 | 6 | Perception | not started | belief markers, vision cones |
 | 7 | Combat + companion | not started | — |
 | 8 | LOD tiers + ambient | partially pre-built (see below) | ✅ tier in overlay |
@@ -106,7 +106,7 @@ redesign. The "extend navgrid" call stays right.
 
 ---
 
-## Phase 4 — open design question
+## Phase 4 — design note carried from before verification
 
 §4.1 wants `ANCHOR_` empties baked into each prop in Blender. This game's
 furniture is **placed by the player at runtime** on a build grid, so there is
@@ -114,6 +114,93 @@ no per-instance scene node to read an anchor from. An anchor has to be derived
 from `type + x + z + rot` via a lookup table instead — which changes the shape
 of the affordance JSON. Also note there are only 15 animation clips and none
 of them is a sit, sleep, eat or use-object clip (`PROJECT_CONTEXT.md` §4).
+`PHASE_3_4_5_ACTUATION_AND_REASONER.md` §4.4 now specifies this table for
+real; it's superseded as an open question and folded into the iteration plan
+below.
+
+---
+
+## Phase 3/4/5 — verified 2026-07-27, iteration build plan
+
+`PHASE_3_4_5_ACTUATION_AND_REASONER.md` is checked against the current
+codebase (not just the phase-1 shape it was drafted against) and corrected in
+place — see its own "Correction:" callouts for the four findings: §3.0's real
+splice mechanism (seven `navSteer` sites in `Villagers.tsx`, one in
+`Npc.tsx`, and no villager has an `Agent` yet at all), §3.1's Intent storage
+location, §3.3's actual attach point (`rig.joints.rightarm`, not a
+nonexistent `righthand`), and §5.1's `logit` `NaN` guard.
+
+This section is the execution plan those findings feed: phases 3–5 broken
+into 20 independently-shippable iterations, each its own branch and PR,
+following the same one-thing-at-a-time discipline the rest of this project's
+history already runs on. **Do not batch iterations into one PR** — the point
+of the split is that each is small enough to verify on its own, and a bug
+found against two trivial synthetic actions (5.5) is a five-minute fix; the
+same bug found entangled with node reservations and depletion state is not.
+
+**Branch naming.** `<type>/<slug>`, matching what CI already enforces
+(`^(feature|enhancement|bugfix|chore|docs)/[a-z0-9._-]+$` — no nested paths,
+a branch like `feature/phase3/foo` fails the `Branch name` check on every
+push and can never auto-merge). Each iteration below names its branch in that
+flat form, encoding the phase and iteration number in the slug itself
+(`feature/phase3-1-agent-lifecycle`), which sorts and reads the same way a
+nested path would without breaking CI.
+
+**Sequencing.** Iterations within a phase are numbered in dependency order —
+3.2 needs 3.1 merged, not just written. Phase 4 needs phase 3 merged in full
+(the Actuator has to exist to consume the new Blackboard fields). Phase 5
+needs phase 4 merged in full, and *within* phase 5, 5.1–5.5 (the reasoner
+core) must merge and pass 5.5's synthetic-action verification before 5.6
+starts — that gate is §5.0/§5.5's own explicit instruction, not something
+this plan added.
+
+### Phase 3 — Actuation (7 iterations)
+
+| # | Branch | What | Depends on |
+|---|---|---|---|
+| 3.1 | `feature/phase3-1-agent-lifecycle` | Spawn/despawn an `Agent` per roster villager (mirrors `registerVillagerMob`'s lifecycle) — the prerequisite §3.0 assumed already existed and doesn't | phase 2 merged |
+| 3.2 | `feature/phase3-2-intent-type` | `Intent` union type; `Agent.intent: Intent \| null` field | 3.1 |
+| 3.3 | `feature/phase3-3-locomotion-villagers` | `Locomotion` module (resolve Intent → target, `navSteer`, `bb.movement` status write); splice as a new first-checked branch in `Villagers.tsx`'s cascade | 3.2 |
+| 3.4 | `feature/phase3-4-locomotion-npc` | Same splice into `Npc.tsx` — separate iteration because its shape is genuinely simpler (one call site, not seven) | 3.2 (not 3.3 — independent) |
+| 3.5 | `feature/phase3-5-animation-controller` | `PLAY_ANIM` intent wired into each component's existing clip-selection; `ResourceProp` carried-item component portaled to `rig.joints.rightarm` | 3.3, 3.4 |
+| 3.6 | `feature/phase3-6-debug-intent-readout` | Extend `AIDebugOverlay` with current-intent (type, params, elapsed, `bb.movement.status`) | 3.2 |
+| 3.7 | `feature/phase3-7-verification` | Hardcoded intent queue (`MOVE_TO` a clicked point → `IDLE`) on one villager; confirm minifig walks and stops, minimap dot tracks, `bb.movement` transitions, rotation matches travel and snaps on `FACE` | 3.3–3.6 |
+
+### Phase 4 — Blackboard & Anchors (3 iterations)
+
+| # | Branch | What | Depends on |
+|---|---|---|---|
+| 4.1 | `feature/phase4-1-blackboard-fields` | `carrying`, `carryCapacity` (flag the default — §4.3 calls this a gameplay-feel decision, not silently pick one), `job` as a **live read**, never a stored copy (§4.2 — this project has hit the two-sources-of-truth bug enough times already) | phase 3 merged |
+| 4.2 | `feature/phase4-2-anchor-rules` | Anchor rule JSON (fixed/radial), resolution wired to `Target.anchorRule`; resolve `fallbackRadius`'s `POND.r + 4` once at startup, not per query | 4.1 |
+| 4.3 | `feature/phase4-3-verification` | Fixed anchors correct across all 4 `rot` values; `fishing` radial anchor resolves to a bank cell (needs phase 2 §2.1's water exclusion, already live); a live roster reassignment updates `bb.job` within one think tick | 4.1, 4.2 |
+
+### Phase 5 — Reasoner core, then gathering (10 iterations)
+
+**5.1–5.5 first, verified on synthetic actions, before 5.6 touches anything
+real — this is a hard gate, not a suggestion (§5.0/§5.5).**
+
+| # | Branch | What | Depends on |
+|---|---|---|---|
+| 5.1 | `feature/phase5-1-curves` | `evalCurve` — five curve types, **with the `logit` NaN guard** | phase 4 merged |
+| 5.2 | `feature/phase5-2-scoring` | `Consideration` + compensated `scoreAction` | 5.1 |
+| 5.3 | `feature/phase5-3-commitment` | Category weights + `interruptPriority` table; momentum (×1.25), 15% switch threshold, cooldowns | 5.2 |
+| 5.4 | `feature/phase5-4-candidate-assembly` | Intrinsic actions + per-target expansion via `TargetRegistry.queryNearby` — one candidate **per target**, not per action | 5.3 |
+| 5.5 | `feature/phase5-5-reasoner-core-verification` | **Gate.** Two synthetic trivial actions (`idle` vs. a fake `wander` on a random threshold) in the debug overlay — confirm scoring, compensation, momentum and switch threshold all behave *before* anything real sits on top | 5.1–5.4 |
+| 5.6 | `feature/phase5-6-flee-sleep` | `flee_to_safety`/`sleep` as utility-gated wrappers around the *existing* raid-flee/bed-seek functions (don't reinvent target selection); delete the old direct-trigger paths once both route through the reasoner | 5.5 passed |
+| 5.7 | `feature/phase5-7-gather-haul` | `gather_resource`/`haul_to_deposit` actions + `GatherAtNode`/`HaulToDeposit` activities, fully specified in `PHASE_2_NAVIGATION_AND_GATHERING.md` §3.4–§3.7 | 5.6 |
+| 5.8a | `feature/phase5-8a-worksignal-neutral` | `workSignal` leaf module; `tickVillagers` reads it for AI-driven villagers only, falls through unchanged otherwise; `carrying` **disabled**, yield still lands directly. **Verify: simulate a full game day before/after, income matches within rounding** — a mismatch means presence semantics diverged, a bug not a design change | 5.7 |
+| 5.8b | `feature/phase5-8b-hauling-live` | Enable `carrying` for real — yield accrues to the villager, lands on deposit. This is a deliberate economy change (net income drops by haul travel time) — decide compensation or accept the cost explicitly, don't let it arrive as a side effect | 5.8a verified neutral |
+| 5.9 | `feature/phase5-9-verification` | Full transition sequence (`gather_resource` → `carrying` → `haul_to_deposit` → inventory increased); slot sharing; id collision (co-located `tree` node + `tree` building); depletion partial-load; abort safety mid-raid; anchor walkability; 60s no-flip-flop | 5.8b |
+
+### After each iteration merges
+
+1. Update this table's row for that iteration (done/date).
+2. Save a short project-memory note: what merged, what's next, anything
+   discovered that changes a *later* iteration's plan (the way phase 2's
+   verification changed phase 3's scope here). Memory is what lets a future
+   session pick this back up correctly without re-deriving it.
+3. Move to the next iteration in sequence — don't skip ahead across a
+   dependency, even if it looks safe.
 
 ---
 
