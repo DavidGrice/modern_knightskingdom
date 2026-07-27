@@ -42,7 +42,7 @@ import { worldEnv, seasonOf } from '../env';
 import { playerState, resetPlayerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
-import { POND, FISHING_DOCK, KEEP_ENTER_SPAWN, NPC_KING, SIGNPOST } from '../data/world';
+import { POND, FISHING_DOCK, KEEP_ENTER_SPAWN, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR } from '../data/world';
 import { WORLD_DESTINATION_BY_ID } from '../data/worlds';
 import { cartLivePos } from '../carts';
 import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST } from '../dungeon';
@@ -710,6 +710,13 @@ function createGameStore() {
       const inBuildRegion = (x: number, z: number) =>
         x > BUILD_REGION.minX - CLEAR && x < BUILD_REGION.maxX + CLEAR
         && z > BUILD_REGION.minZ - CLEAR && z < BUILD_REGION.maxZ + CLEAR;
+      // O3 · neither scatter pass below knew Alric/Beda's home corner existed
+      // — it sits outside BUILD_REGION and outside every GROUNDS section, so
+      // a tree could (and did) land inside Beda's hut. Both passes now reject
+      // against the same fixed clear-zones a footprint-collision test would
+      // have asked for from the start.
+      const inStarterVillage = (x: number, z: number) =>
+        STARTER_VILLAGE_CLEAR.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
 
       // J46 · every node now belongs to a NAMED GROUND (game/data/grounds.ts)
       // rather than seeding wherever a scatter loop happened to drop it. The
@@ -733,6 +740,7 @@ function createGameStore() {
           if (Math.abs(x) > 95 || Math.abs(z) > 95) continue;
           if (x > 30 && z > 20 && g.id !== 'grove') continue; // pond shore stays clear
           if (inBuildRegion(x, z)) continue;
+          if (inStarterVillage(x, z)) continue;
           if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < sep)) continue;
           placed.push([x, z]);
           const i = placed.length - 1;
@@ -787,6 +795,7 @@ function createGameStore() {
             const x = ns ? rx + side * off : rx + along;
             const z = ns ? rz + along : rz + side * off;
             if (inBuildRegion(x, z)) continue;
+            if (inStarterVillage(x, z)) continue;     // O3 · see above
             if (groundAt(x, z)) continue;            // a ground grows its own
             if (Math.hypot(x - POND.x, z - POND.z) < POND.radius + 2) continue;
             // never on another plate's carriageway

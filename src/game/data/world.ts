@@ -53,6 +53,26 @@ export const NIGHT_GATHER_SPOT = { x: KEEP_INTERIOR.x, z: KEEP_INTERIOR.z - 14 }
 // FIXED_WORLD_PROPS below asserts this stays true.
 export const SIGNPOST = { x: -16, z: 36 };
 
+// O3 · Alric and Beda's home corner (their StarterVillage.tsx hut props, and
+// their own standing spot from data/npcs.ts) is neither in BUILD_REGION nor
+// in any GROUNDS section, so neither of seedNodes' two scatter passes ever
+// knew it existed. The general scatter can land anywhere outside the build
+// grid, and the road's own verge-tree pass places trunks in a band 4.4-6.0m
+// off the carriageway with no idea what already stands there — the western
+// leg of the road happens to run right past this corner (SIGNPOST is at
+// (-16, 36), and the road's westward cells put a verge band within a couple
+// of metres of Beda's hut). A tree landing on a hut is what a coding agent
+// would call a footprint-collision test that was simply never asked for.
+// Kept as plain data (not read from StarterVillage.tsx, a 'use client'
+// component) for the same reason road.ts keeps its own route data out of the
+// road renderer: the store's seedNodes must not pull React/three.js in.
+export const STARTER_VILLAGE_CLEAR: { x: number; z: number; r: number }[] = [
+  { x: -41.5, z: 36.5, r: 4.5 }, // Alric's hut (mc001.glb)
+  { x: -40, z: 38, r: 3 },       // Alric himself (data/npcs.ts)
+  { x: -34, z: 44, r: 4.5 },     // Beda's hut (mc001.glb)
+  { x: -35, z: 42, r: 3 },       // Beda herself (data/npcs.ts)
+];
+
 // Cedric the Bull's camp (Phase 20: relocated to The Rival Castle,
 // template-05 — the rebellion's seat, pitched on the terrain-probed flat
 // ground at the foot of his castle). See CedricCamp.tsx; still the game's
