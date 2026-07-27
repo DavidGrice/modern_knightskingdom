@@ -13,7 +13,7 @@ one's debug view works.*
 | # | Phase | Status | Debug view |
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
-| 2 | Navigation | **1/10 iterations done** — see below | navmesh/path gizmos |
+| 2 | Navigation | **2/10 iterations done** — see below | navmesh/path gizmos |
 | 3 | Actuation | **1/7 iterations done, then paused for phase 2** | current-intent readout |
 | 4 | Smart objects | not started — **spec verified, plan set** | anchor axes |
 | 5 | Utility reasoner | not started — **spec verified, plan set** | ✅ renderer already built |
@@ -126,8 +126,8 @@ before verification here for a single linear path.
 
 | # | Branch | What | Depends on |
 |---|---|---|---|
-| 2.1 | `feature/phase2-1-water-exclusion` | `game/navTerrain.ts` leaf module (`TerrainExclusion[]`, `blocked` only); `POND` registered; `rebuildNav`/`findPath` consult it. Fixes a real, currently-shipped bug (villagers/NPCs can path straight through water) | phase 1 merged |
-| 2.2 | `feature/phase2-2-search-internals` | Binary heap (index map for decrease-key) replacing the linear open-set scan; generation-stamped `g`/`f`/`parent` arrays (`stamp: Uint32Array` + monotonic `searchId`) instead of allocating per search. Pure perf, zero API change | phase 1 merged (independent of 2.1) |
+| 2.1 | ~~`feature/phase2-1-water-exclusion`~~ | **Merged 2026-07-27 (#20).** `game/navTerrain.ts` leaf module (`TerrainExclusion[]`, `blocked` only); `POND` registered; `rebuildNav`/`findPath` consult it. Fixed a real, previously-shipped bug (villagers/NPCs could path straight through water) — verified live: pond centre blocked, a south-to-north route goes around it | phase 1 merged |
+| 2.2 | ~~`feature/phase2-2-search-internals`~~ | **Merged 2026-07-27 (#22).** Binary heap with an index map for O(log n) decrease-key, replacing the O(n) linear open-set scan; generation-stamped `gScore`/`fScore`/`cameFrom` arrays instead of allocating per search. Pure perf, zero API change — verified live: water routing still correct post-refactor, a 141m path finds a real 8-corner route, identical start/goal returns byte-identical results across repeated calls, 200 consecutive calls with varying endpoints all succeed | phase 1 merged (independent of 2.1) |
 | 2.3 | `feature/phase2-3-navgrid-class` | Extract the module-level singleton into an instantiable `NavGrid` class; `getNavGrid(null)` returns the home grid, behaviourally identical to today. **The risky one — must be behavior-preserving,** provable by every existing caller (`Villagers.tsx`, `Npc.tsx`) compiling and behaving unchanged | 2.1, 2.2 |
 | 2.4 | `feature/phase2-4-destination-window` | Window-mode grids for destinations (96 m window, recentre at 24 m player movement, path-chaining beyond the edge) | 2.3 |
 | 2.5 | `feature/phase2-5-height-rasterization` | Export `mountedRoot` from `TemplateWorld.tsx`; runtime max-Y-per-cell rasterization for destination grids (no offline bake, no per-cell raycast — see the spec's §2.3 corrections) | 2.4 |
@@ -170,6 +170,21 @@ history already runs on. **Do not batch iterations into one PR** — the point
 of the split is that each is small enough to verify on its own, and a bug
 found against two trivial synthetic actions (5.5) is a five-minute fix; the
 same bug found entangled with node reservations and depletion state is not.
+
+**Verify `merged: true` before deleting a branch, not just "0 open PRs."**
+Found the hard way on iteration 2.2: `ci.yml` fires TWICE per push (once on
+`push`, once on the PR's own `pull_request` event — see `CONTRIBUTING.md`'s
+explanation of why the `push` trigger has to exist at all). The `push`-
+triggered run can succeed while the `pull_request`-triggered one is still
+queued, and "0 open PRs" in a list query is also true for a PR that just
+CLOSED WITHOUT MERGING — which is exactly what happened when the still-open
+PR's branch got deleted while its `pull_request`-triggered check was stuck
+`in_progress`: GitHub auto-closes a PR whose source branch disappears. The
+commit was recoverable (still referenced by the closed PR, `git fetch origin
+<sha>` pulled it right back), so nothing was lost, but it cost a detour.
+**Always check the single-PR endpoint's `merged` field (`gh pr view` or
+`GET /pulls/{number}`) explicitly before deleting a branch — a list query
+answers "is it still open," not "did it merge."**
 
 **Branch naming.** `<type>/<slug>`, matching what CI already enforces
 (`^(feature|enhancement|bugfix|chore|docs)/[a-z0-9._-]+$` — no nested paths,
