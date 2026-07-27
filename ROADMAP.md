@@ -3388,7 +3388,7 @@ doing together.
 
 # NPC AI — phase 1 shipped, 2026-07-27
 
-`NPC_AI_SPEC.md` (researched and written outside this repo) is now the contract
+`src/ai/NPC_AI_SPEC.md` (researched and written outside this repo) is now the contract
 for NPC behaviour. It builds in nine phases, one per session, and **phase 1 is
 done: the skeleton and the debug overlay, nothing else.** Code lives in
 `src/ai/` — see `src/ai/README.md` for the file map and the TS/Next

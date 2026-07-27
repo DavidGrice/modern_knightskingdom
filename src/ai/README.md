@@ -1,6 +1,6 @@
 # `src/ai` — NPC AI system
 
-Implements [`NPC_AI_SPEC.md`](../../NPC_AI_SPEC.md). **Phase 1 only** is built
+Implements [`NPC_AI_SPEC.md`](NPC_AI_SPEC.md). **Phase 1 only** is built
 (spec §10.1: skeleton + debug overlay). Phases 2–9 are not started.
 
 ## Which file do you want?
@@ -9,6 +9,8 @@ Implements [`NPC_AI_SPEC.md`](../../NPC_AI_SPEC.md). **Phase 1 only** is built
 |---|---|---|
 | [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) | **an assistant with no repo access** — pair it with `NPC_AI_SPEC.md` when asking for phase 2+ design work. Self-contained: stack, existing systems the spec overlaps, content inventory, conventions that break generated code, phase-1 API surface | rarely |
 | [`PHASE_STATUS.md`](PHASE_STATUS.md) | where the build order actually stands, per phase, and what is blocked | **every phase** |
+| [`NPC_AI_SPEC.md`](NPC_AI_SPEC.md) | the architecture contract, §0–§12 | never |
+| `PHASE_N_*.md` | a per-phase spec that supersedes part of the contract. [`PHASE_2_NAVIGATION_AND_GATHERING.md`](PHASE_2_NAVIGATION_AND_GATHERING.md) replaces §7 in full — **not yet implemented** | as written |
 | this file | the in-repo file map and TS/Next adaptations | per phase |
 
 ## Adaptations from the spec

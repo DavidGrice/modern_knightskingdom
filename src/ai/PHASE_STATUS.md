@@ -13,7 +13,7 @@ one's debug view works.*
 | # | Phase | Status | Debug view |
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
-| 2 | Navigation | not started — **blocked on a decision** | navmesh/path gizmos |
+| 2 | Navigation | not started — **spec written, decision made** | navmesh/path gizmos |
 | 3 | Actuation | not started | — |
 | 4 | Smart objects | not started — **open design question** | anchor axes |
 | 5 | Utility reasoner | not started | ✅ renderer already built |
@@ -58,7 +58,19 @@ exactly as hungry as a 10 Hz tier-A one with no separate statistical path.
 
 ---
 
-## Phase 2 — blocked on a decision, not on effort
+## Phase 2 — decided, spec written, not implemented
+
+**`PHASE_2_NAVIGATION_AND_GATHERING.md` now supersedes `NPC_AI_SPEC.md` §7 in
+full and is the thing to build against.** It resolves the adopt-vs-extend
+question below in favour of **extending `navgrid`**, on the grounds that this
+world is player-mutable mid-session — every building placement would invalidate
+a baked navmesh, and a tile cache would need a second obstacle representation
+maintained alongside `collisionBoxesFor()`, which is the exact desync the
+current design avoids.
+
+No phase 2 code exists yet. The original framing is kept below for the record.
+
+### The question, as it stood
 
 `src/game/navgrid.ts` already exists and every actor in the game steers with
 it: a 1 m A\* grid whose obstacles are derived from the *same* collision
