@@ -82,10 +82,14 @@ runner.** Four independent reasons:
 All four are only satisfied on the development machine. So:
 
 **Smoke tests are a local pre-merge step, run by you, on the machine that has
-the assets.** State the result in the PR description. `.github/workflows/
-smoke.yml` is ready to run them on a self-hosted Windows runner if you ever
-want that — it is manual-trigger only so it never puts a spurious red X on a
-PR. Its header has the setup steps.
+the assets.** State the result in the PR description. There is no workflow
+file for this — a self-hosted-runner version was written once and removed
+unused before anyone set one up. If you ever do want that, it needs a
+Windows runner registered under Settings > Actions > Runners, a
+`workflow_dispatch`-triggered job (manual-trigger only, so it never puts a
+spurious red X on a PR), a checkout with `clean: false` so the untracked
+`scripts/` and `public/assets/` stay on disk, and a step that starts
+`next dev` before running the chosen script against it.
 
 ```bash
 npx next dev -p 3789          # in one terminal
