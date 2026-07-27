@@ -77,9 +77,18 @@ function Rock({ node }: { node: ResourceNodeState }) {
 
 const HERB_URL = '/assets/props/scenery/l374100.glb';
 
+// O6 · they did not stop existing at night — they stopped being visible.
+// respawnAt/hitsLeft (the actual persistence state) have no time-of-day
+// component anywhere in the store; a 0.35m ground prop under night's 0.28
+// ambient (vs 0.75 by day) is just genuinely hard to see. `selfLit` keeps it
+// findable without changing what "persist" actually meant here — the data
+// was always there.
 function HerbGroup({ nodes }: { nodes: ResourceNodeState[] }) {
-  const instances: InstancedNode[] = nodes.map((n) => ({ key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale }));
-  return <InstancedProp url={HERB_URL} height={0.35} nodes={instances} />;
+  const instances: InstancedNode[] = useMemo(
+    () => nodes.map((n) => ({ key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale })),
+    [nodes],
+  );
+  return <InstancedProp url={HERB_URL} height={0.35} nodes={instances} selfLit />;
 }
 
 const DOCK_LENGTH = Math.hypot(
