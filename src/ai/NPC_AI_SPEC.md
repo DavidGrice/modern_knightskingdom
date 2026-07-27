@@ -407,12 +407,24 @@ At 6–20 agents in a house, full RVO is overkill. Use separation steering: for 
 
 With 6–20 agents this is about smoothness, not raw throughput. Never think all agents on one frame.
 
-| Tier | Condition                          | Think Hz | Perceive Hz | Steering  |
-|------|------------------------------------|----------|-------------|-----------|
-| A    | in frustum, < 15 m                 | 10       | 6           | full      |
-| B    | in frustum, > 15 m                 | 5        | 4           | full      |
-| C    | out of frustum, same region        | 2        | 2           | simplified|
-| D    | different region                   | 0.5      | off         | teleport along path |
+| Tier | Condition                                             | Think Hz | Perceive Hz | Steering  |
+|------|--------------------------------------------------------|----------|-------------|-----------|
+| A    | in frustum, < 15 m                                    | 10       | 6           | full      |
+| B    | in frustum, 15 m to region's nav-window edge*          | 5        | 4           | full      |
+| C    | out of frustum, same region, or past the window edge*  | 2        | 2           | simplified|
+| D    | different region                                      | 0.5      | off         | teleport along path |
+
+**Correction, added once destination navigation shipped (see
+`PHASE_2_NAVIGATION_AND_GATHERING.md` §2.0):** *"window edge" only applies to
+**windowed** regions — destinations, where the nav grid covers only a
+~48 m-radius bubble around the player, not the whole region. **Fixed** regions
+(home, the Sealed Crypt) always have a grid covering the whole region, so
+Tier B stays unbounded there, exactly as first specified above. Without this
+bound, a destination agent could sit in frustum at, say, 90 m — legitimately
+Tier B by the original rule — while standing entirely outside the very grid
+its own "full steering" depends on. The bound must read the **same config
+value** as that region's `windowHalf`, not a second number a person has to
+remember to keep in sync.
 
 Tier D agents skip perception entirely, advance needs statistically, and jump along their path in coarse steps. When a tier-D agent re-enters view, snap it to the nearest valid navmesh point and resume normally.
 
