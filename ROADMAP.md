@@ -3427,3 +3427,46 @@ reasoner, where the spec says the time actually goes) → 6 (perception) → 7
 (combat/companion) → 8 (LOD + ambient). §11's LLM dialogue layer is optional
 and last. One phase per session, and no phase starts before the previous one's
 debug view works.
+
+## Block O — fix log
+
+**O2 · fixed, and the real cause was not either logged suspect.**
+`navSteer`'s `Math.hypot(gdx, gdz) || 1` put a divide-by-zero guard on the
+*reported distance* rather than the divisor. An agent standing exactly on its
+target got `dist = 1`, so every caller's arrival check (`d < 0.4` / `0.6` /
+`1.2`) failed, they took the keep-walking branch with a zero-length direction
+vector, and never re-rolled the target because arrival never fired.
+`VillagerFigure` seeds `x/z` **and** `tx/tz` to the same home spot, so anyone
+who spawned rather than walked in began life in that state. A raid broke it by
+physically displacing them — exactly what was reported.
+
+Second fault in the same area: `recruitVillageFolk`'s road arrival was a silent
+no-op. It read `villagerMobs[npcId]`, which does not exist until
+`VillagerFigure` mounts, so `if (m)` never ran. Now uses `arriveByRoad()`,
+which creates the entry — so Alric and Beda walk the road in like every other
+newcomer, as asked.
+
+**Worth keeping:** the `|| 1` bug was latent for every caller, not just these
+two. Anything that starts on its own target hits it.
+
+**O7 · fixed, with the difficulty system it needed.** New leaf module
+`game/difficulty.ts` (carts.ts pattern — reads the store one-directionally,
+nothing in the store imports it). One `TIER_RULES` table, tiers 0-5, each
+requiring **all** of: lifetime structures, total skill level, lifetime kills,
+days elapsed. An AND rather than a score, so a builder is not handed a war and
+a fighter is not handed a siege of a homestead that is not there.
+
+Every input is monotonic by construction — `stats.buildingsPlaced` is the
+lifetime counter, not the current building list, so razing your own walls (or
+a raider doing it) cannot walk difficulty back down. That is what makes the
+tier persist through a save with no new field and no high-water hack.
+
+The dragon now needs `tier >= 3` **and** `rangedReady()` — a bow or crossbow
+*with ammunition for it*. Both, deliberately: a tier-3 player with no bow is
+still a spectator. Tier, its inputs, and what the next tier is waiting on are
+all in the `` ` `` debug overlay, so this is tunable rather than guessed at.
+
+**Not done in this pass:** only the dragon is migrated. `raidStrength()` is
+exported and ready, but `Enemies.tsx`'s raider spawning still uses its own
+gate. Migrating it is the next step and must happen before two gating schemes
+settle in — that is the failure this system exists to end.

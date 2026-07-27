@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { isRebindListening } from '@/game/data/keybinds';
+import { difficultyState, DRAGON_TIER } from '@/game/difficulty';
 import { NEED_IDS } from '../config';
 import { agentManager } from '../core/AgentManager';
 
@@ -75,6 +76,26 @@ export default function AIDebugOverlay() {
         )}
         {' · REGION '}
         {agentManager.activeRegion ?? 'home'}
+      </div>
+
+      {/* O7 · the shared threat tier. Here rather than in the game HUD
+          because it is a tuning instrument, not player-facing information. */}
+      <div className="ai-debug-row ai-debug-dim">
+        THREAT TIER <b>{difficultyState.tier}</b> · struct {difficultyState.structures} · skill{' '}
+        {difficultyState.skill} · kills {difficultyState.kills} · day {difficultyState.days}
+        <br />
+        DRAGON{' '}
+        <span className={difficultyState.tier >= DRAGON_TIER && difficultyState.rangedReady ? '' : 'ai-warn'}>
+          {difficultyState.tier >= DRAGON_TIER
+            ? (difficultyState.rangedReady ? 'ALLOWED' : 'BLOCKED — no ranged weapon + ammo')
+            : `BLOCKED — tier ${difficultyState.tier}/${DRAGON_TIER}`}
+        </span>
+        {difficultyState.blocking.length > 0 && (
+          <>
+            <br />
+            NEXT TIER NEEDS {difficultyState.blocking.join(' · ')}
+          </>
+        )}
       </div>
 
       {agents.length > 1 && (
