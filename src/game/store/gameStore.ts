@@ -14,6 +14,7 @@ import { brickLabel } from '../data/brickResources';
 import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
 import { stabledHorses } from '../riding';
 import { agentManager } from '@/ai/core/AgentManager';
+import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { NPC_BY_ID, NPCS, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SELL_PRICES } from '../data/trade';
 import { DEEDS } from '../data/achievements';
@@ -558,6 +559,7 @@ function createGameStore() {
       // the AI registry is module state, like the two above: a new character
       // must not inherit the last one's agents, clock or half-drained needs
       agentManager.clear();
+      resetVillagerAgentSync();
       set({
         character,
         // bare-handed start (2026-07-20): no starting axe, no calling kit —
@@ -590,6 +592,7 @@ function createGameStore() {
     loadFromSave: (s) => {
       resetPlayerState();
       agentManager.clear();
+      resetVillagerAgentSync();
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];
       stabledHorses.assigned = { ...(s.mounts ?? {}) };
