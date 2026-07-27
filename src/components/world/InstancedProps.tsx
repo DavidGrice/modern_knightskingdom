@@ -17,7 +17,7 @@ interface SubMesh {
   material: THREE.Material;
 }
 
-function useInstancedSubMeshes(url: string, targetHeight: number): SubMesh[] {
+function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boolean): SubMesh[] {
   const { scene } = useGLTF(url);
   return useMemo(() => {
     const inner = scene.clone(true);
@@ -41,12 +41,30 @@ function useInstancedSubMeshes(url: string, targetHeight: number): SubMesh[] {
       const geometry = mesh.geometry.clone();
       geometry.applyMatrix4(mesh.matrixWorld);
       if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
-      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      // Clone rather than mutate the shared GLTF-cached material: useGLTF's
+      // cache is keyed by url, so the original object can be reused anywhere
+      // else this same GLB is loaded (e.g. a decorative PropModel elsewhere).
+      // `.clone()` on a mesh does not deep-clone its material, so writing
+      // `.side`/`.emissive` on the original silently leaked into every other
+      // consumer of the same asset.
+      const source = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      const material = source.clone() as THREE.MeshStandardMaterial;
       material.side = THREE.DoubleSide;
+      // O6 · small ground-level props (herb patches) read as "gone" at night
+      // — ambient drops from 0.75 to 0.28 (env.ts) and there is nothing about
+      // a 0.35m prop that reads clearly at that light level. A resource that
+      // exists on the map must stay visibly findable regardless of the
+      // clock, so it self-illuminates a little rather than depending purely
+      // on scene lighting — subtle in daylight (its own baked color, at 18%),
+      // the difference that actually matters at night.
+      if (selfLit && material.emissive) {
+        material.emissive.copy(material.color);
+        material.emissiveIntensity = 0.18;
+      }
       subMeshes.push({ geometry, material });
     });
     return subMeshes;
-  }, [scene, targetHeight]);
+  }, [scene, targetHeight, selfLit]);
 }
 
 export interface InstancedNode {
@@ -66,13 +84,16 @@ export interface InstancedNode {
  *  nodes share one url and only their transform (and a per-node scale, e.g.
  *  a tree shrinking as it's chopped) differ. */
 export function InstancedProp({
-  url, height, nodes,
+  url, height, nodes, selfLit = false,
 }: {
   url: string;
   height: number;
   nodes: InstancedNode[];
+  /** O6 · give the instances a low, always-on emissive so they stay visibly
+   *  findable at night instead of depending entirely on scene lighting. */
+  selfLit?: boolean;
 }) {
-  const subMeshes = useInstancedSubMeshes(url, height);
+  const subMeshes = useInstancedSubMeshes(url, height, selfLit);
   if (nodes.length === 0) return null;
   return (
     <>
