@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
 import { agentManager } from './core/AgentManager';
+import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 
 /** Phase 1's one NPC: it ticks, decays its needs, and prints. Parked a few
  *  metres forward-right of SPAWN (0, 26) so it starts inside the view frustum
@@ -33,6 +34,13 @@ export default function AiRuntime() {
     const st = useGameStore.getState();
     // the AI clock stops with the game — needs must not drain behind a menu
     if (st.paused) return;
+    // phase 3, iteration 3.1: every non-defender roster villager gets an
+    // Agent, and each one's tracked position stays mirrored from its live
+    // rendered position. Cheap when the roster hasn't changed (reference
+    // check inside syncVillagerAgents); the position mirror is O(villagers),
+    // not O(search).
+    syncVillagerAgents(st.villagers);
+    mirrorVillagerPositions();
     agentManager.update(dt, camera, st.destination ?? null);
   });
 
