@@ -13,7 +13,7 @@ one's debug view works.*
 | # | Phase | Status | Debug view |
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
-| 2 | Navigation | **2/10 iterations done** — see below | navmesh/path gizmos |
+| 2 | Navigation | **3/10 iterations done** — see below | navmesh/path gizmos |
 | 3 | Actuation | **1/7 iterations done, then paused for phase 2** | current-intent readout |
 | 4 | Smart objects | not started — **spec verified, plan set** | anchor axes |
 | 5 | Utility reasoner | not started — **spec verified, plan set** | ✅ renderer already built |
@@ -128,7 +128,7 @@ before verification here for a single linear path.
 |---|---|---|---|
 | 2.1 | ~~`feature/phase2-1-water-exclusion`~~ | **Merged 2026-07-27 (#20).** `game/navTerrain.ts` leaf module (`TerrainExclusion[]`, `blocked` only); `POND` registered; `rebuildNav`/`findPath` consult it. Fixed a real, previously-shipped bug (villagers/NPCs could path straight through water) — verified live: pond centre blocked, a south-to-north route goes around it | phase 1 merged |
 | 2.2 | ~~`feature/phase2-2-search-internals`~~ | **Merged 2026-07-27 (#22).** Binary heap with an index map for O(log n) decrease-key, replacing the O(n) linear open-set scan; generation-stamped `gScore`/`fScore`/`cameFrom` arrays instead of allocating per search. Pure perf, zero API change — verified live: water routing still correct post-refactor, a 141m path finds a real 8-corner route, identical start/goal returns byte-identical results across repeated calls, 200 consecutive calls with varying endpoints all succeed | phase 1 merged (independent of 2.1) |
-| 2.3 | `feature/phase2-3-navgrid-class` | Extract the module-level singleton into an instantiable `NavGrid` class; `getNavGrid(null)` returns the home grid, behaviourally identical to today. **The risky one — must be behavior-preserving,** provable by every existing caller (`Villagers.tsx`, `Npc.tsx`) compiling and behaving unchanged | 2.1, 2.2 |
+| 2.3 | ~~`feature/phase2-3-navgrid-class`~~ | **Merged 2026-07-27 (#24).** Module-level singleton extracted into an instantiable `NavGrid` class; `getNavGrid(null)` returns the home grid. Found and handled a real gap the original spec's caller audit missed — `Enemies.tsx` calls `findPath`/`rebuildNav` *directly*, bypassing `navSteer` entirely — by keeping every top-level function as a thin delegating wrapper, so no caller needed to change. Verified live: smoke133/134 re-run **unchanged** produce byte-identical `pathLen`/`longPathLen`/corner counts to before the refactor; `getNavGrid` singleton behavior and its non-home-region error boundary both confirmed | 2.1, 2.2 |
 | 2.4 | `feature/phase2-4-destination-window` | Window-mode grids for destinations (96 m window, recentre at 24 m player movement, path-chaining beyond the edge) | 2.3 |
 | 2.5 | `feature/phase2-5-height-rasterization` | Export `mountedRoot` from `TemplateWorld.tsx`; runtime max-Y-per-cell rasterization for destination grids (no offline bake, no per-cell raycast — see the spec's §2.3 corrections) | 2.4 |
 | 2.6 | `feature/phase2-6-crypt-grid` | Fixed-mode grid for the Sealed Crypt, sized from an AABB over `game/dungeon.ts`'s actual generated `layout.rooms[]` — **not** `WORLD_DESTINATIONS`'s static `radius: 140` (the wander clamp, a different number — see the resolved gap above) | 2.3 |
