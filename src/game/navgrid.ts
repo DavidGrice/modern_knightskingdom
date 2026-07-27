@@ -14,6 +14,7 @@
 // without anyone remembering to say so.
 import { collisionBoxesFor } from './data/buildables';
 import { isBuilt, isHomeBuilding, type PlacedBuilding } from './types';
+import { terrainBlocks, terrainExclusions } from './navTerrain';
 
 /** metres per cell — fine enough to find a gate, coarse enough to stay cheap */
 export const CELL = 1;
@@ -73,6 +74,28 @@ export function rebuildNav(buildings: PlacedBuilding[]) {
       const j1 = Math.min(DIM - 1, toCell(cz + hz));
       for (let i = i0; i <= i1; i++) {
         for (let j = j0; j <= j1; j++) blocked[idx(i, j)] = 1;
+      }
+    }
+  }
+
+  // Phase 2, iteration 2.1 — stamp terrain exclusions (water) in AFTER
+  // building obstacles, on top of them. Region is always null here; this is
+  // the single home grid until region support (iteration 2.3) exists.
+  // Bounded to each exclusion's own footprint rather than scanning all
+  // DIM*DIM cells — cheap either way at this grid size, but there is no
+  // reason not to bound it the same way the building loop above already does.
+  for (const ex of terrainExclusions) {
+    if (ex.traversal !== 'blocked' || ex.region !== null) continue;
+    const [ex0, ex1, ez0, ez1] = ex.shape.kind === 'circle'
+      ? [ex.shape.x - ex.shape.r, ex.shape.x + ex.shape.r, ex.shape.z - ex.shape.r, ex.shape.z + ex.shape.r]
+      : [ex.shape.x - ex.shape.hx, ex.shape.x + ex.shape.hx, ex.shape.z - ex.shape.hz, ex.shape.z + ex.shape.hz];
+    const i0 = Math.max(0, toCell(ex0));
+    const i1 = Math.min(DIM - 1, toCell(ex1));
+    const j0 = Math.max(0, toCell(ez0));
+    const j1 = Math.min(DIM - 1, toCell(ez1));
+    for (let i = i0; i <= i1; i++) {
+      for (let j = j0; j <= j1; j++) {
+        if (terrainBlocks(toWorld(i), toWorld(j), null)) blocked[idx(i, j)] = 1;
       }
     }
   }
