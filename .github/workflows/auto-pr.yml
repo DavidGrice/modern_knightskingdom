@@ -1,0 +1,96 @@
+name: Auto-open PR
+
+# Opens a PR into main the moment a properly-named branch is pushed, and arms
+# auto-merge on it in the SAME job — it does not wait for a separately
+# triggered run to do that second half.
+#
+# Why not just let auto-merge.yml's `pull_request: opened` trigger handle it,
+# the way a manually-opened PR already works? Because this job creates the PR
+# using the default GITHUB_TOKEN, and GitHub's loop-prevention rule is
+# explicit: an event caused by GITHUB_TOKEN does not trigger other workflow
+# runs. So `pull_request: opened` would simply never fire for a PR this
+# workflow creates, and it would sit there unarmed. Doing "create" and "arm"
+# as two steps of the one job sidesteps the restriction entirely — nothing
+# here depends on a second workflow run being triggered.
+#
+# ci.yml's checks are covered separately: it also triggers on `push` for
+# these same branch patterns (see its own comment), using the pusher's real
+# credentials rather than GITHUB_TOKEN, so IT is not subject to this
+# restriction and runs normally. auto-merge.yml is untouched and still
+# covers a PR someone opens by hand.
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'enhancement/**'
+      - 'bugfix/**'
+      - 'chore/**'
+      - 'docs/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  open-and-arm:
+    name: Open PR and arm auto-merge
+    # Solo-repo assumption, same as auto-merge.yml: only the repo owner's own
+    # pushes. Re-examine if this repo ever gains other collaborators with
+    # push access.
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `git log main..HEAD` below needs main's real history, not just
+          # the single pushed commit actions/checkout leaves you with by
+          # default.
+          fetch-depth: 0
+
+      - name: Open the PR (skip if one already exists, or there is nothing to merge)
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # set -e: an unexpected failure here must show up as a red job, not
+        # a silently "successful" run that quietly opened nothing (this bit
+        # on the very first run — see below).
+        run: |
+          set -euo pipefail
+          branch="${{ github.ref_name }}"
+
+          existing=$(gh pr list --head "$branch" --base main --state open --json url --jq '.[0].url // empty')
+          if [ -n "$existing" ]; then
+            echo "PR already open for $branch: $existing"
+            echo "url=$existing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # NOT `main..HEAD` — actions/checkout leaves no LOCAL branch called
+          # main (only the remote-tracking origin/main), so that comparison
+          # silently resolved to nothing and this step reported "success"
+          # having opened no PR at all. Cost a live debug pass to catch.
+          ahead=$(git rev-list --count origin/main..HEAD)
+          if [ "$ahead" = "0" ]; then
+            echo "$branch has no commits ahead of main yet — nothing to open a PR for."
+            exit 0
+          fi
+
+          # --fill uses the branch's own commit(s) for title/body: the single
+          # commit's subject/body verbatim if there is just one (the norm in
+          # this repo's workflow so far), or a bulleted commit list if there
+          # are several.
+          url=$(gh pr create --base main --head "$branch" --fill)
+          echo "Opened $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Arm auto-merge (squash)
+        if: steps.pr.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh pr merge --auto --squash "${{ steps.pr.outputs.url }}"; then
+            echo "Auto-merge armed. Merges once required checks pass."
+          else
+            echo "::warning::Could not arm auto-merge on ${{ steps.pr.outputs.url }}."
+            echo "::warning::Most likely 'Allow auto-merge' is off in Settings > General."
+          fi

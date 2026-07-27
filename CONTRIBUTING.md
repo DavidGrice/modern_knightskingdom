@@ -15,10 +15,16 @@ npm run verify                            # same checks CI runs — do this firs
 git push -u origin feature/npc-ai-phase-2
 ```
 
-Then open a PR (`gh pr create --fill`, or the link git prints after the push).
-Auto-merge arms itself: the PR squash-merges the moment CI is green and the
-branch is conflict-free, and waits if it is not. Nothing merges on a red
-check, and nothing merges with a conflict — you resolve it and it proceeds.
+That push is the last manual step. `auto-pr.yml` opens the PR for you (title
+and body filled from your commit), and arms auto-merge on it in the same run
+— it squash-merges the moment CI is green and the branch is conflict-free,
+and waits if it is not. Nothing merges on a red check, and nothing merges
+with a conflict — you resolve it and it proceeds. Pushing again to the same
+branch (another commit, a fix) does not open a second PR; it just updates
+the one already open.
+
+If you ever open a PR by hand instead (the web UI, `gh pr create`), that
+still works too — `auto-merge.yml` arms it the same way.
 
 ## Branch naming — enforced by CI
 
@@ -37,7 +43,8 @@ else runs.
 
 ## What CI actually checks
 
-`.github/workflows/ci.yml`, on Ubuntu:
+`.github/workflows/ci.yml`, on Ubuntu, on the push itself (not just the PR —
+see below):
 
 1. **Branch name** — the pattern above.
 2. **Typecheck** — `tsc --noEmit`. There is no ESLint config in this project,
@@ -48,6 +55,17 @@ This passes without `public/assets/`, because the extracted models, textures
 and sounds are runtime fetches from `public/`, not build inputs. The catalog
 JSON that *is* a build input lives in `src/game/data/*.generated.json` and is
 committed.
+
+**Why CI triggers on `push`, not only on the PR being opened:** `auto-pr.yml`
+opens the PR using the default `GITHUB_TOKEN`, and GitHub has a hard
+loop-prevention rule — an event caused by `GITHUB_TOKEN` does not trigger
+other workflow runs. So the usual `pull_request: opened` trigger never fires
+for a PR opened this way. Running CI on `push` instead uses your own
+credentials, which are not subject to that rule, and GitHub matches a
+required status check by *(commit SHA, check name)*, not by which event
+produced it — so the push-triggered result still satisfies the PR once it
+exists for that same commit. You do not need to think about any of this; it
+is why the automation works, not something you have to act on.
 
 ## What CI does NOT check: the smoke tests
 
