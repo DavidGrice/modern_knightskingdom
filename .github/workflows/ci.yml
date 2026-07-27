@@ -1,13 +1,29 @@
 name: CI
 
-# Runs on every pull request into main, and on main itself after a merge.
-# Deliberately NOT on every branch push as well — that would double-run the
-# same commit while a PR is open.
+# Runs on every pull request into main, on main itself after a merge, AND on
+# a direct push to a properly-named branch.
+#
+# That third trigger is load-bearing, not a convenience: auto-pr.yml opens
+# PRs using the default GITHUB_TOKEN, and GitHub's loop-prevention rule means
+# an event caused by GITHUB_TOKEN (like that PR opening) does NOT trigger
+# other workflows — so the `pull_request` trigger above never fires for an
+# auto-opened PR, and it would sit forever with no check to satisfy the
+# ruleset. Running on `push` instead uses the pusher's own credentials, which
+# has no such restriction, and GitHub matches a REQUIRED status check by
+# (commit SHA, check name), not by which event produced it — so the result
+# from this push-triggered run still satisfies the PR once auto-pr.yml opens
+# one for the same SHA, whichever order the two runs finish in.
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature/**'
+      - 'enhancement/**'
+      - 'bugfix/**'
+      - 'chore/**'
+      - 'docs/**'
 
 # A new push to a PR cancels the run still going for the old commit.
 concurrency:
@@ -20,12 +36,18 @@ env:
 jobs:
   branch-name:
     name: Branch name
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Check the branch prefix
         run: |
-          branch="${{ github.head_ref }}"
+          # head_ref is set for pull_request events (the PR's source branch);
+          # ref_name is set for push events (just the branch name, no
+          # refs/heads/ prefix). Exactly one of the two is non-empty per run.
+          branch="${{ github.head_ref || github.ref_name }}"
+          if [ "$branch" = "main" ]; then
+            echo "On main — nothing to check."
+            exit 0
+          fi
           echo "Branch: $branch"
           if [[ "$branch" =~ ^(feature|enhancement|bugfix|chore|docs)/[a-z0-9._-]+$ ]]; then
             echo "OK"
