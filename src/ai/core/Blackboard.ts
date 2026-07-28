@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { NEED_IDS, needProfile, type NeedId } from '../config';
 import type { ItemId, VillagerJob } from '@/game/types';
+import type { TargetId } from './TargetRegistry';
 
 /** §3.3 — what this agent believes about another entity. NPCs are not
  *  omniscient: combat and search read `lastKnownPosition`, never the live
@@ -39,9 +40,16 @@ export interface ScoredAction {
   gated: boolean;
 }
 
+/** Phase 5 validation (found before 5.1) — this was originally
+ *  `{ objectId: string; affordanceId: string }`, a phase-1 speculative
+ *  guess written before `TargetRegistry` existed. The real reservation
+ *  model (2.8) is `reserve(id: TargetId, slotKind: string, agentId: string)`
+ *  — corrected here to match it exactly, since an Activity's `abort()` must
+ *  call `targetRegistry.release(targetId, slotKind, agent.id)` with real
+ *  values, not ones that were never going to match anything. */
 export interface Reservation {
-  objectId: string;
-  affordanceId: string;
+  targetId: TargetId;
+  slotKind: string;
 }
 
 /** PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.2 — written by Locomotion
