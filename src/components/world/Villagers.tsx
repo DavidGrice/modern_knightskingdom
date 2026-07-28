@@ -9,7 +9,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore } from '@/game/combat';
 import { worldEnv } from '@/game/env';
 import RiggedFigure from '../character/RiggedFigure';
-import { HeldHelmet, Chestplate } from '../character/Equipment';
+import { HeldHelmet, Chestplate, ResourceProp } from '../character/Equipment';
 import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
@@ -20,7 +20,7 @@ import { navSteer } from '@/game/navgrid';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { isBuilt, isHomeBuilding } from '@/game/types';
-import type { CharacterConfig, Villager } from '@/game/types';
+import type { CharacterConfig, ItemId, Villager } from '@/game/types';
 
 const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
 const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
@@ -34,7 +34,13 @@ export { hashId };
 function VillagerFigure({ villager }: { villager: Villager }) {
   const group = useRef<THREE.Group>(null);
   const [clip, setClip] = useState('anim_r_restpose');
+  const [loop, setLoop] = useState(true);
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
+  // mirrors agent.bb.carrying every frame, the same way `clip` mirrors
+  // intent-driven animation state — `agent` itself is only ever a local
+  // inside useFrame (recomputed fresh each frame, never stale across a
+  // despawn/respawn), so the portal below needs its own render-visible copy
+  const [carrying, setCarrying] = useState<{ resource: ItemId; amount: number } | null>(null);
   const h = hashId(villager.id);
 
   // derived-by-id look plus any player edits (data/villagerLooks.ts) — no
@@ -63,6 +69,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     const s = state.current;
     const g = group.current;
     if (!g) return;
+    mob.clip = clip;
 
     // Phase 3, iteration 3.3 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
     // Intent takes over movement entirely, checked FIRST before all seven
@@ -75,6 +82,16 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     // villager falls straight through to the existing cascade unchanged.
     const agent = agentManager.get(villager.id);
     const intent = agent?.intent;
+    // Phase 3, iteration 3.5 — a PLAY_ANIM intent drives `loop` too, so it
+    // has to be resynced before the early-return branches below, not inside
+    // just one of them: this single check covers "entering PLAY_ANIM" and
+    // "leaving PLAY_ANIM back to the legacy cascade" (which always wants
+    // loop=true — every hand-written setClip call in this file's cascade is
+    // a continuous cycle, never a one-shot) in one place.
+    const wantLoop = agent && intent && intent.type === 'PLAY_ANIM' ? intent.loop : true;
+    if (loop !== wantLoop) setLoop(wantLoop);
+    const wantCarrying = agent?.bb.carrying ?? null;
+    if (carrying !== wantCarrying) setCarrying(wantCarrying);
     if (agent && intent && (intent.type === 'MOVE_TO' || intent.type === 'MOVE_TO_ANCHOR')) {
       // resync from wherever Agent-driven movement last left the villager —
       // the same drift guard the ARRIVING branch below already applies in
@@ -95,6 +112,24 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       const moving = agent.bb.movement.status === 'moving';
       const wantClip = moving ? (intent.speed === 'run' ? 'anim_c_run' : 'anim_c_walk') : 'anim_r_restpose';
       if (clip !== wantClip) setClip(wantClip);
+      return;
+    }
+
+    // Phase 3, iteration 3.5 — PLAY_ANIM: hold position (Locomotion never
+    // moves the agent for this intent, see its own comment) and just play
+    // whatever clip the intent names. Checked right after MOVE_TO/
+    // MOVE_TO_ANCHOR, same "agent + active intent is the only gate" rule
+    // 3.3/3.4 already established — not folded into that branch above since
+    // this one holds position instead of steering toward one.
+    if (agent && intent && intent.type === 'PLAY_ANIM') {
+      s.x = agent.position.x;
+      s.z = agent.position.z;
+      s.yaw = agent.yaw;
+      g.position.set(s.x, 0, s.z);
+      g.rotation.y = s.yaw + Math.PI;
+      mob.x = s.x;
+      mob.z = s.z;
+      if (clip !== intent.clip) setClip(intent.clip);
       return;
     }
 
@@ -377,9 +412,10 @@ function VillagerFigure({ villager }: { villager: Villager }) {
 
   return (
     <group ref={group}>
-      <RiggedFigure config={config} height={1.7} clip={clip} timeScale={0.9} onReady={setRig} />
+      <RiggedFigure config={config} height={1.7} clip={clip} loop={loop} timeScale={0.9} onReady={setRig} />
       {rig && villager.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
       {rig && villager.gear?.chestplate && createPortal(<Chestplate />, rig.joints.body)}
+      {rig && carrying && createPortal(<ResourceProp resource={carrying.resource} />, rig.joints.rightarm)}
     </group>
   );
 }
