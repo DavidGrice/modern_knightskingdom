@@ -19,6 +19,7 @@ import { terrainBlocks, terrainExclusions } from './navTerrain';
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWorld';
 import { dungeonState, type DungeonLayout } from './dungeon';
+import { useGameStore } from './store/gameStore';
 import navgridConfig from '../ai/config/navgrid.json';
 
 // Phase 2, iteration 2.5 — scratch vectors for height rasterization, reused
@@ -361,6 +362,14 @@ export class NavGrid {
       if (!isBuilt(b)) continue;
       const buildingRegion = isHomeBuilding(b) ? null : (b.world ?? null);
       if (buildingRegion !== this.region) continue;
+      // iteration 2.10 — an open gate has zero collision, matching
+      // PlayerController.tsx's own player-collision loop exactly
+      // (`b.type === 'gate' && (gateOpen[b.id] ?? true) => passable`).
+      // Found while verifying §2.5's "gate vs wall" checklist item: this
+      // check was simply absent before, so every gate — open or closed —
+      // was permanently solid to findPath/navSteer regardless of state,
+      // while the player could already walk straight through an open one.
+      if (b.type === 'gate' && (useGameStore.getState().gateOpen[b.id] ?? true)) continue;
       for (const box of collisionBoxesFor(b.type, b.rot)) {
         const base = (b.y ?? 0) + box.yBase;
         const top = (b.y ?? 0) + box.yTop;
@@ -754,7 +763,7 @@ export function findPath(
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kknav = {
-    findPath, navBlocked, rebuildNav, getNavGrid,
+    findPath, navBlocked, rebuildNav, getNavGrid, navSteer,
     heightAt: (region: string | null, x: number, z: number) => getNavGrid(region).heightAt(x, z),
   };
 }
