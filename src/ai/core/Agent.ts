@@ -20,7 +20,8 @@ import {
 } from '../config';
 import { createBlackboard, type Blackboard } from './Blackboard';
 import type { TargetId } from './TargetRegistry';
-import type { Activity } from './Reasoner';
+import { runReasoner, type Activity } from './Reasoner';
+import { ACTIONS } from '../actions';
 // AgentManager.ts imports Agent (this file) at its own top level to
 // construct instances in spawn() — a real cycle, referenced here only
 // inside the `intent` setter body below, never at this module's own
@@ -202,8 +203,13 @@ export class Agent {
     }
 
     // phase 6: this.senses.update(now)
-    // phase 5: this.reasoner.think(this, now) -> writes bb.lastScores and may
-    //          swap the running Activity. Nothing decides anything yet.
+    // §5.0/§5.5 — assembles, scores and picks a winner from the real action
+    // registry (src/ai/actions, empty until 5.6/5.7 register real content),
+    // writing bb.lastScores/currentActionId. Fully inert today: an empty
+    // registry means every agent's assembled candidate list is always
+    // empty, so this changes nothing about current behavior — Activity
+    // start/abort orchestration is deliberately still out of scope (5.6).
+    runReasoner(this, ACTIONS, now);
 
     // rolling think-rate measurement for the overlay
     this.hzCount++;
