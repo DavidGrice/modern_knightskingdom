@@ -1,0 +1,30 @@
+{
+  "_doc": [
+    "PHASE_2_NAVIGATION_AND_GATHERING.md §3.2 — kind -> anchor rule, resolved",
+    "at query time by TargetRegistry.queryNearby (iteration 2.8) and turned",
+    "into a real walkable point by anchor resolution (iteration 2.9).",
+    "'radial': sample `slots`-independent points on a circle of `radius`",
+    "around the target, discard non-walkable, pick nearest to the agent.",
+    "'fixed': a single point at `offset` in the target's own local frame,",
+    "rotated by rot*90 degrees, facing `facing` quarter-turns.",
+    "fishing's fallbackRadius is NOT authored here as a literal — it is",
+    "POND.radius + 4, computed in config/index.ts's anchorRuleFor() from the",
+    "real pond definition (game/data/world.ts), so it can never drift out of",
+    "sync with the pond's actual size the way a second hardcoded number could."
+  ],
+  "nodes": {
+    "tree":    { "mode": "radial", "radius": 1.3, "slots": 2 },
+    "rock":    { "mode": "radial", "radius": 1.2, "slots": 2 },
+    "herb":    { "mode": "radial", "radius": 0.8, "slots": 1 },
+    "fishing": { "mode": "radial", "radius": 1.6, "slots": 1 }
+  },
+  "buildings": {
+    "stockpile": { "mode": "radial", "radius": 1.2, "slots": 3 },
+    "barrel":    { "mode": "radial", "radius": 0.9, "slots": 1 },
+    "farmplot":  { "mode": "radial", "radius": 1.1, "slots": 4 },
+    "campfire":  { "mode": "radial", "radius": 1.6, "slots": 5 },
+    "workbench": { "mode": "fixed",  "offset": [0, 1.1], "facing": 0, "slots": 1 },
+    "forge":     { "mode": "fixed",  "offset": [0, 1.2], "facing": 0, "slots": 1 },
+    "bed":       { "mode": "fixed",  "offset": [0, 0.9], "facing": 2, "slots": 1 }
+  }
+}

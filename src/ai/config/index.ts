@@ -10,6 +10,8 @@
 import needsJson from './needs.json';
 import archetypesJson from './archetypes.json';
 import lodJson from './lod.json';
+import anchorsJson from './anchors.json';
+import { POND } from '@/game/data/world';
 
 /** §3.2 — the seven drives. Order here is the order the overlay prints them.
  *  Reworked 2026-07-27: the original set (energy/hygiene/bladder/hunger/
@@ -59,6 +61,27 @@ export interface LodConfig {
   tiers: Record<Tier, TierDef>;
 }
 
+/** §3.2 — how a target kind resolves to a real point an agent can stand at.
+ *  2.8 (this) only needs every `Target` to carry the right rule and its
+ *  `slots` count for reservation capacity; turning a rule into an actual
+ *  walkable point is iteration 2.9's job (radial sampling + nearestWalkable
+ *  fallback, fixed-offset rotation by rot*90°). */
+export interface AnchorRuleRadial {
+  mode: 'radial';
+  radius: number;
+  slots: number;
+  /** fishing only — see anchorRuleFor's own comment for why this is
+   *  resolved in code, not authored as a literal in anchors.json. */
+  fallbackRadius?: number;
+}
+export interface AnchorRuleFixed {
+  mode: 'fixed';
+  offset: [number, number];
+  facing: number;
+  slots: number;
+}
+export type AnchorRule = AnchorRuleRadial | AnchorRuleFixed;
+
 const DEFAULT_NEEDS = needsJson.defaults as Record<NeedId, NeedTuning>;
 const NEED_PROFILES = needsJson.profiles as Record<
   string,
@@ -68,6 +91,15 @@ const NEED_PROFILES = needsJson.profiles as Record<
 const ARCHETYPES = archetypesJson as unknown as Record<string, ArchetypeDef>;
 
 export const LOD = lodJson as unknown as LodConfig;
+
+const ANCHOR_RULES = anchorsJson as unknown as {
+  nodes: Record<string, AnchorRule>;
+  buildings: Record<string, AnchorRule>;
+};
+/** a radial rule nobody authored a kind for yet — a real gap should be
+ *  loud in the debug overlay, not a silent crash the first time a new
+ *  buildable/node kind reaches the reasoner before anchors.json catches up */
+const FALLBACK_ANCHOR_RULE: AnchorRule = { mode: 'radial', radius: 1.0, slots: 1 };
 
 // A profile is the defaults with its own overrides folded in. Merged once per
 // profile and cached — this allocates, so it must never run per frame (§0.4);
@@ -106,4 +138,19 @@ export function archetypeIds(): string[] {
 
 export function tierDef(tier: Tier): TierDef {
   return LOD.tiers[tier];
+}
+
+/** §3.2 — kind -> anchor rule. fishing's `fallbackRadius` is `POND.radius +
+ *  4`, computed here from the real pond definition (game/data/world.ts)
+ *  rather than a second hardcoded number in anchors.json — the spec doc's
+ *  "derive:POND.r + 4" notation meant exactly this, not a literal string to
+ *  store and later parse. */
+export function anchorRuleFor(source: 'node' | 'building', kind: string): AnchorRule {
+  const table = source === 'node' ? ANCHOR_RULES.nodes : ANCHOR_RULES.buildings;
+  const rule = table[kind];
+  if (!rule) return FALLBACK_ANCHOR_RULE;
+  if (kind === 'fishing' && rule.mode === 'radial') {
+    return { ...rule, fallbackRadius: POND.radius + 4 };
+  }
+  return rule;
 }
