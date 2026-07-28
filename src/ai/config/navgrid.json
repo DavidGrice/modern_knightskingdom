@@ -1,0 +1,20 @@
+{
+  "_doc": [
+    "PHASE_2_NAVIGATION_AND_GATHERING.md §2.0 — grid extent per context.",
+    "home: fixed, covers the whole ±56m homestead, unchanged since phase 1.",
+    "destination: window, a 96m (2x halfExtent) box that follows the player",
+    "through a template diorama rather than covering the whole declared",
+    "radius (213-352m across the nine templates — see PHASE_STATUS.md's",
+    "corrected gap #1). recentreAt is the hysteresis distance: rebuild only",
+    "once the player has moved this far from the window's current centre,",
+    "not every frame.",
+    "crypt: fixed, but sized per-descent from the generated room layout, not",
+    "from a static number here — see iteration 2.6.",
+    "maxStep is read by iteration 2.5's height rasterization, not yet by",
+    "anything in iteration 2.4 — declared here now so both iterations read",
+    "the same number rather than each hardcoding their own."
+  ],
+  "home": { "mode": "fixed", "halfExtent": 56, "cellSize": 1.0 },
+  "destination": { "mode": "window", "halfExtent": 48, "cellSize": 1.0, "recentreAt": 24, "maxStep": 0.6 },
+  "crypt": { "mode": "fixed", "cellSize": 1.0 }
+}

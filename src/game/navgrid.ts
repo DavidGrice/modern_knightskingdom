@@ -15,11 +15,18 @@
 import { collisionBoxesFor } from './data/buildables';
 import { isBuilt, isHomeBuilding, type PlacedBuilding } from './types';
 import { terrainBlocks, terrainExclusions } from './navTerrain';
+import { WORLD_DESTINATION_BY_ID } from './data/worlds';
+import navgridConfig from '../ai/config/navgrid.json';
 
+// Phase 2, iteration 2.4 — grid geometry now lives in one place,
+// src/ai/config/navgrid.json, rather than as a hardcoded constant here plus
+// a second copy in that JSON for iteration 2.7's LOD tier-B fix to read.
+// `CELL` stays exported (unused externally today, but was already a public
+// export before this iteration and nothing requires removing it).
 /** metres per cell — fine enough to find a gate, coarse enough to stay cheap */
-export const CELL = 1;
+export const CELL = navgridConfig.home.cellSize;
 /** half-width of the home grid, centred on the homestead */
-const HOME_HALF = 56;
+const HOME_HALF = navgridConfig.home.halfExtent;
 /** how fat the walkers are; obstacles are inflated by this so a path never
  *  hugs a wall so tightly that the collision solver undoes it */
 const AGENT_RADIUS = 0.55;
@@ -37,12 +44,23 @@ export interface NavGridOptions {
    *  PlacedBuilding.world — the same "null means home" convention used
    *  everywhere else in this codebase (isHomeBuilding, TemplateWorld, etc). */
   region: string | null;
-  /** grid centre, in world space. Home is 0,0; a destination's own origin
-   *  (game/data/worlds.ts) once iteration 2.4 adds destination grids. */
+  /** grid centre, in world space. Home is always 0,0; a destination's
+   *  starting centre is its declared teleport origin (game/data/worlds.ts),
+   *  corrected to the player's exact position by the first recentre() call. */
   originX: number;
   originZ: number;
   halfExtent: number;
   cellSize: number;
+  /** 'fixed' (default) never moves — home, and the Crypt from iteration 2.6.
+   *  'window' follows a moving centre (recentre()) and lets findPath route
+   *  toward an out-of-bounds target instead of rejecting it outright — see
+   *  the "path-chaining" note on findPath below. */
+  mode?: 'fixed' | 'window';
+  /** window mode only: recentre once the tracked point has moved this far
+   *  from the grid's current centre — the "quarter window" hysteresis
+   *  PHASE_2_NAVIGATION_AND_GATHERING.md §2.0 specifies, so the grid does not
+   *  rebuild every frame the player merely shifts a metre. */
+  recentreAt?: number;
 }
 
 /**
@@ -67,11 +85,14 @@ export interface NavGridOptions {
  */
 export class NavGrid {
   readonly region: string | null;
-  readonly originX: number;
-  readonly originZ: number;
+  // NOT readonly — a window-mode grid's centre moves under recentre().
+  originX: number;
+  originZ: number;
   readonly halfExtent: number;
   readonly cellSize: number;
   readonly dim: number;
+  readonly mode: 'fixed' | 'window';
+  private readonly recentreAt: number;
 
   private blocked: Uint8Array;
   private builtFrom: PlacedBuilding[] | null = null;
@@ -92,6 +113,8 @@ export class NavGrid {
     this.originZ = opts.originZ;
     this.halfExtent = opts.halfExtent;
     this.cellSize = opts.cellSize;
+    this.mode = opts.mode ?? 'fixed';
+    this.recentreAt = opts.recentreAt ?? Infinity;
     this.dim = Math.round((opts.halfExtent * 2) / opts.cellSize);
 
     const n = this.dim * this.dim;
@@ -131,6 +154,42 @@ export class NavGrid {
   inBounds(x: number, z: number): boolean {
     return x > this.originX - this.halfExtent && x < this.originX + this.halfExtent
       && z > this.originZ - this.halfExtent && z < this.originZ + this.halfExtent;
+  }
+
+  /** Clamp a point into this grid's bounds, `margin` cells shy of the true
+   *  edge (so the clamped result never sits exactly on the boundary, which
+   *  could otherwise land in a half-covered edge cell). Used by findPath's
+   *  path-chaining for a window-mode grid — see the note there. */
+  private clampToBounds(x: number, z: number, margin = 1): { x: number; z: number } {
+    const lo = -this.halfExtent + margin;
+    const hi = this.halfExtent - margin;
+    return {
+      x: this.originX + Math.max(lo, Math.min(hi, x - this.originX)),
+      z: this.originZ + Math.max(lo, Math.min(hi, z - this.originZ)),
+    };
+  }
+
+  /**
+   * Window mode only (a no-op otherwise): recentre on (x, z) — typically the
+   * player's live position — if it has moved more than `recentreAt` from the
+   * grid's current centre. This is the "quarter window" hysteresis §2.0
+   * specifies: cheap to call every frame, since most calls just measure the
+   * distance and return.
+   *
+   * Recentring invalidates `builtFrom` rather than rebuilding immediately —
+   * the SAME array indices now address different world cells (the origin
+   * moved), so the existing obstacle data is stale regardless of whether the
+   * building list itself changed. The next `rebuild(buildings)` call (from
+   * wherever already calls it) picks this up: `builtFrom === buildings`
+   * would otherwise wrongly no-op, since the buildings array's own identity
+   * has not changed, only this grid's relationship to world space has.
+   */
+  recentre(x: number, z: number): void {
+    if (this.mode !== 'window') return;
+    if (Math.hypot(x - this.originX, z - this.originZ) <= this.recentreAt) return;
+    this.originX = x;
+    this.originZ = z;
+    this.builtFrom = null;
   }
 
   /** True if (x, z) is walkable — in bounds and not blocked. `layer` is
@@ -285,13 +344,32 @@ export class NavGrid {
    * (already string-pulled to drop collinear runs), or null when there is no
    * route — a caller that gets null should fall back to steering straight,
    * which is what the old behaviour was everywhere.
+   *
+   * Path-chaining (window mode only): §2.0 specifies picking the window-edge
+   * cell that minimises `travelled + straightLineRemainder` — evaluating
+   * every boundary cell with its own search. That is roughly 4×halfExtent
+   * separate A* runs per chained request, which is not a cost this function
+   * should pay. Clamping the target into the window (leaving the target's
+   * DIRECTION from the start point intact, just capped at the edge) reaches
+   * the same practical outcome — a path that uses the window's full extent,
+   * heading the right way, re-requested as the window recentres — for the
+   * cost of the one search this function already runs. A fixed-mode grid
+   * keeps the original behaviour exactly: an out-of-bounds target is simply
+   * unreachable, same as before this iteration.
    */
   findPath(
     sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, _layer = 0,
   ): { x: number; z: number }[] | null {
-    if (!this.inBounds(sx, sz) || !this.inBounds(tx, tz)) return null;
+    if (!this.inBounds(sx, sz)) return null;
+    let gx = tx, gz = tz;
+    if (!this.inBounds(tx, tz)) {
+      if (this.mode !== 'window') return null;
+      const clamped = this.clampToBounds(tx, tz);
+      gx = clamped.x;
+      gz = clamped.z;
+    }
     const start = this.nearestOpenCell(this.toCellX(sx), this.toCellZ(sz));
-    const goal = this.nearestOpenCell(this.toCellX(tx), this.toCellZ(tz));
+    const goal = this.nearestOpenCell(this.toCellX(gx), this.toCellZ(gz));
     if (!start || !goal) return null;
     const [si, sj] = start;
     const [gi, gj] = goal;
@@ -372,18 +450,52 @@ export class NavGrid {
 }
 
 // ---------------------------------------------------------------------------
-// Registry + backward-compatible top-level API. Iteration 2.3's own stated
-// scope: "getNavGrid(null) returns the home grid, behaviourally identical to
-// today." Destination/crypt grids do not exist yet (iterations 2.4/2.6) — a
-// non-null region here is a clear, deliberate error rather than a silent
-// wrong-grid fallback, since nothing in phases 1-3 calls this with one yet.
+// Registry + backward-compatible top-level API.
 // ---------------------------------------------------------------------------
 
 const homeGrid = new NavGrid({ region: null, originX: 0, originZ: 0, halfExtent: HOME_HALF, cellSize: CELL });
 
+// Phase 2, iteration 2.4 — destination window grids, lazily created and
+// cached per region so revisiting a template reuses its previous grid
+// (and whatever position it last recentred to) rather than starting fresh.
+// Keyed by region id, matching WORLD_DESTINATIONS' own `id` field.
+const destinationGrids = new Map<string, NavGrid>();
+
 export function getNavGrid(region: string | null): NavGrid {
   if (region === null) return homeGrid;
-  throw new Error(`getNavGrid: no grid for region "${region}" yet — destination/crypt grids land in iterations 2.4/2.6.`);
+
+  const cached = destinationGrids.get(region);
+  if (cached) return cached;
+
+  // The Sealed Crypt is a fixed grid sized from its own generated room
+  // layout, not a window — iteration 2.6's job. Reject it clearly here
+  // rather than let it silently fall through and get a window grid it was
+  // never meant to have.
+  if (region === 'dungeon') {
+    throw new Error('getNavGrid: the Crypt grid is not built yet — see iteration 2.6.');
+  }
+
+  const dest = WORLD_DESTINATION_BY_ID[region];
+  if (!dest) {
+    throw new Error(`getNavGrid: "${region}" is not a known destination (checked WORLD_DESTINATION_BY_ID).`);
+  }
+
+  // Start centred on the destination's own declared teleport origin — a
+  // reasonable first approximation of "where the player is," corrected to
+  // their exact position by the first recentre() call after they actually
+  // arrive (see recentre()'s own comment).
+  const cfg = navgridConfig.destination;
+  const grid = new NavGrid({
+    region,
+    originX: dest.origin.x,
+    originZ: dest.origin.z,
+    halfExtent: cfg.halfExtent,
+    cellSize: cfg.cellSize,
+    mode: 'window',
+    recentreAt: cfg.recentreAt,
+  });
+  destinationGrids.set(region, grid);
+  return grid;
 }
 
 export function navInBounds(x: number, z: number): boolean {
