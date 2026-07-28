@@ -10,6 +10,10 @@ export interface VillagerMob {
    *  the way in, and seeing them come up it is what makes them arrive rather
    *  than spawn. Cleared by Villagers.tsx once they reach the holding. */
   arriving?: boolean;
+  /** Mirrors the renderer's own `clip` state, written every frame — debug/
+   *  test visibility only (iteration 3.5's AnimationController has nothing
+   *  else exposed to confirm which animation actually ended up playing). */
+  clip?: string;
 }
 
 export const villagerMobs: Record<string, VillagerMob> = {};

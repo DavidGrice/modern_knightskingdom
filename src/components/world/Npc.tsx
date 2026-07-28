@@ -7,10 +7,13 @@
 // night and back at dawn, a plain position lerp rather than real pathfinding
 // — enough to read as "they went home" without needing a navmesh.
 import { Suspense, useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import RiggedFigure from '../character/RiggedFigure';
+import { ResourceProp } from '../character/Equipment';
+import type { RiggedMinifig } from '@/lib/minifigRig';
+import type { ItemId } from '@/game/types';
 import { NPCS, isNpcRevealed, type NpcDef } from '@/game/data/npcs';
 import { NIGHT_GATHER_SPOT } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
@@ -30,6 +33,12 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
   const [clip, setClip] = useState('anim_r_restpose');
   const clipRef = useRef(clip);
   clipRef.current = clip;
+  const [loop, setLoop] = useState(true);
+  const [rig, setRig] = useState<RiggedMinifig | null>(null);
+  // mirrors agent.bb.carrying every frame — see Villagers.tsx's identical
+  // pattern (iteration 3.5) for why this needs its own render-visible copy
+  // rather than reading the useFrame-local `agent` from the JSX below
+  const [carrying, setCarrying] = useState<{ resource: ItemId; amount: number } | null>(null);
   const group = useRef<THREE.Group>(null);
   const pos = useRef(new THREE.Vector3(def.x, 0, def.z));
   const yaw = useRef(def.yaw);
@@ -54,6 +63,7 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
     }
     const g = group.current;
     if (!g) return;
+    mob.clip = clipRef.current;
 
     // Phase 3, iteration 3.4 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
     // Intent takes over movement entirely, checked FIRST, before the
@@ -79,6 +89,17 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
     // (phase 5's reasoner is the first real writer), so this is inert today.
     const agent = agentManager.get(def.id);
     const intent = agent?.intent;
+    // Phase 3, iteration 3.5 — resynced unconditionally, same reasoning as
+    // Villagers.tsx: covers both entering AND leaving a PLAY_ANIM intent in
+    // one place, rather than only inside the branch below. Outside PLAY_ANIM,
+    // `loop` keeps exactly this file's original clip-derived rule (walk/
+    // restpose loop, anything else — greet waves, a future PLAY_ANIM one-shot
+    // — plays once), just moved from an inline JSX expression into a synced
+    // field so intent.loop can override it.
+    const wantLoop = agent && intent && intent.type === 'PLAY_ANIM' ? intent.loop : MOVE_CLIPS.has(clipRef.current);
+    if (loop !== wantLoop) setLoop(wantLoop);
+    const wantCarrying = agent?.bb.carrying ?? null;
+    if (carrying !== wantCarrying) setCarrying(wantCarrying);
     if (agent && intent && (intent.type === 'MOVE_TO' || intent.type === 'MOVE_TO_ANCHOR')) {
       const loc = pos.current;
       if (Math.hypot(loc.x - agent.position.x, loc.z - agent.position.z) > 6) {
@@ -97,6 +118,23 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
         const wantClip = agent.bb.movement.status === 'moving' ? 'anim_c_walk' : 'anim_r_restpose';
         if (clipRef.current !== wantClip) setClip(wantClip);
       }
+      return;
+    }
+
+    // Phase 3, iteration 3.5 — PLAY_ANIM: hold position, play whatever clip
+    // the intent names. Same unconditional agent+intent gate as the
+    // MOVE_TO/MOVE_TO_ANCHOR branch above, for the same reason (see its own
+    // comment on why this can't sit behind `!schedule`).
+    if (agent && intent && intent.type === 'PLAY_ANIM') {
+      const loc = pos.current;
+      loc.x = agent.position.x;
+      loc.z = agent.position.z;
+      yaw.current = agent.yaw;
+      g.position.set(loc.x, 0, loc.z);
+      g.rotation.y = yaw.current;
+      mob.x = loc.x;
+      mob.z = loc.z;
+      if (clipRef.current !== intent.clip) setClip(intent.clip);
       return;
     }
 
@@ -153,9 +191,11 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
         // see NpcDef.keepProps for why that also fixed their rigs.
         keepProps={def.keepProps !== false}
         clip={clip}
-        loop={clip === 'anim_r_restpose' || clip === 'anim_c_walk'}
+        loop={loop}
         onClipEnd={() => setClip('anim_r_restpose')}
+        onReady={setRig}
       />
+      {rig && carrying && createPortal(<ResourceProp resource={carrying.resource} />, rig.joints.rightarm)}
     </group>
   );
 }

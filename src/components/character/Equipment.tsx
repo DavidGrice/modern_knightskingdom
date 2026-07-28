@@ -14,6 +14,7 @@
 import RealWeapon from './RealWeapon';
 import RealShield from './RealShield';
 import RealHelmet from './RealHelmet';
+import type { ItemId } from '@/game/types';
 
 export function HeldSword({ side = -1 }: { side?: number }) {
   return (
@@ -110,6 +111,40 @@ export function ArmShield({ side = 1 }: { side?: number }) {
           </group>
         }
       />
+    </group>
+  );
+}
+
+/** One small procedural shape per resource kind — no extraction model to draw
+ *  on for any of these (they're all economy items, not minifig gear), so
+ *  every case follows Chestplate's "procedural where the original has no
+ *  equivalent" rule. Unlisted ids (tools, weapons, potions — nothing a
+ *  gather/haul trip ever carries) fall back to a generic sack. */
+const RESOURCE_LOOK: Partial<Record<ItemId, { color: string; roughness: number; metalness?: number }>> = {
+  wood: { color: '#7a5230', roughness: 0.85 },
+  plank: { color: '#a87b45', roughness: 0.7 },
+  stone: { color: '#8b8d92', roughness: 0.9 },
+  iron_ore: { color: '#5c5850', roughness: 0.8 },
+  iron_bar: { color: '#c9ccd4', roughness: 0.35, metalness: 0.7 },
+  wheat: { color: '#d9b23c', roughness: 0.8 },
+  fish: { color: '#7fa7c9', roughness: 0.5 },
+  gold: { color: '#e8c750', roughness: 0.25, metalness: 0.85 },
+};
+const DEFAULT_RESOURCE_LOOK: { color: string; roughness: number; metalness?: number } = { color: '#8a6a42', roughness: 0.85 };
+
+/** §3.3/§4.1's carried-item attach point: portals onto `rig.joints.rightarm`,
+ *  same joint (and the same hand-local offset family) `HeldHalberd`/
+ *  `HeldCrossbow` above already use for a held object, not re-derived. Own
+ *  internal offset for the same reason `HeldHelmet`/`Chestplate` carry one —
+ *  a portaled child inherits the joint's pivot, not the hand itself. */
+export function ResourceProp({ resource, side = -1 }: { resource: ItemId; side?: number }) {
+  const look = RESOURCE_LOOK[resource] ?? DEFAULT_RESOURCE_LOOK;
+  return (
+    <group position={[side * 0.12, -0.48, 0.2]}>
+      <mesh castShadow>
+        <boxGeometry args={[0.16, 0.16, 0.16]} />
+        <meshStandardMaterial color={look.color} roughness={look.roughness} metalness={look.metalness ?? 0} />
+      </mesh>
     </group>
   );
 }

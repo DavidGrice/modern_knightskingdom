@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { NEED_IDS, needProfile, type NeedId } from '../config';
+import type { ItemId } from '@/game/types';
 
 /** §3.3 — what this agent believes about another entity. NPCs are not
  *  omniscient: combat and search read `lastKnownPosition`, never the live
@@ -80,6 +81,15 @@ export interface Blackboard {
 
   /** §3.2 — the Actuator's current movement state, see Movement's own doc */
   movement: Movement;
+
+  /** §4.1 — set for real by phase 5's GatherAtNode/HaulToDeposit activities;
+   *  null here means "not carrying anything." Following the same
+   *  build-the-field-before-the-behaviour precedent as `reservation`/
+   *  `currentActionId` above: AnimationController (3.5) already needs
+   *  something to gate the carried-item prop on, so the field lands now,
+   *  always null, with the actual write-side logic (capacity, gather/haul
+   *  wiring) staying phase 4/5's job. */
+  carrying: { resource: ItemId; amount: number } | null;
 }
 
 export function createBlackboard(
@@ -110,5 +120,6 @@ export function createBlackboard(
     // yet, and IDLE (no intent) resolves to the same "arrived, nowhere in
     // particular" state Locomotion writes for it every frame anyway.
     movement: { status: 'arrived', distRemaining: 0 },
+    carrying: null,
   };
 }

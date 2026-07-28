@@ -8,6 +8,9 @@
 export interface NpcMob {
   x: number;
   z: number;
+  /** Mirrors CourtNpc's own `clip` state, written every frame — debug/test
+   *  visibility only, same as VillagerMob.clip (iteration 3.5). */
+  clip?: string;
 }
 
 export const npcMobs: Record<string, NpcMob> = {};
