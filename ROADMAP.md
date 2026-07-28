@@ -524,6 +524,17 @@ granting the unlock + materials and seeing all 26 pieces appear.
   integration, a roster-panel equip/unequip toggle (mirroring the existing helmet/chestplate UI), and a
   worn-item visual mesh — `rig.joints.rightarm` is already `ResourceProp`'s (the carried resource itself)
   and `leftarm` is shields', so the visual needs a joint that doesn't collide with either.
+- **Real stockpile storage capacity**: today a stockpile is purely cosmetic — confirmed by reading
+  `gameStore.ts` directly, it's only (a) a work-presence anchor for the trip timer and (b) flavor text in
+  the delivery notification. `addItems()` writes straight into one global, uncapped `st.inventory` with no
+  location or capacity check at all; there is no inventory-cap concept anywhere in the codebase. Worth
+  building for real once Phase 5's haul-travel-time economy cost (5.8b) has shipped and had time to be
+  felt — "unlimited storage + a real travel cost" may already read as correct on its own, or the capacity
+  squeeze may be what makes stockpile *placement* (not just existence) matter. Needs its own design pass:
+  a flat cap vs. one that scales per stockpile built, and what happens when storage is full (hard reject,
+  waste the yield, or block further gathering until the player spends/sells). Would give Phase 5's
+  `haul_to_deposit` `target_usable` consideration (currently just `isBuilt`, a placeholder) real teeth —
+  "has room" instead of "exists."
 - Row-fill wall placement (drag a line), demolish-area tool, middle-mouse pan + Q/E aerial rotation.
 - Freeform placement mode (unsnapped position/rotation/scale — existing catalog pieces only).
 
