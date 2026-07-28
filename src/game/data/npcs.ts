@@ -84,6 +84,25 @@ export function isNpcRevealed(npc: NpcDef, completedQuests: string[]): boolean {
   return !npc.revealAfterQuest || completedQuests.includes(npc.revealAfterQuest);
 }
 
+/** Court NPCs that actually move under `navSteer` — `Npc.tsx`'s own
+ *  "schedule" concept (`revealAfterQuest && !world`): a real day/night
+ *  walk, not the static starter farmers or instance residents, who render
+ *  (`Npc.tsx`'s own broader reveal filter, unchanged) but never reach a
+ *  navSteer call site. Phase 3, iteration 3.4 — the population
+ *  `src/ai/npcSync.ts` spawns an Agent per; an Agent for a static NPC
+ *  would just sit unused. Mirrors the `revealed` filter `Npc.tsx`'s own
+ *  default export already computes inline, plus the schedule condition —
+ *  kept here, not duplicated, so the two can't drift apart. */
+export function scheduledCourtNpcs(
+  completedQuests: string[], destination: string | null, villagers: { id: string }[],
+): NpcDef[] {
+  return NPCS.filter((n) =>
+    !!n.revealAfterQuest && !n.world
+    && isNpcRevealed(n, completedQuests)
+    && (n.world ?? null) === (destination ?? null)
+    && !villagers.some((v) => v.id === n.id));
+}
+
 export const NPCS: NpcDef[] = [
   {
     id: 'king',

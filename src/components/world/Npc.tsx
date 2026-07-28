@@ -17,6 +17,8 @@ import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
 import { registerNpcMob } from '@/game/npcMobs';
 import { destinationGroundY } from './TemplateWorld';
+import { agentManager } from '@/ai/core/AgentManager';
+import { stepLocomotion } from '@/ai/core/Locomotion';
 
 const MOVE_CLIPS = new Set(['anim_c_walk', 'anim_r_restpose']);
 
@@ -52,6 +54,52 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
     }
     const g = group.current;
     if (!g) return;
+
+    // Phase 3, iteration 3.4 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
+    // Intent takes over movement entirely, checked FIRST, before the
+    // `!schedule` early-return below. Mirrors Villagers.tsx's iteration 3.3
+    // splice, adapted to this file's own shape: one navSteer call site (not
+    // seven), no offset on g.rotation.y — §3.2's rig-offset note is explicit
+    // that Npc.tsx keeps none, unlike Villagers.tsx's +Math.PI, so
+    // Locomotion's universal agent.yaw is applied as-is here.
+    //
+    // Deliberately NOT gated behind `schedule`: an agent+active-intent check
+    // should be the only gate, the same as Villagers.tsx's splice doesn't
+    // care about `job`. npcSync.ts (this same iteration) only ever spawns an
+    // Agent for a scheduled NPC today, so in practice this is equivalent —
+    // but placing the check after `!schedule`'s early return would silently
+    // stop working the moment anything (a future cutscene, a one-off quest
+    // beat) gives a STATIC NPC a real intent without also making them
+    // "scheduled." Caught this the hard way: the first version of this
+    // splice sat after the early return, and its own smoke test — which
+    // manually spawns an Agent for the always-static farmer_alric, since
+    // zero real NPCs currently satisfy scheduledCourtNpcs at all — showed
+    // zero movement despite a real MOVE_TO intent, because the early return
+    // fired first every frame. Nothing issues a real Intent yet regardless
+    // (phase 5's reasoner is the first real writer), so this is inert today.
+    const agent = agentManager.get(def.id);
+    const intent = agent?.intent;
+    if (agent && intent && (intent.type === 'MOVE_TO' || intent.type === 'MOVE_TO_ANCHOR')) {
+      const loc = pos.current;
+      if (Math.hypot(loc.x - agent.position.x, loc.z - agent.position.z) > 6) {
+        loc.x = agent.position.x;
+        loc.z = agent.position.z;
+      }
+      stepLocomotion(agent, dt);
+      loc.x = agent.position.x;
+      loc.z = agent.position.z;
+      yaw.current = agent.yaw;
+      g.position.set(loc.x, 0, loc.z);
+      g.rotation.y = yaw.current;
+      mob.x = loc.x;
+      mob.z = loc.z;
+      if (MOVE_CLIPS.has(clipRef.current)) {
+        const wantClip = agent.bb.movement.status === 'moving' ? 'anim_c_walk' : 'anim_r_restpose';
+        if (clipRef.current !== wantClip) setClip(wantClip);
+      }
+      return;
+    }
+
     if (!schedule) {
       // residents stand on their bake's real terrain (these hillside scenes
       // vary meters in relief); home NPCs stay on the flat meadow at y=0
@@ -60,6 +108,7 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
       mob.x = def.x; mob.z = def.z;
       return;
     }
+
     const night = worldEnv.night > 0.6;
     const tx = night ? nightSpot.x : def.x;
     const tz = night ? nightSpot.z : def.z;

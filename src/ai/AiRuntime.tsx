@@ -14,6 +14,7 @@ import { playerState } from '@/game/playerState';
 import { getNavGrid } from '@/game/navgrid';
 import { agentManager, type WindowBounds } from './core/AgentManager';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
+import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
 // iteration 2.9 — side-effect import only: nothing here calls resolveAnchor
 // yet (phase 5's gather/haul actions are the first real caller), but it
 // needs to be in the client bundle for its own window.__kkanchor debug
@@ -49,6 +50,13 @@ export default function AiRuntime() {
     // not O(search).
     syncVillagerAgents(st.villagers);
     mirrorVillagerPositions();
+    // phase 3, iteration 3.4: the same lifecycle for scheduled court NPCs
+    // (Npc.tsx's own "schedule" concept — see data/npcs.ts's
+    // scheduledCourtNpcs) — a genuinely different population from roster
+    // villagers, previously spawned no Agent at all (found while building
+    // this iteration's own Locomotion splice into Npc.tsx).
+    syncNpcAgents(st.completedQuests, st.destination ?? null, st.villagers);
+    mirrorNpcPositions();
     // Phase 2, iteration 2.4 — a window-mode destination grid follows the
     // player, not any individual agent (nothing spawns agents in a
     // destination yet; this keeps the grid correctly centred for whenever
