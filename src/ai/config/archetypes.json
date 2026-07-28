@@ -4,17 +4,30 @@
     "which need profile (needs.json) drives it.",
     "`intrinsic` is CONTENT, not code: phase 1 stores the list on the agent and",
     "the debug overlay prints it. The UtilityReasoner (phase 5) is what turns",
-    "these ids into scored candidates, alongside affordance-derived actions."
+    "these ids into scored candidates, alongside affordance-derived actions.",
+    "Updated 2026-07-28 (phase 5.3, found missing during the phase-5",
+    "validation pass): villager gained flee_to_safety/sleep/gather_resource/",
+    "haul_to_deposit (5.6/5.7's own action ids, none of which existed here",
+    "before — gather_resource and haul_to_deposit only ever apply once a",
+    "villager has a job, gated at candidate-assembly time, not by archetype).",
+    "guard's 'flee' renamed to 'flee_to_safety' to match §5.6's real id — it",
+    "was never consumed by any live code, confirmed via grep, so this is a",
+    "content fix, not a behavior change. guard intentionally did NOT gain",
+    "'sleep': defenders keep the OPPOSITE hours to working villagers",
+    "(isWatchHours, data/villagers.ts) and are driven separately by",
+    "Defenders.tsx, not by this reasoner yet — whether/how a guard rests is",
+    "an open question for whenever defender AI actually gets built, not",
+    "something to silently assume works the same way as a villager's night."
   ],
   "villager": {
     "label": "Villager",
     "needProfile": "villager",
-    "intrinsic": ["wander", "socialize", "idle"]
+    "intrinsic": ["wander", "socialize", "idle", "flee_to_safety", "sleep", "gather_resource", "haul_to_deposit"]
   },
   "guard": {
     "label": "Guard",
     "needProfile": "guard",
-    "intrinsic": ["engage_threat", "take_cover", "flee", "wander", "idle"]
+    "intrinsic": ["engage_threat", "take_cover", "flee_to_safety", "wander", "idle"]
   },
   "companion": {
     "label": "Companion",
