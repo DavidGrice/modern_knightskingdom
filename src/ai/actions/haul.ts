@@ -5,11 +5,17 @@
 // Activity doesn't hunt for one itself — it just acts on whichever target
 // won (ctx.target).
 //
-// Deliberately NOT added to src/ai/actions/index.ts's live ACTIONS list —
-// see gather.ts's own comment and index.ts's for why (the addItems() call
-// below would double-grant against tickVillagers' still-running per-trip
-// yield until 5.8a/5.8b land).
+// Registered live as of 5.8a (src/ai/actions/index.ts) — see workSignal.ts's
+// own header for why that's now safe. §4's own two-step plan keeps
+// `carrying`'s ECONOMIC effect gated off through 5.8a: CARRYING_ENABLED
+// below is false until 5.8b flips it. The full mechanic still runs for real
+// even while it's off (travel, deposit sequencing, workSignal) — only the
+// addItems() transfer itself is skipped, so a gathered load quietly does
+// not count during this one transitional iteration. That is deliberate,
+// not a bug: tickVillagers is still the sole source of real yield in 5.8a,
+// exactly as §4 specifies.
 import { useGameStore } from '@/game/store/gameStore';
+import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
@@ -21,12 +27,17 @@ const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRad
 // this the Activity would enter 'perform' and complete on the very same
 // tick, so the clip would never render even one frame
 const PERFORM_HOLD = 0.6;
+// flipped true in 5.8b — see this file's own header
+const CARRYING_ENABLED = false;
 
 class HaulToDepositActivity implements Activity {
   private phase: 'travel' | 'align' | 'perform' = 'travel';
   private travelStepped = false;
   private holdTimer = 0;
   private targetId: TargetId | null = null;
+  /** same reasoning as GatherAtNodeActivity's own `reserved` field — see
+   *  that Activity's comment */
+  private reserved = false;
 
   start(agent: Agent, ctx: Context): void {
     if (!ctx.target) return;
@@ -34,13 +45,15 @@ class HaulToDepositActivity implements Activity {
     this.phase = 'travel';
     this.travelStepped = false;
     this.holdTimer = 0;
-    targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
+    this.reserved = targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
+    if (!this.reserved) return; // update() fails cleanly on the next tick
     agent.bb.reservation = { targetId: ctx.target.id, slotKind: SLOT_KIND };
     agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
   update(agent: Agent, dt: number): ActivityStatus {
     if (!this.targetId) return 'FAILURE';
+    if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
     const target = targetRegistry.get(this.targetId);
     if (!target) return this.finish(agent, 'FAILURE');
 
@@ -61,6 +74,7 @@ class HaulToDepositActivity implements Activity {
       // comment for why there is no "turn finished" signal to wait on
       this.phase = 'perform';
       this.holdTimer = 0;
+      setWorkSignal(agent.id, { active: true, targetId: this.targetId, kind: target.kind });
       agent.intent = { type: 'PLAY_ANIM', clip: 'anim_c_pleased', loop: false, anchored: true };
       return 'RUNNING';
     }
@@ -70,9 +84,11 @@ class HaulToDepositActivity implements Activity {
     this.holdTimer += dt;
     if (this.holdTimer < PERFORM_HOLD) return 'RUNNING';
     if (!agent.bb.carrying) return this.finish(agent, 'SUCCESS'); // nothing to deposit — is_carrying gates this, shouldn't happen
-    // §3.5/§4: transfer via addItems(), never a direct inventory write —
-    // addItems also feeds lifetime stats, mastery and deeds
-    useGameStore.getState().addItems({ [agent.bb.carrying.resource]: agent.bb.carrying.amount }, 'gather');
+    if (CARRYING_ENABLED) {
+      // §3.5/§4: transfer via addItems(), never a direct inventory write —
+      // addItems also feeds lifetime stats, mastery and deeds
+      useGameStore.getState().addItems({ [agent.bb.carrying.resource]: agent.bb.carrying.amount }, 'gather');
+    }
     agent.bb.carrying = null;
     return this.finish(agent, 'SUCCESS');
   }
@@ -81,14 +97,16 @@ class HaulToDepositActivity implements Activity {
    *  path releases the reservation itself, since runReasoner's own cleanup
    *  on a clean SUCCESS/FAILURE never calls abort(). */
   private finish(agent: Agent, status: ActivityStatus): ActivityStatus {
-    if (this.targetId) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
+    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
     agent.bb.reservation = null;
+    clearWorkSignal(agent.id);
     return status;
   }
 
   abort(agent: Agent): void {
-    if (this.targetId) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
+    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
     agent.bb.reservation = null;
+    clearWorkSignal(agent.id);
     agent.intent = null;
     // carrying survives an aborted haul too, same rule as GatherAtNode
   }
