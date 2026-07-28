@@ -21,6 +21,7 @@ import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
 // exposure to exist at all, and this file is the one guaranteed-loaded
 // entry point for the whole AI system per this file's own header comment.
 import './core/AnchorResolution';
+import './core/Reasoner';
 
 /** Phase 1's one NPC: it ticks, decays its needs, and prints. Parked a few
  *  metres forward-right of SPAWN (0, 26) so it starts inside the view frustum
