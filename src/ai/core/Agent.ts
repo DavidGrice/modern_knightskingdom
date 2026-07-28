@@ -20,6 +20,7 @@ import {
 } from '../config';
 import { createBlackboard, type Blackboard } from './Blackboard';
 import type { TargetId } from './TargetRegistry';
+import type { Activity } from './Reasoner';
 // AgentManager.ts imports Agent (this file) at its own top level to
 // construct instances in spawn() — a real cycle, referenced here only
 // inside the `intent` setter body below, never at this module's own
@@ -94,6 +95,17 @@ export class Agent {
     this._intent = v;
     this.intentSetAt = agentManager.now;
   }
+
+  // --- reasoner (phase 5), iteration 5.4 — a real home for the winning
+  // action's actual behavior. Distinct from `bb.currentActionId`/
+  // `currentActionStartedAt` (phase 1's debug-visible mirror of "what's
+  // running" — a plain string/timestamp, cheap for the overlay to read)
+  // and from `intent` above (what an Activity EMITS toward actuation, not
+  // the Activity itself): this is the live object whose `update(agent,dt)`
+  // the reasoner calls each think tick, and whose `abort(agent)` must run
+  // before anything replaces it. Nothing constructs one yet — 5.6's
+  // FleeToSafety/Sleep are the first real implementors.
+  currentActivity: Activity | null = null;
 
   // --- LOD (§8), assigned by AgentManager ---
   tier: Tier = 'A';
