@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { NEED_IDS, needProfile, type NeedId } from '../config';
-import type { ItemId } from '@/game/types';
+import type { ItemId, VillagerJob } from '@/game/types';
 
 /** §3.3 — what this agent believes about another entity. NPCs are not
  *  omniscient: combat and search read `lastKnownPosition`, never the live
@@ -90,6 +90,27 @@ export interface Blackboard {
    *  always null, with the actual write-side logic (capacity, gather/haul
    *  wiring) staying phase 4/5's job. */
   carrying: { resource: ItemId; amount: number } | null;
+
+  /** §4.1/§4.2 — a LIVE READ of the villager's actual `job`, refreshed every
+   *  think tick from the real roster record (Agent.think(), via
+   *  game/data/attributes.ts's carryCapacityOf and the villager lookup
+   *  there) — never a stored copy assigned once at spawn. This project has
+   *  hit the two-sources-of-truth bug enough times already (node ids,
+   *  ground height, work-hours gating) that a snapshotted `job` here would
+   *  be a foreseeable repeat the moment a player reassigns someone via the
+   *  roster panel mid-session. `null` for any agent with no matching
+   *  villager record (the phase-1 probe, a court NPC, a despawned villager
+   *  mid-frame). */
+  job: VillagerJob | null;
+
+  /** §4.1/§4.3 — how much this agent can carry before a haul trip is
+   *  forced, from `carryCapacityOf()` (base + trade-level scaling + carrier
+   *  item + a stubbed building-bonus hook — see that function's own
+   *  comment and ROADMAP.md's "Building-conferred villager attribute
+   *  bonuses" entry). Refreshed every think tick alongside `job`, same
+   *  live-read rule — a villager who levels up or equips a basket mid-
+   *  session must not need a respawn to see the new number. */
+  carryCapacity: number;
 }
 
 export function createBlackboard(
@@ -121,5 +142,10 @@ export function createBlackboard(
     // particular" state Locomotion writes for it every frame anyway.
     movement: { status: 'arrived', distRemaining: 0 },
     carrying: null,
+    // job/carryCapacity are overwritten on the very first think() tick for
+    // any agent with a real villager record; these are just sane pre-first-
+    // think defaults (an idle agent, base capacity, nothing derived yet)
+    job: null,
+    carryCapacity: 0,
   };
 }

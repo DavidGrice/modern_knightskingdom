@@ -25,6 +25,15 @@ import type { TargetId } from './TargetRegistry';
 // inside the `intent` setter body below, never at this module's own
 // top-level scope. See that setter's own comment for why this is safe.
 import { agentManager } from './AgentManager';
+// A second, longer cycle for the same reason: gameStore.ts imports
+// rosterSync.ts/npcSync.ts (for resetVillagerAgentSync/resetNpcAgentSync),
+// which import agentManager from AgentManager.ts above, which imports this
+// file — so gameStore.ts -> ... -> Agent.ts -> gameStore.ts. Only ever
+// dereferenced inside think()'s body below, never at this module's
+// top-level scope, same rule, verified the same way (a real production
+// build, not just tsc).
+import { useGameStore } from '@/game/store/gameStore';
+import { carryCapacityOf } from '@/game/data/attributes';
 
 /** NPC_AI_SPEC §3.1 / PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.1 — the
  *  output crossing the decision→actuation boundary. Written by the
@@ -161,6 +170,24 @@ export class Agent {
     this.lastThinkAt = now;
     this.thinkCount++;
     this.decayNeeds(elapsed);
+
+    // §4.1/§4.2 — job and carryCapacity are LIVE reads, every think tick,
+    // never a stored copy assigned once at spawn (Blackboard.ts's own
+    // comment has the full reasoning). Looked up by id against the actual
+    // roster each time, not cached on this Agent instance — a villager
+    // reassigned via the roster panel, leveled up, or newly equipped with a
+    // carrier mid-session is correct again within one think tick. No match
+    // (the phase-1 probe, a court NPC, a despawned villager mid-frame)
+    // means there is no live economy record to read, so both reset to
+    // their "nothing to report" value rather than going stale.
+    const villager = useGameStore.getState().villagers.find((v) => v.id === this.id);
+    if (villager) {
+      this.bb.job = villager.job;
+      this.bb.carryCapacity = carryCapacityOf(villager, villager.job);
+    } else {
+      this.bb.job = null;
+      this.bb.carryCapacity = 0;
+    }
 
     // phase 6: this.senses.update(now)
     // phase 5: this.reasoner.think(this, now) -> writes bb.lastScores and may
