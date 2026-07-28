@@ -4,17 +4,17 @@
 // phase state machine (flee/sleep's own Activities are a single MOVE_TO,
 // nothing to sequence). Mirrors GotoAndUse's shape from NPC_AI_SPEC.md §3.
 //
-// Deliberately NOT added to src/ai/actions/index.ts's live ACTIONS list —
-// see that file's own comment for why: registering this now, before 5.8a's
-// workSignal reconciliation exists, would let a job-holding villager's real
-// movement fight Villagers.tsx's still-active "Phase 24B" worksite cascade,
-// and would let HaulToDeposit's addItems() call double-grant on top of
-// tickVillagers' own still-running per-trip yield. Exported and exposed on
-// window.__kkactions for direct, isolated testing in the meantime (same
-// approach 5.1-5.5 used before real content existed to register).
+// Registered live as of 5.8a — §4's workSignal now lets tickVillagers trust
+// this Activity's real presence instead of its own proximity heuristic, so
+// running alongside Villagers.tsx's "Phase 24B" worksite cascade and
+// tickVillagers' own per-trip timer is safe (see workSignal.ts's own header
+// and villagerAtWork()'s new early-return in gameStore.ts). `carrying`'s
+// economic effect (HaulToDeposit's addItems() call) stays gated off until
+// 5.8b — see haul.ts's own CARRYING_ENABLED flag.
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { isWorkingHours } from '@/game/data/villagers';
+import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import type { ItemId, VillagerJob } from '@/game/types';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
@@ -52,6 +52,16 @@ class GatherAtNodeActivity implements Activity {
   private travelStepped = false;
   private swingTimer = 0;
   private targetId: TargetId | null = null;
+  /** true once reserve() actually succeeded — start() can't return a status
+   *  (the Activity interface's start() is void), so a failed reservation is
+   *  flagged here and turned into a real FAILURE on the very next update()
+   *  instead of silently proceeding as if the slot were held. Found during
+   *  5.8a's own review: with only one agent ever gathering (5.7's own
+   *  testing), a failed reserve() never happened, so this was invisible —
+   *  the moment two agents can reach the same tree (2 slots), a third
+   *  "winning" gather_resource for it would otherwise gather from a node
+   *  whose slots are already full, bypassing the cap entirely. */
+  private reserved = false;
 
   start(agent: Agent, ctx: Context): void {
     if (!ctx.target) return;
@@ -59,13 +69,15 @@ class GatherAtNodeActivity implements Activity {
     this.phase = 'travel';
     this.travelStepped = false;
     this.swingTimer = 0;
-    targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
+    this.reserved = targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
+    if (!this.reserved) return; // update() fails cleanly on the next tick
     agent.bb.reservation = { targetId: ctx.target.id, slotKind: SLOT_KIND };
     agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
   update(agent: Agent, dt: number): ActivityStatus {
     if (!this.targetId) return 'FAILURE';
+    if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
     const target = targetRegistry.get(this.targetId);
     if (!target || target.source !== 'node') return this.finish(agent, 'FAILURE');
 
@@ -97,6 +109,10 @@ class GatherAtNodeActivity implements Activity {
       // the honest choice, not a shortcut: the swing anim starts a couple
       // of frames before the turn visually settles, which reads fine.
       this.phase = 'perform';
+      // §4: active from align onward, matching villagerAtWork()'s old
+      // heuristic (arrived = at work) — never during travel, which would be
+      // a strictly weaker presence check than the one it replaces
+      setWorkSignal(agent.id, { active: true, targetId: this.targetId, kind: target.kind });
       agent.intent = { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
       return 'RUNNING';
     }
@@ -136,14 +152,16 @@ class GatherAtNodeActivity implements Activity {
    *  only has 2 slots — the second completion would permanently block every
    *  future reservation on it. */
   private finish(agent: Agent, status: ActivityStatus): ActivityStatus {
-    if (this.targetId) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
+    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
     agent.bb.reservation = null;
+    clearWorkSignal(agent.id);
     return status;
   }
 
   abort(agent: Agent): void {
-    if (this.targetId) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
+    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
     agent.bb.reservation = null;
+    clearWorkSignal(agent.id);
     agent.intent = null;
     // §3.5: abort does NOT clear carrying — whatever was already banked survives
   }

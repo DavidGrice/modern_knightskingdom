@@ -17,6 +17,7 @@ import { agentManager } from '@/ai/core/AgentManager';
 import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { resetNpcAgentSync } from '@/ai/npcSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
+import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SELL_PRICES } from '../data/trade';
 import { DEEDS } from '../data/achievements';
@@ -347,6 +348,15 @@ function villagerAtWork(
   st: GameState,
   homeBuildings: PlacedBuilding[],
 ): boolean {
+  // §4 (phase 5, 5.8a): a real GatherAtNode/HaulToDeposit activity in its
+  // align/perform phase is a FACT ("reserved on node:17, actively working
+  // it"), not an inference from proximity — trust it ahead of the heuristic
+  // below rather than running both. Only ever set for lumberjack/miner (the
+  // only jobs gather_resource's job_match currently claims); farmer/
+  // merchant/builder fall straight through to the unchanged heuristic,
+  // exactly as before 5.8a. Absent or inactive (outside work hours,
+  // no reachable node, threatened, mid-travel) falls through the same way.
+  if (workSignals[v.id]?.active) return true;
   const m = villagerMobs[v.id];
   if (!m) return true; // not spawned in the world yet — nothing to be far from
   const near = (x: number, z: number) => Math.hypot(m.x - x, m.z - z) <= WORK_RANGE;
@@ -574,6 +584,7 @@ function createGameStore() {
       resetVillagerAgentSync();
       resetNpcAgentSync();
       targetRegistry.clear();
+      clearAllWorkSignals();
       set({
         character,
         // bare-handed start (2026-07-20): no starting axe, no calling kit —
@@ -609,6 +620,7 @@ function createGameStore() {
       resetVillagerAgentSync();
       resetNpcAgentSync();
       targetRegistry.clear();
+      clearAllWorkSignals();
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];
       stabledHorses.assigned = { ...(s.mounts ?? {}) };
