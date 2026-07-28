@@ -288,6 +288,15 @@ interface GameState {
    *  the calling Activity's own `bb.carrying`, not the shared inventory
    *  (§4: that only happens on `HaulToDeposit`'s deposit, via `addItems`). */
   gatherSwing: (nodeId: string) => { item: ItemId; amount: number } | null;
+  /** Phase 5, iteration 5.8b — the trade-mastery half of a completed trip,
+   *  extracted out of tickVillagers' own inline block (it was hardcoded
+   *  there, flagged during phase-5 validation as a real continuity risk)
+   *  so `HaulToDeposit`'s real deposit (haul.ts) can grant the same +10
+   *  per completed haul that tickVillagers grants per completed timer-trip
+   *  — an AI-migrated villager must not silently stop leveling just
+   *  because their yield now comes from a real haul instead of the old
+   *  timer. No-ops for a villager with no matching record or job 'idle'. */
+  awardTradeXp: (villagerId: string, amount: number) => void;
   tickRespawns: () => void;
   craft: (recipeId: string) => boolean;
   canAfford: (cost: Partial<Record<ItemId, number>>) => boolean;
@@ -1834,13 +1843,20 @@ function createGameStore() {
       const gains: Partial<Record<ItemId, number>> = {};
       let changed = false;
       const delivered: string[] = [];
-      const masteryUp: string[] = [];
-      let villagers = st.villagers;
       for (const v of st.villagers) {
         if (v.job === 'idle') continue;
         if (v.job === 'defender') continue; // no passive delivery — Defenders.tsx drives them instead
         if (v.job === 'builder') continue;  // no delivery either — see the builder pass above
         if (v.job === 'merchant' && !hasStall) continue; // no stall, nothing to sell
+        // §4/5.8b — once carrying is enabled (haul.ts's CARRYING_ENABLED),
+        // an AI-driven villager's real yield comes from HaulToDeposit's own
+        // addItems()+awardTradeXp() call instead; granting it again here on
+        // the old per-trip timer would double-count. The old timer's own
+        // progress simply freezes while workSignal is active, resuming
+        // exactly where it left off once the AI stops driving this villager
+        // (dusk, no reachable node, reassigned) — Phase 24B's own fallback
+        // then picks the same villager back up seamlessly, unaffected.
+        if (workSignals[v.id]?.active) continue;
         const jobDef = JOB_BY_ID[v.job];
         // Phase 24A: Diligence + trade mastery shorten the trip; Swift-family
         // companion traits shave another 12%
@@ -1872,21 +1888,19 @@ function createGameStore() {
         const sideTrait = SIDE_TRAIT[v.job];
         const sideChance = attrs.craft * (sideTrait && hasTrait(v, sideTrait) ? 2 : 1);
         if (side && Math.random() * 25 < sideChance) gains[side] = (gains[side] ?? 0) + 1;
-        // trade mastery: +10 xp per completed trip, kept per job
-        const lvlBefore = tradeLevelOf(v, v.job);
-        const nv: Villager = { ...v, tradeXp: { ...(v.tradeXp ?? {}), [v.job]: tradeXpOf(v, v.job) + 10 } };
-        villagers = villagers.map((x) => (x.id === v.id ? nv : x));
-        if (tradeLevelOf(nv, v.job) > lvlBefore) masteryUp.push(`${v.name} the ${jobDef.label} (Lv ${tradeLevelOf(nv, v.job)})`);
+        // trade mastery: +10 xp per completed trip, kept per job — via the
+        // same awardTradeXp() HaulToDeposit's own real completion calls
+        // (5.8b), not a second, separately-maintained copy of this logic
+        st.awardTradeXp(v.id, 10);
         delivered.push(v.name);
         changed = true;
       }
-      if (changed) set({ villagerProgress: progress, villagers, dirty: true });
+      if (changed) set({ villagerProgress: progress, dirty: true });
       if (delivered.length) {
         st.addItems(gains, 'gather');
         const toStore = homeBuildings.some((b) => b.type === 'stockpile' && isBuilt(b));
         st.notify(`${delivered.join(', ')} hauled supplies to the ${toStore ? 'stockpile' : 'stores'}.`);
       }
-      for (const m of masteryUp) st.notify(`⭐ ${m} has mastered more of their trade!`, true);
     },
 
     checkDeeds: () => {
@@ -2212,6 +2226,19 @@ function createGameStore() {
         ),
       });
       return { item, amount: 1 };
+    },
+
+    awardTradeXp: (villagerId, amount) => {
+      const st = get();
+      const v = st.villagers.find((x) => x.id === villagerId);
+      if (!v || v.job === 'idle') return;
+      const lvlBefore = tradeLevelOf(v, v.job);
+      const nv: Villager = { ...v, tradeXp: { ...(v.tradeXp ?? {}), [v.job]: tradeXpOf(v, v.job) + amount } };
+      set({ villagers: st.villagers.map((x) => (x.id === villagerId ? nv : x)), dirty: true });
+      if (tradeLevelOf(nv, v.job) > lvlBefore) {
+        const jobDef = JOB_BY_ID[v.job];
+        st.notify(`⭐ ${v.name} the ${jobDef.label} (Lv ${tradeLevelOf(nv, v.job)}) has mastered more of their trade!`, true);
+      }
     },
 
     tickRespawns: () => {

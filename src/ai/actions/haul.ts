@@ -6,14 +6,19 @@
 // won (ctx.target).
 //
 // Registered live as of 5.8a (src/ai/actions/index.ts) — see workSignal.ts's
-// own header for why that's now safe. §4's own two-step plan keeps
-// `carrying`'s ECONOMIC effect gated off through 5.8a: CARRYING_ENABLED
-// below is false until 5.8b flips it. The full mechanic still runs for real
-// even while it's off (travel, deposit sequencing, workSignal) — only the
-// addItems() transfer itself is skipped, so a gathered load quietly does
-// not count during this one transitional iteration. That is deliberate,
-// not a bug: tickVillagers is still the sole source of real yield in 5.8a,
-// exactly as §4 specifies.
+// own header for why that's now safe. §4's own two-step plan kept
+// `carrying`'s economic effect gated off through 5.8a (CARRYING_ENABLED was
+// false); 5.8b flips it here for real, §4's own "deliberate economy change"
+// — net daily income now drops by real haul travel time, accepted as a
+// real cost rather than compensated (confirmed with the user during phase-5
+// validation, before any of this was built). A real completed deposit also
+// grants trade-mastery xp via awardTradeXp() (gameStore.ts), the same flat
+// +10 tickVillagers grants per completed timer-trip — extracted into its
+// own reusable store action specifically so an AI-migrated villager doesn't
+// silently stop leveling once tickVillagers stops granting it for them
+// (gameStore.ts's own workSignal-active skip, added alongside this). The
+// Might/Craft/Wit trip-bonus rolls tickVillagers still has are deliberately
+// NOT ported here — see ROADMAP.md.
 import { useGameStore } from '@/game/store/gameStore';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
@@ -28,7 +33,7 @@ const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRad
 // tick, so the clip would never render even one frame
 const PERFORM_HOLD = 0.6;
 // flipped true in 5.8b — see this file's own header
-const CARRYING_ENABLED = false;
+const CARRYING_ENABLED = true;
 
 class HaulToDepositActivity implements Activity {
   private phase: 'travel' | 'align' | 'perform' = 'travel';
@@ -88,6 +93,9 @@ class HaulToDepositActivity implements Activity {
       // §3.5/§4: transfer via addItems(), never a direct inventory write —
       // addItems also feeds lifetime stats, mastery and deeds
       useGameStore.getState().addItems({ [agent.bb.carrying.resource]: agent.bb.carrying.amount }, 'gather');
+      // one completed haul stands in for tickVillagers' own "one completed
+      // trip" for trade-mastery purposes — see this file's own header
+      useGameStore.getState().awardTradeXp(agent.id, 10);
     }
     agent.bb.carrying = null;
     return this.finish(agent, 'SUCCESS');
