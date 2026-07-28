@@ -17,7 +17,7 @@ class FleeToSafetyActivity implements Activity {
     agent.intent = { type: 'MOVE_TO', position: { x: HOME_X, z: HOME_Z }, speed: 'run', stopDistance: STOP_DISTANCE };
   }
 
-  update(_agent: Agent, _dt: number): ActivityStatus {
+  update(_agent: Agent, _dt: number, _now: number): ActivityStatus {
     // Stays RUNNING for as long as it keeps winning — this Activity does
     // not decide "the raid is over," the reasoner does: `raid_active`
     // below gates the action's own score to 0 the instant the raid ends,

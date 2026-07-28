@@ -21,7 +21,7 @@ class SleepActivity implements Activity {
     agent.intent = { type: 'MOVE_TO', position: spot, speed: 'walk', stopDistance: STOP_DISTANCE };
   }
 
-  update(_agent: Agent, _dt: number): ActivityStatus {
+  update(_agent: Agent, _dt: number, _now: number): ActivityStatus {
     // Same reasoning as FleeToSafetyActivity: stays RUNNING for as long as
     // it keeps winning. `is_night` gates the action's own score to 0 at
     // dawn, and pickAction's gated-running-action rule (5.6) means

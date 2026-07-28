@@ -34,6 +34,9 @@ const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRad
 const PERFORM_HOLD = 0.6;
 // flipped true in 5.8b — see this file's own header
 const CARRYING_ENABLED = true;
+// same reasoning and value as gather.ts's own BLOCKED_RETRY_COOLDOWN — see
+// bb.blockedTargets' own comment in Blackboard.ts for the full story
+const BLOCKED_RETRY_COOLDOWN = 15;
 
 class HaulToDepositActivity implements Activity {
   private phase: 'travel' | 'align' | 'perform' = 'travel';
@@ -56,7 +59,7 @@ class HaulToDepositActivity implements Activity {
     agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
-  update(agent: Agent, dt: number): ActivityStatus {
+  update(agent: Agent, dt: number, now: number): ActivityStatus {
     if (!this.targetId) return 'FAILURE';
     if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
     const target = targetRegistry.get(this.targetId);
@@ -66,7 +69,10 @@ class HaulToDepositActivity implements Activity {
       // same staleness reasoning as GatherAtNode's own 'travel' phase — see
       // that Activity's comment
       if (!this.travelStepped) { this.travelStepped = true; return 'RUNNING'; }
-      if (agent.bb.movement.status === 'blocked') return this.finish(agent, 'FAILURE');
+      if (agent.bb.movement.status === 'blocked') {
+        agent.bb.blockedTargets.set(this.targetId, now + BLOCKED_RETRY_COOLDOWN);
+        return this.finish(agent, 'FAILURE');
+      }
       if (agent.bb.movement.status === 'arrived') {
         this.phase = 'align';
         agent.intent = { type: 'FACE', target: { x: target.x, z: target.z } };
@@ -151,7 +157,15 @@ export const HAUL_TO_DEPOSIT: Action = {
   considerations: [
     { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: boolCurve },
     { name: 'load_fraction', input: (agent) => loadFraction(agent), curve: loadFractionCurve },
-    { name: 'target_usable', input: (_agent, ctx) => (ctx.target?.available ? 1 : 0), curve: boolCurve },
+    {
+      name: 'target_usable',
+      input: (agent, ctx) => {
+        if (!ctx.target?.available) return 0;
+        const blockedUntil = agent.bb.blockedTargets.get(ctx.target.id);
+        return blockedUntil !== undefined && blockedUntil > ctx.now ? 0 : 1;
+      },
+      curve: boolCurve,
+    },
     { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
     { name: 'proximity', input: (agent, ctx) => proximityInput(agent, ctx), curve: proximityCurve },
   ],
