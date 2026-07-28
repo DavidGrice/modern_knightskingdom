@@ -3,19 +3,26 @@
     "NPC_AI_SPEC §3.2 / §12 — drive decay rates, per need, per need-profile.",
     "Every need is a SATISFACTION level in 0..1: 1 = fully satisfied, 0 = desperate.",
     "They all decay DOWNWARD, so a consideration reads urgency as (1 - need).",
-    "bladder 1 = empty, 0 = bursting. energy 1 = rested. hygiene 1 = clean.",
-    "decayPerSec is in GAME seconds (agentManager.now), and a full day is",
-    "worldEnv.dayLength = 720s — so 0.0014/s empties a need in about one day.",
+    "safety 1 = at ease, 0 = afraid. purpose 1 = fulfilled, 0 = idle/useless.",
+    "energy 1 = rested. decayPerSec is in GAME seconds (agentManager.now),",
+    "and a full day is worldEnv.dayLength = 720s — so 0.0014/s empties a",
+    "need in about one day.",
     "start is the value a freshly spawned agent begins at.",
     "An archetype profile lists only the needs it overrides; the rest fall",
-    "through to defaults."
+    "through to defaults.",
+    "Reworked 2026-07-27 (see config/index.ts's NEED_IDS comment): safety",
+    "and purpose replaced hygiene/bladder, fun was renamed morale. Numbers",
+    "kept from their old slot where the flavor still fits; guard/companion",
+    "overrides extended to the two new needs rather than left at defaults,",
+    "since 'a hardened professional tolerates everything except what their",
+    "job directly demands' was already the shape of the guard profile."
   ],
   "defaults": {
     "energy": { "decayPerSec": 0.00085, "start": 0.85 },
-    "hygiene": { "decayPerSec": 0.00055, "start": 0.8 },
-    "bladder": { "decayPerSec": 0.0022, "start": 0.9 },
+    "safety": { "decayPerSec": 0.00055, "start": 0.8 },
+    "purpose": { "decayPerSec": 0.0018, "start": 0.85 },
     "hunger": { "decayPerSec": 0.0016, "start": 0.75 },
-    "fun": { "decayPerSec": 0.0012, "start": 0.6 },
+    "morale": { "decayPerSec": 0.0012, "start": 0.6 },
     "social": { "decayPerSec": 0.001, "start": 0.6 },
     "comfort": { "decayPerSec": 0.0008, "start": 0.7 }
   },
@@ -23,12 +30,14 @@
     "villager": {},
     "guard": {
       "energy": { "decayPerSec": 0.0007 },
-      "fun": { "decayPerSec": 0.0008 },
+      "safety": { "decayPerSec": 0.00035 },
+      "purpose": { "decayPerSec": 0.0012 },
+      "morale": { "decayPerSec": 0.0008 },
       "comfort": { "decayPerSec": 0.0005 }
     },
     "companion": {
       "social": { "decayPerSec": 0.0016, "start": 0.75 },
-      "fun": { "decayPerSec": 0.0015 }
+      "morale": { "decayPerSec": 0.0015 }
     }
   }
 }

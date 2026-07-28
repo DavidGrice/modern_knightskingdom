@@ -11,9 +11,19 @@ import needsJson from './needs.json';
 import archetypesJson from './archetypes.json';
 import lodJson from './lod.json';
 
-/** §3.2 — the seven drives. Order here is the order the overlay prints them. */
+/** §3.2 — the seven drives. Order here is the order the overlay prints them.
+ *  Reworked 2026-07-27: the original set (energy/hygiene/bladder/hunger/
+ *  fun/social/comfort) was The Sims' seven motives lifted wholesale, with
+ *  worked examples (bathtub, toilet, bookshelf) that have no object in this
+ *  game. `safety` and `purpose` replace hygiene/bladder — safety gives the
+ *  existing guard intrinsic actions (engage_threat/take_cover/flee, see
+ *  archetypes.json) a need to actually drive their utility score once phase
+ *  5 wires it up; purpose ties to the JOBS system (lumberjack/miner/farmer/
+ *  merchant/defender/builder, see game/data/villagers.ts) instead of a
+ *  bodily function with no in-game object. `fun` is renamed `morale` —
+ *  same slot, a label that fits a homestead instead of a dollhouse. */
 export const NEED_IDS = [
-  'energy', 'hygiene', 'bladder', 'hunger', 'fun', 'social', 'comfort',
+  'energy', 'safety', 'purpose', 'hunger', 'morale', 'social', 'comfort',
 ] as const;
 export type NeedId = (typeof NEED_IDS)[number];
 

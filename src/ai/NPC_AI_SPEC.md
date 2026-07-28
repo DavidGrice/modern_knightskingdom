@@ -119,7 +119,7 @@ Per-agent. Plain object, no getters/setters, no reactivity.
   id: string,
 
   // Drives — 0..1, decay per second, tuned in config
-  needs: { energy, hygiene, bladder, hunger, fun, social, comfort },
+  needs: { energy, safety, purpose, hunger, morale, social, comfort },
 
   // Perception output
   beliefs: Map<entityId, Belief>,
@@ -172,9 +172,9 @@ This is where the Blender library becomes AI content. Adding a behavior means ad
 Each asset already sits under a named root empty. Extend that:
 
 ```
-BATHTUB_01                 (root empty — becomes SmartObject.id)
-  ├── mesh_tub
-  ├── mesh_faucet
+FORGE_01                    (root empty — becomes SmartObject.id)
+  ├── mesh_anvil
+  ├── mesh_bellows
   └── ANCHOR_use            (empty; +Z = facing direction the NPC should adopt)
 
 BED_ADULT_01
@@ -182,9 +182,9 @@ BED_ADULT_01
   ├── ANCHOR_sleep_L
   └── ANCHOR_sleep_R        (two slots)
 
-BOOKSHELF_01
-  ├── mesh_shelf
-  └── ANCHOR_browse
+CAMPFIRE_01
+  ├── mesh_fire
+  └── ANCHOR_gather
 ```
 
 On glTF import, walk the scene graph, find nodes matching `/^ANCHOR_/`, and resolve them with `getObjectByName`. Store world position + quaternion at registration time; re-resolve only if the object moves.
@@ -197,29 +197,29 @@ Authored as JSON, one file per object type, loaded at startup.
 
 ```js
 {
-  "type": "bathtub",
-  "rootPrefix": "BATHTUB",
+  "type": "forge",
+  "rootPrefix": "FORGE",
   "affordances": [
     {
-      "id": "bathe",
+      "id": "smith",
       "anchor": "ANCHOR_use",
-      "anim": "bathe_loop",
+      "anim": "smith_loop",
       "duration": 40,
       "slots": 1,
-      "tags": ["hygiene", "private", "indoor"],
+      "tags": ["purpose", "work", "outdoor"],
       "preconditions": ["!reserved", "!threatNearby"],
-      "effects": { "hygiene": +0.6, "comfort": +0.2, "energy": -0.05 },
+      "effects": { "purpose": +0.6, "energy": -0.1 },
       "baseWeight": 1.0
     }
   ]
 }
 ```
 
-`effects` are **advertised, not guaranteed** — the registry publishes them, the reasoner weights them against the agent's current needs (§5.4). This is the Sims/SimAnt advertising model and it's the whole reason the system scales without code changes.
+`effects` are **advertised, not guaranteed** — the registry publishes them, the reasoner weights them against the agent's current needs (§5.4). This is the Sims/SimAnt advertising model (see Mark Brown's breakdown of it, §11) and it's the whole reason the system scales without code changes — the model, not the game content, is what's borrowed.
 
 ### 4.3 Reservations
 
-Two NPCs must not bathe in the same tub.
+Two NPCs must not share the same forge slot.
 
 ```js
 registry.reserve(objectId, affordanceId, agentId) -> boolean
@@ -250,8 +250,8 @@ A consideration is one normalized input passed through a response curve.
 
 ```js
 {
-  name: 'hygiene_need',
-  input: (agent, ctx) => 1 - agent.needs.hygiene,   // MUST return 0..1
+  name: 'purpose_need',
+  input: (agent, ctx) => 1 - agent.needs.purpose,   // MUST return 0..1
   curve: { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 }
 }
 ```
@@ -272,7 +272,7 @@ bool:      y = x > 0.5 ? 1 : 0
 ```
 
 Curve authoring guidance to bake into the config comments:
-- **Needs → quadratic with k=2, m=1**: mild need barely registers, urgent need dominates. This is what makes bladder beat reading a book.
+- **Needs → quadratic with k=2, m=1**: mild need barely registers, urgent need dominates. This is what makes an empty safety need override idle wandering once a threat closes in.
 - **Distance → linear with m=-1, b=1** over a normalized max range: closer is better, linearly.
 - **Threat → logistic**: a sharp switch, so combat cleanly overrides domestic behavior instead of fading in.
 - **Availability / preconditions → bool**: hard gate, multiplies to zero.
@@ -319,7 +319,7 @@ Weights multiply the final score. Tune these last, after curves are right.
 An uncommitted utility system flip-flops every tick and the NPC vibrates between two actions. Three mechanisms, all required:
 
 1. **Momentum bonus** — the currently-running action gets `score *= 1.25` while it's running.
-2. **Minimum duration** — an action declares `minDuration`; below that it cannot be replaced except by a higher-`interruptPriority` category. Combat interrupts bathing. Wandering does not.
+2. **Minimum duration** — an action declares `minDuration`; below that it cannot be replaced except by a higher-`interruptPriority` category. Combat interrupts smithing. Wandering does not.
 3. **Cooldowns** — on completion, write `cooldowns.set(actionId, now + cooldown)`. A cooling-down action scores zero.
 
 Also: **switch threshold.** Only replace the current action if `newScore > currentScore * 1.15`.
@@ -437,14 +437,14 @@ Implementation: a round-robin queue with a per-frame budget of **3 thinks max**.
 **DOM panel** (top-right, toggled with `~`), for the selected agent:
 
 ```
-AGENT: npc_02          TIER: A     ACTION: use_bathtub (12.4s / 40s)
-NEEDS  energy .72  hygiene .18  bladder .61  fun .44  social .30
+AGENT: npc_02          TIER: A     ACTION: smith_forge (12.4s / 40s)
+NEEDS  energy .72  safety .18  purpose .61  morale .44  social .30
 THREAT 0.02
 
 SCORED ACTIONS
-  0.812  use_bathtub        [hygiene .82→.67] [dist .91→.91] [avail 1→1]
-  0.544  use_toilet         [bladder .61→.37] [dist .88→.88] [avail 1→1]
-  0.310  browse_bookshelf   [fun .56→.31] [dist .74→.74] [avail 1→1]
+  0.812  smith_forge        [purpose .82→.67] [dist .91→.91] [avail 1→1]
+  0.544  warm_at_campfire   [morale .61→.37] [dist .88→.88] [avail 1→1]
+  0.310  chat_at_market     [social .56→.31] [dist .74→.74] [avail 1→1]
   0.000  engage_threat      [threat .02→.00] ← GATED
 ```
 
@@ -474,7 +474,7 @@ Show input **and** post-curve output per consideration. Without that you cannot 
 
 Not built now. Two cheap design choices keep the door open:
 
-1. **Beliefs and completed activities append to a `memoryStream`** — timestamped records with a natural-language `summary` string generated by a template (`"bathed at 14:20"`, `"saw player in the hallway"`). Ring buffer, cap 200 per agent.
+1. **Beliefs and completed activities append to a `memoryStream`** — timestamped records with a natural-language `summary` string generated by a template (`"smithed at 14:20"`, `"saw player in the hallway"`). Ring buffer, cap 200 per agent.
 2. **Retrieval interface stub.** `agent.recall(query, k)` returning top-k. For now, score by recency alone. Later, swap to the Generative Agents formulation — normalized recency (exponential decay) + importance + embedding relevance, summed. Keep k in the 3–5 range; more than 10 doesn't help.
 
 The LLM must only ever produce **dialogue and flavor**, never movement or action selection. The utility reasoner stays authoritative.
