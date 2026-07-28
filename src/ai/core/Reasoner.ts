@@ -54,6 +54,12 @@ export interface Action {
   cooldown: number;
   considerations: Consideration[];
   targetKinds?: string[];
+  /** §5.6 — the real behavior this action runs when it wins. Optional:
+   *  5.1–5.5's synthetic verification actions never needed one (only
+   *  scoring/assembly/commitment were under test), but every real action
+   *  from 5.6 on has one. Absent means winning does nothing beyond
+   *  recording `bb.currentActionId` — a deliberate no-op, not an error. */
+  createActivity?: () => Activity;
 }
 
 /** §5.2 — the IAUS compensation factor: without it, an action with more
@@ -120,6 +126,12 @@ const SWITCH_THRESHOLD = 1.15;
 export interface Candidate {
   action: Action;
   scored: ScoredAction;
+  /** The exact Context this candidate was scored against — carries the
+   *  bound `target` (§5.4's per-target expansion) through to `Activity.
+   *  start()` when this candidate wins. `ScoredAction` alone can't carry
+   *  this (it's a plain id/score/considerations summary, phase 1's own
+   *  shape, unchanged since — deliberately not widened just for this). */
+  ctx: Context;
 }
 
 /** §5.3/§5.6 (NPC_AI_SPEC) — the full commitment decision: which candidate
@@ -150,10 +162,26 @@ export function pickAction(candidates: Candidate[], agent: Agent, now: number): 
   const eligible = candidates.map((c) => {
     const readyAt = bb.cooldowns.get(c.action.id);
     if (readyAt !== undefined && readyAt > now) {
-      return { action: c.action, scored: { ...c.scored, score: 0 } };
+      return { action: c.action, scored: { ...c.scored, score: 0 }, ctx: c.ctx };
     }
     return c;
   });
+  // A zero (gated, cooling down, or genuinely undesired) score must never
+  // win, however it arose — a cold start where every candidate ties at
+  // zero (the fallback `!best` in the reduce below would otherwise just
+  // take whichever came first in the array), or a running action that
+  // just got gated with nothing positive-scoring around to replace it
+  // (found live wiring up 5.6's real content: without this, flee_to_safety
+  // kept "running" — Activity.update() still called every tick — long
+  // after the raid it was fleeing from had already ended, because nothing
+  // else had a positive score to beat its now-zero one with). `pickAction`
+  // finding no acceptable candidate is a real, expected outcome, not an
+  // edge case to special-case away.
+  const result = pickRaw(eligible, bb, now);
+  return result && result.scored.score > 0 ? result : null;
+}
+
+function pickRaw(eligible: Candidate[], bb: Blackboard, now: number): Candidate | null {
   if (eligible.length === 0) return null;
 
   const runningId = bb.currentActionId;
@@ -168,8 +196,16 @@ export function pickAction(candidates: Candidate[], agent: Agent, now: number): 
 
   const boostedScore = running.scored.score * MOMENTUM;
   const elapsed = now - bb.currentActionStartedAt;
-  const protectedByMinDuration = elapsed < running.action.minDuration;
-  const runningAsBest: Candidate = { action: running.action, scored: { ...running.scored, score: boostedScore } };
+  // A running action whose OWN fresh candidate this tick is hard-gated
+  // (its precondition just became false — e.g. flee_to_safety's raid
+  // ended, 5.6) is not "committed to, temporarily scoring low" — it is
+  // genuinely invalid right now, and minDuration exists to protect a good
+  // choice from a marginally-better distraction, not to keep running
+  // something that can no longer run at all. Found wiring up real content
+  // in 5.6; nothing in 5.1-5.5's synthetic verification ever hit this path
+  // since none of those test actions were ever gated while running.
+  const protectedByMinDuration = !running.scored.gated && elapsed < running.action.minDuration;
+  const runningAsBest: Candidate = { action: running.action, scored: { ...running.scored, score: boostedScore }, ctx: running.ctx };
 
   if (protectedByMinDuration) {
     // An interrupt override is absolute, not a score contest against the
@@ -258,51 +294,121 @@ export function assembleCandidates(
         agent.position.x, agent.position.z, queryRadius, action.targetKinds, agent.region,
       );
       for (const target of targets) {
-        out.push({ action, scored: scoreAction(action, agent, { target, now }) });
+        const ctx: Context = { target, now };
+        out.push({ action, scored: scoreAction(action, agent, ctx), ctx });
       }
     } else {
-      out.push({ action, scored: scoreAction(action, agent, { target: null, now }) });
+      const ctx: Context = { target: null, now };
+      out.push({ action, scored: scoreAction(action, agent, ctx), ctx });
     }
   }
   return out;
 }
 
-// --- 5.5: the full per-tick loop --------------------------------------------
+// --- 5.5/5.6: the full per-tick loop, now with real Activity lifecycle -----
 
-/** §5.0/§5.5 — the real per-think-tick entry point: assemble this tick's
- *  candidates, score them, and let commitment decide the winner. Writes
- *  `bb.lastScores` (§9's overlay already renders this — built in phase 1,
- *  waiting ever since for something to populate it) and updates
- *  `bb.currentActionId`/`currentActionStartedAt` when the winner actually
- *  changes. Deliberately does NOT touch `agent.currentActivity` or call
- *  `start`/`abort` on anything — no real Activity exists yet (5.6 is the
- *  first real constructor), so that lifecycle stays out of scope here,
- *  matching this iteration's own stated bar: scoring, compensation,
- *  momentum and the switch threshold, nothing about running behavior yet.
+/** §5.0/§5.5/§5.6 — the real per-think-tick entry point: assemble this
+ *  tick's candidates, score them, let commitment decide the winner, and
+ *  run its Activity. Writes `bb.lastScores` (§9's overlay already renders
+ *  this — built in phase 1, waiting ever since for something to populate
+ *  it) and `bb.currentActionId`/`currentActionStartedAt`.
+ *
+ *  Activity lifecycle (new in 5.6 — 5.5 deliberately left this out, no
+ *  real Activity existed yet to orchestrate):
+ *  - No winner at all (every candidate gated/cooling, or the candidate
+ *    list is empty): abort whatever was running, if anything, and clear
+ *    both `currentActivity` and `currentActionId`.
+ *  - Winner changed from what was running: abort the old Activity (if
+ *    any), construct and `start()` the new one via `action.
+ *    createActivity()` (absent means a real no-op — the action "wins" but
+ *    nothing happens beyond bookkeeping, same as every 5.1-5.5 synthetic
+ *    test action).
+ *  - Every tick the same Activity keeps winning: call its `update(agent,
+ *    dt)`. `SUCCESS`/`FAILURE` ends it — clears `currentActivity`/
+ *    `currentActionId` and starts its cooldown (`action.cooldown`,
+ *    `startCooldown`) so it doesn't win again immediately; `RUNNING` does
+ *    nothing further this tick.
  *
  *  `actions` is passed in, same reasoning as `assembleCandidates` — this
  *  function has no content-authoring opinions of its own. `Agent.think()`
- *  calls this with the real, permanent registry (`src/ai/actions`,
- *  currently empty until 5.6/5.7 populate it — an empty list makes this
- *  entirely inert for every real agent today, the same "safe until content
- *  exists" shape as every other phase-3/4/5 hook). */
-export function runReasoner(agent: Agent, actions: Action[], now: number): void {
+ *  calls this with the real, permanent registry (`src/ai/actions`) and its
+ *  own `elapsed` as `dt`. */
+export function runReasoner(agent: Agent, actions: Action[], now: number, dt: number): void {
   const candidates = assembleCandidates(actions, agent, now);
   agent.bb.lastScores = candidates.map((c) => c.scored);
   const winner = pickAction(candidates, agent, now);
+
   if (!winner) {
+    if (agent.currentActivity) {
+      agent.currentActivity.abort(agent);
+      agent.currentActivity = null;
+    }
     agent.bb.currentActionId = null;
     return;
   }
+
   if (winner.action.id !== agent.bb.currentActionId) {
+    if (agent.currentActivity) agent.currentActivity.abort(agent);
     agent.bb.currentActionId = winner.action.id;
     agent.bb.currentActionStartedAt = now;
+    agent.currentActivity = winner.action.createActivity?.() ?? null;
+    agent.currentActivity?.start(agent, winner.ctx);
   }
+
+  if (agent.currentActivity) {
+    const status = agent.currentActivity.update(agent, dt);
+    if (status === 'SUCCESS' || status === 'FAILURE') {
+      startCooldown(agent.bb, winner.action.id, winner.action.cooldown, now);
+      agent.currentActivity = null;
+      agent.bb.currentActionId = null;
+    }
+  }
+}
+
+// --- 5.6: the real registry, reached WITHOUT Agent.ts ever importing
+// src/ai/actions directly --------------------------------------------------
+
+let registeredActions: Action[] = [];
+
+/** §5.6 — how real content reaches `Agent.think()` without `Agent.ts`
+ *  itself ever statically importing `src/ai/actions`. That seems like an
+ *  odd thing to avoid, and it would have been fine as a plain `import {
+ *  ACTIONS } from '../actions'` — except it genuinely broke the app the
+ *  first time it was tried, with a real `Cannot access 'useGameStore'
+ *  before initialization` error, not a hypothetical one. Root cause:
+ *  `Agent.ts` already sits deep in a cycle `gameStore.ts` itself is part
+ *  of (via `rosterSync.ts`/`npcSync.ts` → `AgentManager.ts` → `Agent.ts`,
+ *  already safe — confirmed by a real production build back in 4.1,
+ *  confined to a function body). Once `flee.ts`/`sleep.ts` (5.6's first
+ *  real actions) needed `useGameStore`/`useEnemyStore`/`worldEnv` of their
+ *  own, importing them via `Agent.ts → actions/index.ts → flee.ts →
+ *  gameStore.ts` added a SECOND, independent edge into that same cycle —
+ *  and two edges into one target from a module already this deep in a
+ *  cycle was what actually broke module evaluation order, not the mere
+ *  existence of a cycle (5.1-5.5 each added their own without incident).
+ *
+ *  Fixed by moving the registry OUT of Agent.ts's own import graph
+ *  entirely: `actions/index.ts` calls `registerActions()` at its own
+ *  module load, reached via a side-effect import from `AiRuntime.tsx`
+ *  (the same pattern `AnchorResolution.ts` and this file's own §5.2
+ *  addition already use) — a leaf consumer nothing else imports back, so
+ *  it can safely sit downstream of `gameStore.ts` without closing any
+ *  loop through `Agent.ts` at all. `Agent.think()` calls `tickReasoner`
+ *  below, never touching `src/ai/actions` directly. */
+export function registerActions(actions: Action[]): void {
+  registeredActions = actions;
+}
+
+/** The real per-think-tick call `Agent.think()` makes — `runReasoner`
+ *  against whatever `registerActions()` last set, defaulting to `[]`
+ *  (fully inert) until `src/ai/actions` has loaded and registered itself. */
+export function tickReasoner(agent: Agent, now: number, dt: number): void {
+  runReasoner(agent, registeredActions, now, dt);
 }
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkreason = {
     scoreAction, pickAction, startCooldown, assembleCandidates, runReasoner,
-    CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
+    registerActions, tickReasoner, CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
   };
 }

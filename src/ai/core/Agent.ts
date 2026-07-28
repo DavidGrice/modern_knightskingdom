@@ -20,8 +20,7 @@ import {
 } from '../config';
 import { createBlackboard, type Blackboard } from './Blackboard';
 import type { TargetId } from './TargetRegistry';
-import { runReasoner, type Activity } from './Reasoner';
-import { ACTIONS } from '../actions';
+import { tickReasoner, type Activity } from './Reasoner';
 // AgentManager.ts imports Agent (this file) at its own top level to
 // construct instances in spawn() — a real cycle, referenced here only
 // inside the `intent` setter body below, never at this module's own
@@ -203,13 +202,13 @@ export class Agent {
     }
 
     // phase 6: this.senses.update(now)
-    // §5.0/§5.5 — assembles, scores and picks a winner from the real action
-    // registry (src/ai/actions, empty until 5.6/5.7 register real content),
-    // writing bb.lastScores/currentActionId. Fully inert today: an empty
-    // registry means every agent's assembled candidate list is always
-    // empty, so this changes nothing about current behavior — Activity
-    // start/abort orchestration is deliberately still out of scope (5.6).
-    runReasoner(this, ACTIONS, now);
+    // §5.0/§5.5/§5.6 — assembles, scores, picks a winner from whatever
+    // real content has registered itself (src/ai/actions, reached via
+    // registerActions() — deliberately NOT a direct import here, see
+    // tickReasoner's own comment in Reasoner.ts for the real cycle this
+    // avoids), and runs its Activity. `elapsed` (already computed above)
+    // is the same dt every other per-tick system in this method uses.
+    tickReasoner(this, now, elapsed);
 
     // rolling think-rate measurement for the overlay
     this.hzCount++;

@@ -1,4 +1,7 @@
-import type { DefenderLoadout, ItemId, VillagerJob } from '../types';
+import type { DefenderLoadout, ItemId, PlacedBuilding, Villager, VillagerJob } from '../types';
+import { isBuilt, isHomeBuilding } from '../types';
+import { BUILD_REGION } from './buildables';
+import { hashId } from './villagerLooks';
 
 // Villager recruitment: once your homestead has enough beds and buildings,
 // generic villagers (the extraction's unnamed good/bad minifig variants)
@@ -27,6 +30,42 @@ export function isWorkingHours(time: number): boolean {
 // which is exactly why it can't just reuse isWorkingHours' inverted range.
 export function isWatchHours(time: number): boolean {
   return time >= WORK_END || time <= WORK_START;
+}
+
+// Phase 5, iteration 5.6 — extracted from Villagers.tsx's own raid-flee/
+// night-bed-seek cascade branches so the reasoner's flee_to_safety/sleep
+// Activities (src/ai/actions) can call the SAME target-selection logic
+// rather than reinventing it (§5.6's own explicit instruction). Villagers.
+// tsx's copies are deleted once both route through the reasoner — this is
+// the one remaining source, not a duplicate.
+export const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
+export const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
+
+/** A villager's own fixed home spot, deterministic from their id — the
+ *  exact derivation Villagers.tsx's VillagerFigure already used for its
+ *  own `home` (a ring around HOME_X/HOME_Z, radius/angle from hashId). */
+export function villagerHomeSpot(id: string): { x: number; z: number } {
+  const h = hashId(id);
+  const angle = (h % 360) * (Math.PI / 180);
+  return {
+    x: HOME_X + Math.cos(angle) * (6 + (h % 5)),
+    z: HOME_Z + Math.sin(angle) * (6 + (h % 5)),
+  };
+}
+
+/** Which bed (if any) this villager has claimed for the night, by stable
+ *  rank among non-defender roster villagers — one sleeper per bed, never
+ *  "everyone seeks the nearest bed" (the Phase 22 fix this preserves
+ *  verbatim). Falls back to the villager's own home spot when they have no
+ *  bed of their own, including before any beds exist at all. */
+export function assignedSleepSpot(
+  villagerId: string, villagers: Villager[], buildings: PlacedBuilding[],
+): { x: number; z: number } {
+  const beds = buildings.filter((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b));
+  const sleepers = villagers.filter((v) => v.job !== 'defender');
+  const rank = sleepers.findIndex((v) => v.id === villagerId);
+  const bed = rank >= 0 && rank < beds.length ? beds[rank] : null;
+  return bed ? { x: bed.x, z: bed.z } : villagerHomeSpot(villagerId);
 }
 
 export interface JobDef {
