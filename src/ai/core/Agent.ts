@@ -19,6 +19,21 @@ import {
   type Tier,
 } from '../config';
 import { createBlackboard, type Blackboard } from './Blackboard';
+import type { TargetId } from './TargetRegistry';
+
+/** NPC_AI_SPEC §3.1 / PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.1 — the
+ *  output crossing the decision→actuation boundary. Written by the
+ *  reasoner (phase 5), read by Locomotion/AnimationController (iteration
+ *  3.3+) — never the reverse. Does not belong on Blackboard: Blackboard is
+ *  belief/need state the reasoner scores AGAINST, Intent is what it
+ *  produces, a different thing. ATTACK is deferred — combat is out of
+ *  scope through phase 5 (§5.9). */
+export type Intent =
+  | { type: 'MOVE_TO'; position: { x: number; z: number }; speed: 'walk' | 'run'; stopDistance: number }
+  | { type: 'MOVE_TO_ANCHOR'; targetId: TargetId; anchorName: string; speed: 'walk' | 'run' }
+  | { type: 'PLAY_ANIM'; clip: string; loop: boolean; anchored: boolean }
+  | { type: 'FACE'; target: { x: number; z: number } }
+  | { type: 'IDLE' };
 
 export class Agent {
   readonly id: string;
@@ -34,6 +49,12 @@ export class Agent {
    *  destination id (see game/data/worlds.ts). §8's tier D is "different
    *  region". */
   region: string | null;
+
+  // --- actuation (phase 3), iteration 3.2 — a plain mutable field, same
+  // shape as position/yaw above: the reasoner (phase 5) writes it,
+  // Locomotion/AnimationController (3.3+) read it. null until something
+  // assigns one; every agent starts here.
+  intent: Intent | null = null;
 
   // --- LOD (§8), assigned by AgentManager ---
   tier: Tier = 'A';
