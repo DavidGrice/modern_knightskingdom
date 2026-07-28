@@ -17,6 +17,24 @@ const _viewProj = new THREE.Matrix4();
 const _frustum = new THREE.Frustum();
 const _sphere = new THREE.Sphere();
 
+/** Phase 2, iteration 2.7 — the active region's nav-window bound, for
+ *  Tier B's §8 correction ("window edge" only applies to windowed regions;
+ *  fixed regions like home/the Crypt stay unbounded). Deliberately a plain
+ *  data shape, not a `NavGrid` import: `AgentManager` sits under `ai/core`
+ *  and `game/navgrid.ts` transitively imports `game/store/gameStore.ts`
+ *  (via `TemplateWorld.tsx`), which already imports `agentManager` — an
+ *  `AgentManager -> navgrid -> ... -> gameStore -> AgentManager` cycle, not
+ *  hypothetical, confirmed via the real import edges. `AiRuntime.tsx`
+ *  already talks to both `getNavGrid` and `agentManager` every frame, so it
+ *  computes this and passes it in, keeping AgentManager itself free of any
+ *  navigation-module dependency. */
+export interface WindowBounds { originX: number; originZ: number; halfExtent: number }
+
+function inWindowBounds(p: THREE.Vector3, b: WindowBounds): boolean {
+  return p.x > b.originX - b.halfExtent && p.x < b.originX + b.halfExtent
+    && p.z > b.originZ - b.halfExtent && p.z < b.originZ + b.halfExtent;
+}
+
 export class AgentManager {
   readonly agents: Agent[] = [];
   private readonly byId = new Map<string, Agent>();
@@ -57,8 +75,10 @@ export class AgentManager {
   }
 
   /** Called once per frame from AiRuntime. Only the SCHEDULER runs at frame
-   *  rate; the thinks it dispatches are rate-limited per §8. */
-  update(dt: number, camera: THREE.Camera, activeRegion: string | null) {
+   *  rate; the thinks it dispatches are rate-limited per §8. `windowBounds`
+   *  is non-null only when `activeRegion` is a windowed (destination) grid —
+   *  null for home/the Crypt (fixed, unbounded) and for `null` region. */
+  update(dt: number, camera: THREE.Camera, activeRegion: string | null, windowBounds: WindowBounds | null = null) {
     // same clamp the rest of the project uses, so one long frame cannot jump
     // every need and cooldown forward by seconds at once
     if (dt > 0.05) dt = 0.05;
@@ -69,7 +89,7 @@ export class AgentManager {
     const tierPeriod = 1 / LOD.tierRefreshHz;
     if (this.tierTimer >= tierPeriod) {
       this.tierTimer = 0;
-      this.refreshTiers(camera);
+      this.refreshTiers(camera, windowBounds);
     }
 
     this.scheduler.update(dt, this.now, this.agents);
@@ -78,7 +98,7 @@ export class AgentManager {
   /** §8's tier table. Deliberately cheap and deliberately NOT per frame — a
    *  tier is a coarse budget decision, and re-deciding it 60 times a second
    *  would cost more than the thinks it is trying to save. */
-  private refreshTiers(camera: THREE.Camera) {
+  private refreshTiers(camera: THREE.Camera, windowBounds: WindowBounds | null) {
     _viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_viewProj);
     const near2 = LOD.nearDistance * LOD.nearDistance;
@@ -86,8 +106,15 @@ export class AgentManager {
     for (let i = 0; i < this.agents.length; i++) {
       const a = this.agents[i];
       let tier: Tier;
+      a.boundCapped = false;
       if (a.region !== this.activeRegion) {
         tier = 'D';
+      } else if (windowBounds && !inWindowBounds(a.position, windowBounds)) {
+        // §8's correction: in a windowed region, past the nav grid's own
+        // covered bubble is Tier C regardless of frustum — the agent is
+        // standing outside the very grid its "full steering" depends on.
+        tier = 'C';
+        a.boundCapped = true;
       } else {
         // a sphere, not the feet point: an agent standing just below the
         // bottom of the frame is still visible from the waist up

@@ -12,7 +12,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
 import { getNavGrid } from '@/game/navgrid';
-import { agentManager } from './core/AgentManager';
+import { agentManager, type WindowBounds } from './core/AgentManager';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 
 /** Phase 1's one NPC: it ticks, decays its needs, and prints. Parked a few
@@ -52,16 +52,25 @@ export default function AiRuntime() {
     //
     // 'dungeon' is deliberately excluded: gameStore sets st.destination to
     // it when the player enters the Sealed Crypt (verified — see
-    // gameStore.ts's foundKeep-adjacent dungeon entry), and getNavGrid
-    // THROWS for that region on purpose (the Crypt's fixed grid is iteration
-    // 2.6's job, not window mode). Calling it unguarded here would crash
-    // this frame loop on every single frame spent in the dungeon. Caught by
-    // actually checking every real caller of st.destination before shipping
-    // this, not assumed.
+    // gameStore.ts's enterDungeon()), and the Crypt's grid is fixed-mode
+    // (iteration 2.6), not window mode — recentre() would just no-op there,
+    // but getNavGrid('dungeon') still throws if no layout has generated yet
+    // (dungeonState.layout null), so this call site skips it rather than
+    // risk that on a frame where destination flips before the layout does.
+    //
+    // Phase 2, iteration 2.7 — a windowed grid's current bounds are also
+    // read here and passed to agentManager.update() so Tier B can enforce
+    // §8's correction (the "window edge" ceiling only applies to windowed
+    // regions); null for a fixed region or when nothing is active.
+    let windowBounds: WindowBounds | null = null;
     if (st.destination && st.destination !== 'dungeon') {
-      getNavGrid(st.destination).recentre(playerState.x, playerState.z);
+      const grid = getNavGrid(st.destination);
+      grid.recentre(playerState.x, playerState.z);
+      if (grid.mode === 'window') {
+        windowBounds = { originX: grid.originX, originZ: grid.originZ, halfExtent: grid.halfExtent };
+      }
     }
-    agentManager.update(dt, camera, st.destination ?? null);
+    agentManager.update(dt, camera, st.destination ?? null, windowBounds);
   });
 
   return null;

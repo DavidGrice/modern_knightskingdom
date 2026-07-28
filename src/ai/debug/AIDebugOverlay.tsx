@@ -117,7 +117,8 @@ export default function AIDebugOverlay() {
       {agent && (
         <>
           <div className="ai-debug-row">
-            AGENT <b>{agent.id}</b> · TIER <b>{agent.tier}</b> · ACTION{' '}
+            AGENT <b>{agent.id}</b> · TIER <b>{agent.tier}</b>
+            {agent.boundCapped && <span className="ai-debug-dim"> (window edge)</span>} · ACTION{' '}
             <b>
               {agent.bb.currentActionId
                 ? `${agent.bb.currentActionId} (${(agentManager.now - agent.bb.currentActionStartedAt).toFixed(1)}s)`
