@@ -6,7 +6,6 @@ import { useMemo, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
-import { useEnemyStore } from '@/game/combat';
 import { worldEnv } from '@/game/env';
 import RiggedFigure from '../character/RiggedFigure';
 import { HeldHelmet, Chestplate, ResourceProp } from '../character/Equipment';
@@ -185,67 +184,20 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       return;
     }
 
-    // a raid in progress sends everyone scurrying home instead of obliviously
-    // wandering the danger zone — even this minimal reaction sells the stakes
-    // of an undefended homestead
-    if (useEnemyStore.getState().enemies.some((e) => e.raid)) {
-      const { nx, nz, dist: d } = navSteer(s, HOME_X, HOME_Z, dt);
-      if (d < 0.6) {
-        if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
-      } else {
-        const speed = 1.6; // fleeing, faster than the normal wander pace
-        s.x += nx * speed * dt;
-        s.z += nz * speed * dt;
-        const desired = Math.atan2(-nx, -nz);
-        let diff = desired - s.yaw;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        s.yaw += diff * Math.min(1, dt * 3);
-        if (clip !== 'anim_c_run') setClip('anim_c_run');
-      }
-      g.position.set(s.x, 0, s.z);
-      g.rotation.y = s.yaw + Math.PI;
-      mob.x = s.x;
-      mob.z = s.z;
-      return;
-    }
-
-    // day/night schedule (Phase 15, reworked Phase 22): at night each
-    // villager claims their OWN finished bed — one sleeper per bed by stable
-    // rank, never "everyone seeks the bed nearest home", which piled the
-    // whole village onto a single mattress. Anyone without a bed of their
-    // own (including before any beds are built at all) turns in at their
-    // home spot instead of joining the pile.
-    if (worldEnv.night > 0.6) {
-      const st = useGameStore.getState();
-      // homestead sleepers only ever claim a HOME bed — a bed built on a
-      // remote claimed plot belongs to that outpost, not the village roster
-      const beds = st.buildings.filter((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b));
-      const sleepers = st.villagers.filter((v) => v.job !== 'defender');
-      const rank = sleepers.findIndex((v) => v.id === villager.id);
-      const bed = rank >= 0 && rank < beds.length ? beds[rank] : null;
-      const bx = bed ? bed.x : home[0];
-      const bz = bed ? bed.z : home[1];
-      const { nx, nz, dist: d } = navSteer(s, bx, bz, dt);
-      if (d < 0.6) {
-        if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
-      } else {
-        const speed = 0.85;
-        s.x += nx * speed * dt;
-        s.z += nz * speed * dt;
-        const desired = Math.atan2(-nx, -nz);
-        let diff = desired - s.yaw;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        s.yaw += diff * Math.min(1, dt * 3);
-        if (clip !== 'anim_c_walk') setClip('anim_c_walk');
-      }
-      g.position.set(s.x, 0, s.z);
-      g.rotation.y = s.yaw + Math.PI;
-      mob.x = s.x;
-      mob.z = s.z;
-      return;
-    }
+    // Phase 5, iteration 5.6 — the raid-flee and night-bed-seek branches
+    // that used to live here are DELETED, not just superseded: both now
+    // route through the reasoner (src/ai/actions/flee.ts, sleep.ts),
+    // whose Activities emit the exact same MOVE_TO target this cascade
+    // used to compute inline (HOME_X/HOME_Z for flee, assignedSleepSpot's
+    // same rank-based bed assignment for sleep — both now live in
+    // game/data/villagers.ts, the single remaining copy). The MOVE_TO
+    // splice at the top of this cascade (3.3) already picks that intent up
+    // — every roster villager has a real Agent (rosterSync, 3.1) whose
+    // archetype's intrinsic list already includes both action ids (5.3),
+    // so there is no gap where a villager has neither the old cascade nor
+    // real reasoner-driven behavior. §5.6's own explicit instruction:
+    // leaving both the old and new paths running is the failure mode to
+    // avoid, not a safety net to keep.
 
     // Phase 24B — real labor: production villagers physically walk out to
     // their worksite, work it, and haul the goods home. The trip timer

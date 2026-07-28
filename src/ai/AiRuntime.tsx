@@ -22,6 +22,7 @@ import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
 // entry point for the whole AI system per this file's own header comment.
 import './core/AnchorResolution';
 import './core/Reasoner';
+import './actions';
 
 /** Phase 1's one NPC: it ticks, decays its needs, and prints. Parked a few
  *  metres forward-right of SPAWN (0, 26) so it starts inside the view frustum
