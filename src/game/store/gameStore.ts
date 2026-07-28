@@ -1570,8 +1570,19 @@ function createGameStore() {
     // — a quest-flavored, one-time recruitment instead. Once joined they
     // stop rendering as a standalone NpcDef (see Npc.tsx's filter) and
     // become an ordinary roster villager, managed from the Roster panel like
-    // any other recruit; their starting tradeXp reflects an already-
-    // established trade rather than a green newcomer's.
+    // any other recruit.
+    //
+    // Used to pre-assign job:'farmer'/'miner' with a tradeXp head start
+    // ("an already-established trade rather than a green newcomer's") — a
+    // real bug in practice, not just a design choice worth revisiting: a
+    // brand-new homestead usually has no farmplot built yet, and job:
+    // 'farmer' has no fallback worksite (`Villagers.tsx`'s own cascade), so
+    // Alric fell straight through to the generic wander loop and looked
+    // permanently broken — pre-employed on paper, aimlessly pacing in
+    // practice. They now join `idle`/unassigned with no tradeXp, exactly
+    // like every other newcomer from `checkVillagerArrival` — the player
+    // assigns a real job (with real infrastructure already in place) from
+    // the Roster panel same as anyone else.
     recruitVillageFolk: (npcId) => {
       const st = get();
       if (st.villagers.some((v) => v.id === npcId)) return; // already joined
@@ -1588,9 +1599,8 @@ function createGameStore() {
       }
       const inv = { ...st.inventory };
       for (const [id, n] of Object.entries(cost)) inv[id as ItemId] = (inv[id as ItemId] ?? 0) - (n as number);
-      const job: VillagerJob = isAlric ? 'farmer' : 'miner';
       const name = isAlric ? 'Alric' : 'Beda';
-      const villager: Villager = { id: npcId, name, job, tradeXp: { [job]: 120 } }; // a real head start, not a green recruit
+      const villager: Villager = { id: npcId, name, job: 'idle' };
       // They walk the road in like every other newcomer. This used to read
       // `const m = villagerMobs[npcId]; if (m) m.arriving = true;` on the
       // theory that they should set off from wherever they already stood —
@@ -1604,11 +1614,10 @@ function createGameStore() {
       set({
         inventory: inv,
         villagers: [...st.villagers, villager],
-        villagerProgress: { ...st.villagerProgress, [npcId]: JOB_BY_ID[job].tripSeconds },
         dirty: true,
       });
       audio.play('treasure', 0.7);
-      st.notify(`${name} joins your homestead as a ${JOB_BY_ID[job].label.toLowerCase()}!`, true);
+      st.notify(`${name} joins your homestead! Assign them a job from the Roster panel.`, true);
     },
 
     checkVillagerArrival: () => {
