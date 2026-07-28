@@ -40,6 +40,15 @@ export class Agent {
   thinkHz: number;
   perceiveHz: number;
   steering: 'full' | 'simplified' | 'teleport';
+  /** iteration 2.7 — true when the current tier was forced to C by a
+   *  windowed region's nav-window bound, distinct from "out of frustum" (the
+   *  other way to land on C). §9's debug overlay reads this alongside tier
+   *  so "why C" is visible without guessing; also the only reliable way to
+   *  test the bound in isolation from frustum/camera state (see
+   *  scripts/smoke140.mjs). Set on every refresh, not just tier changes —
+   *  setTier() itself no-ops when the tier doesn't change, but the REASON
+   *  can still be worth re-confirming. */
+  boundCapped = false;
 
   // --- scheduling (§8), owned by Scheduler ---
   /** seconds of game time banked toward the next think */
