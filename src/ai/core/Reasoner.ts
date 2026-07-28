@@ -267,8 +267,42 @@ export function assembleCandidates(
   return out;
 }
 
+// --- 5.5: the full per-tick loop --------------------------------------------
+
+/** §5.0/§5.5 — the real per-think-tick entry point: assemble this tick's
+ *  candidates, score them, and let commitment decide the winner. Writes
+ *  `bb.lastScores` (§9's overlay already renders this — built in phase 1,
+ *  waiting ever since for something to populate it) and updates
+ *  `bb.currentActionId`/`currentActionStartedAt` when the winner actually
+ *  changes. Deliberately does NOT touch `agent.currentActivity` or call
+ *  `start`/`abort` on anything — no real Activity exists yet (5.6 is the
+ *  first real constructor), so that lifecycle stays out of scope here,
+ *  matching this iteration's own stated bar: scoring, compensation,
+ *  momentum and the switch threshold, nothing about running behavior yet.
+ *
+ *  `actions` is passed in, same reasoning as `assembleCandidates` — this
+ *  function has no content-authoring opinions of its own. `Agent.think()`
+ *  calls this with the real, permanent registry (`src/ai/actions`,
+ *  currently empty until 5.6/5.7 populate it — an empty list makes this
+ *  entirely inert for every real agent today, the same "safe until content
+ *  exists" shape as every other phase-3/4/5 hook). */
+export function runReasoner(agent: Agent, actions: Action[], now: number): void {
+  const candidates = assembleCandidates(actions, agent, now);
+  agent.bb.lastScores = candidates.map((c) => c.scored);
+  const winner = pickAction(candidates, agent, now);
+  if (!winner) {
+    agent.bb.currentActionId = null;
+    return;
+  }
+  if (winner.action.id !== agent.bb.currentActionId) {
+    agent.bb.currentActionId = winner.action.id;
+    agent.bb.currentActionStartedAt = now;
+  }
+}
+
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkreason = {
-    scoreAction, pickAction, startCooldown, assembleCandidates, CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
+    scoreAction, pickAction, startCooldown, assembleCandidates, runReasoner,
+    CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
   };
 }
