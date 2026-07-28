@@ -9,6 +9,7 @@ import { GROUNDS, groundAt } from '../data/grounds';
 import { ROAD_HALF_WIDTH, ROAD_TILE, roadEntry, routeCells } from '../data/road';
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
 import { arriveByRoad, villagerMobs } from '../villagerMobs';
+import { npcMobs } from '../npcMobs';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, type KeepState } from '../data/keep';
 import { brickLabel } from '../data/brickResources';
 import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
@@ -1611,6 +1612,20 @@ function createGameStore() {
       // arriveByRoad creates the entry as well as setting the flag.
       const entry = roadEntry();
       arriveByRoad(npcId, entry.x, entry.z);
+      // Npc.tsx's CourtNpc registers into `npcMobs` on mount but never
+      // cleans up on unmount (same gap villagerMobs's own comment above
+      // already found and fixed for arrival) — once `villagers` excludes
+      // this id, Npc.tsx stops rendering him and PlayerController's own
+      // interact check already skips him too, but `npcMobs[npcId]` was left
+      // behind at his static post forever. targeting.ts's `resolveAim` has
+      // no concept of "already recruited" (it's a leaf module fed raw
+      // `npcMobs` entries) and kept raycasting a friendly cylinder there,
+      // so the crosshair nameplate ("Alric · FRIENDLY · 1m") kept appearing
+      // at his old spot with no figure behind it. Deleting the stale entry
+      // here — the one place that knows for certain this id just stopped
+      // being a static NPC — fixes it at the source instead of teaching
+      // every consumer to filter it out independently.
+      delete npcMobs[npcId];
       set({
         inventory: inv,
         villagers: [...st.villagers, villager],
