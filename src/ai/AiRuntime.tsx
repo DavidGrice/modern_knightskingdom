@@ -14,6 +14,12 @@ import { playerState } from '@/game/playerState';
 import { getNavGrid } from '@/game/navgrid';
 import { agentManager, type WindowBounds } from './core/AgentManager';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
+// iteration 2.9 — side-effect import only: nothing here calls resolveAnchor
+// yet (phase 5's gather/haul actions are the first real caller), but it
+// needs to be in the client bundle for its own window.__kkanchor debug
+// exposure to exist at all, and this file is the one guaranteed-loaded
+// entry point for the whole AI system per this file's own header comment.
+import './core/AnchorResolution';
 
 /** Phase 1's one NPC: it ticks, decays its needs, and prints. Parked a few
  *  metres forward-right of SPAWN (0, 26) so it starts inside the view frustum
