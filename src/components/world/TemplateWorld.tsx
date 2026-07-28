@@ -23,6 +23,12 @@ import DungeonScene from './DungeonScene';
 // a hillside; see sampleTemplateGroundY, used in place of floorHeightAt
 // while st.destination is set).
 const mountedRoot: { current: THREE.Object3D | null } = { current: null };
+// which destination id mountedRoot currently holds — set alongside it, so a
+// caller (navgrid.ts's height rasterization, iteration 2.5) can tell a real
+// mount apart from "something else is mounted right now" before trusting the
+// geometry. mountedRoot is a single global ref; only one destination is ever
+// mounted at a time.
+const mountedRegion: { current: string | null } = { current: null };
 const raycaster = new THREE.Raycaster();
 const rayOrigin = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -52,6 +58,22 @@ export function sampleTemplateGroundY(x: number, z: number, fallback = lastGroun
  *  stale height from the previous template world never leaks into the next */
 export function resetTemplateGroundFallback() {
   lastGroundY = null;
+}
+
+/** Phase 2, iteration 2.5 — the mounted template scene's root, exported so
+ *  navgrid.ts can rasterize its real geometry into a destination grid's
+ *  height field (§2.3: runtime rasterization, not an offline bake or a
+ *  per-cell raycast). Previously private; `sampleTemplateGroundY` was the
+ *  only reader. */
+export function getMountedRoot(): THREE.Object3D | null {
+  return mountedRoot.current;
+}
+
+/** Which destination id `getMountedRoot()` currently belongs to, or null if
+ *  nothing is mounted. See `mountedRegion`'s own comment above for why this
+ *  check exists. */
+export function getMountedRegion(): string | null {
+  return mountedRegion.current;
 }
 
 /** ground height for actors at a destination, treating the Battle Dome's
@@ -140,8 +162,9 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
   const claim = useGameStore((s) => s.claimedWorlds[destId]);
   useEffect(() => {
     mountedRoot.current = groupRef.current;
+    mountedRegion.current = destId;
     resetTemplateGroundFallback();
-    return () => { mountedRoot.current = null; };
+    return () => { mountedRoot.current = null; mountedRegion.current = null; };
   }, [destId]);
   if (!dest) return null;
   if (dest.id === 'dungeon') {
@@ -171,6 +194,15 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
       {claim && <ClaimFlag x={claim.x - dest.origin.x} z={claim.z - dest.origin.z} groundY={claim.groundY} />}
     </group>
   );
+}
+
+if (typeof window !== 'undefined') {
+  // debug/test access only — lets a smoke test cross-check navgrid.ts's
+  // rasterized heightAt() against this module's already-trusted raycast
+  // sampler (iteration 2.5's own verification).
+  (window as unknown as Record<string, unknown>).__kkworld = {
+    sampleTemplateGroundY, destinationGroundY, getMountedRegion,
+  };
 }
 
 export default function TemplateWorld() {

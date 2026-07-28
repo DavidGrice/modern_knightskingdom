@@ -12,11 +12,23 @@
 // That is the whole point: a hole in the geometry is automatically a hole in
 // the navmesh, so a breached wall, an archway or an open gate is walkable
 // without anyone remembering to say so.
+import * as THREE from 'three';
 import { collisionBoxesFor } from './data/buildables';
 import { isBuilt, isHomeBuilding, type PlacedBuilding } from './types';
 import { terrainBlocks, terrainExclusions } from './navTerrain';
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
+import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWorld';
 import navgridConfig from '../ai/config/navgrid.json';
+
+// Phase 2, iteration 2.5 — scratch vectors for height rasterization, reused
+// across every triangle of every rasterize call rather than allocated per
+// triangle. Rasterization is infrequent (grid build / recentre), not
+// per-frame, so this is hygiene more than a hard requirement — but the
+// codebase's own convention (TemplateWorld.tsx's rayOrigin/DOWN) is to reuse
+// scratch objects for exactly this kind of geometry math, so match it.
+const scratchV0 = new THREE.Vector3();
+const scratchV1 = new THREE.Vector3();
+const scratchV2 = new THREE.Vector3();
 
 // Phase 2, iteration 2.4 — grid geometry now lives in one place,
 // src/ai/config/navgrid.json, rather than as a hardcoded constant here plus
@@ -61,6 +73,13 @@ export interface NavGridOptions {
    *  PHASE_2_NAVIGATION_AND_GATHERING.md §2.0 specifies, so the grid does not
    *  rebuild every frame the player merely shifts a metre. */
   recentreAt?: number;
+  /** window mode only (§2.3): the largest per-cell height step a walker can
+   *  climb. A neighbour pair whose rasterized `|Δy|` exceeds this is
+   *  unlinked during search, same as a blocked cell. Deliberately just above
+   *  PlayerController's own ~0.55 m step height, so agent traversal matches
+   *  what the player can climb. Unset (fixed/home grids) means no height
+   *  field is ever built and this check never fires. */
+  maxStep?: number;
 }
 
 /**
@@ -97,6 +116,15 @@ export class NavGrid {
   private blocked: Uint8Array;
   private builtFrom: PlacedBuilding[] | null = null;
 
+  // Phase 2, iteration 2.5 — ground-height field, window-mode grids only.
+  // null means "no height data yet" (nothing mounted, or nothing mounted
+  // for THIS region) or "mounted but zero triangles found" — both cases
+  // mean the maxStep check below never fires, matching §2.3's "no terrain
+  // mesh found → flat, skip step checks entirely."
+  private heights: Float32Array | null = null;
+  private heightsStale = true;
+  private readonly maxStep: number;
+
   // A* scratch, allocated once per instance — see iteration 2.2's own
   // comment (still accurate) on why this is not allocated per search.
   private gScore: Float32Array;
@@ -115,6 +143,7 @@ export class NavGrid {
     this.cellSize = opts.cellSize;
     this.mode = opts.mode ?? 'fixed';
     this.recentreAt = opts.recentreAt ?? Infinity;
+    this.maxStep = opts.maxStep ?? Infinity;
     this.dim = Math.round((opts.halfExtent * 2) / opts.cellSize);
 
     const n = this.dim * this.dim;
@@ -190,6 +219,122 @@ export class NavGrid {
     this.originX = x;
     this.originZ = z;
     this.builtFrom = null;
+    // the height field is keyed by the same indices as `blocked`, so it is
+    // exactly as stale as the obstacle grid the moment the origin moves —
+    // same reasoning as builtFrom = null just above.
+    this.heightsStale = true;
+  }
+
+  /** Rasterized ground height at (x, z), or null if this grid has no height
+   *  field right now (fixed/home grids, a window grid whose terrain has not
+   *  mounted yet, or one whose mounted bake had zero triangles). Public so
+   *  callers besides `findPath` — a future foot-placement actuator, or a
+   *  smoke test — can read real per-cell heights without reaching into
+   *  private state. */
+  heightAt(x: number, z: number): number | null {
+    this.ensureHeights();
+    if (!this.heights || !this.inBounds(x, z)) return null;
+    return this.heights[this.idx(this.toCellX(x), this.toCellZ(z))];
+  }
+
+  private ensureHeights(): void {
+    if (this.mode !== 'window' || !this.heightsStale) return;
+    this.rasterizeHeights();
+  }
+
+  /**
+   * Phase 2, iteration 2.5 — populate the per-cell ground-height field from
+   * the mounted template bake's real geometry. PHASE_2_NAVIGATION_AND_GATHERING.md
+   * §2.3: runtime rasterization over the mounted mesh's own triangles, not an
+   * offline bake (would have to replicate normalizeTemplateBake's scale and
+   * recentre and could drift) and not a per-cell raycast (thousands of
+   * scene-graph traversals per recentre at this cell count).
+   *
+   * Guards against painting the WRONG region's geometry: `mountedRoot` is a
+   * single global ref — only one destination is ever mounted at a time — so
+   * a stale cached grid for a region the player has since left must not
+   * rasterize from whatever happens to be mounted right now. When the
+   * mounted region does not match this grid's own, `heightsStale` is left
+   * true so a later call retries once this grid's region is the one
+   * actually mounted, rather than being marked done on a false read.
+   */
+  private rasterizeHeights(): void {
+    if (getMountedRegion() !== this.region) return;
+    this.heightsStale = false;
+
+    const root = getMountedRoot();
+    if (!root) { this.heights = null; return; }
+
+    const n = this.dim * this.dim;
+    const heights = new Float32Array(n);
+    const touched = new Uint8Array(n);
+    let any = false;
+
+    root.updateWorldMatrix(true, true);
+    root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const pos = mesh.geometry.attributes.position;
+      if (!pos) return;
+      const index = mesh.geometry.index;
+      const triCount = (index ? index.count : pos.count) / 3;
+
+      for (let t = 0; t < triCount; t++) {
+        const a = index ? index.getX(t * 3) : t * 3;
+        const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;
+        const c = index ? index.getX(t * 3 + 2) : t * 3 + 2;
+        scratchV0.fromBufferAttribute(pos, a).applyMatrix4(mesh.matrixWorld);
+        scratchV1.fromBufferAttribute(pos, b).applyMatrix4(mesh.matrixWorld);
+        scratchV2.fromBufferAttribute(pos, c).applyMatrix4(mesh.matrixWorld);
+
+        const minX = Math.min(scratchV0.x, scratchV1.x, scratchV2.x);
+        const maxX = Math.max(scratchV0.x, scratchV1.x, scratchV2.x);
+        const minZ = Math.min(scratchV0.z, scratchV1.z, scratchV2.z);
+        const maxZ = Math.max(scratchV0.z, scratchV1.z, scratchV2.z);
+        if (maxX < this.originX - this.halfExtent || minX > this.originX + this.halfExtent) continue;
+        if (maxZ < this.originZ - this.halfExtent || minZ > this.originZ + this.halfExtent) continue;
+
+        // barycentric denominator in the XZ plane; near-zero means the
+        // triangle is degenerate (or near edge-on) when projected flat
+        const denom = (scratchV1.z - scratchV2.z) * (scratchV0.x - scratchV2.x)
+          + (scratchV2.x - scratchV1.x) * (scratchV0.z - scratchV2.z);
+        if (Math.abs(denom) < 1e-8) continue;
+
+        const i0 = Math.max(0, this.toCellX(minX));
+        const i1 = Math.min(this.dim - 1, this.toCellX(maxX));
+        const j0 = Math.max(0, this.toCellZ(minZ));
+        const j1 = Math.min(this.dim - 1, this.toCellZ(maxZ));
+        for (let i = i0; i <= i1; i++) {
+          const px = this.toWorldX(i);
+          for (let j = j0; j <= j1; j++) {
+            const pz = this.toWorldZ(j);
+            const wa = ((scratchV1.z - scratchV2.z) * (px - scratchV2.x)
+              + (scratchV2.x - scratchV1.x) * (pz - scratchV2.z)) / denom;
+            const wb = ((scratchV2.z - scratchV0.z) * (px - scratchV2.x)
+              + (scratchV0.x - scratchV2.x) * (pz - scratchV2.z)) / denom;
+            const wc = 1 - wa - wb;
+            if (wa < -1e-3 || wb < -1e-3 || wc < -1e-3) continue; // outside the triangle
+            const y = wa * scratchV0.y + wb * scratchV1.y + wc * scratchV2.y;
+            const idx = this.idx(i, j);
+            if (!touched[idx] || y > heights[idx]) { heights[idx] = y; touched[idx] = 1; }
+            any = true;
+          }
+        }
+      }
+    });
+
+    if (!any) { this.heights = null; return; }
+
+    // Cells no triangle touched hold the last sampled value, in the same
+    // row-major order `idx()` already uses — matching sampleTemplateGroundY's
+    // own hold-last-known-height behaviour on a raycast miss. Ground sits at
+    // y=0 after normalizeTemplateBake (TemplateWorld.tsx), so that is the
+    // correct seed before the first touched cell, not an arbitrary guess.
+    let last = 0;
+    for (let i = 0; i < n; i++) {
+      if (touched[i]) last = heights[i]; else heights[i] = last;
+    }
+    this.heights = heights;
   }
 
   /** True if (x, z) is walkable — in bounds and not blocked. `layer` is
@@ -360,6 +505,7 @@ export class NavGrid {
   findPath(
     sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, _layer = 0,
   ): { x: number; z: number }[] | null {
+    this.ensureHeights();
     if (!this.inBounds(sx, sz)) return null;
     let gx = tx, gz = tz;
     if (!this.inBounds(tx, tz)) {
@@ -430,6 +576,11 @@ export class NavGrid {
         if (this.blocked[n]) continue;
         // no cutting a corner diagonally between two blocked cells
         if (di && dj && (this.blocked[this.idx(ci + di, cj)] || this.blocked[this.idx(ci, cj + dj)])) continue;
+        // §2.3 maxStep: unlink a neighbour pair whose rasterized heights
+        // differ by more than a walker can climb. this.heights is null for
+        // fixed/home grids and for a window grid with no height data yet, so
+        // this never fires there — exactly "skip step checks entirely."
+        if (this.heights && Math.abs(this.heights[n] - this.heights[cur]) > this.maxStep) continue;
         this.touch(n);
         const tentative = this.gScore[cur] + cost;
         if (tentative >= this.gScore[n]) continue;
@@ -493,6 +644,7 @@ export function getNavGrid(region: string | null): NavGrid {
     cellSize: cfg.cellSize,
     mode: 'window',
     recentreAt: cfg.recentreAt,
+    maxStep: cfg.maxStep,
   });
   destinationGrids.set(region, grid);
   return grid;
@@ -518,7 +670,10 @@ export function findPath(
 }
 
 if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kknav = { findPath, navBlocked, rebuildNav, getNavGrid };
+  (window as unknown as Record<string, unknown>).__kknav = {
+    findPath, navBlocked, rebuildNav, getNavGrid,
+    heightAt: (region: string | null, x: number, z: number) => getNavGrid(region).heightAt(x, z),
+  };
 }
 
 /** per-agent routing state, stashed on the agent object itself so callers
