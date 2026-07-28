@@ -15,6 +15,7 @@ import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
 import { stabledHorses } from '../riding';
 import { agentManager } from '@/ai/core/AgentManager';
 import { resetVillagerAgentSync } from '@/ai/rosterSync';
+import { resetNpcAgentSync } from '@/ai/npcSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { NPC_BY_ID, NPCS, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SELL_PRICES } from '../data/trade';
@@ -561,6 +562,7 @@ function createGameStore() {
       // must not inherit the last one's agents, clock or half-drained needs
       agentManager.clear();
       resetVillagerAgentSync();
+      resetNpcAgentSync();
       targetRegistry.clear();
       set({
         character,
@@ -595,6 +597,7 @@ function createGameStore() {
       resetPlayerState();
       agentManager.clear();
       resetVillagerAgentSync();
+      resetNpcAgentSync();
       targetRegistry.clear();
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];
