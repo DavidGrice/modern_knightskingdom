@@ -43,6 +43,16 @@ export interface Reservation {
   affordanceId: string;
 }
 
+/** PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.2 — written by Locomotion
+ *  (iteration 3.3+) every frame it runs, read by Activities (phase 5) —
+ *  never the reverse. Arrival is this status flag, not something an
+ *  Activity polls for by reading the agent's live position: §0.1's
+ *  transform-isolation rule cuts both ways. */
+export interface Movement {
+  status: 'moving' | 'arrived' | 'blocked';
+  distRemaining: number;
+}
+
 export interface Blackboard {
   id: string;
 
@@ -67,6 +77,9 @@ export interface Blackboard {
 
   /** §9 — written every think, read by the overlay. Empty until phase 5. */
   lastScores: ScoredAction[];
+
+  /** §3.2 — the Actuator's current movement state, see Movement's own doc */
+  movement: Movement;
 }
 
 export function createBlackboard(
@@ -93,5 +106,9 @@ export function createBlackboard(
     cooldowns: new Map(),
     reservation: null,
     lastScores: [],
+    // 'arrived' at spawn, not 'moving' — a fresh agent has no destination
+    // yet, and IDLE (no intent) resolves to the same "arrived, nowhere in
+    // particular" state Locomotion writes for it every frame anyway.
+    movement: { status: 'arrived', distRemaining: 0 },
   };
 }

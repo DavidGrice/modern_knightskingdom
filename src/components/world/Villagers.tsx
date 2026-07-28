@@ -17,6 +17,8 @@ import { JOB_BY_ID } from '@/game/data/villagers';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { registerVillagerMob } from '@/game/villagerMobs';
 import { navSteer } from '@/game/navgrid';
+import { agentManager } from '@/ai/core/AgentManager';
+import { stepLocomotion } from '@/ai/core/Locomotion';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, Villager } from '@/game/types';
 
@@ -61,6 +63,40 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     const s = state.current;
     const g = group.current;
     if (!g) return;
+
+    // Phase 3, iteration 3.3 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
+    // Intent takes over movement entirely, checked FIRST before all seven
+    // existing branches below. Per PHASE_3_4_5_ACTUATION_AND_REASONER.md
+    // §3.0's verified splice point: this is a new branch inserted first, not
+    // a source swap — Villagers.tsx has seven separate navSteer call sites,
+    // one per behavioural branch, with no single point that "supplies the
+    // target" to redirect. Nothing issues a real Intent yet (phase 5's
+    // reasoner is the first real writer), so this is inert today — every
+    // villager falls straight through to the existing cascade unchanged.
+    const agent = agentManager.get(villager.id);
+    const intent = agent?.intent;
+    if (agent && intent && (intent.type === 'MOVE_TO' || intent.type === 'MOVE_TO_ANCHOR')) {
+      // resync from wherever Agent-driven movement last left the villager —
+      // the same drift guard the ARRIVING branch below already applies in
+      // the other direction (mob -> s), so control can hand off cleanly
+      // either way without a visible teleport
+      if (Math.hypot(s.x - agent.position.x, s.z - agent.position.z) > 6) {
+        s.x = agent.position.x;
+        s.z = agent.position.z;
+      }
+      stepLocomotion(agent, dt);
+      s.x = agent.position.x;
+      s.z = agent.position.z;
+      s.yaw = agent.yaw;
+      g.position.set(s.x, 0, s.z);
+      g.rotation.y = s.yaw + Math.PI;
+      mob.x = s.x;
+      mob.z = s.z;
+      const moving = agent.bb.movement.status === 'moving';
+      const wantClip = moving ? (intent.speed === 'run' ? 'anim_c_run' : 'anim_c_walk') : 'anim_r_restpose';
+      if (clip !== wantClip) setClip(wantClip);
+      return;
+    }
 
     // ARRIVING: a newcomer walks the road in rather than appearing on the
     // doorstep. They come up it under their own steam — navSteer takes them
