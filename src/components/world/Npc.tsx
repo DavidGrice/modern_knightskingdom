@@ -138,6 +138,24 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
       return;
     }
 
+    // Phase 3, iteration 3.7 — FACE: a real gap found verifying the full
+    // intent lifecycle in Villagers.tsx (see its own comment on why), fixed
+    // identically here for parity — `stepLocomotion` already lerps yaw
+    // without moving for this intent, no renderer diverted to it before now.
+    if (agent && intent && intent.type === 'FACE') {
+      stepLocomotion(agent, dt);
+      const loc = pos.current;
+      loc.x = agent.position.x;
+      loc.z = agent.position.z;
+      yaw.current = agent.yaw;
+      g.position.set(loc.x, 0, loc.z);
+      g.rotation.y = yaw.current;
+      mob.x = loc.x;
+      mob.z = loc.z;
+      if (clipRef.current !== 'anim_r_restpose') setClip('anim_r_restpose');
+      return;
+    }
+
     if (!schedule) {
       // residents stand on their bake's real terrain (these hillside scenes
       // vary meters in relief); home NPCs stay on the flat meadow at y=0

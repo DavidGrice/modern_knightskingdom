@@ -133,6 +133,29 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       return;
     }
 
+    // Phase 3, iteration 3.7 — FACE: a real gap found verifying the full
+    // intent lifecycle, not a deliberate omission. `stepLocomotion` already
+    // lerps yaw without moving for this intent (§3.2) but no renderer ever
+    // diverted to it — MOVE_TO/MOVE_TO_ANCHOR (3.3) and PLAY_ANIM (3.5) each
+    // got their own branch, FACE didn't, so it silently fell through to the
+    // legacy cascade below. That matters for real: NPC_AI_SPEC §3's
+    // GotoAndUse activity chains MOVE_TO_ANCHOR -> FACE -> PLAY_ANIM (phase
+    // 5) — without this branch the villager would visibly wander off mid
+    // interaction during the align phase, only picked back up once
+    // PLAY_ANIM's own branch engaged.
+    if (agent && intent && intent.type === 'FACE') {
+      stepLocomotion(agent, dt);
+      s.x = agent.position.x;
+      s.z = agent.position.z;
+      s.yaw = agent.yaw;
+      g.position.set(s.x, 0, s.z);
+      g.rotation.y = s.yaw + Math.PI;
+      mob.x = s.x;
+      mob.z = s.z;
+      if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+      return;
+    }
+
     // ARRIVING: a newcomer walks the road in rather than appearing on the
     // doorstep. They come up it under their own steam — navSteer takes them
     // round anything in the way — and only join the ordinary routine once
