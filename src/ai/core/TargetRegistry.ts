@@ -32,6 +32,12 @@ export interface Target {
    *  without an explicit value would wrongly read as unavailable. */
   available: boolean;
   anchorRule: AnchorRule;
+  /** quarter-turns, buildings only (iteration 2.9's fixed-mode anchor
+   *  resolution needs it to rotate a rule's local offset with the piece —
+   *  see AnchorResolution.ts). Nodes carry a continuous `yaw` instead, not
+   *  this — always undefined for a node target, and never read for one,
+   *  since every node's own anchor rule is 'radial'. */
+  rot?: 0 | 1 | 2 | 3;
 }
 
 function nodeTarget(n: ResourceNodeState): Target {
@@ -46,7 +52,7 @@ function buildingTarget(b: PlacedBuilding): Target {
   const region = isHomeBuilding(b) ? null : (b.world ?? null);
   return {
     id: `bldg:${b.id}`, source: 'building', kind: b.type, x: b.x, z: b.z, region,
-    available: isBuilt(b), anchorRule: anchorRuleFor('building', b.type),
+    available: isBuilt(b), anchorRule: anchorRuleFor('building', b.type), rot: b.rot,
   };
 }
 
