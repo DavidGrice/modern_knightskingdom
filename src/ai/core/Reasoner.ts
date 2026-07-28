@@ -1,15 +1,17 @@
-// NPC_AI_SPEC.md §5.1/§5.2/§5.4/§5.6 / PHASE_3_4_5_ACTUATION_AND_REASONER.md
-// §5.2/§5.3 — the utility reasoner's scoring core. 5.2 shipped the types
-// and `scoreAction`; this iteration (5.3) adds category weight/
-// interruptPriority reference tables and commitment (momentum, minDuration
-// interrupt override, switch threshold, cooldowns). Candidate assembly
-// (5.4) and real actions (5.6+) land on top in later iterations — nothing
-// here decides anything against real game content yet.
+// NPC_AI_SPEC.md §5.1/§5.2/§5.4/§5.6/§5.7 / PHASE_3_4_5_ACTUATION_AND_REASONER.md
+// §5.2/§5.3/§5.4 — the utility reasoner's scoring core. 5.2 shipped the
+// types and `scoreAction`; 5.3 added category reference tables and
+// commitment (momentum, minDuration interrupt override, switch threshold,
+// cooldowns); this iteration (5.4) adds candidate assembly and the
+// `Activity` type Agent needs a real home for. Real actions (5.6+) land on
+// top in a later iteration — nothing here decides anything against real
+// game content yet, only synthetic actions used for verification.
 
 import { evalCurve, type Curve } from './curves';
 import type { Agent } from './Agent';
-import type { Target } from './TargetRegistry';
+import { targetRegistry, type Target } from './TargetRegistry';
 import type { Blackboard, ScoredAction, ScoredConsideration } from './Blackboard';
+import { archetypeDef } from '../config';
 
 /** §5.4 (PHASE_3_4_5) / §5.1 (NPC_AI_SPEC) — passed to every Consideration's
  *  `input()` and to `scoreAction` itself. `target` is set for a per-target
@@ -205,8 +207,68 @@ export function startCooldown(bb: Blackboard, actionId: string, cooldownSeconds:
   bb.cooldowns.set(actionId, now + cooldownSeconds);
 }
 
+// --- 5.4: candidate assembly ------------------------------------------------
+
+/** §5.4 — the winning action's actual behavior. A small state object,
+ *  not a class hierarchy — this repo's scale doesn't need one (NPC_AI_SPEC
+ *  §5.7's own reasoning). `start`/`update` emit Intent (never touch
+ *  position/transform directly — §0.1's rule), `abort` MUST release
+ *  whatever `bb.reservation` it holds; nothing here implements this yet,
+ *  it's a real home for 5.6's `FleeToSafety`/`Sleep` and 5.7's
+ *  `GatherAtNode`/`HaulToDeposit` to land in. */
+export type ActivityStatus = 'RUNNING' | 'SUCCESS' | 'FAILURE';
+export interface Activity {
+  start(agent: Agent, ctx: Context): void;
+  update(agent: Agent, dt: number): ActivityStatus;
+  abort(agent: Agent): void;
+}
+
+/** §5.4 — every think tick's full candidate list, from two sources:
+ *
+ *  1. Intrinsic — `action.id` present in the agent's own archetype
+ *     `intrinsic` list (archetypes.json) and no `targetKinds`: scored once,
+ *     `ctx.target = null` (nothing to bind — `idle`, `wander`).
+ *  2. Per-target expanded — `action.id` present in `intrinsic` AND
+ *     `targetKinds` set: `TargetRegistry.queryNearby` finds nearby targets
+ *     of those kinds, and ONE candidate is created PER TARGET, each scored
+ *     independently with its own `ctx.target` bound — `gather_resource@
+ *     node:17` and `gather_resource@node:22` never share a score.
+ *     Scoring the action once against an arbitrarily-chosen target is the
+ *     named failure mode here (§5.4) — this function exists specifically
+ *     so no caller has to get that right by hand.
+ *
+ *  `allActions` is passed in rather than pulled from some global registry:
+ *  this iteration has no real actions to register yet (5.6/5.7's job) —
+ *  passing the set explicitly keeps this function honest about having zero
+ *  content-authoring opinions of its own, and lets 5.5's synthetic
+ *  verification exercise it with two trivial actions before anything real
+ *  exists. An action whose id isn't in the archetype's `intrinsic` list is
+ *  skipped entirely — including its `TargetRegistry` query — so an
+ *  archetype that was never offered `gather_resource` (a `companion`, say)
+ *  never even looks for a target to bind it to. */
+export function assembleCandidates(
+  allActions: Action[], agent: Agent, now: number, queryRadius = 40,
+): Candidate[] {
+  const intrinsicIds = new Set(archetypeDef(agent.archetype).intrinsic);
+  const out: Candidate[] = [];
+  for (const action of allActions) {
+    if (!intrinsicIds.has(action.id)) continue;
+    if (action.targetKinds && action.targetKinds.length > 0) {
+      const targets = targetRegistry.queryNearby(
+        agent.position.x, agent.position.z, queryRadius, action.targetKinds, agent.region,
+      );
+      for (const target of targets) {
+        out.push({ action, scored: scoreAction(action, agent, { target, now }) });
+      }
+    } else {
+      out.push({ action, scored: scoreAction(action, agent, { target: null, now }) });
+    }
+  }
+  return out;
+}
+
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkreason = {
-    scoreAction, pickAction, startCooldown, CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
+    scoreAction, pickAction, startCooldown, assembleCandidates, CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
   };
 }
