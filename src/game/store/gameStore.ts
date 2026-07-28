@@ -277,6 +277,16 @@ interface GameState {
   addItems: (items: Partial<Record<ItemId, number>>, source?: 'gather' | 'craft' | 'grant') => void;
   addXp: (skill: SkillId, amount: number) => void;
   harvestNode: (nodeId: string) => void;
+  /** AI-only, single-swing harvest for `GatherAtNode` (PHASE_2_NAVIGATION_
+   *  AND_GATHERING.md §3.5/§4) — distinct from `harvestNode`, the player's
+   *  own action, which empties a whole node in one go with skill/guild bonus
+   *  rolls that make no sense applied against the player's own state for a
+   *  background villager. Yields exactly one base resource per call and
+   *  decrements `hitsLeft` by one. Returns null if the node doesn't exist or
+   *  is already unavailable. Never calls `addItems` — the yield goes into
+   *  the calling Activity's own `bb.carrying`, not the shared inventory
+   *  (§4: that only happens on `HaulToDeposit`'s deposit, via `addItems`). */
+  gatherSwing: (nodeId: string) => { item: ItemId; amount: number } | null;
   tickRespawns: () => void;
   craft: (recipeId: string) => boolean;
   canAfford: (cost: Partial<Record<ItemId, number>>) => boolean;
@@ -2172,6 +2182,24 @@ function createGameStore() {
         );
       }
       set(patch);
+    },
+
+    gatherSwing: (nodeId) => {
+      const st = get();
+      const node = st.nodes.find((n) => n.id === nodeId);
+      if (!node || node.respawnAt !== null || node.hitsLeft <= 0) return null;
+      const item: ItemId =
+        node.kind === 'tree' ? 'wood' : node.kind === 'rock' ? 'stone' : node.kind === 'herb' ? 'herb' : 'fish';
+      const hitsLeft = node.hitsLeft - 1;
+      // fishing spots never deplete (harvestNode's own fishing branch skips
+      // this too — "one bite, one fish", the node stays available)
+      const depleted = hitsLeft <= 0 && node.kind !== 'fishing';
+      set({
+        nodes: st.nodes.map((n) =>
+          n.id === nodeId ? { ...n, hitsLeft, respawnAt: depleted ? Date.now() + 35000 : n.respawnAt } : n,
+        ),
+      });
+      return { item, amount: 1 };
     },
 
     tickRespawns: () => {
