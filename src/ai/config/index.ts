@@ -140,17 +140,34 @@ export function tierDef(tier: Tier): TierDef {
   return LOD.tiers[tier];
 }
 
-/** §3.2 — kind -> anchor rule. fishing's `fallbackRadius` is `POND.radius +
- *  4`, computed here from the real pond definition (game/data/world.ts)
- *  rather than a second hardcoded number in anchors.json — the spec doc's
- *  "derive:POND.r + 4" notation meant exactly this, not a literal string to
- *  store and later parse. */
+/** §4.4 — resolved once, not per query: `POND` (game/data/world.ts) is a
+ *  static module-level constant, never mutated at runtime, so re-deriving
+ *  `POND.radius + 4` and allocating a fresh merged object on every single
+ *  `anchorRuleFor('node'|'building', 'fishing')` call (as the first version
+ *  of this function did, iteration 2.8) is pure waste — the exact "must
+ *  never run per frame" §0.4 already states for `profileCache` above.
+ *  Keyed by the base rule object rather than a bare boolean/kind string so
+ *  this stays correct even if a future 'fishing' *building* entry (there
+ *  isn't one today — checked anchors.json directly) got its own distinct
+ *  base rule. */
+const fishingRuleCache = new WeakMap<AnchorRule, AnchorRule>();
+
+/** §3.2/§4.4 — kind -> anchor rule. fishing's `fallbackRadius` is
+ *  `POND.radius + 4`, computed from the real pond definition (game/data/
+ *  world.ts) rather than a second hardcoded number in anchors.json — the
+ *  spec doc's "derive:POND.r + 4" notation meant exactly this, not a
+ *  literal string to store and later parse. */
 export function anchorRuleFor(source: 'node' | 'building', kind: string): AnchorRule {
   const table = source === 'node' ? ANCHOR_RULES.nodes : ANCHOR_RULES.buildings;
   const rule = table[kind];
   if (!rule) return FALLBACK_ANCHOR_RULE;
   if (kind === 'fishing' && rule.mode === 'radial') {
-    return { ...rule, fallbackRadius: POND.radius + 4 };
+    let cached = fishingRuleCache.get(rule);
+    if (!cached) {
+      cached = { ...rule, fallbackRadius: POND.radius + 4 };
+      fishingRuleCache.set(rule, cached);
+    }
+    return cached;
   }
   return rule;
 }
