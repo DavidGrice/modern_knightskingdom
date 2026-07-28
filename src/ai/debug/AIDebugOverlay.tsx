@@ -199,8 +199,19 @@ export default function AIDebugOverlay() {
               bb.lastScores: §9 requires the input AND the post-curve output of
               every consideration, or a bad curve is indistinguishable from a
               bad input */}
-          {agent.bb.lastScores.map((s) => (
-            <div key={s.actionId} className={`ai-debug-score ${s.gated ? 'gated' : ''}`}>
+          {agent.bb.lastScores.map((s, i) => (
+            // Phase 5, final validation pass (5.9) — keying by s.actionId
+            // alone was fine when built (phase 1, before per-target
+            // expansion existed): every action had at most one scored
+            // entry. gather_resource/haul_to_deposit (5.4+) can now
+            // legitimately produce several entries sharing the SAME
+            // actionId, one per nearby target — a real React duplicate-key
+            // warning, found live running several AI-driven villagers
+            // together for the first time. ScoredAction doesn't carry a
+            // target id (Blackboard.ts), so the array index is the
+            // simplest disambiguator; order is stable within a single
+            // render (lastScores is overwritten whole, not mutated).
+            <div key={`${s.actionId}-${i}`} className={`ai-debug-score ${s.gated ? 'gated' : ''}`}>
               <span className="v">{s.score.toFixed(3)}</span>
               <span className="a">{s.actionId}</span>
               {s.considerations.map((c) => (

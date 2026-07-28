@@ -3658,3 +3658,50 @@ the player places), walking each ground's four edges in evenly-spaced
 segments through one shared `InstancedProp` call across every ground — same
 reasoning `ResourceNodes.tsx`'s `TreeGroup` already uses. Open/locked state
 keeps the same legibility the strips had, now as a tint on real wood.
+
+# NPC AI — phases 2-5 complete, 2026-07-28
+
+The full 30-iteration build plan (`NPC_AI_SPEC.md`, `PHASE_2_NAVIGATION_AND_GATHERING.md`,
+`PHASE_3_4_5_ACTUATION_AND_REASONER.md`) is done — navigation, actuation/animation splice, and the
+utility-AI reasoner all shipped, one branch/PR per iteration. `src/ai/PHASE_STATUS.md` carries the full
+per-iteration detail (every bug found, every fix, every verifying smoke test); this entry is just the
+roadmap-level summary and what's deliberately still open.
+
+Two real product bugs turned up in the final validation pass (a live 6-villager, every-job-type,
+75+ second unpaused run — the first test in the whole arc to do that) that no single-agent controlled
+test had caught: a React key collision once `gather_resource`/`haul_to_deposit` legitimately produce
+several scored candidates sharing one action id (`AIDebugOverlay.tsx`), and a villager that reaches
+"nothing left to do" (sack full, no reachable stockpile, no raid, daytime) freezing in place forever —
+`runReasoner`'s "no winner" branch cleared `agent.currentActivity` but not `agent.intent`, and every
+renderer treats any non-null intent as authoritative with no way to tell "still running" from "reasoner
+moved on." Both fixed; confirmed end-to-end by re-running the original discovery scenario, not just in
+isolation.
+
+**Still open, found not invented:**
+- **Might/Craft/Wit trip bonuses don't reach the AI-driven haul path.** The old `tickVillagers` timer
+  rolls a double-load chance off Might, side-goods off Craft, and a Wit-scaled bonus for merchants
+  (`gameStore.ts`'s per-trip block) — `haul.ts`'s real `addItems()` call just grants `jobDef.perTrip`
+  flat, no attribute rolls at all. Flagged in `haul.ts`'s own header comment and `PHASE_STATUS.md`'s
+  5.8b row when it shipped, deliberately deferred rather than ported blind — the old formulas were
+  written for a per-trip timer, not a per-node-visit loop, and need their own pass to decide what "a
+  trip" even means now that gathering can span several nodes before a single haul.
+- **Stranded carrying.** If an AI-driven villager's sack is full and genuinely no stockpile is within
+  `haul_to_deposit`'s query radius (40m), they're stuck: the intent-clearing fix stops them from visibly
+  freezing (they fall back to the old walk-to-worksite cascade), but the resources they're already
+  carrying are never deposited — there's no code path that hands carried goods to the legacy system.
+  Confirmed real, not hypothetical: a live trace during this validation pass showed target nodes
+  legitimately spawning 45-50m from home. A wider query radius or a periodic capacity-triggered
+  re-query are the two obvious mitigations; neither is built.
+- **herb/fishing node kinds have no `job_match`.** `gather.ts`'s job_match only claims `tree`/`rock` for
+  lumberjack/miner — an herbalist or fisherman job type would need to exist first (neither does today),
+  so these node kinds sit permanently inert for the AI system. Content gap, not a bug.
+- **Farmplot gathering stays behind `FARMPLOT_GATHER_ENABLED = false`** (`gather.ts`) pending
+  `PHASE_2_NAVIGATION_AND_GATHERING.md` §1.1's open design question (farmplots regrow on a timer, not a
+  hit-count like trees/rocks — the existing `GatherAtNodeActivity` shape doesn't fit them as-is).
+- **AI-driven trip times are real-distance-bound, and that can be slow.** The old per-job timer granted
+  a trip's yield on a fixed clock regardless of where the villager actually stood; the new reasoner
+  walks a real path to a real node and back, so a poorly-placed homestead (nearest tree/rock 45-50m out)
+  can make a single lumberjack/miner cycle take 150-200+ real seconds end to end — confirmed by direct
+  trace, not assumed. Not a bug (the trip genuinely finishes, verified), but worth a deliberate call
+  later: is "distance now has a real, felt cost" the intended balance change, or does target scoring
+  want a stronger nearest-node bias than proximity alone gives it today.
