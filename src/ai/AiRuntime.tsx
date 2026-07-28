@@ -10,6 +10,8 @@
 import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
+import { playerState } from '@/game/playerState';
+import { getNavGrid } from '@/game/navgrid';
 import { agentManager } from './core/AgentManager';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 
@@ -41,6 +43,24 @@ export default function AiRuntime() {
     // not O(search).
     syncVillagerAgents(st.villagers);
     mirrorVillagerPositions();
+    // Phase 2, iteration 2.4 — a window-mode destination grid follows the
+    // player, not any individual agent (nothing spawns agents in a
+    // destination yet; this keeps the grid correctly centred for whenever
+    // something does). getNavGrid() lazily creates and caches the grid on
+    // first call; recentre() itself is a cheap hysteresis check that no-ops
+    // on almost every frame — see both methods' own comments in navgrid.ts.
+    //
+    // 'dungeon' is deliberately excluded: gameStore sets st.destination to
+    // it when the player enters the Sealed Crypt (verified — see
+    // gameStore.ts's foundKeep-adjacent dungeon entry), and getNavGrid
+    // THROWS for that region on purpose (the Crypt's fixed grid is iteration
+    // 2.6's job, not window mode). Calling it unguarded here would crash
+    // this frame loop on every single frame spent in the dungeon. Caught by
+    // actually checking every real caller of st.destination before shipping
+    // this, not assumed.
+    if (st.destination && st.destination !== 'dungeon') {
+      getNavGrid(st.destination).recentre(playerState.x, playerState.z);
+    }
     agentManager.update(dt, camera, st.destination ?? null);
   });
 
