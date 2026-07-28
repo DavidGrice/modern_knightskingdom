@@ -240,6 +240,70 @@ real — this is a hard gate, not a suggestion (§5.0/§5.5).**
 | 5.8b | ~~`feature/phase5-8b-hauling-live`~~ | **Merged 2026-07-28 (#74).** `haul.ts`'s `CARRYING_ENABLED` flag flips permanently true — a completed AI haul now transfers via real `addItems()` and grants trade-mastery xp via a new `awardTradeXp(villagerId, amount)` store action, extracted out of `tickVillagers`' own previously-hardcoded inline block (the exact continuity risk flagged during phase-5 validation: `tradeXp += 10` lived only inside `tickVillagers`, with no reusable path for an AI-migrated villager to keep leveling) so both the old timer and the new AI path share one implementation and one mastery-level-up notification, instead of two independently-maintained copies. `tickVillagers` gains one new, earlier check — `if (workSignals[v.id]?.active) continue;` — so its own per-trip grant never runs at all for a villager the AI is actively driving, preventing the double-count that would otherwise land the instant a haul completes. This is a real, deliberate reversal of 5.8a's own semantics for the SAME signal: in 5.8a (carrying still disabled) `workSignal` active made the old timer's progress *advance* (still the sole yield source); in 5.8b it makes that same timer's progress *freeze* instead (the AI now owns yield), resuming exactly where it left off once the AI stops driving that villager — confirmed deliberate, not a regression, and documented as such in `smoke158.mjs`'s own updated trust test. Might/Craft/Wit's trip-bonus rolls (double-load chance, side-goods, merchant wit bonus) are deliberately NOT ported to the AI-driven path — they're keyed to `jobDef.perTrip`, a fixed quantity with no clean mapping to a physically-carried, capacity-bound haul — logged to `ROADMAP.md` as a future enhancement rather than silently dropped. Verified live (`smoke159.mjs`): a non-AI-driven farmer still gains tradeXp through the unchanged `tickVillagers` path (confirms the extraction didn't touch anyone else); a real, unpaused, live-registered lumberjack's full gather→haul→deposit cycle lands real inventory AND exactly +10 tradeXp (not +20 — the direct regression test proving no double-grant); `villagerProgress` for that same villager is provably frozen (sampled at workSignal-active, resampled 2s later mid-perform, byte-identical) rather than merely absent, since it can legitimately already hold a real value from proximity to a different nearby tree during the earlier travel phase (a genuine test-design correction made mid-iteration, not a product bug — see this iteration's own memory note). smoke149/150/153/154/155/156/157 all re-run clean; smoke157/158 both had assertions flip back to their original 5.7-era expectations now that `CARRYING_ENABLED` is permanently true again, the same "update the stale assertion, don't silently leave it wrong" discipline 5.6/5.8a already established | 5.8a verified neutral |
 | 5.9 | ~~`feature/phase5-9-verification`~~ | **Merged 2026-07-28 (#76). Phase 5 complete — 10/10, and the full 30-iteration phases 2–5 plan is now done.** Ran the whole gather→haul→deposit loop through §3.7's full checklist for the first time: slot sharing (a real positive 2-agent case on a 2-slot tree, plus a 1-slot herb node); the real `'tree'` id-space collision (a node AND a buildable id, confirmed back in 2.8) between a resource node and a co-located decorative building; depletion partial-load re-targeting (gather_resource correctly keeps winning on a fresh node, not haul, while the load is still low); anchor walkability under real obstruction (a tree fenced on 3 sides with real `stonewall` buildings and a real nav-grid rebuild — the agent paths around; a real fishing node's anchor resolves on land, confirmed via a direct Activity drive that bypasses `job_match`, which no job claims for `fishing` today); a real raid interrupting a real gather then correctly resuming into a real haul once carrying is high enough to legitimately cross the 1.4/1.2 weight gap (§3.4's own load-bearing crossover, independently confirmed via a direct `scoreAction` sweep: haul decisively outscores gather from roughly 62% capacity up); and 60 real simulated seconds with no illegitimate flip-flopping. **Three genuine, previously-invisible reasoner bugs found and fixed, none reachable by any prior single-agent or synthetic test:** (1) `pickRaw` (`Reasoner.ts`) matched "the running candidate" by `action.id` alone — `gather_resource`/`haul_to_deposit` expand into one candidate per nearby target sharing that id, so the match could grab an arbitrary same-action candidate instead of the one actually reserved, occasionally gating a perfectly valid, still-held gather to a spurious zero score; now matches by the specific bound target (`bb.reservation.targetId`) when one exists, and the exclusion loops that used to skip every same-action candidate now correctly exclude only that one specific candidate, letting a genuinely better target compete. (2) `job_match` (`gather.ts`) didn't check `target.source`, so a decorative `'tree'` building co-located with a real tree node could win scoring only to fail every tick against `GatherAtNodeActivity`'s own source-check, with nothing stopping the same building winning again — fixed at the scoring source, the Activity's own guard now defense-in-depth. (3) `assembleCandidates`' proximity scoring is straight-line, with no path-reachability concept at all — a target that scores well but turns out genuinely unreachable (`resolveAnchor`/`navSteer` reports `'blocked'`) could keep winning and failing forever; new `bb.blockedTargets` (`Blackboard.ts`) records a 15-second exclusion on a `'blocked'` failure, checked by `target_usable` in both actions. Getting bug 3 right also required threading `Activity.update()`'s own `now` parameter through for real (a new, required 3rd parameter on the `Activity` interface, `flee.ts`/`sleep.ts` updated to match) — `agentManager.now` freezes while the game is paused, but every direct-call test in this whole suite (the established pattern for fast, accelerated-time tests) drives `runReasoner` with its own still-advancing local clock while paused, so only `runReasoner`'s real `now` parameter is correct under both callers. **A fourth, separate real bug found along the way:** `AgentManager.despawn()` never called `abort()` on a departing agent's `currentActivity`, so its held `TargetRegistry` reservation leaked permanently — reachable in real gameplay via `rosterSync.ts`'s own job-based exclusion (reassigning a lumberjack to `'defender'` mid-gather despawns their Agent), and a real, permanent, silent capacity loss on a tree with only 2 slots. Also fixed two pre-existing flaky waits (`smoke150.mjs`, `smoke157.mjs`, both a fixed-timeout race against `Agent.think()`'s first real tick) found running the regression suite repeatedly during this iteration's own debugging — unrelated to 5.9's own logic, but real flakiness worth closing while found. smoke149/150/153/154/155/156/157/158/159 all re-run clean across multiple full regression passes | 5.8b |
 
+### Final comprehensive validation pass — merged 2026-07-28 (#78)
+
+Explicitly requested after 5.9 landed: a thorough, final validation of every change across 5.8a/5.8b/5.9,
+not another numbered iteration. New `smoke161.mjs` — a realistic homestead with 6 villagers across every
+job type (lumberjack/miner/farmer/merchant/builder/idle), live and unpaused for real wall-clock time — the
+first test in the whole arc to exercise the full system together instead of one or two controlled agents.
+It surfaced two real, previously-invisible bugs neither single-agent nor synthetic testing had reached:
+
+1. **A permanently frozen villager once carrying is full and no stockpile is reachable** — a realistic
+   scenario, not a contrived one: real trees/rocks can legitimately sit 45–50m from a villager's own home
+   spawn. Root cause, traced through three rounds of targeted diagnostics: `runReasoner`'s "no winner"
+   branch (`Reasoner.ts`) cleared `agent.bb.currentActionId` but never `agent.intent` — only `abort()` did
+   that, and a natural `SUCCESS` never reaches `abort()` (the branch's own `currentActivity` guard is
+   already false by the time SUCCESS's own handling runs). Every renderer (`Villagers.tsx`, `Npc.tsx`)
+   treats any non-null intent as authoritative with no way to tell "still running" from "reasoner moved
+   on", so a villager with nothing left to do (sack full, no reachable stockpile, daytime, no raid) would
+   visibly freeze on its last `PLAY_ANIM` intent forever instead of falling back to the legacy cascade.
+   Fixed with an unconditional `agent.intent = null` in that branch. This is exactly the residual
+   "stranded carrying" gap logged to `ROADMAP.md` this same pass: the fix stops the visible freeze, but
+   the carried resources themselves still never reach a stockpile until one comes into range.
+2. **A React duplicate-key warning in `AIDebugOverlay.tsx`** — `bb.lastScores.map((s) => <div
+   key={s.actionId}>)` collides now that `gather_resource`/`haul_to_deposit` legitimately produce several
+   scored candidates sharing one action id (one per nearby target, 5.4's own per-target expansion), first
+   visible once several AI-driven villagers ran together. Fixed with `key={`${s.actionId}-${i}`}`.
+
+Both fixes verified end-to-end by re-running `smoke161.mjs` itself (the original discovery scenario, not
+just the isolated diagnostics) after landing: a real lumberjack's full gather→haul→deposit cycle lands
+real wood, a real miner completes the same cycle for stone, and the old `tickVillagers` path stays alive
+for farmer/merchant throughout — confirmed on the actual PR branch, not just on `main` ahead of a proper
+commit.
+
+**A second, unrelated finding from the same pass, product-correct but test-relevant:** `smoke161.mjs`'s
+own original 75-second wait budget assumed near-node distances that don't hold in this world — a live
+trace showed a single AI-driven gather→haul round trip can genuinely take 150–200+ real seconds end to
+end once real travel distance and multi-node capacity-filling are accounted for (`carryCapacity` is 4, a
+single node's `hitsLeft` can be as low as 3, so gather often has to visit a second node before haul even
+starts). Not a bug — the trip provably finishes — but real enough to log to `ROADMAP.md` as a balance
+question for later. `smoke161.mjs` now polls for real inventory growth up to a 300s ceiling instead of a
+fixed 75s wait, re-pinning `worldEnv.time` every poll (the same day/night-drift fix already applied to
+smoke158–160 for the same reason: a long live window can otherwise drift past working hours and engage
+`sleep` instead of the action under test).
+
+**A third finding, this time in the test suite itself:** re-running the full regression suite multiple
+times during this pass surfaced intermittent failures in `smoke158.mjs`'s 3-agent reservation-cap check
+and several of `smoke160.mjs`'s 8 sub-tests (a different specific assertion failing each time — target
+misselection, an empty 60-second stability window, a spuriously gated candidate) that a single run would
+have missed. Root cause: both tests spawn a fresh villager, wait ~600ms unpaused so `rosterSync`/
+`AiRuntime.tsx` can actually create the real `Agent` (spawning is gated behind the same `st.paused` check
+that stops thinking, so this wait is unavoidable — confirmed by reading `AiRuntime.tsx`'s own `useFrame`),
+then pause and take manual control. During that unavoidable live window, the real scheduler can already
+run `Agent.think()` for the new villager against its own default spawn position, occasionally leaving it
+mid-activity or holding a stale `bb.reservation`/`bb.blockedTargets` entry before the test ever
+repositions it — a race that predates this pass but had gone unnoticed until 5.9's own `blockedTargets`
+gave it a way to manifest as a spurious zero score. Fixed by resetting each freshly-spawned agent's
+`currentActivity`/`intent`/`bb.currentActionId`/`bb.reservation`/`bb.blockedTargets` to a clean slate
+immediately after grabbing it and before repositioning, in every sub-test that follows this pattern in
+both files — confirmed to hold across several repeated back-to-back runs afterward. Test-only, not
+committed (`scripts/` is gitignored).
+
+Future-enhancement ideas surfaced this pass (Might/Craft/Wit trip bonuses not ported to the AI-driven haul
+path, stranded carrying, herb/fishing job types, farmplot gathering, realistic AI trip-time expectations)
+are logged in `ROADMAP.md`'s "NPC AI — phases 2-5 complete" entry, matching the project's established
+pattern of logging deferred ideas rather than dropping them silently.
+
 ### After each iteration merges
 
 1. Update this table's row for that iteration (done/date).
