@@ -1368,7 +1368,16 @@ function createGameStore() {
     toggleGate: (buildingId) => {
       const st = get();
       const wasOpen = st.gateOpen[buildingId] ?? true;
-      set({ gateOpen: { ...st.gateOpen, [buildingId]: !wasOpen }, dirty: true });
+      // buildings is also re-spread (its own entries are unchanged) so the
+      // 1Hz `rebuildNav(useGameStore.getState().buildings)` poll in
+      // Enemies.tsx — which only re-stamps on a reference change — actually
+      // notices a gate toggle. gateOpen is a separate field from
+      // PlacedBuilding itself, so without this the nav grid would keep
+      // treating a just-opened/closed gate as whatever it was before,
+      // sometimes indefinitely (found while verifying §2.5's "gate vs
+      // wall" checklist item alongside NavGrid.rebuild()'s own missing
+      // gateOpen check — the same bug had two different-shaped halves).
+      set({ gateOpen: { ...st.gateOpen, [buildingId]: !wasOpen }, buildings: [...st.buildings], dirty: true });
       audio.play(wasOpen ? 'portcullis' : 'drawbridge', 0.8);
       st.notify(wasOpen ? 'The gate grinds shut.' : 'The gate creaks open.');
     },
