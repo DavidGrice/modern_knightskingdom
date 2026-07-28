@@ -14,7 +14,7 @@ one's debug view works.*
 |---|---|---|---|
 | 1 | Skeleton + debug overlay | **done** — 2026-07-27 | ✅ DOM panel, `` ` `` |
 | 2 | Navigation | **done — 10/10 iterations** — 2026-07-28, see below | navmesh/path gizmos |
-| 3 | Actuation | **1/7 iterations done, then paused for phase 2** | current-intent readout |
+| 3 | Actuation | **2/7 iterations done** — phase 2 fully merged, no longer paused | current-intent readout |
 | 4 | Smart objects | not started — **spec verified, plan set** | anchor axes |
 | 5 | Utility reasoner | not started — **spec verified, plan set** | ✅ renderer already built |
 | 6 | Perception | not started | belief markers, vision cones |
@@ -207,7 +207,7 @@ this plan added.
 | # | Branch | What | Depends on |
 |---|---|---|---|
 | 3.1 | `feature/phase3-1-agent-lifecycle` | Spawn/despawn an `Agent` per roster villager (mirrors `registerVillagerMob`'s lifecycle) — the prerequisite §3.0 assumed already existed and doesn't | phase 2 merged |
-| 3.2 | `feature/phase3-2-intent-type` | `Intent` union type; `Agent.intent: Intent \| null` field | 3.1 |
+| 3.2 | ~~`feature/phase3-2-intent-type`~~ | **Merged 2026-07-28 (#41).** `Intent` union type (`MOVE_TO`/`MOVE_TO_ANCHOR`/`PLAY_ANIM`/`FACE`/`IDLE`, `ATTACK` deferred per §5.9) and `Agent.intent: Intent \| null`, a plain mutable field alongside `position`/`yaw` — not on `Blackboard`, which is belief/need state the reasoner scores against, not what it produces. `MOVE_TO_ANCHOR` carries a real `TargetId` from phase 2's `TargetRegistry` (2.8), not a bare string. Small and deliberately additive — no locomotion wiring (3.3/3.4) or debug readout (3.6) yet. Verified live: starts null, every variant round-trips as a plain field, doesn't disturb unrelated agent state. smoke131/132 unchanged, no regressions | 3.1 |
 | 3.3 | `feature/phase3-3-locomotion-villagers` | `Locomotion` module (resolve Intent → target, `navSteer`, `bb.movement` status write); splice as a new first-checked branch in `Villagers.tsx`'s cascade | 3.2 |
 | 3.4 | `feature/phase3-4-locomotion-npc` | Same splice into `Npc.tsx` — separate iteration because its shape is genuinely simpler (one call site, not seven) | 3.2 (not 3.3 — independent) |
 | 3.5 | `feature/phase3-5-animation-controller` | `PLAY_ANIM` intent wired into each component's existing clip-selection; `ResourceProp` carried-item component portaled to `rig.joints.rightarm` | 3.3, 3.4 |
