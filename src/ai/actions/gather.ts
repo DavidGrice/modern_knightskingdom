@@ -24,6 +24,14 @@ import type { Curve } from '../core/curves';
 const SLOT_KIND = 'gather';
 const SWING_INTERVAL = 1.2; // seconds per swing — no player-side reference left to match (harvestNode now empties a node in one action); chosen for a readable cadence against anim_g_swordswish
 const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRadius
+// Phase 5, 5.9 — how long a genuinely unreachable target (resolveAnchor/
+// navSteer reports 'blocked') stays excluded from scoring after a failed
+// attempt, via bb.blockedTargets (see that field's own comment in
+// Blackboard.ts for the full story). Long enough that a villager doesn't
+// immediately retry and re-fail every tick forever; short enough that a
+// temporarily-blocked path (mid-raid rubble, say) clears on its own once
+// the obstruction is gone, without needing an explicit unblock signal.
+const BLOCKED_RETRY_COOLDOWN = 15;
 
 // Only kinds with an obvious 1:1 job AND a real ResourceNodeState kind today
 // (game/types.ts: 'tree'|'rock'|'fishing'|'herb', no 'farmplot' — that's a
@@ -75,7 +83,7 @@ class GatherAtNodeActivity implements Activity {
     agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
-  update(agent: Agent, dt: number): ActivityStatus {
+  update(agent: Agent, dt: number, now: number): ActivityStatus {
     if (!this.targetId) return 'FAILURE';
     if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
     const target = targetRegistry.get(this.targetId);
@@ -92,7 +100,14 @@ class GatherAtNodeActivity implements Activity {
       // call has had a chance to run against the actual MOVE_TO_ANCHOR
       // intent, and the status is trustworthy again.
       if (!this.travelStepped) { this.travelStepped = true; return 'RUNNING'; }
-      if (agent.bb.movement.status === 'blocked') return this.finish(agent, 'FAILURE');
+      if (agent.bb.movement.status === 'blocked') {
+        // a genuinely unreachable target — without recording this, its raw
+        // score (proximity is straight-line, not path-based) could easily
+        // keep winning every subsequent tick, failing the exact same way
+        // forever; see BLOCKED_RETRY_COOLDOWN's own comment
+        agent.bb.blockedTargets.set(this.targetId, now + BLOCKED_RETRY_COOLDOWN);
+        return this.finish(agent, 'FAILURE');
+      }
       if (agent.bb.movement.status === 'arrived') {
         this.phase = 'align';
         agent.intent = { type: 'FACE', target: { x: target.x, z: target.z } };
@@ -198,12 +213,31 @@ export const GATHER_RESOURCE: Action = {
       curve: identityCurve,
     },
     {
+      // §1.1/2.8's own confirmed id-space collision: 'tree' is BOTH a real
+      // node kind AND a real buildable id ("Garden Tree"). TargetRegistry.
+      // queryNearby matches by bare kind string across both sources, so a
+      // player's decorative Garden Tree co-located with a real tree node
+      // would otherwise generate an equally job_match=1, target_usable=1
+      // candidate — winning the scoring contest sometimes, only for
+      // GatherAtNodeActivity's own `target.source !== 'node'` guard to fail
+      // it every single tick with nothing to stop the SAME building
+      // candidate winning again next tick (cooldown is 0). Gating the
+      // WHOLE action to 0 here, at the source, is the real fix — the
+      // Activity's own guard stays as defense in depth, not the only line.
       name: 'job_match',
       input: (agent, ctx) =>
-        ctx.target && agent.bb.job && JOB_RESOURCE_MAP[agent.bb.job] === ctx.target.kind ? 1 : 0,
+        ctx.target && ctx.target.source === 'node' && agent.bb.job && JOB_RESOURCE_MAP[agent.bb.job] === ctx.target.kind ? 1 : 0,
       curve: boolCurve,
     },
-    { name: 'target_usable', input: (_agent, ctx) => (ctx.target?.available ? 1 : 0), curve: boolCurve },
+    {
+      name: 'target_usable',
+      input: (agent, ctx) => {
+        if (!ctx.target?.available) return 0;
+        const blockedUntil = agent.bb.blockedTargets.get(ctx.target.id);
+        return blockedUntil !== undefined && blockedUntil > ctx.now ? 0 : 1;
+      },
+      curve: boolCurve,
+    },
     { name: 'is_work_hours', input: () => (isWorkingHours(worldEnv.time) ? 1 : 0), curve: boolCurve },
     { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
     { name: 'proximity', input: (agent, ctx) => proximityInput(agent, ctx), curve: proximityCurve },

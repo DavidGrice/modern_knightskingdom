@@ -185,7 +185,25 @@ function pickRaw(eligible: Candidate[], bb: Blackboard, now: number): Candidate 
   if (eligible.length === 0) return null;
 
   const runningId = bb.currentActionId;
-  const running = runningId ? eligible.find((c) => c.action.id === runningId) ?? null : null;
+  // A target-bound action (gather_resource, haul_to_deposit) expands into
+  // one candidate PER NEARBY TARGET sharing the same action.id (§5.4's own
+  // per-target rule). Matching "the running candidate" by action.id alone
+  // would grab an ARBITRARY same-action candidate — whichever sorts first
+  // in this tick's fresh queryNearby order, which can shift tick to tick as
+  // distances change — not necessarily the specific target this agent is
+  // actually committed to. bb.reservation.targetId (set by the Activity's
+  // own start()) is the real source of truth for that; found live running
+  // a real agent through a dense grove for 60+ seconds (5.9) — the
+  // arbitrary match would occasionally land on a DIFFERENT nearby tree that
+  // happened to be gated for its own unrelated reasons that tick, making a
+  // perfectly valid, still-reserved gather spuriously score 0 and drop the
+  // winner to null. Actions with no targetKinds (flee_to_safety, sleep)
+  // never set a reservation, so this falls back to matching by action.id
+  // alone for them, unchanged from before this fix.
+  const running = runningId
+    ? eligible.find((c) => c.action.id === runningId
+        && (!bb.reservation || !c.ctx.target || c.ctx.target.id === bb.reservation.targetId)) ?? null
+    : null;
 
   if (!running) {
     return eligible.reduce<Candidate | null>(
@@ -216,7 +234,11 @@ function pickRaw(eligible: Candidate[], bb: Blackboard, now: number): Candidate 
     // qualify at all, never a baseline those challengers must also clear.
     let bestInterrupt: Candidate | null = null;
     for (const c of eligible) {
-      if (c.action.id === runningId) continue;
+      // exclude ONLY the specific running candidate (same action AND same
+      // target), not every candidate sharing its action.id — a different
+      // nearby target with the same action.id is a real, distinct
+      // alternative, not a duplicate of the one currently held
+      if (c === running) continue;
       if (c.action.interruptPriority <= running.action.interruptPriority || c.scored.score <= 0) continue;
       if (!bestInterrupt || c.scored.score > bestInterrupt.scored.score) bestInterrupt = c;
     }
@@ -225,7 +247,7 @@ function pickRaw(eligible: Candidate[], bb: Blackboard, now: number): Candidate 
 
   let best = runningAsBest;
   for (const c of eligible) {
-    if (c.action.id === runningId) continue;
+    if (c === running) continue;
     if (c.scored.score > boostedScore * SWITCH_THRESHOLD && c.scored.score > best.scored.score) {
       best = c;
     }
@@ -255,7 +277,19 @@ export function startCooldown(bb: Blackboard, actionId: string, cooldownSeconds:
 export type ActivityStatus = 'RUNNING' | 'SUCCESS' | 'FAILURE';
 export interface Activity {
   start(agent: Agent, ctx: Context): void;
-  update(agent: Agent, dt: number): ActivityStatus;
+  /** `now` is the SAME clock `runReasoner`'s own `now` parameter carries —
+   *  added in phase 5, iteration 5.9, when `GatherAtNode`/`HaulToDeposit`
+   *  needed a real timestamp for `bb.blockedTargets` (Blackboard.ts) and
+   *  `agentManager.now` turned out to be the wrong one to reach for: it
+   *  freezes while the game is paused (by design — the AI clock must stop
+   *  with it), but every direct-call test in this whole suite drives
+   *  `runReasoner` with its own hand-rolled, still-advancing `now` while
+   *  paused (the established pattern for fast, accelerated-time tests) —
+   *  the two clocks only coincide in real gameplay, where `Agent.think()`
+   *  is the sole caller and both derive from the same scheduler. Threading
+   *  the actual value through here, rather than an Activity reaching for
+   *  some ambient clock of its own, is correct under both callers. */
+  update(agent: Agent, dt: number, now: number): ActivityStatus;
   abort(agent: Agent): void;
 }
 
@@ -356,7 +390,7 @@ export function runReasoner(agent: Agent, actions: Action[], now: number, dt: nu
   }
 
   if (agent.currentActivity) {
-    const status = agent.currentActivity.update(agent, dt);
+    const status = agent.currentActivity.update(agent, dt, now);
     if (status === 'SUCCESS' || status === 'FAILURE') {
       startCooldown(agent.bb, winner.action.id, winner.action.cooldown, now);
       agent.currentActivity = null;

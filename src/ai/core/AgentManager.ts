@@ -59,6 +59,18 @@ export class AgentManager {
   despawn(id: string) {
     const agent = this.byId.get(id);
     if (!agent) return;
+    // Phase 5, iteration 5.9 — a real, previously-undiscovered bug found
+    // building this iteration's own test: without this, a despawning agent
+    // mid-GatherAtNode/HaulToDeposit (e.g. a villager reassigned to
+    // 'defender' — rosterSync.ts's syncVillagerAgents excludes that job and
+    // despawns them) never releases its TargetRegistry reservation.
+    // Reasoner.ts's own runReasoner only calls abort() when an activity is
+    // REPLACED by a new winner on the SAME agent, never when the agent
+    // itself goes away — despawn() is a second, real place an activity's
+    // lifecycle can end, and it needs the same cleanup. A tree has only 2
+    // gather slots; one leaked reservation is a real, permanent, silent
+    // capacity loss for the rest of the session, not a cosmetic gap.
+    agent.currentActivity?.abort(agent);
     this.byId.delete(id);
     const i = this.agents.indexOf(agent);
     if (i >= 0) this.agents.splice(i, 1);

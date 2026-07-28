@@ -84,6 +84,23 @@ export interface Blackboard {
   cooldowns: Map<string, number>;
   reservation: Reservation | null;
 
+  /** Phase 5, iteration 5.9 — a real, previously-undiscovered gap found
+   *  running a real agent through a dense grove for 60+ real seconds:
+   *  `assembleCandidates`' own proximity scoring is a naive straight-line
+   *  distance, with no concept of actual path-reachability. When the
+   *  highest-scoring target is genuinely unreachable (`resolveAnchor`/
+   *  `navSteer` reports `blocked` — an obstacle, or nothing walkable within
+   *  the anchor rule's fallback radius), GatherAtNode/HaulToDeposit fail
+   *  cleanly, but nothing stops the SAME unreachable target from winning
+   *  the very next tick and failing again — a real, permanent stuck loop
+   *  (a villager who can never gather anything again), not a cosmetic
+   *  glitch. Same shape as `cooldowns` above, but keyed by target id
+   *  instead of action id: `target_usable` (gather.ts/haul.ts) checks it
+   *  alongside `Target.available`, and the two gather/haul Activities are
+   *  the only writers, recording an entry only on a `'blocked'`-caused
+   *  FAILURE — never on a normal SUCCESS/partial-load/abort. */
+  blockedTargets: Map<string, number>;
+
   /** §9 — written every think, read by the overlay. Empty until phase 5. */
   lastScores: ScoredAction[];
 
@@ -144,6 +161,7 @@ export function createBlackboard(
     currentActionStartedAt: 0,
     cooldowns: new Map(),
     reservation: null,
+    blockedTargets: new Map(),
     lastScores: [],
     // 'arrived' at spawn, not 'moving' — a fresh agent has no destination
     // yet, and IDLE (no intent) resolves to the same "arrived, nowhere in
