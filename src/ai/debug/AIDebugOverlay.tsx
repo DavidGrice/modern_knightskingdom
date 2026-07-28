@@ -17,12 +17,35 @@ import { isRebindListening } from '@/game/data/keybinds';
 import { difficultyState, DRAGON_TIER } from '@/game/difficulty';
 import { NEED_IDS } from '../config';
 import { agentManager } from '../core/AgentManager';
+import type { Intent } from '../core/Agent';
 
 /** ".72" / "1.00", the format §9's mock-up prints needs and scores in */
 function dec(v: number): string {
   if (v >= 1) return '1.00';
   if (v <= 0) return '.00';
   return v.toFixed(2).slice(1);
+}
+
+/** Phase 3, iteration 3.6 — one line per Intent variant, params and all.
+ *  Nothing renders MOVE_TO_ANCHOR's target as anything friendlier than its
+ *  raw TargetId here on purpose: resolving it to a name would mean this
+ *  debug-only file reaching into TargetRegistry for a cosmetic label, and
+ *  the id is exactly what a hardcoded intent queue's own author typed in
+ *  (§3.5's verification driver), so it is the more useful form to see. */
+function describeIntent(intent: Intent | null): string {
+  if (!intent) return '—';
+  switch (intent.type) {
+    case 'MOVE_TO':
+      return `MOVE_TO (${intent.position.x.toFixed(1)}, ${intent.position.z.toFixed(1)}) ${intent.speed} stop${intent.stopDistance}`;
+    case 'MOVE_TO_ANCHOR':
+      return `MOVE_TO_ANCHOR ${intent.targetId}@${intent.anchorName} ${intent.speed}`;
+    case 'PLAY_ANIM':
+      return `PLAY_ANIM ${intent.clip} ${intent.loop ? 'loop' : 'once'}${intent.anchored ? ' anchored' : ''}`;
+    case 'FACE':
+      return `FACE (${intent.target.x.toFixed(1)}, ${intent.target.z.toFixed(1)})`;
+    case 'IDLE':
+      return 'IDLE';
+  }
 }
 
 export default function AIDebugOverlay() {
@@ -128,6 +151,20 @@ export default function AIDebugOverlay() {
           <div className="ai-debug-row ai-debug-dim">
             {agent.def.label} · think {agent.measuredHz.toFixed(1)}/{agent.thinkHz} Hz · see{' '}
             {agent.perceiveHz} Hz · steer {agent.steering} · #{agent.thinkCount}
+          </div>
+
+          {/* §3.4's debug addition: current Intent (type, params, elapsed)
+              plus bb.movement.status — the actuation layer's own state,
+              distinct from bb.currentActionId above (phase 5's Activity id,
+              still unset until the reasoner exists). Elapsed reads
+              Agent.intentSetAt, stamped by the `intent` setter itself
+              (iteration 3.6) against AgentManager.now, so it stays correct
+              even if the panel was closed when the intent was assigned. */}
+          <div className="ai-debug-row ai-debug-dim">
+            INTENT {describeIntent(agent.intent)}
+            {agent.intent && ` · ${(agentManager.now - agent.intentSetAt).toFixed(1)}s`}
+            {' · MOVEMENT '}
+            {agent.bb.movement.status}
           </div>
 
           <div className="ai-debug-row">

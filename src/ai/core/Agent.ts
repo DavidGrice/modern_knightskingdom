@@ -20,6 +20,11 @@ import {
 } from '../config';
 import { createBlackboard, type Blackboard } from './Blackboard';
 import type { TargetId } from './TargetRegistry';
+// AgentManager.ts imports Agent (this file) at its own top level to
+// construct instances in spawn() — a real cycle, referenced here only
+// inside the `intent` setter body below, never at this module's own
+// top-level scope. See that setter's own comment for why this is safe.
+import { agentManager } from './AgentManager';
 
 /** NPC_AI_SPEC §3.1 / PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.1 — the
  *  output crossing the decision→actuation boundary. Written by the
@@ -54,7 +59,32 @@ export class Agent {
   // shape as position/yaw above: the reasoner (phase 5) writes it,
   // Locomotion/AnimationController (3.3+) read it. null until something
   // assigns one; every agent starts here.
-  intent: Intent | null = null;
+  //
+  // Backed by a private field + accessor (iteration 3.6) purely so
+  // `intentSetAt` can be stamped automatically on every assignment, for
+  // §9's overlay "elapsed since this intent started" readout — every
+  // existing call site (`agent.intent = {...}`) is unchanged, an accessor
+  // is transparent to assignment syntax.
+  private _intent: Intent | null = null;
+  /** AgentManager.now (the AI clock, not wall time — see AgentManager.ts's
+   *  own header on why: it must freeze with the game, and this project's dt
+   *  clamp already makes wall time diverge from it) at the last `intent`
+   *  assignment. Reads `agentManager` lazily inside the setter body only —
+   *  a real AgentManager<->Agent import cycle (AgentManager.ts imports
+   *  Agent at its top level to construct instances), but confined to a
+   *  function body the same way this module graph's other cycles already
+   *  are (gameStore<->TargetRegistry, navgrid->gameStore), verified safe by
+   *  a production build each time. */
+  intentSetAt = 0;
+
+  get intent(): Intent | null {
+    return this._intent;
+  }
+
+  set intent(v: Intent | null) {
+    this._intent = v;
+    this.intentSetAt = agentManager.now;
+  }
 
   // --- LOD (§8), assigned by AgentManager ---
   tier: Tier = 'A';
