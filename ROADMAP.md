@@ -507,6 +507,23 @@ granting the unlock + materials and seeing all 26 pieces appear.
 
 **Build system**
 - Functional doors/windows; enclosed-area detection → "your homestead is a fort!" buffs.
+- **Building-conferred villager attribute bonuses (RTS-style)**: certain placed buildings passively
+  grant stat/capacity bonuses to villagers just by existing on the grid (e.g., a future storage/
+  warehouse-type building boosting carry capacity), rather than requiring direct interaction. Genuinely
+  new content and schema — no existing "kind → passive bonus" table to extend today. Closest precedents:
+  guild membership's flat %-bonuses (`data/guilds.ts`, Woodsmen's Lodge/Miners' Brotherhood/Builders'
+  Guild) and the affordance `effects` map (`NPC_AI_SPEC.md` §4.2), but that one only fires on active
+  interaction, never proximity/existence. Cross-reference the enclosed-area buff line just above — both
+  are "your build layout passively affects gameplay" ideas and probably deserve one coherent design pass
+  together rather than two separate bolt-on systems. Phase 4's `carryCapacityOf()` (`game/data/
+  attributes.ts`) ships with a stubbed `externalCapacityBonus()` hook (always 0 until this exists) ready
+  for it once designed.
+- **Carrier item content (basket/cart)**: Phase 4.1 ships the `Villager.gear.carrier?: 'basket' | 'cart'`
+  field and its `carryCapacityOf()` bonus (+4/+10) — real, live, testable by direct assignment. What it
+  doesn't ship: how a player actually gets one. Needs two new `ItemId`s, a crafting recipe, Armory stock
+  integration, a roster-panel equip/unequip toggle (mirroring the existing helmet/chestplate UI), and a
+  worn-item visual mesh — `rig.joints.rightarm` is already `ResourceProp`'s (the carried resource itself)
+  and `leftarm` is shields', so the visual needs a joint that doesn't collide with either.
 - Row-fill wall placement (drag a line), demolish-area tool, middle-mouse pan + Q/E aerial rotation.
 - Freeform placement mode (unsnapped position/rotation/scale — existing catalog pieces only).
 

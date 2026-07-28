@@ -271,6 +271,14 @@ export type Alliance = 'leo' | 'cedric';
 
 export type DefenderLoadout = 'bow' | 'sword_shield' | 'halberd';
 
+/** A worn item that raises `carryCapacityOf()`'s result (game/data/
+ *  attributes.ts) — basket first, cart a larger tier above it. Acquisition
+ *  (crafting recipe, Armory stock, roster equip UI, a visual mesh) is
+ *  deliberately NOT built yet — see ROADMAP.md's "Carrier item content"
+ *  entry. This type exists now so the capacity formula and Villager.gear
+ *  shape are real and testable ahead of that. */
+export type CarrierTier = 'basket' | 'cart';
+
 export interface Villager {
   id: string;
   name: string;
@@ -288,8 +296,11 @@ export interface Villager {
   stationId?: string | null;
   /** worn armor, drawn from the homestead Armory (any job can wear these —
    *  defenders additionally get a small combat bonus per piece, see
-   *  Defenders.tsx). Absent/false = bare-headed/chested. */
-  gear?: { helmet?: boolean; chestplate?: boolean };
+   *  Defenders.tsx). Absent/false = bare-headed/chested. `carrier` raises
+   *  carry capacity (game/data/attributes.ts's carryCapacityOf) — absent =
+   *  no bonus. Unlike helmet/chestplate it isn't Armory-backed yet; see
+   *  CarrierTier's own comment. */
+  gear?: { helmet?: boolean; chestplate?: boolean; carrier?: CarrierTier };
   /** player-edited appearance overrides (data/villagerLooks.ts). Only the
    *  fields actually changed are stored; anything absent keeps tracking the
    *  id-derived default, so untouched villagers need no migration. */
