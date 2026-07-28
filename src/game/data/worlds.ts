@@ -13,6 +13,7 @@
 // scene (template-09's empty field) doesn't get distorted the way matching
 // individual props to a target height would.
 import type { ItemId } from '../types';
+import { DUNGEON_ORIGIN, REACH_LIMIT } from '../dungeon';
 
 export interface WorldDestination {
   id: string;
@@ -101,7 +102,12 @@ export const DUNGEON_DESTINATION: WorldDestination = {
   id: 'dungeon', name: 'The Sealed Crypt',
   blurb: 'A shifting underground ruin — no two descents are the same.',
   thumb: '', model: '',
-  origin: { x: 4200, z: 4200 }, radius: 140,
+  // origin/radius derive from dungeon.ts's own constants rather than a
+  // second hand-copied pair — a duplicated number was exactly how the
+  // wall-tiling bug the branching-generator redesign fixed got in (see
+  // dungeon.ts's module doc). +30 gives real margin over REACH_LIMIT, the
+  // generator's own hard cap on any room's farthest corner from the origin.
+  origin: DUNGEON_ORIGIN, radius: REACH_LIMIT + 30,
 };
 
 export const WORLD_DESTINATION_BY_ID: Record<string, WorldDestination> =

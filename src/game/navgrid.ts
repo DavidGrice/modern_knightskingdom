@@ -18,6 +18,7 @@ import { isBuilt, isHomeBuilding, type PlacedBuilding } from './types';
 import { terrainBlocks, terrainExclusions } from './navTerrain';
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWorld';
+import { dungeonState, type DungeonLayout } from './dungeon';
 import navgridConfig from '../ai/config/navgrid.json';
 
 // Phase 2, iteration 2.5 — scratch vectors for height rasterization, reused
@@ -612,19 +613,101 @@ const homeGrid = new NavGrid({ region: null, originX: 0, originZ: 0, halfExtent:
 // Keyed by region id, matching WORLD_DESTINATIONS' own `id` field.
 const destinationGrids = new Map<string, NavGrid>();
 
+// Phase 2, iteration 2.6 — the Sealed Crypt's own grid, cached separately
+// from destinationGrids since it is fixed-mode (never recentres) and, per
+// its own blurb ("no two descents are the same"), a FRESH layout with a
+// different branching shape (5-8 total rooms, see dungeon.ts) generates on
+// every entry. The cache below is keyed by `layout.seed`, not just "has a
+// grid been built once" — a stale grid from a previous descent must not
+// survive into a new one with a different shape.
+let dungeonGrid: NavGrid | null = null;
+let dungeonGridSeed: number | null = null;
+// kept across rebuild() calls with the SAME layout so rebuild()'s own
+// `builtFrom === buildings` reference check actually no-ops on repeat calls
+// instead of recomputing every time — see rebuild()'s own comment.
+let dungeonWallBuildings: PlacedBuilding[] = [];
+
+/** AABB over every room and corridor footprint in a generated layout, with a
+ *  margin so a wall right at the edge is not clipped. The layout (redesigned
+ *  2026-07-27, see dungeon.ts's own module doc) is a branching tree of
+ *  variously-sized rooms, not a straight corridor, so a square grid centred
+ *  on this AABB can waste real cells when the tree happens to grow lopsided
+ *  — accepted rather than giving NavGrid rectangular bounds, which no other
+ *  caller needs and which would touch toCellX/toCellZ/inBounds/
+ *  clampToBounds/idx together. A few hundred KB of scratch arrays for one
+ *  Crypt grid, rebuilt only on descent, is not a real cost. Rooms and
+ *  corridors alone fully bound every wall too — a wall is always placed on
+ *  its owning room's own face, never past it. */
+function dungeonLayoutBounds(layout: DungeonLayout): { originX: number; originZ: number; halfExtent: number } {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const r of layout.rooms) {
+    minX = Math.min(minX, r.cx - r.halfX);
+    maxX = Math.max(maxX, r.cx + r.halfX);
+    minZ = Math.min(minZ, r.cz - r.halfZ);
+    maxZ = Math.max(maxZ, r.cz + r.halfZ);
+  }
+  for (const c of layout.corridors) {
+    minX = Math.min(minX, c.x0);
+    maxX = Math.max(maxX, c.x1);
+    minZ = Math.min(minZ, c.z0);
+    maxZ = Math.max(maxZ, c.z1);
+  }
+  const margin = 4;
+  return {
+    originX: (minX + maxX) / 2,
+    originZ: (minZ + maxZ) / 2,
+    halfExtent: Math.max(maxX - minX, maxZ - minZ) / 2 + margin,
+  };
+}
+
+/** Build (or reuse) the Crypt's NavGrid for the CURRENTLY generated layout.
+ *  Returns null if no layout has been generated yet (dungeonState.layout is
+ *  null — the player has not entered, or the last descent's layout was
+ *  cleared by resetDungeon() and a new one has not generated yet). */
+function ensureDungeonGrid(): NavGrid | null {
+  const layout = dungeonState.layout;
+  if (!layout) { dungeonGrid = null; dungeonGridSeed = null; return null; }
+  if (dungeonGrid && dungeonGridSeed === layout.seed) return dungeonGrid;
+
+  const bounds = dungeonLayoutBounds(layout);
+  dungeonGrid = new NavGrid({
+    region: 'dungeon',
+    originX: bounds.originX,
+    originZ: bounds.originZ,
+    halfExtent: bounds.halfExtent,
+    cellSize: navgridConfig.crypt.cellSize,
+    mode: 'fixed',
+  });
+  dungeonGridSeed = layout.seed;
+
+  // The Crypt's walls are real `stonewall` pieces (DungeonScene.tsx renders
+  // them with the same model the build menu uses) placed directly by
+  // generation rather than through the player's build economy, so there is
+  // no PlacedBuilding for rebuild() to read. Synthesize minimal ones —
+  // collisionBoxesFor('stonewall', rot) and DungeonWall.rot use the exact
+  // same quarter-turn convention (DungeonScene.tsx's own `w.rot === 1 ?
+  // Math.PI / 2 : 0` yaw confirms it), so rebuild()'s existing per-piece
+  // collision logic needs no changes at all to consume them correctly.
+  dungeonWallBuildings = layout.walls.map((w, i) => ({
+    id: `crypt-wall-${i}`, type: 'stonewall', x: w.x, z: w.z, rot: w.rot, world: 'dungeon',
+  }));
+  dungeonGrid.rebuild(dungeonWallBuildings);
+  return dungeonGrid;
+}
+
 export function getNavGrid(region: string | null): NavGrid {
   if (region === null) return homeGrid;
 
+  if (region === 'dungeon') {
+    const grid = ensureDungeonGrid();
+    if (!grid) {
+      throw new Error('getNavGrid: no Crypt layout generated yet (dungeonState.layout is null) — enter the Sealed Crypt first.');
+    }
+    return grid;
+  }
+
   const cached = destinationGrids.get(region);
   if (cached) return cached;
-
-  // The Sealed Crypt is a fixed grid sized from its own generated room
-  // layout, not a window — iteration 2.6's job. Reject it clearly here
-  // rather than let it silently fall through and get a window grid it was
-  // never meant to have.
-  if (region === 'dungeon') {
-    throw new Error('getNavGrid: the Crypt grid is not built yet — see iteration 2.6.');
-  }
 
   const dest = WORLD_DESTINATION_BY_ID[region];
   if (!dest) {

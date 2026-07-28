@@ -9,7 +9,7 @@
 // location-agnostic list (buildings, blueprints) this project already relies on.
 import { useMemo, Suspense } from 'react';
 import * as THREE from 'three';
-import { dungeonState, ROOM_SIZE, CORRIDOR_LENGTH } from '@/game/dungeon';
+import { dungeonState } from '@/game/dungeon';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import PropModel from './PropModel';
 import { Torch } from './Buildings';
@@ -42,12 +42,12 @@ export default function DungeonScene() {
         const color = room.isBoss ? '#5a2e2e' : room.isEntry ? '#6b5a3a' : '#3f3f45';
         return (
           <group key={room.index}>
-            <FloorTile x={room.cx - ox} z={room.cz - oz} w={ROOM_SIZE} d={ROOM_SIZE} color={color} />
+            <FloorTile x={room.cx - ox} z={room.cz - oz} w={room.halfX * 2} d={room.halfZ * 2} color={color} />
             <Suspense fallback={null}>
-              <group position={[room.cx - ox - ROOM_SIZE / 2 + 1.4, 0, room.cz - oz - ROOM_SIZE / 2 + 1.4]}>
+              <group position={[room.cx - ox - room.halfX + 1.4, 0, room.cz - oz - room.halfZ + 1.4]}>
                 <Torch />
               </group>
-              <group position={[room.cx - ox + ROOM_SIZE / 2 - 1.4, 0, room.cz - oz + ROOM_SIZE / 2 - 1.4]}>
+              <group position={[room.cx - ox + room.halfX - 1.4, 0, room.cz - oz + room.halfZ - 1.4]}>
                 <Torch />
               </group>
             </Suspense>
@@ -55,14 +55,18 @@ export default function DungeonScene() {
         );
       })}
 
-      {/* corridor floor strips between consecutive rooms */}
-      {layout.rooms.slice(0, -1).map((room, i) => (
+      {/* corridor floor strips — explicit connection data (Phase 2's
+          iteration 2.6 nav-grid work is what caught the branching topology
+          needing this: array adjacency stopped meaning "connected" the
+          moment rooms could have more than one child) rather than inferred
+          from array position */}
+      {layout.corridors.map((c, i) => (
         <FloorTile
           key={`c${i}`}
-          x={room.cx - ox + ROOM_SIZE / 2 + CORRIDOR_LENGTH / 2}
-          z={room.cz - oz}
-          w={CORRIDOR_LENGTH}
-          d={4}
+          x={(c.x0 + c.x1) / 2 - ox}
+          z={(c.z0 + c.z1) / 2 - oz}
+          w={c.x1 - c.x0}
+          d={c.z1 - c.z0}
           color="#3f3f45"
         />
       ))}
