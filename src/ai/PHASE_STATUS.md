@@ -16,7 +16,7 @@ one's debug view works.*
 | 2 | Navigation | **done — 10/10 iterations** — 2026-07-28, see below | navmesh/path gizmos |
 | 3 | Actuation | **done — 7/7 iterations** — 2026-07-28, see below | current-intent readout |
 | 4 | Smart objects | **done — 3/3 iterations** — 2026-07-28, see below | anchor axes |
-| 5 | Utility reasoner | not started — **spec verified, plan set** | ✅ renderer already built |
+| 5 | Utility reasoner | **1/10 iterations done** — phase 4 fully merged, no longer paused | ✅ renderer already built |
 | 6 | Perception | not started | belief markers, vision cones |
 | 7 | Combat + companion | not started | — |
 | 8 | LOD tiers + ambient | partially pre-built (see below) | ✅ tier in overlay |
@@ -229,7 +229,7 @@ real — this is a hard gate, not a suggestion (§5.0/§5.5).**
 
 | # | Branch | What | Depends on |
 |---|---|---|---|
-| 5.1 | `feature/phase5-1-curves` | `evalCurve` — five curve types, **with the `logit` NaN guard** | phase 4 merged |
+| 5.1 | ~~`feature/phase5-1-curves`~~ | **Merged 2026-07-28 (#58).** `src/ai/core/curves.ts`: `Curve`/`CurveType`/`evalCurve` — linear/quadratic/logistic/logit/bool, faithful port of `NPC_AI_SPEC.md` §5.3 with the `logit` NaN guard (`t <= 0 \|\| t >= 1` returns 0 before the log, never lets a non-positive or ≥1 ratio reach `Math.log`). Preceded by a full validation pass confirming nothing built in phases 2–4 works against Phase 5: found real, precisely-located gaps to close as Phase 5 proceeds (`Blackboard.reservation`'s field names don't match `TargetRegistry.reserve()`'s real model; `archetypes.json`'s intrinsic lists are missing `gather_resource`/`haul_to_deposit`/`flee_to_safety`/`sleep` entirely; `TargetRegistry.queryNearby`'s real 6-argument signature differs from both spec docs' pseudocode; `Context`/`Agent.currentActivity` are never actually defined anywhere; the `tradeXp` +10/trip award is hardcoded inside `tickVillagers`, not a reusable function 5.8a can call) — none blocking, all now tracked for the iterations that touch them. Also confirmed the actuation layer built in phase 3 is exactly what `GotoAndUse`/`flee_to_safety`/`sleep` need: the raid-flee and night-bed-seek cascade branches in `Villagers.tsx`/`Npc.tsx` only run when no Agent intent is active, so 5.6's reasoner-driven versions will take over automatically via the already-built `MOVE_TO` splice, zero renderer changes required. Verified with a standalone `npx tsx` script (no browser needed — pure math): every curve type checked against hand-derived values, the NaN guard confirmed at both `t<=0` and `t>=1`, plus an exhaustive sweep across curve types/params/inputs confirming nothing ever escapes `[0,1]` as `NaN`/`Infinity`. Also logged a real gap found along the way — stockpiles have zero storage-capacity mechanic today (confirmed by reading `gameStore.ts`: `addItems()` writes into one global uncapped inventory, stockpile only affects work-presence and flavor text) — to `ROADMAP.md`, deferred until after 5.8b ships | phase 4 merged |
 | 5.2 | `feature/phase5-2-scoring` | `Consideration` + compensated `scoreAction` | 5.1 |
 | 5.3 | `feature/phase5-3-commitment` | Category weights + `interruptPriority` table; momentum (×1.25), 15% switch threshold, cooldowns | 5.2 |
 | 5.4 | `feature/phase5-4-candidate-assembly` | Intrinsic actions + per-target expansion via `TargetRegistry.queryNearby` — one candidate **per target**, not per action | 5.3 |
