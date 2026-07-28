@@ -378,6 +378,26 @@ export function runReasoner(agent: Agent, actions: Action[], now: number, dt: nu
       agent.currentActivity = null;
     }
     agent.bb.currentActionId = null;
+    // Found in the final validation pass (5.9), not by any single-agent
+    // test: a natural SUCCESS (not abort/interrupt) never touches
+    // agent.intent — only abort() does, and finish() (both gather.ts and
+    // haul.ts) deliberately doesn't, since it has no opinion on movement.
+    // SUCCESS's own handling further down this function already sets
+    // agent.currentActivity = null before this branch can ever run again,
+    // so the `if (agent.currentActivity)` guard above is false and abort()
+    // is never reached — leaving whatever intent the Activity last emitted
+    // (commonly a PLAY_ANIM swing/deposit animation) stuck forever. Every
+    // renderer's own cascade (Villagers.tsx, Npc.tsx) treats ANY non-null
+    // intent as authoritative and holds position for it unconditionally,
+    // with no way to tell "still running" from "reasoner moved on" —
+    // so a genuinely-idle agent (nothing left to do: sack full, no
+    // reachable stockpile, no raid, daytime) visibly froze in place
+    // forever instead of falling through to the old cascade's own
+    // fallback behavior. "No winner" is the one place that can
+    // authoritatively state nothing is running, so it must always leave a
+    // clean signal behind, not just when this tick happened to inherit a
+    // still-live activity to abort.
+    agent.intent = null;
     return;
   }
 
