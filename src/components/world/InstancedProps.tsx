@@ -8,7 +8,7 @@
 // drei <Instance> sharing that geometry/material — same visual result as
 // PropModel, one real InstancedMesh draw call per sub-mesh instead of one
 // draw call per node.
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGLTF, Instances, Instance } from '@react-three/drei';
 
@@ -94,6 +94,24 @@ export function InstancedProp({
   selfLit?: boolean;
 }) {
   const subMeshes = useInstancedSubMeshes(url, height, selfLit);
+  // `limit` sizes drei's underlying InstancedBufferAttribute — it is NOT
+  // meant to track the live count. Passing nodes.length directly means the
+  // buffer shrinks every time a node harvests/depletes (fewer live nodes)
+  // and has to grow back on respawn; reported 2026-07-28 (real Firefox
+  // console output): "drawArraysInstanced: Instance fetch requires 2, but
+  // attribs only supply 1" — a genuine buffer/attribute size mismatch after
+  // a shrink-then-regrow. Chrome's WebGL validation is permissive enough to
+  // silently tolerate this (nothing draws wrong there); Firefox's is
+  // stricter and the draw call is rejected outright, so the prop just never
+  // renders — reproducible on herbs specifically because they're the one
+  // node kind actually cycling through harvest+respawn during normal play
+  // in the areas this was checked, not because anything about them differs
+  // in code. Fixed at the source instead of guessing per-consumer: track
+  // the highest count this instance has ever needed and never shrink the
+  // limit back down, so a full grove/meadow's worth of capacity, once
+  // reserved, stays reserved.
+  const maxSeen = useRef(0);
+  maxSeen.current = Math.max(maxSeen.current, nodes.length);
   if (nodes.length === 0) return null;
   return (
     <>
@@ -104,7 +122,7 @@ export function InstancedProp({
           material={sm.material}
           castShadow
           receiveShadow
-          limit={nodes.length}
+          limit={maxSeen.current}
         >
           {nodes.map((n) => (
             <Instance
