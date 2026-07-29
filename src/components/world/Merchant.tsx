@@ -7,6 +7,7 @@ import RiggedFigure from '../character/RiggedFigure';
 import PropModel from './PropModel';
 import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
+import { roadEntry } from '@/game/data/road';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import type { CharacterConfig } from '@/game/types';
 
@@ -38,12 +39,13 @@ const MERCHANT_KEEP_PROPS = false;
 const WALK_BUFFER = 0.03; // ~21.6 game-seconds at the default 720s day
 const WALK_SPEED = 1.2;
 
-// a point down the road he arrives from and departs toward — behind his own
-// facing direction, so the cart naturally leads him in and trails him out
-const OFF_STAGE = {
-  x: MERCHANT_SPOT.x + Math.sin(MERCHANT_SPOT.yaw) * 18,
-  z: MERCHANT_SPOT.z + Math.cos(MERCHANT_SPOT.yaw) * 18,
-};
+// The actual road's far entry point — the same spot every newcomer walks in
+// from (villagerMobs.arriveByRoad) — not an arbitrary offset behind
+// MERCHANT_SPOT. Found while investigating a reported rig bug: the old
+// OFF_STAGE point (18m directly behind MERCHANT_SPOT) had nothing to do
+// with where the road actually runs, so "walks in from down the road" was
+// only true by coincidence of direction, not by following the road itself.
+const OFF_STAGE = roadEntry();
 
 type Stage = 'away' | 'arriving' | 'present' | 'leaving';
 
@@ -94,7 +96,11 @@ export default function Merchant() {
       s.z = MERCHANT_SPOT.z;
       s.yaw = MERCHANT_SPOT.yaw;
       g.position.set(s.x, 0, s.z);
-      g.rotation.y = s.yaw;
+      // RiggedFigure convention (see Villagers.tsx) — the same +Math.PI the
+      // arriving/leaving branch below already applies; missing here meant
+      // the merchant stood backwards (back to the player) the entire time
+      // he's actually interactable, found investigating a reported rig bug.
+      g.rotation.y = s.yaw + Math.PI;
       if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
       return;
     }
