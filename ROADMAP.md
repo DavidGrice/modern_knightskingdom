@@ -521,15 +521,14 @@ granting the unlock + materials and seeing all 26 pieces appear.
   On player death IN THIS ARENA SPECIFICALLY: no game-over, no day-skip — respawn just outside the
   arena entrance and the run resets (a "redo," not a punishment), distinct from the general 0-HP
   behavior below.
-- [TODO] **A real 0-HP state, everywhere else** (requested 2026-07-28): today there's no defined
-  behavior for the player's HP actually reaching 0 outside combat's own damage clamps — needs one.
-  Explicitly NOT a game-over screen. The requested shape: something closer to a forced fast-forward to
-  the next day (sun up) with nearby hostiles despawned, so the player recovers rather than losing
-  progress — "you overextended and had to be pulled back," not "you failed." Needs a design pass on the
-  actual presentation (a fade, a specific respawn point — likely home/`SPAWN`), what happens to combat
-  state and any mid-fight raid, and how it interacts with the arena's own separate on-death rule above
-  (the arena's "respawn just outside, redo" should override this general behavior while inside it,
-  not stack with it).
+[COMPLETE] **A real 0-HP state, everywhere else** (requested 2026-07-28): `damagePlayer()`
+(`game/combat.ts`) already reset HP/stamina and teleported home on knockout; it now also jumps
+`worldEnv.time` to 0.27 (just before sunrise — the same dawn value `sleep()` uses for a bed) and
+clears `useEnemyStore` (which holds both raid AND dungeon-room enemies in one flat array, so this
+despawns whatever was pressuring the player either way). Explicitly not a game-over screen — the
+existing "carried back to camp" notify now says so and wakes at dawn. Left as a hook for later: a
+future arena's own "respawn just outside, redo" rule (below) needs to check for that case and
+return before reaching this general path, not stack with it — noted in the code at the same spot.
 - [TODO] **Raiders should arrive by the road, not pop into existence** (requested 2026-07-28): a raid
   spawn today is `spawn('gilbert', Math.cos(a0) * 38, Math.sin(a0) * 38, true)` (`Enemies.tsx`) — an
   instant appearance at a random point on a 38m ring around the homestead. Newcomers/the merchant

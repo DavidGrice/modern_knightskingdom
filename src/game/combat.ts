@@ -16,6 +16,7 @@ import { resetDungeon } from './dungeon';
 import { ITEMS } from './data/items';
 import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
+import { worldEnv } from './env';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -284,7 +285,21 @@ export function damagePlayer(amount: number) {
       useGameStore.setState({ destination: null });
       resetDungeon();
     }
-    st.notify('You were knocked out and carried back to camp…', true);
+    // A real 0-HP state (requested 2026-07-28): explicitly not a game-over —
+    // a forced recovery. Jumps to just-before-sunrise, the same dawn value
+    // gameStore's own sleep() uses for a bed, and clears whatever was
+    // pressuring the player. useEnemyStore holds both raid AND dungeon-room
+    // enemies (spawn()'s own dungeonRoom param) in one flat array, so one
+    // clear() here despawns both: the raid that knocked the player out is
+    // called off, and any dungeon-room fight is abandoned along with the
+    // layout reset above (an orphaned dungeon-room enemy surviving a
+    // discarded layout was already a latent gap this incidentally closes).
+    // A future arena's own "respawn just outside, redo" rule (ROADMAP) must
+    // check for that case and return before reaching this general path,
+    // not stack with it.
+    useEnemyStore.getState().clear();
+    worldEnv.time = 0.27; // just before sunrise
+    st.notify('You were knocked out and carried back to camp… you wake at dawn.', true);
     audio.play('horn', 0.5);
   }
 }
