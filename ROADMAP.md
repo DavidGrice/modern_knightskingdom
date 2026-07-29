@@ -529,14 +529,20 @@ despawns whatever was pressuring the player either way). Explicitly not a game-o
 existing "carried back to camp" notify now says so and wakes at dawn. Left as a hook for later: a
 future arena's own "respawn just outside, redo" rule (below) needs to check for that case and
 return before reaching this general path, not stack with it — noted in the code at the same spot.
-- [TODO] **Raiders should arrive by the road, not pop into existence** (requested 2026-07-28): a raid
-  spawn today is `spawn('gilbert', Math.cos(a0) * 38, Math.sin(a0) * 38, true)` (`Enemies.tsx`) — an
-  instant appearance at a random point on a 38m ring around the homestead. Newcomers/the merchant
-  already walk in from the real road entry point (`roadEntry()`, `data/road.ts`) and it reads
-  substantially better; a raid approaching visibly down the road (or fanning out from it) would sell
-  "this is happening to your homestead" far more than a pop-in ever will. Needs its own pass: does the
-  whole party arrive together or staggered, do they peel off toward different sides once in sight, and
-  does this apply to every raid kind or just the ones with a leader (Gilbert) worth making an entrance.
+[COMPLETE] **N79 · Raiders should arrive by the road, not pop into existence** (requested 2026-07-28):
+raiders now spawn loosely clustered around `roadEntry()` (`data/road.ts`) instead of on a random
+point on a 38m ring, tagged `approaching: true` (`EnemyMob`, `game/combat.ts`). While approaching, a
+new branch in `Enemies.tsx`'s per-frame block routes each raider toward `HOME_X`/`HOME_Z` via the
+same nav-grid `findPath` the ordinary chase behavior already uses, with its own small pack-separation
+nudge so they don't stack; it clears itself (handing off to the normal wander/chase/attack FSM)
+once a raider is within 30m of home or the player is already within the usual 26m aggro range,
+whichever comes first. Answers the open design questions with the simplest reasonable default: the
+whole party leaves together (no stagger) and every raid kind gets the walk-in, not just Gilbert's —
+"peeling off toward different sides" stays open if it turns out to want more than the existing
+chase-branch flanking already gives it once they're close. The raider ram (`raiderRamState`, a
+separate system with no mob/walk-in of its own) still starts on the old 34m ring, unchanged.
+Verified live: three bandits spawned at the road entry with the player far away (isolating the
+walk from aggro) steadily closed on (0, 0) via real pathing, not a straight teleport-toward-target.
 
 **Homestead & economy**
 - [COMPLETE] **Bug (deferred, Phase 10 #9):** the traveling merchant's cart parked inside `BUILD_REGION` —

@@ -178,6 +178,11 @@ export interface EnemyMob {
   /** rallied by an ally being struck (AI wave 2): chases regardless of the
    *  normal 26m aggro leash while > 0, ticking down each frame */
   alertT?: number;
+  /** N79 (requested 2026-07-28): spawned at the road's entry point rather
+   *  than popping into existence, and still walking in toward the
+   *  homestead — Enemies.tsx routes this via the nav grid instead of the
+   *  normal wander/chase FSM until it clears itself close to home. */
+  approaching?: boolean;
 }
 
 export interface EnemyData {
@@ -215,14 +220,14 @@ let enemySeq = 1;
 
 interface EnemyStore {
   enemies: EnemyData[];
-  spawn: (kind: EnemyKind, x: number, z: number, raid?: boolean, dungeonRoom?: number) => void;
+  spawn: (kind: EnemyKind, x: number, z: number, raid?: boolean, dungeonRoom?: number, approaching?: boolean) => void;
   remove: (id: number) => void;
   clear: () => void;
 }
 
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
   enemies: [],
-  spawn: (kind, x, z, raid = false, dungeonRoom) => {
+  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false) => {
     const scale = (kind === 'cedric' || kind === 'storm') ? 1 : raidStrength();
     const maxHp = Math.round(KIND_HP[kind] * scale);
     const e: EnemyData = {
@@ -238,6 +243,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
         x, z, yaw: Math.random() * Math.PI * 2,
         state: 'wander', attackCd: 0, wanderT: 0,
         homeX: x, homeZ: z, dieT: 0,
+        approaching,
       },
     };
     set({ enemies: [...get().enemies, e] });

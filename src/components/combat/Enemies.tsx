@@ -23,6 +23,8 @@ import type { CharacterConfig, ItemId } from '@/game/types';
 import { ITEMS } from '@/game/data/items';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD, POND, WORLD_HALF } from '@/game/data/world';
 import { sizeFor } from '@/game/data/buildables';
+import { HOME_X, HOME_Z } from '@/game/data/villagers';
+import { roadEntry } from '@/game/data/road';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
 import { defenderState } from '@/game/defenders';
 import { dungeonState } from '@/game/dungeon';
@@ -152,6 +154,59 @@ function Enemy({ data }: { data: EnemyData }) {
 
     if (!st.buildMode) {
       const d = distToPlayer(m.x, m.z);
+      // N79 (requested 2026-07-28): a raider spawned at the road's entry
+      // point (the raid trigger below) walks in toward the homestead first,
+      // routed via the same nav-grid pathing the ordinary chase branch uses
+      // below, just aimed at HOME_X/HOME_Z instead of the player — until
+      // close enough to the homestead, or the player is already near, at
+      // which point approaching clears and the normal wander/chase/attack
+      // FSM below takes over on the next frame. Mirrors the 'fleeing'
+      // branch just below: sets its own position/rotation/clip and returns
+      // early rather than falling through to the shared tail.
+      if (m.approaching) {
+        const homeD = Math.hypot(m.x - HOME_X, m.z - HOME_Z);
+        if (d < 26 || homeD < 30) {
+          m.approaching = false; // close enough — the FSM below takes over next frame
+        } else {
+          m.state = 'chase';
+          path.current.t -= dt;
+          if (path.current.t <= 0) {
+            path.current.t = 0.7 + Math.random() * 0.4;
+            path.current.pts = findPath(m.x, m.z, HOME_X, HOME_Z) ?? [];
+            path.current.i = 0;
+          }
+          let aimX = HOME_X, aimZ = HOME_Z;
+          const pts = path.current.pts;
+          while (path.current.i < pts.length
+            && Math.hypot(pts[path.current.i].x - m.x, pts[path.current.i].z - m.z) < 1.1) {
+            path.current.i++;
+          }
+          if (path.current.i < pts.length) { aimX = pts[path.current.i].x; aimZ = pts[path.current.i].z; }
+          const ad = Math.hypot(aimX - m.x, aimZ - m.z) || 1;
+          const nx = (aimX - m.x) / ad;
+          const nz = (aimZ - m.z) / ad;
+          m.x += nx * speed * dt;
+          m.z += nz * speed * dt;
+          m.yaw = Math.atan2(-nx, -nz);
+          // same pack-separation nudge the shared tail applies to chase/
+          // attack — duplicated rather than shared since this branch
+          // returns early below
+          for (const o of useEnemyStore.getState().enemies) {
+            if (o.id === data.id || o.mob.state === 'dying') continue;
+            const sx = m.x - o.mob.x;
+            const sz = m.z - o.mob.z;
+            const sd = Math.hypot(sx, sz);
+            if (sd > 0.001 && sd < 1.1) {
+              m.x += (sx / sd) * (1.1 - sd) * 0.5;
+              m.z += (sz / sd) * (1.1 - sd) * 0.5;
+            }
+          }
+          g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : 0, m.z);
+          g.rotation.y = m.yaw + Math.PI;
+          if (clip !== 'anim_c_run') setClip('anim_c_run');
+          return;
+        }
+      }
       // broken morale (advanced AI): a badly wounded bandit loses heart and
       // breaks for the treeline instead of trading blows to the end — no
       // kill credit, no loot, they just live to raid another day
@@ -532,14 +587,26 @@ export default function Enemies() {
       audio.play('warcry', 0.9);
       audio.play('horn', 0.9);
       const a0 = Math.random() * Math.PI * 2;
+      // N79 (requested 2026-07-28): raiders arrive by the road instead of
+      // popping into existence on a ring around the homestead — spawned
+      // loosely clustered around the same road entry point newcomers and
+      // the merchant already walk in from (roadEntry()), each individually
+      // routed home via Enemies.tsx's own approaching walk (see the
+      // per-frame block above). a0 (below) still picks the ram's own spot —
+      // see that call's own comment for why it's unchanged.
+      const entry = roadEntry();
+      function roadSpawnPos(i: number): [number, number] {
+        const a = (i / 3) * Math.PI * 2;
+        return [entry.x + Math.cos(a) * 3, entry.z + Math.sin(a) * 3];
+      }
       if (st.alliance === 'cedric') {
         // Phase 19 alliance branch: pledge to Cedric and it's the CROWN that
         // comes for your homestead — a wave of royal knights, never Cedric's
         // own people (your allies now), and no Weezil bark in the pack
         st.notify('⚔ The crown brands you a traitor — royal knights raid your homestead!', true);
         for (let i = 0; i < 3; i++) {
-          const a = a0 + (i / 3) * Math.PI * 2;
-          spawn('royal', Math.cos(a) * 38, Math.sin(a) * 38, true);
+          const [sx, sz] = roadSpawnPos(i);
+          spawn('royal', sx, sz, true, undefined, true);
         }
       } else {
         // unsworn or crown-sworn: the bandit threat, exactly as before
@@ -552,22 +619,27 @@ export default function Enemies() {
         if (cedricLed) {
           audio.playVoice('greeting_cedric', 0.9);
           st.notify('⚔ Cedric the Bull himself leads the raid on your homestead!', true);
-          spawn('cedric', Math.cos(a0) * 38, Math.sin(a0) * 38, true);
+          const [sx, sz] = roadSpawnPos(0);
+          spawn('cedric', sx, sz, true, undefined, true);
         } else {
           // Gilbert the Bad leads the raid, with Weezil somewhere in the pack —
           // their own real voice lines instead of an anonymous mob (see combat.ts)
           audio.playVoice('greeting_gilbert', 0.85);
           st.notify('⚔ Gilbert the Bad leads a raid on your homestead!', true);
-          spawn('gilbert', Math.cos(a0) * 38, Math.sin(a0) * 38, true);
+          const [sx, sz] = roadSpawnPos(0);
+          spawn('gilbert', sx, sz, true, undefined, true);
         }
         audio.playVoice('greeting_weezil', 0.6);
         for (let i = 1; i < 3; i++) {
-          const a = (i / 3) * Math.PI * 2 + Math.random();
-          spawn('bandit', Math.cos(a) * 38, Math.sin(a) * 38, true);
+          const [sx, sz] = roadSpawnPos(i);
+          spawn('bandit', sx, sz, true, undefined, true);
         }
       }
       // raiders occasionally bring their own ram — the same threat the
-      // player's siege tools already pose, now aimed at the player's gate
+      // player's siege tools already pose, now aimed at the player's gate.
+      // Has no walk-in of its own (raiderRamState is a separate system, not
+      // an EnemyData/mob), so it still starts on the old 34m ring rather
+      // than at the road entry — a rework of its own, out of scope here.
       if (Math.random() < 0.4) {
         // full reset, not just `active = true` — a ram that was broken last
         // raid must not roll back in already wrecked and on 0 HP
