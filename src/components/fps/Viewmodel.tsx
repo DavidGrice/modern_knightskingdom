@@ -124,8 +124,9 @@ function Longbow({ draw }: { draw: number }) {
           back at the player while the bow's belly faced outward — the two
           read as swapped. They are siblings now: the bow keeps its
           cross-body presentation, and the arrow is aimed downrange in the
-          MOUNT's own frame where -Z is forward, independent of however the
-          bow is turned. */}
+          MOUNT's own frame, independent of however the bow is turned (see
+          the arrow's own group below for which axis "downrange" ended up
+          being, re-measured 2026-07-29). */}
       <group rotation={[0.1, -Math.PI / 2, 0]}>
       <RealWeapon
         id="bow"
@@ -154,9 +155,19 @@ function Longbow({ draw }: { draw: number }) {
         );
       })}
       </group>
-      {/* the nocked arrow: pointing DOWNRANGE (-Z), riding back toward the
-          archer along +Z as the draw deepens */}
-      <group position={[0, 0, pull]} rotation-x={-Math.PI / 2}>
+      {/* the nocked arrow: pointing DOWNRANGE (+X, this mount's own forward
+          once rotated), riding back toward the archer along -X as the draw
+          deepens. Re-measured 2026-07-29: the arrow's own rest orientation
+          (see loadWeapon('arrow')) is +Y like every other real mold, but a
+          quarter-turn onto -Z (what K56 shipped) points it along the
+          camera's OWN forward axis — which looks right on paper but is
+          exactly wrong on screen: pointing straight into the depth the
+          camera is already looking down foreshortens it to a barely-visible
+          sliver, which is what "lies vertically alongside the bow rather
+          than downrange" actually looked like. A quarter-turn onto ±X
+          instead keeps the shaft ACROSS the view, visibly running from the
+          string out to the reticle the way a nocked arrow actually reads. */}
+      <group position={[-pull, 0, 0]} rotation-z={-Math.PI / 2}>
         <RealWeapon id="arrow" scale={0.85} fallback={null} />
       </group>
     </group>
@@ -215,7 +226,8 @@ function BlockShield() {
  * origin with its length along +Y (see lib/weaponParts), so these are
  * statements of intent rather than per-weapon fudge factors:
  *   sword     — blade up and angled forward, carried at the ready
- *   crossbow  — levelled downrange, +Y turned a quarter onto -Z
+ *   crossbow  — levelled downrange, +Y turned a quarter onto -Z, plus a roll
+ *               to square the bow-arms (see MOUNT's own comment)
  *   tool      — haft up and forward, the shared pose for the procedural set
  */
 /** how high the hands sit in the frame, and how far out the off hand is.
@@ -229,7 +241,13 @@ const BOW_X = 0.2;
 
 const MOUNT = {
   sword: [-0.45, 0, -0.12] as [number, number, number],
-  crossbow: [-Math.PI / 2, 0, 0] as [number, number, number],
+  // Re-measured 2026-07-29: the pitch (x) was already right — levelled and
+  // pointed downrange — but with zero roll the crossbow's own bow-arms sat
+  // canted a good 25-30° off level rather than square to the view, which is
+  // what actually read as "wrong" (the pitch alone looked plausible on
+  // paper; only screenshotting it at scale made the roll obvious). +0.5 on
+  // z squares the arms up without touching the pitch.
+  crossbow: [-Math.PI / 2, 0, 0.5] as [number, number, number],
   //   tool — H34. There is no pickaxe or hammer mold anywhere in the
   //          extraction (the lab's only `pickaxe` is a trait on a defence
   //          tower, not a held part), so these four stay procedural. What
