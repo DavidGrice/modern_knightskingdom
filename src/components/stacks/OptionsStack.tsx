@@ -83,7 +83,7 @@ export default function OptionsStack() {
   const pop = useAppStore((s) => s.pop);
 
   return (
-    <div className="kk-screen kk-screen-metal">
+    <div className={`kk-screen kk-screen-${settings.uiTheme}`}>
       <div className="kk-screen-pad">
         <div className="kk-screen-head">
           <h2>OPTIONS</h2>

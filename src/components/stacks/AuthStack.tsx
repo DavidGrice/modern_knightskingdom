@@ -16,6 +16,9 @@ export default function AuthStack() {
   const setUser = useAppStore((s) => s.setUser);
   const setGuest = useAppStore((s) => s.setGuest);
   const resetTo = useAppStore((s) => s.resetTo);
+  // one shared theme now, not the mockup's fixed "title = chrome" pick —
+  // see kk-screens.css's own header for the full story
+  const uiTheme = useAppStore((s) => s.settings.uiTheme);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +47,7 @@ export default function AuthStack() {
   }
 
   return (
-    <div className="kk-screen kk-title-screen">
+    <div className={`kk-screen kk-title-screen kk-screen-${uiTheme}`}>
       <div className="kk-title-sky" />
       <div className="kk-plaque">
         <div className="kk-plaque-word">KNIGHTS&apos; KINGDOM</div>

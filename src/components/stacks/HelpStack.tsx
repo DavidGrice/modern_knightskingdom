@@ -47,9 +47,10 @@ const STEPS: Step[] = [
 
 export default function HelpStack() {
   const pop = useAppStore((s) => s.pop);
+  const uiTheme = useAppStore((s) => s.settings.uiTheme);
 
   return (
-    <div className="kk-screen kk-screen-metal">
+    <div className={`kk-screen kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
         <div className="kk-screen-head">
           <h2>HOW TO PLAY</h2>

@@ -4,10 +4,19 @@
    turns 3a–3d and 1a–1d) per HANDOFF.md §5.
 
    Structure only. Every colour comes from kk-tokens.css; the four
-   lane treatments live in kk-lanes.css. Each screen keeps the lane
-   the mockup assigned it (title = Millennium Chrome, menu/options =
-   Metalheart, hero forge = Guild Leather, HUD = whatever the player
-   picked in Options), because those pairings are what was approved.
+   lane treatments live in kk-lanes.css. Each screen used to keep
+   whichever lane the mockup happened to assign it (title = Millennium
+   Chrome, menu/options = Metalheart, hero forge = Guild Leather, and
+   only the in-game HUD followed the player's own Options pick) —
+   approved once as four independent showcases, but reported back
+   2026-07-29 as exactly what it looks like from inside the game: login,
+   menu, character creator and the HUD each reading as a different
+   theme, with no way to make them agree. Every `.kk-screen-*` class
+   below is now driven by the SAME `uiTheme` setting the in-game HUD
+   already followed (see each stack component's own `kk-screen-${lane}`
+   className), so picking a lane in Options now really does apply
+   everywhere — the four recipes stay, but which one is showing is a
+   single shared choice again, not a per-screen fact.
    ============================================================ */
 
 /* ---------- shared screen shell ---------- */
@@ -49,6 +58,31 @@
     repeating-linear-gradient(37deg, rgba(0, 0, 0, .14) 0 2px, transparent 2px 5px),
     repeating-linear-gradient(-51deg, rgba(255, 255, 255, .025) 0 1px, transparent 1px 4px);
 }
+/* the two lanes that previously had no screen-level treatment at all
+   (only a .game-panel recipe in kk-lanes.css) — same dark shell every
+   lane uses, tinted with that lane's own accent, so the front-door
+   screens under aero glass / millennium chrome read as the same family
+   as their in-game panels rather than borrowing metal's backdrop */
+.kk-screen-glass {
+  background: linear-gradient(160deg, #0e1712, #0a100d 55%, #101a15);
+}
+.kk-screen-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(70% 60% at 50% 12%, rgba(168, 245, 205, .14), transparent 66%);
+}
+.kk-screen-chrome {
+  background: linear-gradient(160deg, #0c1520, #080d15 55%, #0e1928);
+}
+.kk-screen-chrome::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(70% 60% at 50% 12%, rgba(143, 168, 189, .16), transparent 66%);
+}
 
 /* ---------- 3a · TITLE & SIGN IN ---------- */
 .kk-title-screen {
@@ -56,7 +90,10 @@
   justify-content: center;
   flex-direction: column;
   gap: 24px;
-  background: #0b0d14;
+  /* no background of its own any more — one of the .kk-screen-* lane
+     classes above supplies it now, same as every other front-door
+     screen, with .kk-title-sky layered on top for the plaque's own
+     atmosphere regardless of which lane is active */
 }
 .kk-title-sky {
   position: absolute;

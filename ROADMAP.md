@@ -626,19 +626,28 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   so the ~100 existing rules and inline styles followed without rewrites; the remaining hardcoded browns
   were swept (`#574327` → `var(--chrome-2)` etc.). **Follow-ups:** notification glows, minimap ring
   tinting, a blackletter/uncial display face for titles (needs font embedding), loading-screen heraldry.
-- [TODO] **A real, user-selectable theme system** (requested 2026-07-28): reported as a hodge-podge —
-  login, main menu, character creator and the in-game HUD each currently read as a different theme.
-  Worth reconciling against the "Dark-ages re-theme (v2)" entry directly above, which specifically
-  claimed "the whole UI — login/menus through in-game panels" — either later screens were added outside
-  that token system, or the token coverage itself has gaps; needs a fresh screen-by-screen audit before
-  assuming which. What's actually being asked for is bigger than re-auditing consistency, though: a real
-  theme SWITCHER, not just one consistent look — pick a theme in Options and have it apply everywhere,
-  with a sensible shipped default. The existing `[data-faction]` root-attribute + CSS custom-property
-  token mechanism (`FactionTheme.tsx`, the same system the dark-ages re-theme and faction chrome both
-  already use) is a real, proven pattern for exactly this — extending it to a player-chosen
-  `[data-theme]` alongside the allegiance-driven `[data-faction]` is more plausible than inventing a
-  second theming system from scratch, but needs a design pass on how many themes actually ship at v1 and
-  whether faction chrome should compose with the chosen theme or be one of the theme choices itself.
+[COMPLETE] **A real, user-selectable theme system** (requested 2026-07-28): the audit found the switcher
+already existed and already worked — `OptionsStack.tsx`'s "Interface Theme" picker, `UiTheme.tsx`
+setting `data-kk-lane` on `<html>` globally from `settings.uiTheme`, four real recipes in
+`kk-lanes.css` (Aero Glass/Metalheart/Millennium Chrome/Guild Leather) — but it only ever reached
+`.game-panel`/`.build-menu`/`.rank-badge`/`.quest-tracker`, i.e. the in-game HUD. The actual root
+cause of "login is one theme, menu is another, character creator is another": `kk-screens.css`'s own
+header said it outright — each front-door screen kept whichever lane its ORIGINAL mockup was
+approved with (title = chrome-styled plaque, menu/options = hardcoded `kk-screen-metal`, hero forge
+= hardcoded `kk-screen-leather`) regardless of what the player picked, while only the HUD ever
+followed the setting. Fixed by making every front-door screen's `kk-screen-*` className read
+`settings.uiTheme` live instead of a fixed string (`AuthStack`/`MainMenu`/`OptionsStack`/
+`CharacterCreator`/`CreditsStack`/`HelpStack.tsx`), and adding the two lane recipes that never had a
+screen-level treatment at all (`.kk-screen-glass`/`.kk-screen-chrome` in `kk-screens.css`, matching
+their existing in-game `.game-panel` accent colors). Verified live end-to-end: picking Metalheart in
+Options re-tints the Options screen itself immediately, and the change carries through Back to the
+main menu and into "New Journey" → Forge Your Hero, all three now the same steel-blue lane that used
+to be menu/options-only. **Known remaining gap, out of scope here:** `StatsStack.tsx` still uses an
+entirely separate, older `.stack-screen`/`.panel` class system predating the UI handoff pack, so the
+Chronicle-of-Deeds screen doesn't follow the lane at all yet; the sign-in plaque and the character
+creator's own doll-stage frame also keep bespoke decorative styling rather than the shared 4-recipe
+treatment. Worth a follow-up pass, not a blocker on "pick a theme and have it apply everywhere" being
+true for the screens the original report actually named.
 
 **Tech (continuous)**
 - [TODO] **Performance & streamlining pass (requested 2026-07-18)** — a dedicated rendering-efficiency effort,
