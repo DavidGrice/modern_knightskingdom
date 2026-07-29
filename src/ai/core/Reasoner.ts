@@ -159,7 +159,14 @@ export interface Candidate {
  *  wins outright — no momentum or threshold applies to a cold start. */
 export function pickAction(candidates: Candidate[], agent: Agent, now: number): Candidate | null {
   const bb: Blackboard = agent.bb;
-  const eligible = candidates.map((c) => {
+  // Performance pass (2026-07-28): with no cooldowns active at all — the
+  // common case, most agents most of the time — this map() was allocating
+  // a whole new array (and a new candidate object per cooling-down entry)
+  // every think tick for no reason: bb.cooldowns.get(anything) can only
+  // ever return undefined when the Map is empty, so the transform below is
+  // the identity function in that case. Skipping straight to `candidates`
+  // is behaviorally identical and allocates nothing.
+  const eligible = bb.cooldowns.size === 0 ? candidates : candidates.map((c) => {
     const readyAt = bb.cooldowns.get(c.action.id);
     if (readyAt !== undefined && readyAt > now) {
       return { action: c.action, scored: { ...c.scored, score: 0 }, ctx: c.ctx };
@@ -316,10 +323,26 @@ export interface Activity {
  *  skipped entirely — including its `TargetRegistry` query — so an
  *  archetype that was never offered `gather_resource` (a `companion`, say)
  *  never even looks for a target to bind it to. */
+// Performance pass (2026-07-28): `new Set(archetypeDef(...).intrinsic)`
+// used to run fresh every single think tick, for every agent — but an
+// archetype's intrinsic list is static config data (archetypes.json),
+// never mutated at runtime, so the same Set can be built once per
+// archetype and reused forever. Module-level cache, same pattern as
+// AnchorRule's own fishing-radius memoization in config/index.ts.
+const intrinsicSetCache = new Map<string, Set<string>>();
+function intrinsicSetFor(archetype: string): Set<string> {
+  let s = intrinsicSetCache.get(archetype);
+  if (!s) {
+    s = new Set(archetypeDef(archetype).intrinsic);
+    intrinsicSetCache.set(archetype, s);
+  }
+  return s;
+}
+
 export function assembleCandidates(
   allActions: Action[], agent: Agent, now: number, queryRadius = 40,
 ): Candidate[] {
-  const intrinsicIds = new Set(archetypeDef(agent.archetype).intrinsic);
+  const intrinsicIds = intrinsicSetFor(agent.archetype);
   const out: Candidate[] = [];
   for (const action of allActions) {
     if (!intrinsicIds.has(action.id)) continue;

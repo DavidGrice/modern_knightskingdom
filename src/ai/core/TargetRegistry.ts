@@ -66,25 +66,65 @@ class TargetRegistry {
   // same bare id/kind can never share a reservation bucket
   private reservations = new Map<TargetId, Reservation[]>();
 
+  // Performance pass (2026-07-28): get() used to be a straight
+  // `st.nodes.find(...)`/`st.buildings.find(...)` — an O(n) scan of the
+  // WHOLE array. That's expensive here specifically because get() isn't
+  // just a think-tick cost: Locomotion.ts calls it every RENDER FRAME for
+  // every agent walking to an anchor (not think-rate-limited at all), and
+  // GatherAtNode/HaulToDeposit's own update() call it again every think
+  // tick on top of that. These id-indexes turn it into an O(1) Map lookup.
+  // Rebuilt lazily on reference change rather than on every call — st.nodes/
+  // st.buildings get a genuinely new array reference on every store update
+  // that touches either (harvest, respawn, placement, damage), so identity
+  // comparison is a correct, cheap staleness check, and the O(n) rebuild
+  // only happens once per actual mutation instead of once per lookup.
+  private nodesRef: ResourceNodeState[] | null = null;
+  private nodesById = new Map<string, ResourceNodeState>();
+  private buildingsRef: PlacedBuilding[] | null = null;
+  private buildingsById = new Map<string, PlacedBuilding>();
+
+  private syncNodeIndex(nodes: ResourceNodeState[]): void {
+    if (nodes === this.nodesRef) return;
+    this.nodesRef = nodes;
+    this.nodesById.clear();
+    for (const n of nodes) this.nodesById.set(n.id, n);
+  }
+
+  private syncBuildingIndex(buildings: PlacedBuilding[]): void {
+    if (buildings === this.buildingsRef) return;
+    this.buildingsRef = buildings;
+    this.buildingsById.clear();
+    for (const b of buildings) this.buildingsById.set(b.id, b);
+  }
+
   /** Nearest targets to (x, z) within `radius`, filtered to `kinds` (empty
    *  = any kind) and `region`. Capped at 12 — §3.1: do not score the whole
    *  world every think. Targets are computed fresh from live store state
-   *  every call, not cached; only reservations persist across calls. */
+   *  every call, not cached; only reservations persist across calls.
+   *  Performance pass: the radius scan itself is still O(nodes+buildings) —
+   *  a real spatial index would be a much bigger change for a cap this game
+   *  world's current scale doesn't need yet — but a real `Target` object
+   *  (nodeTarget()/buildingTarget()) is now only constructed for the
+   *  entries that actually survive the sort+slice to `limit`, not for every
+   *  match within radius. */
   queryNearby(
     x: number, z: number, radius: number,
     kinds: string[] = [], region: string | null = null, limit = 12,
   ): Target[] {
     const st = useGameStore.getState();
+    this.syncNodeIndex(st.nodes);
+    this.syncBuildingIndex(st.buildings);
     const r2 = radius * radius;
     const wantKind = kinds.length > 0 ? new Set(kinds) : null;
-    const found: { t: Target; d2: number }[] = [];
+    const found: { ref: ResourceNodeState | PlacedBuilding; isNode: boolean; d2: number }[] = [];
 
-    for (const n of st.nodes) {
-      if (region !== null) continue; // every node's own region is null — see Target.region's doc
-      if (wantKind && !wantKind.has(n.kind)) continue;
-      const dx = n.x - x, dz = n.z - z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 <= r2) found.push({ t: nodeTarget(n), d2 });
+    if (region === null) { // every node's own region is null — see Target.region's doc
+      for (const n of st.nodes) {
+        if (wantKind && !wantKind.has(n.kind)) continue;
+        const dx = n.x - x, dz = n.z - z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 <= r2) found.push({ ref: n, isNode: true, d2 });
+      }
     }
 
     for (const b of st.buildings) {
@@ -93,25 +133,31 @@ class TargetRegistry {
       if (wantKind && !wantKind.has(b.type)) continue;
       const dx = b.x - x, dz = b.z - z;
       const d2 = dx * dx + dz * dz;
-      if (d2 <= r2) found.push({ t: buildingTarget(b), d2 });
+      if (d2 <= r2) found.push({ ref: b, isNode: false, d2 });
     }
 
     found.sort((a, b) => a.d2 - b.d2);
-    return found.slice(0, limit).map((e) => e.t);
+    return found.slice(0, limit).map((e) => (
+      e.isNode ? nodeTarget(e.ref as ResourceNodeState) : buildingTarget(e.ref as PlacedBuilding)
+    ));
   }
 
   /** The live Target for a specific id, or null if it no longer exists (a
    *  harvested node despawned, a building was demolished). Re-reads current
    *  store state every call rather than trusting a cached snapshot — a
-   *  target that no longer exists must read as gone, not stale-available. */
+   *  target that no longer exists must read as gone, not stale-available.
+   *  O(1) via the id-index above, not a linear scan — see that comment for
+   *  why this specific lookup mattered enough to index. */
   get(id: TargetId): Target | null {
     const st = useGameStore.getState();
     if (id.startsWith('node:')) {
-      const n = st.nodes.find((x) => x.id === id.slice(5));
+      this.syncNodeIndex(st.nodes);
+      const n = this.nodesById.get(id.slice(5));
       return n ? nodeTarget(n) : null;
     }
     if (id.startsWith('bldg:')) {
-      const b = st.buildings.find((x) => x.id === id.slice(5));
+      this.syncBuildingIndex(st.buildings);
+      const b = this.buildingsById.get(id.slice(5));
       return b ? buildingTarget(b) : null;
     }
     return null;
@@ -150,6 +196,13 @@ class TargetRegistry {
 
   clear() {
     this.reservations.clear();
+    // drop the id-index too — a stale reference held onto across a
+    // newGame()/loadFromSave() is a real (if small) leak, and the next
+    // get()/queryNearby() call rebuilds it against the new array anyway
+    this.nodesRef = null;
+    this.nodesById.clear();
+    this.buildingsRef = null;
+    this.buildingsById.clear();
   }
 }
 

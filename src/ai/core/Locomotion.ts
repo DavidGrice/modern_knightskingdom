@@ -12,7 +12,8 @@
 import { navSteer, type NavAgent } from '@/game/navgrid';
 import type { Agent } from './Agent';
 import { targetRegistry } from './TargetRegistry';
-import { resolveAnchor } from './AnchorResolution';
+import { resolveAnchor, type ResolvedAnchor } from './AnchorResolution';
+import { despawnHooks } from './AgentManager';
 
 const WALK_SPEED = 0.9; // m/s — matches Villagers.tsx's existing wander/work pace
 const RUN_SPEED = 1.6; // m/s — matches Villagers.tsx's existing raid-flee pace
@@ -40,6 +41,53 @@ function steerFor(agent: Agent): NavAgent {
   return s;
 }
 
+// Performance pass (2026-07-28): resolveAnchor() was being called every
+// single RENDER FRAME for every agent walking to an anchor — 8 trig
+// evaluations plus 8 nav-grid walkability samples, to re-derive a point that
+// can't actually change mid-approach (the target is stationary; the only
+// thing that could invalidate a resolved anchor is the nav grid itself
+// changing, e.g. a wall going up). Cached per agent, keyed by targetId, with
+// a short TTL rather than "forever" so a newly-obstructed anchor still
+// self-heals within a bounded time instead of never re-checking. `age` is
+// accumulated from `dt` rather than read off a clock, since Locomotion only
+// ever receives a frame's dt, not a timestamp.
+const ANCHOR_REFRESH_INTERVAL = 1.5; // seconds
+interface AnchorCacheEntry { targetId: string; anchor: ResolvedAnchor; age: number }
+const anchorCache = new Map<string, AnchorCacheEntry>();
+
+function anchorFor(agent: Agent, targetId: string, dt: number): ResolvedAnchor | null {
+  const entry = anchorCache.get(agent.id);
+  if (entry && entry.targetId === targetId) {
+    entry.age += dt;
+    if (entry.age < ANCHOR_REFRESH_INTERVAL) return entry.anchor;
+  }
+  const target = targetRegistry.get(targetId);
+  if (!target) { anchorCache.delete(agent.id); return null; }
+  const anchor = resolveAnchor(target, agent.position.x, agent.position.z);
+  if (!anchor) { anchorCache.delete(agent.id); return null; }
+  anchorCache.set(agent.id, { targetId, anchor, age: 0 });
+  return anchor;
+}
+
+/** Drop this agent's steering/anchor state. Without it, a villager who
+ *  despawns and respawns repeatedly (e.g. reassigned to 'defender' and back,
+ *  per AgentManager.despawn()'s own history) leaks one entry per departure
+ *  into both Maps for the rest of the session; neither is otherwise bounded
+ *  by anything but active agent count. Registered into AgentManager's own
+ *  `despawnHooks` below rather than AgentManager.ts importing this file
+ *  directly — that direction turned out to be a real cycle break, not a
+ *  safe one (see despawnHooks' own comment in AgentManager.ts for the full
+ *  story: confirmed live, a genuine "Cannot access before initialization"
+ *  crash on every page load, not a hypothetical risk). This file already
+ *  imports AgentManager.ts for `despawnHooks` itself, and Locomotion.ts is a
+ *  leaf from gameStore.ts's side — nothing gameStore transitively imports
+ *  ever imports this file back — so this direction can't re-close the loop. */
+function clearLocomotionState(agentId: string): void {
+  steerState.delete(agentId);
+  anchorCache.delete(agentId);
+}
+despawnHooks.push(clearLocomotionState);
+
 function faceToward(agent: Agent, tx: number, tz: number, dt: number): void {
   // yaw -> facing is (-sin, -cos) by this codebase's convention
   // (PlayerController.tsx/combat.ts/Villagers.tsx's own wander branch)
@@ -48,6 +96,17 @@ function faceToward(agent: Agent, tx: number, tz: number, dt: number): void {
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
   agent.yaw += diff * Math.min(1, dt * FACE_TURN_RATE);
+}
+
+// Performance pass: this ran up to 4x every frame per moving agent
+// (`agent.bb.movement = {status, distRemaining}`) — a fresh object every
+// call, for every agent, at full render rate. bb.movement is a stable
+// shape (Blackboard.ts) that nothing holds a reference to across a write,
+// so mutating its two fields in place is behaviorally identical and
+// allocates nothing.
+function setMovement(agent: Agent, status: 'moving' | 'arrived' | 'blocked', distRemaining: number): void {
+  agent.bb.movement.status = status;
+  agent.bb.movement.distRemaining = distRemaining;
 }
 
 /** Advance `agent` one frame per its current Intent. Mutates
@@ -59,13 +118,13 @@ export function stepLocomotion(agent: Agent, dt: number): void {
   const intent = agent.intent;
 
   if (!intent || intent.type === 'IDLE') {
-    agent.bb.movement = { status: 'arrived', distRemaining: 0 };
+    setMovement(agent, 'arrived', 0);
     return;
   }
 
   if (intent.type === 'FACE') {
     faceToward(agent, intent.target.x, intent.target.z, dt);
-    agent.bb.movement = { status: 'arrived', distRemaining: 0 };
+    setMovement(agent, 'arrived', 0);
     return;
   }
 
@@ -81,14 +140,9 @@ export function stepLocomotion(agent: Agent, dt: number): void {
   if (intent.type === 'MOVE_TO') {
     tx = intent.position.x; tz = intent.position.z; stopDistance = intent.stopDistance;
   } else {
-    const target = targetRegistry.get(intent.targetId);
-    if (!target) {
-      agent.bb.movement = { status: 'blocked', distRemaining: Infinity };
-      return;
-    }
-    const anchor = resolveAnchor(target, agent.position.x, agent.position.z);
+    const anchor = anchorFor(agent, intent.targetId, dt);
     if (!anchor) {
-      agent.bb.movement = { status: 'blocked', distRemaining: Infinity };
+      setMovement(agent, 'blocked', Infinity);
       return;
     }
     tx = anchor.x; tz = anchor.z; stopDistance = ANCHOR_STOP_DISTANCE;
@@ -99,7 +153,7 @@ export function stepLocomotion(agent: Agent, dt: number): void {
   const { nx, nz, dist } = navSteer(steer, tx, tz, dt);
 
   if (dist < stopDistance) {
-    agent.bb.movement = { status: 'arrived', distRemaining: dist };
+    setMovement(agent, 'arrived', dist);
     return;
   }
 
@@ -113,7 +167,7 @@ export function stepLocomotion(agent: Agent, dt: number): void {
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
   agent.yaw += diff * Math.min(1, dt * FACE_TURN_RATE);
-  agent.bb.movement = { status: 'moving', distRemaining: dist };
+  setMovement(agent, 'moving', dist);
 }
 
 if (typeof window !== 'undefined') {
