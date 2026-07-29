@@ -66,11 +66,17 @@ useGameStore.subscribe((s) => {
   // attribute bonuses that were already here. (Vigour is one bar with a
   // numeric readout since the UI pack's HUD work; there are no hearts.)
   const total = SKILLS.reduce((t, sk) => t + levelFromXp(s.xp[sk.id] ?? 0), 0);
-  combatState.maxStamina = 100
+  combatState.maxStamina = Math.round((100
     + Math.round(total * 1.5)                     // general levels
     + (s.perks.includes('iron_grip') ? 15 : 0)
     + (s.skillTree.includes('combat2') ? 10 : 0)  // Second Wind talent
-    + (s.attrSpent.courage ?? 0) * 5;             // Courage attribute
+    + (s.attrSpent.courage ?? 0) * 5)             // Courage attribute
+    * (s.perks.includes('berserker') ? 0.8 : 1)); // Berserker trade-off: −20%
+  // the trade-off perks above are the first thing in this subscriber that
+  // can ever make maxStamina go DOWN (every other term here only adds) — a
+  // stamina value left above the new lower ceiling from a stale render would
+  // read as a free bonus the perk description didn't promise
+  combatState.stamina = Math.min(combatState.stamina, combatState.maxStamina);
 
   const hpBefore = combatState.maxHp;
   combatState.maxHp = 10 + Math.floor(total / 3);
@@ -354,7 +360,11 @@ export function playerAttack(): boolean {
   // Knights' Order passive + Heavy Hand talent: flat melee damage bonuses
   const orderBonus = (st.guild === 'knights' ? 1 : 0) + (st.skillTree.includes('combat3') ? 1 : 0)
     + Math.floor((st.attrSpent.might ?? 0) / 2); // Might attribute
-  const dmg = (hasSword ? (swordWorn ? 1.5 : 3) : 1) + orderBonus;
+  const swordDmg = hasSword ? (swordWorn ? 1.5 : 3) : 1;
+  // Berserker trade-off: +30% sword damage specifically (its own downside is
+  // the −20% max stamina above) — unarmed swings don't benefit
+  const berserkerMult = hasSword && st.perks.includes('berserker') ? 1.3 : 1;
+  const dmg = swordDmg * berserkerMult + orderBonus;
   if (hasSword) st.useTool('sword');
   audio.play('sword_swish', hasSword ? 0.8 : 0.45);
 

@@ -11,6 +11,13 @@ export default function ShopPanel() {
   const inventory = useGameStore((s) => s.inventory);
   const sellItem = useGameStore((s) => s.sellItem);
   const buyOffer = useGameStore((s) => s.buyOffer);
+  // Silver Tongue trade-off perk: +15%/−15% here mirror the exact multipliers
+  // sellItem()/buyOffer() themselves apply — shown so the price on the
+  // ticket is the price actually charged, not a stale base number, and so
+  // the Buy button's affordability check agrees with what buyOffer() will
+  // really deduct (a player with exactly enough gold for the discounted
+  // price would otherwise see it wrongly greyed out).
+  const silverTongue = useGameStore((s) => s.perks.includes('silver_tongue'));
   const gold = inventory.gold ?? 0;
 
   const sellables = (Object.keys(SELL_PRICES) as ItemId[]).filter((id) => (inventory[id] ?? 0) > 0);
@@ -26,32 +33,38 @@ export default function ShopPanel() {
           {sellables.length === 0 && (
             <div className="loading-note">Nothing in your satchel he wants today.</div>
           )}
-          {sellables.map((id) => (
-            <div className="recipe-row" key={id}>
-              <div className="icon"><Ico e={ITEMS[id].icon} /></div>
-              <div className="r-main">
-                <div className="r-name">{ITEMS[id].name} × {inventory[id]}</div>
-                <div className="r-cost">{SELL_PRICES[id]}g each</div>
+          {sellables.map((id) => {
+            const each = silverTongue ? Math.round((SELL_PRICES[id] ?? 0) * 1.15) : SELL_PRICES[id];
+            return (
+              <div className="recipe-row" key={id}>
+                <div className="icon"><Ico e={ITEMS[id].icon} /></div>
+                <div className="r-main">
+                  <div className="r-name">{ITEMS[id].name} × {inventory[id]}</div>
+                  <div className="r-cost">{each}g each</div>
+                </div>
+                <button onClick={() => sellItem(id, 1)}>Sell 1</button>
+                <button onClick={() => sellItem(id, inventory[id] ?? 0)}>All</button>
               </div>
-              <button onClick={() => sellItem(id, 1)}>Sell 1</button>
-              <button onClick={() => sellItem(id, inventory[id] ?? 0)}>All</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ flex: 1 }}>
           <div className="creator-section">Buy</div>
-          {BUY_OFFERS.map((o) => (
-            <div className="recipe-row" key={o.item}>
-              <div className="icon"><Ico e={ITEMS[o.item].icon} /></div>
-              <div className="r-main">
-                <div className="r-name">{ITEMS[o.item].name}{o.qty > 1 ? ` ×${o.qty}` : ''}</div>
-                <div className="r-cost">{o.price}g</div>
+          {BUY_OFFERS.map((o) => {
+            const cost = silverTongue ? Math.round(o.price * 0.85) : o.price;
+            return (
+              <div className="recipe-row" key={o.item}>
+                <div className="icon"><Ico e={ITEMS[o.item].icon} /></div>
+                <div className="r-main">
+                  <div className="r-name">{ITEMS[o.item].name}{o.qty > 1 ? ` ×${o.qty}` : ''}</div>
+                  <div className="r-cost">{cost}g</div>
+                </div>
+                <button disabled={gold < cost} onClick={() => buyOffer(o.item, o.qty, o.price)}>
+                  Buy
+                </button>
               </div>
-              <button disabled={gold < o.price} onClick={() => buyOffer(o.item, o.qty, o.price)}>
-                Buy
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

@@ -1352,8 +1352,11 @@ function createGameStore() {
       if (n <= 0) return;
       const inv = { ...st.inventory };
       inv[item] = held - n;
-      // Wit attribute: a sharper tongue haggles +4% per point
-      const take = Math.round(price * n * (1 + (st.attrSpent.wit ?? 0) * 0.04));
+      // Wit attribute: a sharper tongue haggles +4% per point. Silver Tongue
+      // trade-off perk: a flat +15% on top (its own downside lives in
+      // Storm's own duel cooldown — see Enemies.tsx's 'storm' branch).
+      const take = Math.round(price * n * (1 + (st.attrSpent.wit ?? 0) * 0.04
+        + (st.perks.includes('silver_tongue') ? 0.15 : 0)));
       inv.gold = (inv.gold ?? 0) + take;
       set({
         inventory: inv,
@@ -1365,12 +1368,15 @@ function createGameStore() {
 
     buyOffer: (item, qty, price) => {
       const st = get();
-      if ((st.inventory.gold ?? 0) < price) {
+      // Silver Tongue trade-off perk: the same +15% haggle sellItem() gives,
+      // spent the other direction — a flat discount on what the merchant asks
+      const cost = st.perks.includes('silver_tongue') ? Math.round(price * 0.85) : price;
+      if ((st.inventory.gold ?? 0) < cost) {
         st.notify('Not enough gold!');
         return;
       }
       const inv = { ...st.inventory };
-      inv.gold = (inv.gold ?? 0) - price;
+      inv.gold = (inv.gold ?? 0) - cost;
       inv[item] = (inv[item] ?? 0) + qty;
       set({ inventory: inv, dirty: true });
       audio.play('brick_connect', 0.6);
@@ -1883,8 +1889,11 @@ function createGameStore() {
         if (workSignals[v.id]?.active) continue;
         const jobDef = JOB_BY_ID[v.job];
         // Phase 24A: Diligence + trade mastery shorten the trip; Swift-family
-        // companion traits shave another 12%
-        const trip = jobDef.tripSeconds * tripSpeedMult(v) * tripTraitMult(v);
+        // companion traits shave another 12%. Hermit trade-off perk: +25% on
+        // top — its own upside is the player's own gathering, doubled, in
+        // harvestNode() above.
+        const trip = jobDef.tripSeconds * tripSpeedMult(v) * tripTraitMult(v)
+          * (st.perks.includes('hermit') ? 1.25 : 1);
         // L66 · the trip only runs down while they are actually somewhere
         // that counts: at their worksite, or back at the stores hauling. A
         // villager stuck on the far side of the map used to fill their sack
@@ -2155,7 +2164,8 @@ function createGameStore() {
       if (node.kind === 'fishing') {
         // one bite, one fish — already a single chunky action, unaffected
         // by the multi-hit drip fix below
-        const fish = st.skillTree.includes('fishing3') && Math.random() < 0.15 ? 2 : 1;
+        let fish = st.skillTree.includes('fishing3') && Math.random() < 0.15 ? 2 : 1;
+        if (st.perks.includes('hermit')) fish *= 2; // Hermit trade-off perk
         st.addItems({ fish }, 'gather');
         st.addXp('fishing', 14);
         st.useTool('fishing_rod');
@@ -2205,6 +2215,13 @@ function createGameStore() {
             totals.herb = (totals.herb ?? 0) + 1;
             xpTotal += 8;
           }
+        }
+        // Hermit trade-off perk: everything the player personally gathers
+        // is doubled (its own downside lives in tickVillagers' own trip
+        // duration below) — after the per-kind rolls above, not baked into
+        // any one of them, so it applies uniformly across tree/rock/herb
+        if (st.perks.includes('hermit')) {
+          for (const k of Object.keys(totals) as ItemId[]) totals[k] = (totals[k] ?? 0) * 2;
         }
         st.addItems(totals, 'gather');
         st.addXp(xpSkill, xpTotal);
