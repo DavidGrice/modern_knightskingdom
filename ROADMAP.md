@@ -2893,9 +2893,15 @@ the action starts.
 [COMPLETE] **L67 · Guards patrol through the day.** A defender on patrol keeps patrolling
 in daylight. Patrol is a NIGHT order: by day they should sleep.
 
-[TODO] **L68 · The south furniture is in the way.** The merchant should stand at the
+[COMPLETE] **L68 · The south furniture is in the way.** The merchant should stand at the
 two south guard posts, not off to the right where it fouls homestead building,
-and the guard posts themselves overlap the land-purchase sections.
+and the guard posts themselves overlap the land-purchase sections. Resolved
+2026-07-29: the two guard posts are the `mc001` ("Wall Corner (Small)") huts
+in `StarterVillage.tsx` — the same props carrying Alric's and Beda's houses,
+at (-41.5, 36.5) and (-34, 44). `MERCHANT_SPOT` (`game/data/trade.ts`) now
+stands between them, on the road's own westward run, clear of `BUILD_REGION`
+and every `GROUNDS` section (no overlap — checked against `grounds.ts`'s own
+dev-time assertions, which fire on any real overlap and did not).
 
 [COMPLETE] **L69 · Buying land has no handle in the world.** You should be able to walk
 to a plot and buy it there, or at least see an indicator saying how a plot is
@@ -3025,10 +3031,6 @@ the riser.
 - [TODO] **L62 (rest) · lance and halberd from the saddle.** Ranged works; the lance
   still only exists inside the joust mechanic, and the halberd has no mounted
   pose.
-- [TODO] **L68 (rest) · The south guard posts.** I could not identify which props
-  these are — the only fixed structures near there are Alric's and Beda's
-  houses (`StarterVillage.tsx`, at (-41.5, 36.5) and (-34, 44)). Needs a
-  pointer before I move anything.
 
 ## Future · build from the real instruction sets [TODO]
 
@@ -3242,8 +3244,6 @@ Nothing sits south of the homestead in the road's path.
   Moving it is a small change — seven named cells in `Road.tsx` — but it wants
   one pass over the whole layout (road, signpost, merchant, guard posts)
   rather than nudging a number.
-- **The south guard posts** still need a pointer before the merchant can be
-  put on them.
 
 ## Roadside trees, 2026-07-26 [COMPLETE]
 
@@ -3397,9 +3397,6 @@ was forgotten.
   only its README. Send one `.mpd` and the seam can be proved against it.
 
 ## Blocked on a decision or a pointer [TODO]
-- [TODO] **The south guard posts.** The merchant cannot be put on them until I know
-  which props they are; the only fixed structures nearby are Alric's and
-  Beda's houses.
 - [TODO] **The road's route vs. southward expansion.** Small change, but it wants one
   pass over the whole southern layout rather than a nudge.
 
@@ -3461,12 +3458,13 @@ purchase) hard to feed.
 first spawned — arms and hands from a donor whose body type does not match
 (see K57). Audit the merchant's config the same way.
 
-[TODO] **N78 · The merchant should live somewhere and TRAVEL.** A small walled place
-with a couple of guard posts, off to the west, connected to the homestead by
-an extension of the road — and the merchant walks that road rather than
-standing on a spot forever. This is also the answer to the "south guard posts"
-question I have been asking about: build the guarded place deliberately rather
-than reusing whatever is standing there now.
+[TODO] **N78 (rest) · A proper walled merchant camp.** The "arrive, trade, leave"
+half is done (O4, superseded below). What's left is content authoring, not a
+bugfix: a small walled place with its own guard posts, off to the west,
+connected to the homestead by an extension of the road, purpose-built rather
+than the merchant sharing Alric's and Beda's own corner — which is where he
+stands now (L68, resolved: the "south guard posts" turned out to be their
+`mc001` huts). Optional polish, not a blocker on anything.
 
 [TODO] **N79 · Enemies should come UP THE ROAD.** Bandits and raiders spawning in
 their own places and travelling the road to the homestead — day or night, not
