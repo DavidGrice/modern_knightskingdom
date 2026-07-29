@@ -3,8 +3,9 @@ import { useAppStore } from '@/game/store/appStore';
 
 export default function CreditsStack() {
   const pop = useAppStore((s) => s.pop);
+  const uiTheme = useAppStore((s) => s.settings.uiTheme);
   return (
-    <div className="kk-screen kk-screen-metal">
+    <div className={`kk-screen kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
         <div className="kk-screen-head">
           <h2>CREDITS</h2>

@@ -84,6 +84,7 @@ export default function CharacterCreator() {
   const pop = useAppStore((s) => s.pop);
   const push = useAppStore((s) => s.push);
   const newGame = useGameStore((s) => s.newGame);
+  const uiTheme = useAppStore((s) => s.settings.uiTheme);
 
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>('male');
@@ -138,7 +139,7 @@ export default function CharacterCreator() {
   }
 
   return (
-    <div className="kk-screen kk-screen-leather">
+    <div className={`kk-screen kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
         <div className="kk-screen-head">
           <h2>FORGE YOUR HERO</h2>
