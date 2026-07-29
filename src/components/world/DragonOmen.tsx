@@ -15,6 +15,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
+import { difficultyState } from '@/game/difficulty';
 
 const C = '/assets/props/creatures/';
 const FLIGHT_SECONDS = 26;
@@ -199,7 +200,17 @@ export default function DragonOmen() {
 
   useFrame(() => {
     if (destination || active) return;
-    // one roll per night, deep in the dark hours
+    // one roll per night, deep in the dark hours. Reported 2026-07-28: the
+    // omen could roll on literally the first night, before the player had
+    // even reached the Old Quarry deed — every OTHER spawner reads the one
+    // shared threat tier (game/difficulty.ts, see its own header comment
+    // arguing against exactly this: a spawner inventing its own ungated
+    // condition), and this was the one that hadn't been folded in. Tier 1
+    // alone (not the full tier-3 DRAGON_TIER the real siege needs) is
+    // enough: it requires at least a day survived and some real structures/
+    // skill/kills, so the first omen reads as foreshadowing something
+    // earned rather than an ambush on day one.
+    if (difficultyState.tier < 1) return;
     if (worldEnv.night > 0.85 && worldEnv.dayCount !== lastNightChecked.current && !dragonAir.busy) {
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < 0.4) {
