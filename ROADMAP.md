@@ -273,10 +273,12 @@ consumable here:
 - [COMPLETE] **`PAK_CAPABILITY_OVERRIDES.json`** — verified per-asset records (kind, displayName, wall roles
   `wall_straight/corner/tower`, destruction phases, explosives, mounts). ✅ *Already consumed:* the
   Phase 25 Prefabs tier took its piece selection + names straight from these labels.
-- [TODO — VERIFY] **`reports/rigs/*_rig.json`** — verified per-shape → bone maps. The dragon (`l7517400/1`) has
-  jaw/legs/tail/wing_L/wing_R bones labeled: upgrade the omen's two-frame flap to REAL articulated
-  wing rotation, and later the defend-the-keep fire event. `DEFAULT_MINIFIG_HORSE_MOUNT.json` carries
-  exact seat/rider matrices for proper mounted alignment (current riding is hand-tuned).
+- [COMPLETE] **`reports/rigs/*_rig.json`** — verified per-shape → bone maps. The dragon (`l7517400/1`) has
+  jaw/legs/tail/wing_L/wing_R bones labeled — confirmed shipped: `DragonOmen.tsx` drives REAL articulated
+  `wingL`/`wingR` bone rotation from them today, not the old two-frame flap (the defend-the-keep fire
+  event is still future). [TODO] `DEFAULT_MINIFIG_HORSE_MOUNT.json` carries exact seat/rider matrices for
+  proper mounted alignment, but nothing in the codebase reads them yet (confirmed: no reference to
+  `HORSE_MOUNT` anywhere in `src/`) — riding stays hand-tuned.
 - [TODO] **`ORIENTATION_REGISTRY.json` / `PAK_ORIENTATION_CATALOG.json`** — per-asset correct eulers; use as
   ground truth whenever a new prop imports facing the wrong way.
 - [TODO] **`LEARNED_PART_LEXICON.json`** — family defaults (mc_wall → standable/connectable/destructible);
@@ -294,10 +296,13 @@ consumable here:
    Wall Tower `mc003`, Breached Wall `mc009` + Ruined Wall `mc010` (labeled destruction phases, placed
    as battle-scarred flavor for now), Weapons Rack `oc6094-1`, Armory Stand `oc6032b4` — plus the
    **War Banner** (`18_l7196300`) in Windows & Decor, and Phase 24B's **Stockpile** in Essentials.
-2. [TODO — VERIFY] **Still to come**: arches/rounded generated pieces audit, the 4 Road models as pavement, the
-   remaining oc-series set pieces (jail cells, drawbridge base, jewel tower — labels already verified),
-   Destructor/second Cannon/Animal audit, and wall-CONNECTION logic using `canConnectAsWall` +
-   `wallRole` so prefab walls snap end-to-end.
+2. [TODO] **Still to come**: arches/rounded generated pieces audit; [COMPLETE] the 4 Road models as pavement
+   (confirmed shipped — they're the actual road network newcomers/NPCs walk in on, `Road.tsx`, see L71
+   below); [TODO] the remaining oc-series set pieces (jail cells, drawbridge base, jewel tower — labels
+   already verified, but confirmed not yet in `buildables.ts`'s catalog); Destructor/second Cannon/Animal
+   audit; and wall-CONNECTION logic using `canConnectAsWall` + `wallRole` so prefab walls snap end-to-end
+   (confirmed: `labCanConnectAsWall` is defined in `labCapabilities.ts` but has no caller anywhere else —
+   only generic per-piece grid-snap exists today, not true wall-to-wall connection).
 
 ---
 
@@ -475,7 +480,8 @@ granting the unlock + materials and seeing all 26 pieces appear.
 - [TODO] Sealed Crypt follow-ups: branching layouts, new objective types (escort/retrieve/survive), visual reskins
   via other piece categories. ✅ *Cosmetic-unlock loot shipped 2026-07-19* — full clears #1/#2 award the
   Broken Axe / Horned Sigil crests (see the crest-unlock entry under Homestead & economy).
-- [TODO — VERIFY] The 4 unused `Road` models — pave travel routes / a marketplace square (fits Phase 20 step 3).
+- [COMPLETE] The 4 `Road` models — no longer unused: they pave the real road network newcomers/NPCs now
+  walk in on (`Road.tsx`). The "marketplace square" half of the original idea specifically wasn't built.
 - [TODO] Unused-asset audit completion: `Destructor` (4), second `Cannon`, 2 unused `Animal` models.
 
 **Combat & content**
@@ -492,10 +498,51 @@ granting the unlock + materials and seeing all 26 pieces appear.
   the extraction).
 - [TODO] Delivery quests — haul goods by cart between instances (perfect fit after Phase 20).
 - [TODO] Alliance follow-ups: reputation fallout with the court, alliance-exclusive quests/rewards, a turncoat path.
+- [TODO] **Cedric's siege — an epic, unlockable set-piece battle** (requested 2026-07-28): Cedric brings his
+  full war party AND his vehicles to attack, not just a handful of raiders. Natural fit for the existing
+  `game/difficulty.ts` tier system (O7's fix log, above) as the unlock gate — a real, monotonic,
+  save-proof threshold rather than a new one-off flag, the same reasoning that already moved the dragon
+  onto tier + `rangedReady()`. "His vehicles" has a real asset base ready: the nine siege engines +
+  three explosives shipped in the Phase 25 rig-lab integration (catapults, stone throwers, crossbow
+  turrets, a siege tower — see "What's wired" above), plus `game/crew.ts`'s real crewing system if enemy
+  AI ever needs to man one. Needs its own design pass: how large "his full war party" actually is,
+  whether it's a single scripted event or a repeatable one, and whether beating it changes anything
+  permanent (a Deed, a crest, alliance standing).
+- [TODO] **Underground fight arena — endless mobs, an ongoing kill-count quest, escalating modifiers**
+  (requested 2026-07-28): a sealed arena (new location, not the existing Sealed Crypt — that has fixed
+  rooms and a clear-and-done objective, this wants continuous spawns) where mobs keep coming until the
+  player leaves or dies. Loot drops here should be re-tuned toward ammo (arrows/bolts) and gold/goodies
+  specifically, not the normal overworld table — a separate drop table, not a modifier on the existing
+  one, so it doesn't leak into regular raid loot. The quest itself is a running counter (kills so far,
+  always visible, never "complete" in the normal sense) rather than a fixed `need: N` — `SideQuestDef`'s
+  shape (`game/data/npcs.ts`) assumes a target count today and would need a genuinely open-ended variant.
+  Enemy stats should scale as the count climbs via random modifiers (increased armor/attack/HP), likely
+  reusing the raid/siege difficulty math as a starting point rather than a third, separate scaling curve.
+  On player death IN THIS ARENA SPECIFICALLY: no game-over, no day-skip — respawn just outside the
+  arena entrance and the run resets (a "redo," not a punishment), distinct from the general 0-HP
+  behavior below.
+- [TODO] **A real 0-HP state, everywhere else** (requested 2026-07-28): today there's no defined
+  behavior for the player's HP actually reaching 0 outside combat's own damage clamps — needs one.
+  Explicitly NOT a game-over screen. The requested shape: something closer to a forced fast-forward to
+  the next day (sun up) with nearby hostiles despawned, so the player recovers rather than losing
+  progress — "you overextended and had to be pulled back," not "you failed." Needs a design pass on the
+  actual presentation (a fade, a specific respawn point — likely home/`SPAWN`), what happens to combat
+  state and any mid-fight raid, and how it interacts with the arena's own separate on-death rule above
+  (the arena's "respawn just outside, redo" should override this general behavior while inside it,
+  not stack with it).
 
 **Homestead & economy**
-- [TODO — VERIFY] **Bug (deferred, Phase 10 #9):** the traveling merchant's cart parks inside `BUILD_REGION` — relocate
-  `MERCHANT_SPOT` (moot if Phase 20 re-sites the homestead anyway — fold it in there).
+- [COMPLETE] **Bug (deferred, Phase 10 #9):** the traveling merchant's cart parked inside `BUILD_REGION` —
+  `MERCHANT_SPOT` has since been relocated (O4, then again at L68).
+- [COMPLETE] **Bug:** the merchant's minifig spawned with its arms floating in the air, detached from
+  the body — reported and fixed 2026-07-28. Not a rig bug: the `'present'` stage in `Merchant.tsx` set
+  `g.rotation.y = s.yaw` without the `+ Math.PI` the arriving/leaving branch (and every other
+  `RiggedFigure` user) applies, so he stood rotated 180° from his rig's own forward-facing assembly
+  assumption for the entire time he's actually interactable — which read as disconnected floating
+  hands from the angle a player naturally approaches from. Fixed by adding the missing offset;
+  confirmed by screenshot from both sides. Also: his arrival/departure now walks from the real road
+  entry point (`roadEntry()`, the same one every newcomer uses) instead of an arbitrary point 18m
+  behind `MERCHANT_SPOT` that had nothing to do with the actual road.
 - [TODO] Taming: falcon companion (`snd054`).
 - [TODO] Cooking depth beyond bread/cooked fish.
 - [COMPLETE] ✅ **Unlockable crests** *(shipped 2026-07-19)* — went **account-level** instead of in-save:
@@ -728,8 +775,8 @@ villagers reacting (fleeing, defenders rallying) to the siege specifically rathe
 1. [COMPLETE] **User-reported batch above** — instance-bleed visibility ✅ and NPC equipment/Armory ✅ both
    shipped 2026-07-19. Remaining: regional quest log; real wall collision (arrow slits); GUI overhaul
    (holding for the user's reference); Beda & Alric's purpose; mobile-friendly tech debt.
-2. [TODO — VERIFY] **Phase 25 wave 2** — remaining verified oc-series set pieces, Road pavement, wall-connection
-   snapping via `wallRole`/`canConnectAsWall`.
+2. [TODO] **Phase 25 wave 2** — remaining verified oc-series set pieces, wall-connection
+   snapping via `wallRole`/`canConnectAsWall`. [COMPLETE] Road pavement shipped (see L297/L71).
 3. [TODO] **Phase 24 follow-ups** — per-defender orders, HUD order chip, deposit floaties, stall UI.
 4. [TODO] **Instance-separation audit list** (Phase 23 doctrine) whenever a listed system is touched.
 5. [TODO] Backlog alongside: trade-off perks, halberd/spear player weapons, armor tiers, dungeon follow-ups,
@@ -1189,7 +1236,8 @@ new pool is `equipKind: "none"`; the two obvious "generic villager" donors are `
 `crossbow` respectively, which is why they look broken. This is now the documented pre-screen for
 adding any future villager look.
 
-[COMPLETE] **The big opportunity (not yet done — proposing as the next significant item):**
+[COMPLETE] **The big opportunity** *(written when this was still just a proposal — shipped since, see
+"Rig-lab part maps integrated" just below)*:
 `src/lib/minifigRig.ts` currently identifies body parts by **spatially guessing**
 (`classifyBySpace`: topmost cluster = head, horizontal offset = which arm, bbox-diagonal outlier =
 prop). That guessing is the direct cause of two known problems: mixed head/body donors assembling
@@ -1206,9 +1254,10 @@ role is already named per donor. Replacing the spatial classifier with a lookup 
   `public/assets/rigs/`, then a loader in `minifigRig.ts` that prefers the map and falls back to
   today's spatial classifier for any donor without one.
 
-[TODO — VERIFY] Also worth mining later: `traits.wall.destructionPhase`/`destructionPhaseCount` (a real, ordered
-damage chain per wall piece, better than the current hardcoded mc006→mc009→mc010 ladder), and
-`traits.minifig.isMountable` + `DEFAULT_MINIFIG_HORSE_MOUNT.json` seat matrices for riding.
+[COMPLETE] `traits.wall.destructionPhase`/`destructionPhaseCount` — shipped: `damageBuilding` (`gameStore.ts`)
+calls `labDamagedForm`, a real ordered damage chain per wall piece, replacing the old hardcoded
+mc006→mc009→mc010 ladder. [TODO] `traits.minifig.isMountable` + `DEFAULT_MINIFIG_HORSE_MOUNT.json` seat
+matrices for riding — still unread anywhere in the codebase.
 
 ### ✅ Rig-lab part maps integrated (allied + enemy NPC rigging) [COMPLETE]
 
@@ -1363,18 +1412,27 @@ catapult prompts "Fire Catapult (1 stone)" and consumes stone; a powder barrel
 detonates, is consumed without a false refund, and blows an adjacent Castle
 Wall to rubble; the stonewall damage ladder walks its real phases.
 
-[COMPLETE] **Not yet integrated (the remaining lab surface):**
-- [COMPLETE] `traits.minifig.swordHand` / `shieldHand` — the lab recorded which hand each
-  donor actually holds things in; `Equipment.tsx` still passes a fixed side.
-- [TODO — VERIFY] Mount seat matrices (`DEFAULT_MINIFIG_HORSE_MOUNT.json` /
-  `..._DRAGON_MOUNT.json`) and the four extra horse variants now copied in.
-- [COMPLETE] Non-minifig prop rigs (drawbridge, catapult arm, jail cell, ladder,
-  springboard) — `rigs/*_rig.json` has moving-part maps for these; they render
-  static today.
-- [COMPLETE] `ORIENTATION_REGISTRY.json` per-asset eulers (nothing currently looks wrong,
-  so this is a correctness backstop rather than a fix).
-- [COMPLETE] `traits.vehicle.canSeat` / `canDrive` / `canPush` — the siege pieces are
-  fire-only for now; none are rideable or pushable yet.
+[TODO] **Not yet integrated (the remaining lab surface)** — corrected on a 2026-07-28 re-audit; several of
+these shipped later under other sections and had been mistagged:
+- [COMPLETE] `traits.minifig.swordHand` / `shieldHand` — verified, not left undone: `Equipment.tsx`'s own
+  2026-07-25 header comment records checking all 15 donors against the lab's data (every one is
+  `swordHand: hand_R`, `shieldHand: hand_L`, no variation to drive) and deliberately keeping the fixed
+  side rather than adding a no-op data dependency.
+- [TODO] Mount seat matrices (`DEFAULT_MINIFIG_HORSE_MOUNT.json` /
+  `..._DRAGON_MOUNT.json`) and the four extra horse variants now copied in — confirmed still unread
+  anywhere in the codebase.
+- [COMPLETE] Non-minifig prop rigs, catapult arm — shipped: `lib/propRig.ts` + `ANIMATED_ROLES` loads the
+  OBJ-preserved per-part rig and drives real catapult-arm/counterweight/flag/wheel rotation, wired into
+  `Buildings.tsx` via `RiggedProp`/`hasAnimatedRig`. [TODO] Drawbridge, jail cell, ladder, and springboard
+  are NOT in `ANIMATED_ROLES` and don't even exist as buildable catalog pieces yet — still render static
+  (in effect: still to come, since they're not built at all).
+- [TODO] `ORIENTATION_REGISTRY.json` per-asset eulers — real, available data, but still just a backstop
+  nothing currently calls (nothing looks wrong enough yet to need it).
+- [COMPLETE] `traits.vehicle.canSeat` / `canDrive` / `canPush` — correctly false for every siege piece
+  (they're emplacements, not vehicles) and stay that way, but the capability the data was pointing at
+  shipped anyway via a different trait: `game/crew.ts` implements real crewing (`canOccupy`/`occupyMode`)
+  — step onto an engine, aim by looking, fire from the crew position. Siege pieces are no longer
+  fire-only from outside.
 
 ## ✅ UI design-system integration — four themes (2026-07-25) [COMPLETE]
 
