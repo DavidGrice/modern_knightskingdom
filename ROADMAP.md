@@ -530,6 +530,14 @@ granting the unlock + materials and seeing all 26 pieces appear.
   state and any mid-fight raid, and how it interacts with the arena's own separate on-death rule above
   (the arena's "respawn just outside, redo" should override this general behavior while inside it,
   not stack with it).
+- [TODO] **Raiders should arrive by the road, not pop into existence** (requested 2026-07-28): a raid
+  spawn today is `spawn('gilbert', Math.cos(a0) * 38, Math.sin(a0) * 38, true)` (`Enemies.tsx`) — an
+  instant appearance at a random point on a 38m ring around the homestead. Newcomers/the merchant
+  already walk in from the real road entry point (`roadEntry()`, `data/road.ts`) and it reads
+  substantially better; a raid approaching visibly down the road (or fanning out from it) would sell
+  "this is happening to your homestead" far more than a pop-in ever will. Needs its own pass: does the
+  whole party arrive together or staggered, do they peel off toward different sides once in sight, and
+  does this apply to every raid kind or just the ones with a leader (Gilbert) worth making an entrance.
 
 **Homestead & economy**
 - [COMPLETE] **Bug (deferred, Phase 10 #9):** the traveling merchant's cart parked inside `BUILD_REGION` —
@@ -613,6 +621,19 @@ granting the unlock + materials and seeing all 26 pieces appear.
   so the ~100 existing rules and inline styles followed without rewrites; the remaining hardcoded browns
   were swept (`#574327` → `var(--chrome-2)` etc.). **Follow-ups:** notification glows, minimap ring
   tinting, a blackletter/uncial display face for titles (needs font embedding), loading-screen heraldry.
+- [TODO] **A real, user-selectable theme system** (requested 2026-07-28): reported as a hodge-podge —
+  login, main menu, character creator and the in-game HUD each currently read as a different theme.
+  Worth reconciling against the "Dark-ages re-theme (v2)" entry directly above, which specifically
+  claimed "the whole UI — login/menus through in-game panels" — either later screens were added outside
+  that token system, or the token coverage itself has gaps; needs a fresh screen-by-screen audit before
+  assuming which. What's actually being asked for is bigger than re-auditing consistency, though: a real
+  theme SWITCHER, not just one consistent look — pick a theme in Options and have it apply everywhere,
+  with a sensible shipped default. The existing `[data-faction]` root-attribute + CSS custom-property
+  token mechanism (`FactionTheme.tsx`, the same system the dark-ages re-theme and faction chrome both
+  already use) is a real, proven pattern for exactly this — extending it to a player-chosen
+  `[data-theme]` alongside the allegiance-driven `[data-faction]` is more plausible than inventing a
+  second theming system from scratch, but needs a design pass on how many themes actually ship at v1 and
+  whether faction chrome should compose with the chosen theme or be one of the theme choices itself.
 
 **Tech (continuous)**
 - [TODO] **Performance & streamlining pass (requested 2026-07-18)** — a dedicated rendering-efficiency effort,
