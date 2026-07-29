@@ -1092,7 +1092,13 @@ export default function PlayerController() {
           }
         }
         for (const n of st.nodes) {
-          if (n.respawnAt !== null || n.kind === 'fishing') continue;
+          // herbs are a 0.35m ground prop (ResourceNodes.tsx's HerbGroup) —
+          // walkable like fishing spots, not a physical obstacle. Reported
+          // 2026-07-28 as an invisible wall around every herb patch: this
+          // loop gave them the SAME 1.1-radius block as a boulder (the
+          // `: 1.1` fallback below was meant for rocks, not "everything
+          // that isn't a tree").
+          if (n.respawnAt !== null || n.kind === 'fishing' || n.kind === 'herb') continue;
           const r = (n.kind === 'tree' ? 0.55 : 1.1) * n.scale + PLAYER_RADIUS;
           const dx = nx - n.x;
           const dz = nz - n.z;
