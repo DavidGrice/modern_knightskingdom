@@ -52,11 +52,22 @@ const CONFIGS: Record<string, CharacterConfig> = {
     armColor: 24, handColor: 18, legColor: 150, hipColor: 24,
   },
   // the crown's anonymous knights (Phase 19 alliance raids on a Cedric-sworn
-  // player) — Richard's 01 donor variant (the named NPC uses 00) in King
-  // Leo's own royal blue/white/yellow, so the wave unmistakably reads as
-  // "the King's men", not another bandit pack
+  // player) — a Richard donor variant OTHER than 00 (the named NPC's own),
+  // in King Leo's own royal blue/white/yellow, so the wave unmistakably
+  // reads as "the King's men", not another bandit pack. Was '01' — found
+  // investigating the Gilbert floating-hand report and checking every
+  // CONFIGS donor's rig data fresh: '01' is a MOUNTED-COMBAT export (every
+  // one of its part_roles.json entries is prefixed `rider_`/`horse_`,
+  // meaning classifyByRigMap correctly refuses all of them as "not this
+  // figure's own body" per its own mount-exclusion rule), so royal knights
+  // silently fell back to the old spatial-guessing classifier the verified
+  // rig maps exist specifically to replace — the exact failure mode behind
+  // Gilbert's own bug, just from a donor mismatch instead of a kept prop.
+  // '02' is a real standing-minifig rig (verified, no mount prefixes) and a
+  // different face from Richard's own '00', so the "not Richard" intent
+  // still holds.
   royal: {
-    name: 'Royal Knight', headDonor: 'minifigrichardstrong01', bodyDonor: 'minifigrichardstrong01',
+    name: 'Royal Knight', headDonor: 'minifigrichardstrong02', bodyDonor: 'minifigrichardstrong02',
     armColor: 26, handColor: 18, legColor: 150, hipColor: 26,
   },
 };
@@ -188,7 +199,7 @@ function Enemy({ data }: { data: EnemyData }) {
           m.yaw = Math.atan2(-ndx, -ndz);
           if (m.attackCd <= 0) {
             m.attackCd = ATTACK_CD[data.kind];
-            defTarget.hp -= ATTACK_DMG[data.kind];
+            defTarget.hp -= ATTACK_DMG[data.kind] * data.scale;
             if (defTarget.hp <= 0 && defTarget.state === 'ok') {
               defTarget.state = 'downed';
               defTarget.downedUntil = Date.now() + 45000;
@@ -216,7 +227,7 @@ function Enemy({ data }: { data: EnemyData }) {
           // a duel with Storm ends the instant either side lands a blow —
           // no lingering damage, just resolution (see combat.ts's resolveDuel)
           if (data.kind === 'storm') resolveDuel(false, data.id);
-          else damagePlayer(ATTACK_DMG[data.kind]);
+          else damagePlayer(ATTACK_DMG[data.kind] * data.scale);
         }
       } else if (d < 26 || (m.alertT ?? 0) > 0) {
         m.state = 'chase';
@@ -340,11 +351,22 @@ function Enemy({ data }: { data: EnemyData }) {
       <RiggedFigure
         config={CONFIGS[data.kind]}
         height={1.72}
-        // hostiles keep the weapon molded into their donor mesh — a bandit's
-        // crossbow, Gilbert's axe, Cedric's horned helm are the character
-        // (verified per-shape via the rig lab's part maps, so this no longer
-        // means "and also whatever stray geometry the heuristics grabbed")
-        keepProps
+        // Reported 2026-07-28: Gilbert spawned with a hand floating away from
+        // his body. Root cause — his donor's own molded axe+shield are
+        // "prop"-kind parts (verified, part_roles.json): kept (per the old
+        // `keepProps` here) means they're parented straight to the body
+        // joint at their ORIGINAL baked position, never re-hung alongside
+        // the arm the way the hand riding it is (see rehangArm) — so once
+        // the arm moves to its neutral hanging pose, the axe stays exactly
+        // where it was baked, adrift from wherever the hand ended up. It was
+        // also pure redundancy: bandits/Gilbert/royal knights already carry
+        // a REAL separately-portalled weapon below, and neither Cedric's
+        // horn+helmet nor Storm's visor are "prop" kind at all (they're
+        // "accessory", which is always kept regardless of this flag) — so
+        // no enemy in the roster actually needs their own donor's molded
+        // weapon kept. Confirmed with a fresh read of every CONFIGS entry's
+        // rig data, not assumed.
+        keepProps={false}
         clip={clip}
         timeScale={clip === 'anim_g_swordswish' ? 1.8 : 1.15}
         onReady={(r) => {
@@ -357,9 +379,16 @@ function Enemy({ data }: { data: EnemyData }) {
       {/* bandits and Gilbert (their leader) carry the original halberd */}
       {rig && (data.kind === 'bandit' || data.kind === 'gilbert')
         && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
-      {/* the crown's knights fight sword-and-shield, like the player's own kit */}
-      {rig && data.kind === 'royal' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-      {rig && data.kind === 'royal' && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+      {/* the crown's knights — and Cedric, their equal and opposite — fight
+          sword-and-shield, like the player's own kit. Skeletons carry just a
+          sword, no shield: requested 2026-07-28 alongside gilbert/royal's own
+          weapon-rig fixes above — with keepProps now off (it was never safe
+          to leave on, see the note above), skeleton and Cedric were the two
+          kinds left with nothing in their hands at all. */}
+      {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton')
+        && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+      {rig && (data.kind === 'royal' || data.kind === 'cedric')
+        && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
     </group>
   );
 }

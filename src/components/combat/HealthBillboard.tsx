@@ -15,7 +15,7 @@
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { maxHpOf, type EnemyData } from '@/game/combat';
+import type { EnemyData } from '@/game/combat';
 
 /** how high above the figure's feet the bar floats */
 const LIFT = 2.15;
@@ -48,7 +48,10 @@ export default function HealthBillboard({ data }: { data: EnemyData }) {
       : 1 - (d - FADE_START) / (FADE_END - FADE_START);
     // hide a full-health enemy you are not fighting: a field of untouched
     // bars is noise. It appears the moment one is hurt.
-    const hurt = data.hp < maxHpOf(data.kind);
+    // this instance's own (possibly raid-scaled) ceiling, not the flat
+    // per-kind reference maxHpOf gives the Bestiary — see combat.ts's
+    // EnemyData.maxHp
+    const hurt = data.hp < data.maxHp;
     g.visible = fade > 0.02 && hurt;
     if (!g.visible) return;
 
@@ -57,7 +60,7 @@ export default function HealthBillboard({ data }: { data: EnemyData }) {
     const s = 1 + d * 0.035;
     g.scale.setScalar(s);
 
-    const frac = Math.max(0, Math.min(1, data.hp / maxHpOf(data.kind)));
+    const frac = Math.max(0, Math.min(1, data.hp / data.maxHp));
     const f = fill.current;
     if (f) {
       f.scale.x = Math.max(0.001, frac);
