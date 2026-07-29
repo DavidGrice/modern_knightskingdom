@@ -12,6 +12,30 @@ import { LOD, type Tier } from '../config';
 import { Agent } from './Agent';
 import { Scheduler } from './Scheduler';
 
+// Performance pass (2026-07-28): despawn() needs to tell Locomotion.ts to
+// drop its per-agent steering/anchor caches, but AgentManager.ts importing
+// Locomotion.ts directly turned out to be a REAL cycle break, not a safe
+// one — confirmed live, not just guessed at: Locomotion.ts pulls in
+// navgrid.ts, which pulls in a long chain (TemplateWorld -> DungeonScene ->
+// Buildings -> siege -> combat -> difficulty) that ends up back at
+// gameStore.ts's own top-level code (difficulty.ts calls
+// `useGameStore.subscribe(...)` at ITS module scope, not deferred) — and
+// since gameStore.ts itself imports AgentManager.ts, this closed a second,
+// independent loop back into a module still mid-initialization:
+// "Cannot access 'useGameStore' before initialization", a real runtime
+// crash on every page load, not a cosmetic risk. `next build` compiled it
+// fine; only an actual live load caught it — the exact gap this project's
+// own established discipline exists to catch.
+//
+// Fixed by inverting the dependency instead of trying to defer around it:
+// AgentManager.ts gains zero new imports and stays exactly as safe as it
+// already was: Locomotion.ts imports AgentManager.ts (not the reverse) and
+// registers its own cleanup into `despawnHooks` below at ITS OWN module
+// scope. Locomotion.ts is a leaf from gameStore.ts's side (nothing gameStore
+// transitively imports ever imports Locomotion.ts back), so this direction
+// cannot re-close the same loop.
+export const despawnHooks: ((id: string) => void)[] = [];
+
 // §0.4 — scratch objects reused every LOD refresh, never reallocated
 const _viewProj = new THREE.Matrix4();
 const _frustum = new THREE.Frustum();
@@ -71,6 +95,12 @@ export class AgentManager {
     // gather slots; one leaked reservation is a real, permanent, silent
     // capacity loss for the rest of the session, not a cosmetic gap.
     agent.currentActivity?.abort(agent);
+    // same reasoning as the reservation cleanup above, for Locomotion's own
+    // per-agent steering/anchor caches — otherwise a villager who despawns
+    // and respawns repeatedly leaks one entry into each, per departure, for
+    // the rest of the session. See despawnHooks' own comment above for why
+    // this is a hook list rather than a direct import.
+    for (const hook of despawnHooks) hook(id);
     this.byId.delete(id);
     const i = this.agents.indexOf(agent);
     if (i >= 0) this.agents.splice(i, 1);

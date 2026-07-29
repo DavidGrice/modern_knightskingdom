@@ -162,7 +162,14 @@ export const HAUL_TO_DEPOSIT: Action = {
       input: (agent, ctx) => {
         if (!ctx.target?.available) return 0;
         const blockedUntil = agent.bb.blockedTargets.get(ctx.target.id);
-        return blockedUntil !== undefined && blockedUntil > ctx.now ? 0 : 1;
+        if (blockedUntil === undefined) return 1;
+        if (blockedUntil > ctx.now) return 0;
+        // Performance pass (2026-07-28) — mirrors gather.ts's own fix.
+        // Opportunistic cleanup: this map is keyed by target id (unbounded
+        // over a session), unlike bb.cooldowns (keyed by the small fixed
+        // set of action ids, already bounded).
+        agent.bb.blockedTargets.delete(ctx.target.id);
+        return 1;
       },
       curve: boolCurve,
     },

@@ -234,7 +234,17 @@ export const GATHER_RESOURCE: Action = {
       input: (agent, ctx) => {
         if (!ctx.target?.available) return 0;
         const blockedUntil = agent.bb.blockedTargets.get(ctx.target.id);
-        return blockedUntil !== undefined && blockedUntil > ctx.now ? 0 : 1;
+        if (blockedUntil === undefined) return 1;
+        if (blockedUntil > ctx.now) return 0;
+        // Performance pass (2026-07-28): expired entries were never
+        // removed, only ever ignored once past their timestamp — unlike
+        // bb.cooldowns (keyed by the small, fixed set of action ids, so
+        // inherently bounded), this map is keyed by TARGET id, and every
+        // node/building an agent ever failed to reach over a whole session
+        // stayed in it forever. Opportunistic: cleaned up the next time
+        // this exact target is actually re-evaluated, not on a timer.
+        agent.bb.blockedTargets.delete(ctx.target.id);
+        return 1;
       },
       curve: boolCurve,
     },
