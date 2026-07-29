@@ -4,7 +4,7 @@ import { Suspense, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import RiggedFigure from '../character/RiggedFigure';
-import PropModel from './PropModel';
+import RiggedProp from './RiggedProp';
 import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
 import { roadEntry } from '@/game/data/road';
@@ -61,13 +61,29 @@ function stageFor(time: number): Stage {
 // the same height as a rideable horse (see RideHorse.tsx) so the pair reads
 // at true horse scale. Parented under the same group as the merchant, so it
 // travels with him for free — "along with the horses" needs no extra code.
-function Cart() {
-  return <PropModel url="/assets/props/oc6095b3.glb" height={1.7} position={[1.9, 0, -0.4]} yaw={0.4} />;
+// Reported 2026-07-28: the team stood frozen mid-stride while walking. The
+// rig lab DID chart a full four-leg walk cycle per horse (verified,
+// part_roles.json) — it just never got wired to a renderer: PropModel only
+// ever plays the static GLB path. RiggedProp already has a complete
+// diagonal-trot animator (built for Wildlife.tsx's standalone horses); it
+// just didn't recognise this asset's own per-horse leg names
+// (horse_L_leg_FL_upper, …) until this same investigation added that case.
+function Cart({ gaitSpeed }: { gaitSpeed: number }) {
+  return (
+    <RiggedProp
+      assetId="oc6095b3"
+      height={1.7}
+      position={[1.9, 0, -0.4]}
+      yaw={0.4}
+      gaitSpeed={gaitSpeed}
+    />
+  );
 }
 
 export default function Merchant() {
   const group = useRef<THREE.Group>(null);
   const [clip, setClip] = useState('anim_r_restpose');
+  const [gaitSpeed, setGaitSpeed] = useState(0);
   const state = useRef({ x: OFF_STAGE.x, z: OFF_STAGE.z, yaw: MERCHANT_SPOT.yaw, stage: 'away' as Stage });
 
   useFrame((_, dt) => {
@@ -102,6 +118,7 @@ export default function Merchant() {
       // he's actually interactable, found investigating a reported rig bug.
       g.rotation.y = s.yaw + Math.PI;
       if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+      if (gaitSpeed !== 0) setGaitSpeed(0);
       return;
     }
 
@@ -117,6 +134,9 @@ export default function Merchant() {
       while (diff < -Math.PI) diff += Math.PI * 2;
       s.yaw += diff * Math.min(1, dt * 3);
       if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+      if (gaitSpeed !== WALK_SPEED) setGaitSpeed(WALK_SPEED);
+    } else if (gaitSpeed !== 0) {
+      setGaitSpeed(0);
     }
     g.position.set(s.x, 0, s.z);
     g.rotation.y = s.yaw + Math.PI; // RiggedFigure convention (see Villagers.tsx)
@@ -127,7 +147,7 @@ export default function Merchant() {
       <Suspense fallback={null}>
         <RiggedFigure config={MERCHANT_CONFIG} height={1.75} keepProps={MERCHANT_KEEP_PROPS} clip={clip} />
       </Suspense>
-      <Cart />
+      <Cart gaitSpeed={gaitSpeed} />
     </group>
   );
 }

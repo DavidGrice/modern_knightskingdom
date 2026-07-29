@@ -201,6 +201,43 @@ export default function RiggedProp({
       }
     }
 
+    // --- two-horse cart team (oc6095b3, the merchant's yoked pair): the lab
+    // named each leg explicitly per horse (horse_L_leg_FL_upper, …) instead
+    // of the generic leg_upper/leg_lower a standalone horse rig collapses
+    // into four numbered clusters, so the block above never matches it —
+    // found investigating a reported "cart horses don't animate" bug.
+    // Reuses the exact same diagonal-trot math (FL+BR share a phase, FR+BL
+    // the opposite one), just addressed by name instead of index, and both
+    // horses share ONE gait clock since they're yoked to the same tow-bar
+    // and would look wrong stepping out of sync with each other.
+    if (rig.parts['horse_L_leg_FL_upper']) {
+      gait.current += dt * (2.2 + gaitSpeed * 1.8);
+      const amp = gaitSpeed > 0.05 ? Math.min(0.55, 0.18 + gaitSpeed * 0.32) : 0.05;
+      const DIAG: [string, number][] = [['FL', 0], ['BR', 0], ['FR', Math.PI], ['BL', Math.PI]];
+      for (const side of ['horse_L', 'horse_R']) {
+        for (const [leg, offset] of DIAG) {
+          const phase = gait.current + offset;
+          const swing = Math.sin(phase) * amp;
+          const upper = rig.parts[`${side}_leg_${leg}_upper`];
+          if (upper) {
+            if (!rest.current.has(upper)) rest.current.set(upper, upper.rotation.x);
+            upper.rotation.x = rest.current.get(upper)! + swing;
+          }
+          const lower = rig.parts[`${side}_leg_${leg}_lower`];
+          if (lower) {
+            if (!rest.current.has(lower)) rest.current.set(lower, lower.rotation.x);
+            lower.rotation.x = rest.current.get(lower)! + Math.max(0, Math.sin(phase - 0.7)) * amp * 0.8;
+          }
+        }
+        const head = rig.parts[`${side}_head`];
+        if (head) {
+          if (!rest.current.has(head)) rest.current.set(head, head.rotation.x);
+          const graze = gaitSpeed < 0.05 ? 0.4 + Math.sin(t.current * 0.6 + (side === 'horse_R' ? 1.3 : 0)) * 0.18 : 0;
+          head.rotation.x = rest.current.get(head)! + graze;
+        }
+      }
+    }
+
     // --- flame: flicker in scale + a little vertical bob ---
     const flame = rig.parts.flame;
     if (flame) {
