@@ -2951,8 +2951,9 @@ placed building currently picks it up to move it. It should open a menu of
 actions on that building instead — and one of those actions is mounting an
 explosive charge on top of a wall piece.
 
-[TODO] **L73 · The FPS weapons are still misaligned.** H29/K56 improved the grip
-derivation but they still do not sit right in the hands.
+[COMPLETE] **L73 · The FPS weapons are still misaligned.** H29/K56 improved the grip
+derivation but they still do not sit right in the hands. Finished 2026-07-29 — see
+L73 (rest) below for the final measurement pass.
 
 ## Order [COMPLETE]
 
@@ -3048,11 +3049,22 @@ hand nowhere near it. It hangs off the off-hand side now, pulled inboard the
 way a drawn bow actually is: limbs vertical, belly to the target, gripped at
 the riser.
 
-### Still open in L [TODO]
-- [TODO] **L73 (rest) · the arrow on the string** still lies vertically alongside the
-  bow rather than horizontally downrange, and the sword/crossbow poses have
-  not been re-measured — only the bow's HAND was wrong, which was the loud
-  part. Worth a proper pass with the lab's grip data rather than more nudging.
+[COMPLETE] **L73 (rest) · the arrow on the string, and the crossbow's roll.**
+Re-measured live rather than nudged blind: screenshotting the drawn bow at
+scale showed the arrow's quarter-turn onto the CAMERA's own forward axis
+(what K56 shipped, and which reads correctly as math) foreshortens it to a
+near-invisible sliver on screen — pointing an object straight down the same
+line the camera is already looking along makes it disappear regardless of
+whether the rotation is "right." Turned onto the mount's local X axis
+instead (`Viewmodel.tsx`'s `Longbow`), so the shaft runs visibly across the
+view from the string to the reticle, and slides back toward the archer as
+the draw deepens rather than away from them. The crossbow's own `MOUNT.crossbow`
+had the opposite problem: the pitch (pointed downrange) was already right,
+but with zero roll the bow-arms sat canted 25-30° off level — only obvious
+once screenshotted at scale, invisible at the viewmodel's actual small size.
+A +0.5 roll squares them up without touching the pitch. The sword's own pose
+was checked the same way and found to already read correctly — no change
+needed there.
 - [TODO] **L62 (rest) · lance and halberd from the saddle.** Ranged works; the lance
   still only exists inside the joust mechanic, and the halberd has no mounted
   pose.
@@ -3437,10 +3449,6 @@ block rather than being started at the end of a session.
   village buildings need enterable interiors with NPCs in them.
   `KeepInteriorRoom.tsx` is the existing pattern to generalise — one room, one
   door, one occupant list — rather than something to invent.
-- [TODO] **L73 (rest) · weapon poses.** Only the bow's HAND was wrong and that is
-  fixed; the arrow still lies along the bow rather than downrange, and the
-  sword and crossbow poses want re-measuring against the lab grip data rather
-  than more nudging.
 - [TODO] **L62 (rest) · lance and halberd from the saddle.**
 
 ## Pointer lock, corrected again — 2026-07-26 [COMPLETE]
@@ -3503,8 +3511,8 @@ the night shift".
 
 [TODO] **N81 · The FPS hands are gesturing backwards.** Chopping bare-handed moves the
 ARMS while the hands stay still; it should be the other way round — arms
-relatively constant, hands doing the work. The weapon poses are still wrong
-too (L73's remainder).
+relatively constant, hands doing the work. (L73's own remainder — the held
+weapon poses — is done; this is the separate bare-handed/tool gesture.)
 
 [TODO] **N82 · One readout for a target, not two.** There is a health bar AND a card
 that repeats the health bar plus friend/foe plus distance. It should be a
@@ -3513,10 +3521,10 @@ to the head but left the older bar in place instead of folding them together.
 
 ## Order [TODO]
 
-N74 and the corner are small. N76 is data. N77 is one config audit. N81 and
-L73's remainder are one animation pass. N82 is a merge, not new work. N78/N79/
-N80 are one arc — the road becomes the spine the world moves along — and want
-doing together.
+N74 and the corner are small. N76 is data. N77 is one config audit. N81 is its
+own animation pass (L73's remainder shipped separately). N82 is a merge, not
+new work. N78/N79/N80 are one arc — the road becomes the spine the world moves
+along — and want doing together.
 
 # NPC AI — phase 1 shipped, 2026-07-27 [COMPLETE]
 
