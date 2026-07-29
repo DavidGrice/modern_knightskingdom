@@ -683,10 +683,21 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   passives (verified deterministically: Second Wind → exactly 110 stamina; Sure Hammer + Raised Right →
   0.5 swing = 0.65 built). **Follow-up:** a respec option (gold cost), deeper tiers if the level curve
   extends.
-- [TODO] **Perks with trade-offs (+/−)**: perks that cost something — "Berserker: +30% sword damage, −20% max
-  stamina"; "Hermit: villagers work slower, but you gather double"; "Silver Tongue: better trade prices,
-  Storm duels harder." Makes builds distinct instead of strictly additive. Could arrive as a second perk
-  row alongside the existing all-upside five.
+[COMPLETE] **Perks with trade-offs (+/−)**: three real perks added to the existing pool
+(`game/data/perks.ts`, flagged `tradeoff: true`), sharing the same one-pick-per-rank-up, 4-slot
+budget as the plain upside five rather than a separate allowance — the Abilities panel now shows
+them in their own "A Calculated Risk" row underneath, so the cost is legible before picking, not
+just in the tooltip after. **Berserker** (+30% sword damage, −20% max stamina) — `combat.ts`'s
+`playerAttack()` and the level-up stamina subscriber, which now also clamps current stamina down to
+a lower max instead of only ever raising it. **Hermit** (double personal gathering, villagers 25%
+slower) — `gameStore.ts`'s `harvestNode()` (every node kind, including fishing) and `tickVillagers()`'s
+trip duration. **Silver Tongue** (+15%/−15% trade prices, Storm strikes faster in a duel) —
+`sellItem()`/`buyOffer()`, with `ShopPanel.tsx`'s displayed prices and its Buy button's affordability
+check updated to match what's actually charged (the check would otherwise disagree with the discount
+and grey out an affordable purchase); Storm's own `ATTACK_CD` calc in `Enemies.tsx` gets an extra
+subtraction, the same direction reputation already pushes it. Verified live: all three trade-offs
+measured against the exact math (3→3.9 sword damage, 100→80 max stamina, 10→12g sold / 7→6g bought,
+3→6 wood gathered) and the Abilities panel screenshot confirms the new row renders correctly.
 
 ---
 

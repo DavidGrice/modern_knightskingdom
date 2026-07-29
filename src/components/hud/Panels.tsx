@@ -714,6 +714,12 @@ function SkillsPanel() {
   const choosePerk = useGameStore((s) => s.choosePerk);
   const slotsEarned = perkSlotsEarned(xp, completedQuests);
   const unpicked = PERKS.filter((p) => !perks.includes(p.id));
+  // trade-off perks (2026-07-29) get their own row rather than blending into
+  // the plain upside five — the point is that the cost is legible BEFORE
+  // picking, not just in the tooltip after. Same shared slot budget: picking
+  // one is still one fewer of the other kind, not a separate allowance.
+  const unpickedPlain = unpicked.filter((p) => !p.tradeoff);
+  const unpickedTradeoff = unpicked.filter((p) => p.tradeoff);
   return (
     <PanelFrame title="Abilities">
       {SKILLS.map((s) => {
@@ -767,7 +773,7 @@ function SkillsPanel() {
           <div className="creator-section" style={{ marginTop: 16 }}>
             A New Strength — choose a permanent gift ({perks.length}/{slotsEarned})
           </div>
-          {unpicked.map((p) => (
+          {unpickedPlain.map((p) => (
             <div
               key={p.id}
               className="quest-item"
@@ -778,6 +784,24 @@ function SkillsPanel() {
               <div className="q-desc">{p.desc}</div>
             </div>
           ))}
+          {unpickedTradeoff.length > 0 && (
+            <>
+              <div className="creator-section" style={{ marginTop: 12 }}>
+                Or — A Calculated Risk (costs something in exchange)
+              </div>
+              {unpickedTradeoff.map((p) => (
+                <div
+                  key={p.id}
+                  className="quest-item"
+                  style={{ cursor: 'pointer', borderColor: 'var(--danger)' }}
+                  onClick={() => choosePerk(p.id)}
+                >
+                  <div className="q-name"><Ico e={p.icon} /> {p.name}</div>
+                  <div className="q-desc">{p.desc}</div>
+                </div>
+              ))}
+            </>
+          )}
         </>
       )}
       <TalentTree />

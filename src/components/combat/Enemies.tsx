@@ -277,7 +277,13 @@ function Enemy({ data }: { data: EnemyData }) {
         m.attackCd -= dt;
         if (m.attackCd <= 0) {
           m.attackCd = data.kind === 'storm'
-            ? Math.max(0.55, ATTACK_CD.storm - (useGameStore.getState().reputation['storm'] ?? 0) * 0.006)
+            // Silver Tongue trade-off perk: its own upside is trade prices
+            // (gameStore.ts's sellItem/buyOffer) — the cost is Storm striking
+            // faster here, the same direction reputation already pushes this
+            // cooldown, so a Silver Tongue holder meets a permanently
+            // "further into the escalation" Storm rather than a new curve
+            ? Math.max(0.55, ATTACK_CD.storm - (useGameStore.getState().reputation['storm'] ?? 0) * 0.006
+              - (useGameStore.getState().perks.includes('silver_tongue') ? 0.15 : 0))
             : ATTACK_CD[data.kind];
           // a duel with Storm ends the instant either side lands a blow —
           // no lingering damage, just resolution (see combat.ts's resolveDuel)
