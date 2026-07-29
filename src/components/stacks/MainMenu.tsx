@@ -82,6 +82,19 @@ export default function MainMenu() {
     push('create');
   }, [guest, loadFromSave, push]);
 
+  // Reported 2026-07-28: "Empty slot — start a new holdfast" sits directly
+  // beneath the real save card, styled almost the same way, and used to jump
+  // straight to character creation on a single click — this file's own
+  // footer text already says "Starting a new holdfast overwrites the one
+  // above", so a misclick here silently discards real progress with no way
+  // back. Only guard when there's actually something to lose.
+  const startNew = useCallback(() => {
+    if (slot && !window.confirm(`Starting a new holdfast will overwrite "${slot.name}". This cannot be undone — continue?`)) {
+      return;
+    }
+    play(false);
+  }, [slot, play]);
+
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     setUser(null);
@@ -106,7 +119,7 @@ export default function MainMenu() {
                 {slot && <span className="kk-menu-key">DAY {slot.day}</span>}
               </button>
             )}
-            <button className="kk-menu-item" onClick={() => play(false)}>
+            <button className="kk-menu-item" onClick={startNew}>
               <KkIcon name="k-keep" size={17} />
               <span>New Journey</span>
             </button>
@@ -158,7 +171,7 @@ export default function MainMenu() {
                 <div className="kk-save-cta">RESUME</div>
               </button>
             )}
-            <button className="kk-save-empty" onClick={() => play(false)}>
+            <button className="kk-save-empty" onClick={startNew}>
               <KkIcon name="k-plus" size={15} />
               {slot ? 'Empty slot — start a new holdfast' : 'Empty slot — forge your first hero'}
             </button>
