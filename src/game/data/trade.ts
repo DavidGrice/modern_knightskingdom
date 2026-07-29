@@ -9,9 +9,21 @@ import type { ItemId } from '../types';
 // Phase 20's homestead re-site as planned)
 // L68 · the merchant stood at (36, 16) — four metres off the east edge of a
 // fully-bought holding, right where the last deed's build squares land, so
-// finishing the homestead meant building around a shopkeeper. Moved south to
-// the road, outside every tier's footprint, where the traffic is anyway.
-export const MERCHANT_SPOT = { x: 8, z: 44, yaw: Math.PI * 0.9 };
+// finishing the homestead meant building around a shopkeeper. Then moved to
+// (8, 44) — outside every land tier's footprint, but still not the "two
+// south guard posts" the roadmap actually asked for, since the props those
+// referred to hadn't been identified yet.
+//
+// L68 (resolved) · the two guard posts ARE the mc001 ("Wall Corner (Small)")
+// huts in StarterVillage.tsx — the same props already carrying Alric's and
+// Beda's houses, at (-41.5, 36.5) and (-34, 44). The merchant now stands
+// between them, on the road's own westward run (road.ts's route passes
+// right through this corner), clear of both huts' and both NPCs'
+// STARTER_VILLAGE_CLEAR radii (world.ts) and well outside BUILD_REGION —
+// no overlap with either the homestead or any GROUNDS section (checked
+// against grounds.ts's own dev-time overlap assertions). Facing back down
+// the road toward the homestead.
+export const MERCHANT_SPOT = { x: -37.5, z: 40, yaw: -1.21 };
 
 export const SELL_PRICES: Partial<Record<ItemId, number>> = {
   wood: 1,
