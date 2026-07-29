@@ -15,6 +15,7 @@ import { SKILLS, levelFromXp } from './data/ranks';
 import { resetDungeon } from './dungeon';
 import { ITEMS } from './data/items';
 import type { ItemId } from './types';
+import { raidStrength } from './difficulty';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -189,6 +190,24 @@ export interface EnemyData {
    *  enemies don't survive a reload) */
   inventory?: Partial<Record<ItemId, number>>;
   mob: EnemyMob;
+  /** this instance's own health ceiling, scaled at spawn (see `scale`) —
+   *  `maxHpOf(kind)` stays the flat, unscaled reference value for anything
+   *  that isn't a live instance (the Bestiary's "Vigour" entry, in
+   *  particular, must keep reading the base number). */
+  maxHp: number;
+  /** requested 2026-07-28: raiders should scale with real progress, not
+   *  spawn at the same fixed strength on day 1 and day 50. Reuses
+   *  `difficulty.ts`'s already-exported, previously-unwired `raidStrength()`
+   *  — ROADMAP's own O7 fix log already flagged this as the next step
+   *  ("raidStrength() is exported and ready, but Enemies.tsx's raider
+   *  spawning still uses its own gate"). Fixed at spawn, not re-read every
+   *  frame, so a fight doesn't get harder out from under the player mid-
+   *  raid if their tier ticks over while they're still fighting. Cedric and
+   *  Storm are excluded — both are tuned, named set-piece encounters (Storm
+   *  specifically is a 1-HP "first hit ends it" duel; scaling her HP would
+   *  break the mechanic outright), not raid filler.
+   */
+  scale: number;
 }
 
 let enemySeq = 1;
@@ -203,10 +222,14 @@ interface EnemyStore {
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
   enemies: [],
   spawn: (kind, x, z, raid = false, dungeonRoom) => {
+    const scale = (kind === 'cedric' || kind === 'storm') ? 1 : raidStrength();
+    const maxHp = Math.round(KIND_HP[kind] * scale);
     const e: EnemyData = {
       id: enemySeq++,
       kind,
-      hp: KIND_HP[kind],
+      hp: maxHp,
+      maxHp,
+      scale,
       raid,
       dungeonRoom,
       inventory: rollLoot(kind),

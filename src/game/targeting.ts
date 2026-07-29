@@ -77,7 +77,7 @@ function hitCylinder(
 export function resolveAim(
   ox: number, oy: number, oz: number,
   dx: number, dy: number, dz: number,
-  enemies: { id: number; kind: string; hp: number; mob: { x: number; z: number; yaw: number; state: string } }[],
+  enemies: { id: number; kind: string; hp: number; maxHp?: number; mob: { x: number; z: number; yaw: number; state: string } }[],
   nameOfEnemy: (kind: string) => string,
   maxHpOf: (kind: string) => number,
   npcName: (id: string) => string,
@@ -110,7 +110,10 @@ export function resolveAim(
       standing: 'hostile',
       distance: t,
       hp: Math.max(0, e.hp),
-      maxHp: maxHpOf(e.kind),
+      // this instance's own (possibly raid-scaled) ceiling when the caller
+      // has it (combat.ts's EnemyData.maxHp); the flat per-kind fallback
+      // stays for any caller that only ever had the bare kind string
+      maxHp: e.maxHp ?? maxHpOf(e.kind),
       known: isKnown(e.kind),
       x: e.mob.x, z: e.mob.z, height: FRIENDLY_HEIGHT,
     };
