@@ -521,6 +521,24 @@ granting the unlock + materials and seeing all 26 pieces appear.
   On player death IN THIS ARENA SPECIFICALLY: no game-over, no day-skip — respawn just outside the
   arena entrance and the run resets (a "redo," not a punishment), distinct from the general 0-HP
   behavior below.
+- [TODO] **A real ladder — climb the walls, look out over the world** (requested 2026-07-29): checked
+  the rig lab's own JSON rather than assuming — `public/assets/rigs/capabilities.json` really does
+  carry a dedicated ladder mold, `oc6096-5` (from the Bull's Attack set, alongside Cedric's own
+  counterweight siege engine, `oc6096b3`, which separately carries a `ladder`-labelled sub-part of its
+  own). `oc6096-5`'s own traits are exactly what this needs: `rigClass: "ladder"`,
+  `structureKind: "ladder"`, `isLadder: true`, `isMovableLadder: true`, `canStandOn: true` — flagged
+  `rigStatus: "todo"`, i.e. catalogued but never verified/wired up. It's already secretly IN the game
+  today: the generic auto-generated bricks pipeline picked it up as `gen_oc6096-5`, "Castle Piece 6×5",
+  filed under the Castle category — placeable right now, but as a purely decorative box with none of
+  the rig lab's own richer semantic traits cross-referenced, so nothing about it says "ladder" and
+  nothing lets the player climb it. This is the same gap flagged earlier under Phase 25's own
+  "Not yet covered" note: "actual walkable-parapet access (climbing onto the walkway a wall's
+  `canStandOn` label implies — no stairs mechanic exists yet)" — a real ladder-climb interaction (an
+  E-hold near a placed one, raising the player smoothly to `KeepPart.walkway` height) would close that
+  exact gap, give the still-open "Defenders do not use the walls" item (`KeepPart.walkway` records the
+  height; nothing posts anyone to it) a real path onto the parapet for the player first and a defender
+  later, and hand the player the first actual way to reach `onBattlement()`'s already-built +25%
+  elevated ranged-damage bonus (`combat.ts`) — on top of the vista itself, which was the actual ask.
 [COMPLETE] **A real 0-HP state, everywhere else** (requested 2026-07-28): `damagePlayer()`
 (`game/combat.ts`) already reset HP/stamina and teleported home on knockout; it now also jumps
 `worldEnv.time` to 0.27 (just before sunrise — the same dawn value `sleep()` uses for a bed) and
