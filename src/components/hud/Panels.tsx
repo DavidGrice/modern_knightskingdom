@@ -23,7 +23,8 @@ import BestiaryPanel from './BestiaryPanel';
 import AllegianceMeter from './AllegianceMeter';
 import { HeldSword, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
 import { EDIBLES, ITEMS, UTILITY_POTIONS } from '@/game/data/items';
-import { combatState, useEnemyStore } from '@/game/combat';
+import { combatState } from '@/game/combat';
+import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
@@ -443,12 +444,18 @@ function CraftingPanel() {
 function ParleyPanel() {
   const setPanel = useGameStore((s) => s.setPanel);
   const pledgeAlliance = useGameStore((s) => s.pledgeAlliance);
+  const finalStandReady = useGameStore((s) => cedricFinalStandReady(s));
   const challenge = () => {
     setPanel('none');
-    useEnemyStore.getState().spawn('cedric', CEDRIC_CAMP.x, CEDRIC_CAMP.z + 1.5, false);
+    const finalStand = startCedricDuel(useGameStore.getState());
     audio.play('warcry', 0.9);
     audio.playVoice('greeting_cedric', 0.85);
-    useGameStore.getState().notify('Cedric the Bull sneers: "Come to lose your head, have you?"', true);
+    useGameStore.getState().notify(
+      finalStand
+        ? 'Cedric the Bull roars: "This ends here, would-be knight!"'
+        : 'Cedric the Bull sneers: "Come to lose your head, have you?"',
+      true,
+    );
   };
   // War council (Phase 20 4b): a sworn bannerman gets rebellion errands
   // instead of the recruitment pitch — the same sideQuest machinery every
@@ -532,9 +539,13 @@ function ParleyPanel() {
       </div>
       <div className="quest-item">
         <div className="q-name">⚔ Challenge Him to Battle</div>
-        <div className="q-desc">Answer his offer with steel — the capstone boss fight, as ever.</div>
+        <div className="q-desc">
+          {finalStandReady
+            ? 'His Final Stand — answer his offer with steel, and finish this for good.'
+            : 'Answer his offer with steel — he fights for real, but has not yet earned his final defeat.'}
+        </div>
         <button className="menu-btn small danger" style={{ margin: '8px 0 0' }} onClick={challenge}>
-          Draw your sword
+          {finalStandReady ? 'Draw your sword — His Final Stand' : 'Draw your sword'}
         </button>
       </div>
       <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>

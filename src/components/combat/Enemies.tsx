@@ -81,6 +81,10 @@ const ATTACK_CD: Record<string, number> = { skeleton: 1.6, bandit: 1.6, gilbert:
  *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
  *  pool), closer to what the player's own ram/cannon already deal it */
 const RAID_SIEGE_DMG: Record<string, number> = { bandit: 9, gilbert: 12, cedric: 18, royal: 12 };
+/** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
+ *  every appearance except his own sanctioned final stand — a real fight
+ *  first, then he bails, same shape as the bandit morale-break below */
+const CEDRIC_FLEE_HP = 9;
 /** a distinct voice bark on defeat, where the original bank has one (Deed-worthy antagonists only) */
 const DEATH_BARK: Partial<Record<string, SoundName>> = {
   bandit: 'random_weezil', gilbert: 'random_gilbert', cedric: 'random_cedric',
@@ -214,10 +218,20 @@ function Enemy({ data }: { data: EnemyData }) {
       }
       // broken morale (advanced AI): a badly wounded bandit loses heart and
       // breaks for the treeline instead of trading blows to the end — no
-      // kill credit, no loot, they just live to raid another day
-      if (data.kind === 'bandit' && data.hp <= 2 && !m.fleeing) {
+      // kill credit, no loot, they just live to raid another day.
+      // Cedric's Siege: the same escape valve is what keeps every Cedric
+      // appearance OTHER than his sanctioned final stand from being able to
+      // permanently kill him — he trades blows for real, then bails, same as
+      // a bandit, rather than needing a bespoke "can't die here" mechanic of
+      // his own. `finalStand` spawns (the camp duel once cedricFinalStandReady)
+      // are excluded — that is the one fight he does not walk away from.
+      if (
+        (data.kind === 'bandit' && data.hp <= 2
+          || (data.kind === 'cedric' && !data.finalStand && data.hp <= CEDRIC_FLEE_HP))
+        && !m.fleeing
+      ) {
         m.fleeing = true;
-        st.notify('A bandit loses heart and flees!');
+        st.notify(data.kind === 'cedric' ? 'Cedric the Bull breaks off, sounding the retreat!' : 'A bandit loses heart and flees!');
       }
       if (m.fleeing) {
         m.state = 'chase'; // run animation

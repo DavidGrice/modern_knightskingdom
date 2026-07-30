@@ -27,6 +27,11 @@ type GameState = ReturnType<typeof useGameStore.getState>;
 /** The tier at which the dragon is allowed to come at all (§O7). */
 export const DRAGON_TIER = 3;
 
+/** The tier at which Cedric's homestead siege is allowed to come at all —
+ *  deliberately past the dragon's own gate, so his siege reads as a further
+ *  escalation rather than a coincident threat (game/cedricSiege.ts). */
+export const CEDRIC_SIEGE_TIER = 4;
+
 export interface TierRule {
   tier: number;
   /** lifetime structures raised */

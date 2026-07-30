@@ -112,6 +112,10 @@ export function explodeBall(ball: Cannonball) {
   }
   if (hits > 0) st.addXp('combat', 5);
   for (const b of st.buildings) {
+    // the keep's own synthetic entry exists purely for interact-detection —
+    // damaging it directly would delete it at 0 HP and orphan the real
+    // assembled castle (st.keep), which damageKeepNear below already covers
+    if (b.type === 'keep') continue;
     const d = Math.hypot(b.x - ball.pos.x, b.z - ball.pos.z);
     if (d > 3.2) continue;
     st.damageBuilding(b.id, 18, 'was blasted');
@@ -154,7 +158,7 @@ export function detonate(charge: PlacedBuilding) {
   // charge damages structures
   if (traits?.damagesWalls !== false) {
     for (const b of st.buildings) {
-      if (b.id === charge.id) continue;
+      if (b.id === charge.id || b.type === 'keep') continue; // see explodeBall's own note
       if (Math.hypot(b.x - x, b.z - z) > 5) continue;
       st.damageBuilding(b.id, 45, 'was blown apart');
     }
@@ -193,7 +197,7 @@ export function ramCheck(rammerId: string, x: number, z: number) {
     }
   }
   for (const b of st.buildings) {
-    if (b.id === rammerId) continue;
+    if (b.id === rammerId || b.type === 'keep') continue; // see explodeBall's own note
     const d = Math.hypot(b.x - x, b.z - z);
     if (d > 2.1) continue;
     lastRamHitAt = now;

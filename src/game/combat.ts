@@ -220,20 +220,29 @@ export interface EnemyData {
    *  break the mechanic outright), not raid filler.
    */
   scale: number;
+  /** Cedric's Siege: true only for the sanctioned final-stand fight at his
+   *  own camp — every OTHER spawn of kind 'cedric' (a raid-leader cameo, an
+   *  ordinary early camp duel) defaults this false, which is what makes him
+   *  flee rather than die for good outside that one fight (see the flee-guard
+   *  in Enemies.tsx). Meaningless for any other kind. */
+  finalStand?: boolean;
 }
 
 let enemySeq = 1;
 
 interface EnemyStore {
   enemies: EnemyData[];
-  spawn: (kind: EnemyKind, x: number, z: number, raid?: boolean, dungeonRoom?: number, approaching?: boolean) => void;
+  spawn: (
+    kind: EnemyKind, x: number, z: number, raid?: boolean, dungeonRoom?: number,
+    approaching?: boolean, finalStand?: boolean,
+  ) => void;
   remove: (id: number) => void;
   clear: () => void;
 }
 
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
   enemies: [],
-  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false) => {
+  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false, finalStand = false) => {
     const scale = (kind === 'cedric' || kind === 'storm') ? 1 : raidStrength();
     const maxHp = Math.round(KIND_HP[kind] * scale);
     const e: EnemyData = {
@@ -244,6 +253,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       scale,
       raid,
       dungeonRoom,
+      finalStand,
       inventory: rollLoot(kind),
       mob: {
         x, z, yaw: Math.random() * Math.PI * 2,
@@ -426,7 +436,12 @@ export function playerAttack(): boolean {
       .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
       .join(', ');
     st.notify(haul ? `${KIND_LABEL[best.kind]} defeated! Looted ${haul}.` : `${KIND_LABEL[best.kind]} defeated!`);
-    if (best.kind === 'cedric') st.markCedricDefeated();
+    // Cedric's Siege: only the sanctioned final stand ever permanently
+    // defeats him — every other spawn of his kind flees well before 0 HP
+    // (see Enemies.tsx's flee-guard), so reaching this branch with
+    // finalStand unset should be effectively unreachable, but the gate stays
+    // as the deliberate second line of defense against that assumption.
+    if (best.kind === 'cedric' && best.finalStand) st.markCedricDefeated();
   }
   return true;
 }
@@ -634,7 +649,8 @@ export function stepBolt(b: Bolt, dt: number): boolean {
           .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
           .join(', ');
         st.notify(rHaul ? `${KIND_LABEL[e.kind]} shot down! Looted ${rHaul}.` : `${KIND_LABEL[e.kind]} shot down!`, true);
-        if (e.kind === 'cedric') st.markCedricDefeated();
+        // Cedric's Siege: see playerAttack's matching gate above for why.
+        if (e.kind === 'cedric' && e.finalStand) st.markCedricDefeated();
       }
       // NOT removed: a stuck bolt stays in the world (Bolts.tsx parents it to
       // the struck mob). It expires with the corpse, not on contact.
