@@ -498,16 +498,64 @@ granting the unlock + materials and seeing all 26 pieces appear.
   the extraction).
 - [TODO] Delivery quests — haul goods by cart between instances (perfect fit after Phase 20).
 - [TODO] Alliance follow-ups: reputation fallout with the court, alliance-exclusive quests/rewards, a turncoat path.
-- [TODO] **Cedric's siege — an epic, unlockable set-piece battle** (requested 2026-07-28): Cedric brings his
-  full war party AND his vehicles to attack, not just a handful of raiders. Natural fit for the existing
-  `game/difficulty.ts` tier system (O7's fix log, above) as the unlock gate — a real, monotonic,
-  save-proof threshold rather than a new one-off flag, the same reasoning that already moved the dragon
-  onto tier + `rangedReady()`. "His vehicles" has a real asset base ready: the nine siege engines +
-  three explosives shipped in the Phase 25 rig-lab integration (catapults, stone throwers, crossbow
-  turrets, a siege tower — see "What's wired" above), plus `game/crew.ts`'s real crewing system if enemy
-  AI ever needs to man one. Needs its own design pass: how large "his full war party" actually is,
-  whether it's a single scripted event or a repeatable one, and whether beating it changes anything
-  permanent (a Deed, a crest, alliance standing).
+[COMPLETE] **Cedric's siege — an epic, unlockable set-piece battle** (requested 2026-07-28, shipped
+2026-07-30). Two distinct encounters, per the design given: Cedric can now be fought everywhere he
+always could, but only the SECOND of these two ever permanently ends him —
+
+- **The homestead siege** (`components/world/CedricSiege.tsx`), a structural mirror of `DragonSiege.tsx`:
+  once `game/cedricSiege.ts`'s `CEDRIC_SIEGE_TIER` (4 — past the dragon's own tier-3 gate) is reached and
+  the reveal quest is done, a nightly roll can bring his full war party — himself, Gilbert, four bandits,
+  a guaranteed battering ram (not the ordinary raid's 40% coin-flip), and two ambient siege engines
+  (Catapult `oc6096-4`, Stone Thrower `oc1289`) — down on the homestead. The engines fire on their own
+  cadence at ordinary buildings AND finished Keep pieces alike (`st.damageBuilding`/`st.damageKeepPart`),
+  deliberately with NO wood/stone filtering the way dragonfire has — a catapult stone does not care what
+  it lands on, so this siege threatens a stone Keep the dragon never could. Repelling it (every raider
+  gone before the 70s timer) or merely enduring it never permanently defeats him — `recordCedricSiege`
+  mirrors `recordDragonSiege` exactly: a `cedricSieges` counter and a `cedricRouted` flag, the same
+  "weathered, not killed" shape the dragon already has.
+- **The final stand**, upgraded in place from the existing camp-duel trigger (`PlayerController.tsx`'s
+  `challenge_cedric` handler, `Panels.tsx`'s `ParleyPanel`) rather than a new trigger surface — once
+  `cedricFinalStandReady` (arc-eligible AND at least one homestead siege survived — the literal code
+  expression of "vanquished here is not his final stand; that comes on his own map"), the SAME "Challenge
+  Him to Battle" button spawns him with `finalStand: true`, alongside an escort and one 20-second-timed
+  reinforcement wave for a real multi-wave fight. This is the only spawn of his that can permanently end
+  him.
+
+**The load-bearing mechanism, and the cheapest part of the whole feature**: every OTHER appearance of
+Cedric — the existing 35%-chance raid-leader cameo, an ordinary early camp duel — needed zero trigger
+changes at all. A single flee-guard extension in `Enemies.tsx` (mirroring the existing bandit
+morale-break: `data.kind === 'cedric' && !data.finalStand && data.hp <= 9` bails him out at ~20% HP,
+same as a bandit — no kill credit, no loot, no death) makes every non-`finalStand` spawn of him
+structurally incapable of a permanent kill, with `combat.ts`'s two `markCedricDefeated()` call sites
+gated on `finalStand` as a second line of defense. Beats fully suppressing his early appearances (which
+would leave a long dead zone between the reveal quest and the siege's own tier gate with nothing to do
+at his camp) — he stays a real, fightable threat throughout, just not a permanently-killable one until
+the story says so.
+
+Capstone reward (`markCedricDefeated`, gameStore.ts) is real now: {gold:250, iron_bar:10, stone:20} (was
+{gold:100, iron_bar:3}), a salvaged halberd + chestplate to the Armory, and a +35 allegiance swing — on
+top of two things that already existed and just needed their trigger finally gated correctly: the
+`cedric_jailed` Deed and its `minifigcedricbull00` crest unlock (`crestUnlocks.ts` — confirmed already
+wired, not new). Two new Deeds, `bull_siege`/`bull_routed`, mirror `flame_stone`/`sky_sting` exactly.
+
+**A real pre-existing bug found and fixed along the way, not introduced by this work**: the splash-damage
+loops in `siege.ts` (`explodeBall`, `detonate`, `ramCheck`) — shipped in the earlier Keep siege-damage
+PR this same session — never excluded the Keep's own synthetic `PlacedBuilding` (added for interact-
+detection only) from their `st.buildings` target lists. A cannonball, charge, or ram landing on the
+Keep's foundation would call `damageBuilding` on that synthetic entry, and at 0 HP would delete it —
+orphaning the real assembled castle (`st.keep`) while breaking "Enter the Keep" all over again. Found
+live-testing this siege's own engine fire hitting the same entry; fixed with a `b.type !== 'keep'`
+exclusion in all three loops (mirroring the exclusion `CedricSiege.tsx`'s own engine-target list already
+needed) rather than left as a latent trap the next siege source would have rediscovered.
+
+Verified live end-to-end: the full war party spawning correctly (composition, guaranteed ram, no
+double-trigger with a Dragon Omen/Siege night); engine fire destroying a Keep wall piece within the
+observed window with zero leak onto the Keep's synthetic entry; a repel AND a forced timeout both
+recording correctly with the right reward-or-not; the real "Challenge Him to Battle" button — clicked
+through the actual DOM, not simulated — upgrading into the final stand with its escort and timed
+reinforcement; a genuine kill through the unmodified `combat.ts` path granting the full capstone (gold,
+Armory gear, allegiance, both new Deeds, `cedric_jailed`, and the crest unlock in `localStorage`) with
+zero console errors throughout.
 - [TODO] **Underground fight arena — endless mobs, an ongoing kill-count quest, escalating modifiers**
   (requested 2026-07-28): a sealed arena (new location, not the existing Sealed Crypt — that has fixed
   rooms and a clear-and-done objective, this wants continuous spawns) where mobs keep coming until the

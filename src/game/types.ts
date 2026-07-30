@@ -185,6 +185,9 @@ export interface SaveGame {
   /** dragonfire sieges weathered / ever driven off with bolts (Deeds) */
   dragonSieges?: number;
   dragonRouted?: boolean;
+  /** Cedric's homestead sieges weathered / ever driven off before the timer (Deeds) */
+  cedricSieges?: number;
+  cedricRouted?: boolean;
   /** gate buildings: absent/true = open (passable), false = closed */
   gateOpen?: Record<string, boolean>;
   /** buildings under siege damage: absent = full HP (see data/buildables maxHpFor) */

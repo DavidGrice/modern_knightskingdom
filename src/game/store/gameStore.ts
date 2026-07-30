@@ -174,6 +174,8 @@ interface GameState {
   dragonSeen: boolean;            // witnessed the dragon's night flyover (drives its Deed)
   dragonSieges: number;           // dragonfire sieges weathered (Flame and Stone deed)
   dragonRouted: boolean;          // ever drove the beast off with bolts (Sting the Sky)
+  cedricSieges: number;           // Cedric's homestead sieges weathered (The Bull at the Gate deed)
+  cedricRouted: boolean;          // ever drove his war party off before the timer (Gore for Gore)
   timeOfDay: number;             // low-frequency mirror of worldEnv.time (HUD/saves)
   dayCount: number;               // low-frequency mirror of worldEnv.dayCount (HUD/saves)
   season: number;                 // low-frequency mirror of seasonOf(dayCount) (HUD/saves)
@@ -230,6 +232,9 @@ interface GameState {
   checkDeeds: () => void;
   markDragonSeen: () => void;
   recordDragonSiege: (routed: boolean) => void;
+  /** Cedric's Siege: a homestead siege ended — routed before the timer, or
+   *  endured to its end. Mirrors recordDragonSiege exactly. */
+  recordCedricSiege: (routed: boolean) => void;
   checkChallenges: () => void;
   plantPlot: (buildingId: string) => void;
   harvestPlot: (buildingId: string) => void;
@@ -595,6 +600,8 @@ function createGameStore() {
     dragonSeen: false,
     dragonSieges: 0,
     dragonRouted: false,
+    cedricSieges: 0,
+    cedricRouted: false,
     timeOfDay: 0.3,
     dayCount: 0,
     season: 0,
@@ -634,6 +641,7 @@ function createGameStore() {
         claimedWorlds: {}, customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
         interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
+        cedricSieges: 0, cedricRouted: false,
       });
       worldEnv.time = 0.3;
       worldEnv.dayCount = 0;
@@ -695,6 +703,7 @@ function createGameStore() {
         armory: s.armory ?? {},
         interior: null, enteredInteriorPos: null, treasureOpened: s.treasureOpened ?? false, dragonSeen: s.dragonSeen ?? false,
         dragonSieges: s.dragonSieges ?? 0, dragonRouted: s.dragonRouted ?? false,
+        cedricSieges: s.cedricSieges ?? 0, cedricRouted: s.cedricRouted ?? false,
       });
       worldEnv.time = s.timeOfDay ?? 0.3;
       worldEnv.dayCount = s.dayCount ?? 0;
@@ -753,6 +762,8 @@ function createGameStore() {
         dragonSeen: s.dragonSeen,
         dragonSieges: s.dragonSieges,
         dragonRouted: s.dragonRouted,
+        cedricSieges: s.cedricSieges,
+        cedricRouted: s.cedricRouted,
       };
     },
 
@@ -1181,9 +1192,17 @@ function createGameStore() {
       const st = get();
       if (st.defeatedCedric) return;
       set({ defeatedCedric: true, dirty: true });
-      st.addItems({ gold: 100, iron_bar: 3 }, 'grant');
+      // Cedric's Siege: the capstone payout for the real, permanent final
+      // stand — bigger than the old flat reward this used to pay for ANY
+      // duel win, since reaching this now means finishing the whole arc
+      // (a weathered homestead siege first, then this)
+      st.addItems({ gold: 250, iron_bar: 10, stone: 20 }, 'grant');
+      st.grantArmory('halberd', 1);
+      st.grantArmory('chestplate', 1);
+      st.shiftAllegiance(35, "You ended Cedric's rebellion at his own camp");
       audio.play('treasure', 0.9);
-      st.notify('🔒 Cedric the Bull is safely behind bars at last!', true);
+      audio.play('horn', 1);
+      st.notify("🔒 Cedric's rebellion ends here — the Bull is dragged in chains at last!", true);
     },
 
     // Phase 21 talent tree: spend derived points (one earned per total skill
@@ -1963,6 +1982,8 @@ function createGameStore() {
         dragonSeen: st.dragonSeen,
         dragonSieges: st.dragonSieges,
         dragonRouted: st.dragonRouted,
+        cedricSieges: st.cedricSieges,
+        cedricRouted: st.cedricRouted,
         defeatedCedric: st.defeatedCedric,
         reputation: st.reputation,
       };
@@ -1999,6 +2020,16 @@ function createGameStore() {
       set({
         dragonSieges: st.dragonSieges + 1,
         dragonRouted: st.dragonRouted || routed,
+        dirty: true,
+      });
+      get().checkDeeds();
+    },
+
+    recordCedricSiege: (routed) => {
+      const st = get();
+      set({
+        cedricSieges: st.cedricSieges + 1,
+        cedricRouted: st.cedricRouted || routed,
         dirty: true,
       });
       get().checkDeeds();

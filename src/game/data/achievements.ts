@@ -14,6 +14,8 @@ export interface DeedState {
   dragonSeen?: boolean;
   dragonSieges?: number;
   dragonRouted?: boolean;
+  cedricSieges?: number;
+  cedricRouted?: boolean;
   reputation?: Record<string, number>;
 }
 
@@ -66,4 +68,8 @@ export const DEEDS: DeedDef[] = [
     check: (s) => (s.dragonSieges ?? 0) >= 1 },
   { id: 'sky_sting', name: 'Sting the Sky', icon: '🏹', desc: 'Drive the dragon off with bolts before it tires of burning.',
     check: (s) => !!s.dragonRouted },
+  { id: 'bull_siege', name: 'The Bull at the Gate', icon: '🐂', desc: "Weather Cedric's siege upon your homestead.",
+    check: (s) => (s.cedricSieges ?? 0) >= 1 },
+  { id: 'bull_routed', name: 'Gore for Gore', icon: '⚔️', desc: "Drive Cedric's war party off before he tires of the assault.",
+    check: (s) => !!s.cedricRouted },
 ];

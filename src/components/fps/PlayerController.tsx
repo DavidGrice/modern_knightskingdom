@@ -15,6 +15,7 @@ import {
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { NPCS, NPC_BY_ID, isNpcRevealed } from '@/game/data/npcs';
 import { INTERIORS, pocketFor } from '@/game/data/interiors';
+import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
@@ -419,6 +420,7 @@ export default function PlayerController() {
         return {
           id: 'cedric', kind: 'challenge_cedric', duration: 0, actionable: true,
           label: st.alliance === 'cedric' ? 'Sit the War Council'
+            : cedricFinalStandReady(st) ? 'Challenge Cedric — His Final Stand'
             : st.alliance === 'leo' ? 'Challenge Cedric the Bull'
             : 'Approach Cedric the Bull',
         };
@@ -889,10 +891,17 @@ export default function PlayerController() {
         audio.playVoice('greeting_cedric', 0.85);
         return;
       }
-      useEnemyStore.getState().spawn('cedric', CEDRIC_CAMP.x, CEDRIC_CAMP.z + 1.5, false);
-      audio.play('warcry', 0.9);
-      audio.playVoice('greeting_cedric', 0.85);
-      st.notify('Cedric the Bull sneers: "Come to lose your head, have you?"', true);
+      {
+        const finalStand = startCedricDuel(st);
+        audio.play('warcry', 0.9);
+        audio.playVoice('greeting_cedric', 0.85);
+        st.notify(
+          finalStand
+            ? 'Cedric the Bull roars: "This ends here, would-be knight!"'
+            : 'Cedric the Bull sneers: "Come to lose your head, have you?"',
+          true,
+        );
+      }
     } else if (t.kind === 'fishing') {
       if (fishingState.nodeId !== t.id) {
         startFishing(t.id, worldEnv.rain > 0.4);
