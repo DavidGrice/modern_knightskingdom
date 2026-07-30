@@ -644,10 +644,29 @@ Options re-tints the Options screen itself immediately, and the change carries t
 main menu and into "New Journey" → Forge Your Hero, all three now the same steel-blue lane that used
 to be menu/options-only. **Known remaining gap, out of scope here:** `StatsStack.tsx` still uses an
 entirely separate, older `.stack-screen`/`.panel` class system predating the UI handoff pack, so the
-Chronicle-of-Deeds screen doesn't follow the lane at all yet; the sign-in plaque and the character
-creator's own doll-stage frame also keep bespoke decorative styling rather than the shared 4-recipe
-treatment. Worth a follow-up pass, not a blocker on "pick a theme and have it apply everywhere" being
-true for the screens the original report actually named.
+Chronicle-of-Deeds screen doesn't follow the lane at all yet.
+
+**Follow-up, 2026-07-29:** the background-only fix above was real but incomplete, and it happened to
+introduce a real regression on top: `kk-screens.css` had a `.kk-screen-metal, .kk-screen-leather {
+align-items: center; justify-content: center; }` rule with the two NEW lane classes missing from
+its selector list — since `glass` is the default lane, every fresh player landed on a left-aligned
+login/menu/options/forge screen. Fixed by adding `.kk-screen-glass`/`.kk-screen-chrome` to that same
+rule. Separately, and this is the deeper miss: the login plaque/sign-in card and the character
+creator's own name field and turntable stage were exactly the "bespoke decorative styling" flagged
+above as a gap — reported back as "login is still a different theme" and "the name input and the
+character background are still brown" once the backgrounds started working, because the CARDS inside
+those screens were still 100% hardcoded to their original mockup's one recipe (chrome for login,
+leather for the forge) with no lane hookup at all. Fixed properly this time with eight shared
+`--kk-card-*` custom properties (`kk-lanes.css`), one set per lane, referenced by `.kk-plaque`/
+`.kk-signin`/`.kk-forge-stage`/`.kk-forge-input`/`.kk-toggle`/`.kk-calling`/`.kk-face`/`.kk-swatch`
+instead of a hardcoded hex value each — so both screens (and any future one) share the same lane's
+card language instead of each hardcoding its own. Chrome and leather's token values are exactly what
+was already hardcoded, so a player who never opens Options sees no change at all; glass and metal
+are the two that previously had no card recipe anywhere. Also fixed while in there: the Options
+screen's own scrollbar had no gutter of its own and sat flush against the right column's quality-
+preset buttons and keybind key-caps — `scrollbar-gutter: stable` plus a little padding. Verified live
+across three lanes on both screens (login card and forge stage/input genuinely re-tint together, not
+just coincidentally matching) and confirmed centering holds again on the default glass lane.
 
 **Tech (continuous)**
 - [TODO] **Performance & streamlining pass (requested 2026-07-18)** — a dedicated rendering-efficiency effort,

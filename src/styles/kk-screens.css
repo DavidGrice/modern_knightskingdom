@@ -104,14 +104,17 @@
     linear-gradient(rgba(8, 12, 20, .4), rgba(6, 9, 16, .88)),
     linear-gradient(#1c3348, #0b0d14 70%);
 }
-/* the moulded chrome wordmark plaque */
+/* the wordmark plaque — 2026-07-29: re-pointed onto the shared card tokens
+   (kk-lanes.css) instead of a hardcoded "Millennium Chrome" gradient, so it
+   follows whichever lane the player actually picked, same as every other
+   front-door screen's own cards below */
 .kk-plaque {
   position: relative;
   padding: 18px 42px;
   border-radius: 20px;
-  background: linear-gradient(#f6fbff, #cfe1f0 44%, #9dbcd6 46%, #e4eff9);
-  border: 1px solid #4f7191;
-  box-shadow: inset 0 2px 0 #fff, 0 3px 0 #2c4256, 0 16px 40px rgba(0, 0, 0, .6);
+  background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
+  border: 1px solid var(--kk-card-border);
+  box-shadow: inset 0 2px 0 var(--kk-card-border-top), var(--kk-sh-panel);
 }
 .kk-plaque::before {
   content: '';
@@ -119,15 +122,15 @@
   left: 14px; right: 14px; top: 5px;
   height: 38%;
   border-radius: 14px;
-  background: linear-gradient(rgba(255, 255, 255, .85), rgba(255, 255, 255, 0));
+  background: linear-gradient(rgba(255, 255, 255, .3), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
 .kk-plaque-word {
   position: relative;
   font: 700 40px/1 var(--kk-font-display);
   letter-spacing: -.03em;
-  color: #12293d;
-  text-shadow: 0 1px 0 #fff;
+  color: var(--kk-card-text);
+  text-shadow: 0 1px 0 var(--kk-card-border-top);
   white-space: nowrap;
 }
 .kk-plaque-rule {
@@ -140,30 +143,30 @@
 }
 .kk-plaque-rule span:first-child,
 .kk-plaque-rule span:last-child { width: 40px; height: 1px; }
-.kk-plaque-rule span:first-child { background: linear-gradient(90deg, transparent, rgba(18, 41, 61, .4)); }
-.kk-plaque-rule span:last-child { background: linear-gradient(90deg, rgba(18, 41, 61, .4), transparent); }
+.kk-plaque-rule span:first-child { background: linear-gradient(90deg, transparent, var(--kk-card-text-dim)); }
+.kk-plaque-rule span:last-child { background: linear-gradient(90deg, var(--kk-card-text-dim), transparent); }
 .kk-plaque-tag {
   font: 500 11.5px/1 var(--kk-font);
   letter-spacing: .17em;
   text-transform: uppercase;
-  color: #3b6183;
+  color: var(--kk-card-text-dim);
 }
 
-/* the sign-in card (Millennium Chrome) */
+/* the sign-in card */
 .kk-signin {
   position: relative;
   width: 382px;
   padding: 20px;
   border-radius: 18px;
-  background: linear-gradient(rgba(238, 247, 255, .94), rgba(186, 212, 232, .92));
-  border: 1px solid #4f7191;
-  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2c4256, 0 18px 44px rgba(0, 0, 0, .55);
+  background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
+  border: 1px solid var(--kk-card-border);
+  box-shadow: inset 0 1px 0 var(--kk-card-border-top), var(--kk-sh-panel);
 }
 .kk-signin-tabs {
   display: flex;
   border-radius: 11px;
   overflow: hidden;
-  border: 1px solid #5d7f9c;
+  border: 1px solid var(--kk-card-input-border);
   margin-bottom: 16px;
 }
 .kk-signin-tabs button {
@@ -172,20 +175,20 @@
   border: 0;
   cursor: pointer;
   font: 500 12.5px/1 var(--kk-font);
-  color: #3b6183;
-  background: linear-gradient(rgba(255, 255, 255, .6), rgba(255, 255, 255, .15));
+  color: var(--kk-card-text-dim);
+  background: linear-gradient(var(--kk-card-input-bg-1), var(--kk-card-input-bg-2));
 }
 .kk-signin-tabs button.on {
   font-weight: 600;
-  color: #12293d;
-  background: linear-gradient(#d9f75e, #a8cc33);
+  color: var(--kk-card-accent-text);
+  background: linear-gradient(var(--kk-card-accent-bg-1), var(--kk-card-accent-bg-2));
 }
 .kk-field { margin-bottom: 12px; }
 .kk-field-label {
   font: 600 10px/1 var(--kk-font);
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: #3b6183;
+  color: var(--kk-card-text-dim);
   margin-bottom: 6px;
 }
 .kk-field input {
@@ -194,12 +197,12 @@
   height: 38px;
   padding: 0 13px;
   border-radius: 10px;
-  background: linear-gradient(#f9fcff, #e2edf7);
-  border: 1px solid #5d7f9c;
-  box-shadow: inset 0 2px 4px rgba(40, 70, 100, .22);
+  background: linear-gradient(var(--kk-card-input-bg-1), var(--kk-card-input-bg-2));
+  border: 1px solid var(--kk-card-input-border);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .22);
   font: 500 13.5px/1 var(--kk-font);
-  color: #12293d;
-  caret-color: #ff8a00;
+  color: var(--kk-card-text);
+  caret-color: var(--kk-card-caret);
 }
 .kk-field input:focus-visible { outline: 2px solid #ff8a00; outline-offset: 1px; }
 /* lime = confirm. Exactly one primary per surface (HANDOFF §2). */
@@ -227,13 +230,13 @@
   height: 38px;
   margin-top: 9px;
   border-radius: 11px;
-  background: linear-gradient(rgba(255, 255, 255, .55), rgba(255, 255, 255, .12));
-  border: 1px solid #5d7f9c;
+  background: linear-gradient(var(--kk-card-input-bg-1), var(--kk-card-input-bg-2));
+  border: 1px solid var(--kk-card-input-border);
   font: 500 12.5px/1 var(--kk-font);
-  color: #12293d;
+  color: var(--kk-card-text);
   cursor: pointer;
 }
-.kk-secondary .dim { color: #5d7f9c; margin-left: 5px; }
+.kk-secondary .dim { color: var(--kk-card-text-dim); margin-left: 5px; }
 .kk-signin-error {
   min-height: 16px;
   margin: 2px 0 9px;
@@ -252,7 +255,9 @@
 /* ---------- 3b · MAIN MENU & SAVES (Metalheart) ---------- */
 /* the mockup frames every screen at 860x600; at desktop widths the layout
    must stay a comfortable measure rather than stretching to 1440+ */
-.kk-screen-metal, .kk-screen-leather { align-items: center; justify-content: center; }
+.kk-screen-metal, .kk-screen-leather, .kk-screen-glass, .kk-screen-chrome {
+  align-items: center; justify-content: center;
+}
 .kk-menu-body {
   position: relative;
   display: flex;
@@ -510,6 +515,13 @@
   min-height: 0;
   overflow-y: auto;
   align-content: start;
+  /* the scrollbar used to sit flush against the right column's own content
+     (quality-preset buttons, keybind key-caps) with no gutter of its own —
+     reserved space keeps it from overlapping either column, and padding
+     gives it real breathing room on browsers that don't support the
+     property yet */
+  scrollbar-gutter: stable;
+  padding-right: 14px;
 }
 @media (max-width: 900px) { .kk-opt-grid { grid-template-columns: 1fr; } }
 .kk-opt-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
@@ -678,6 +690,12 @@
   flex-direction: column;
   gap: 9px;
 }
+/* 2026-07-29: re-pointed onto the shared card tokens (kk-lanes.css), same
+   reasoning as the login plaque/sign-in card above — this stage and every
+   control below it was hardcoded to Guild Leather regardless of the chosen
+   lane, which is what actually produced "the name input and the turntable
+   background are still brown" once the screen's own outer background
+   started following the lane correctly. */
 .kk-forge-stage {
   position: relative;
   /* fixed 3:4 stage: the turntable camera frames a whole minifig at this
@@ -686,18 +704,18 @@
   aspect-ratio: 3 / 4;
   overflow: hidden;
   border-radius: 10px;
-  background: linear-gradient(#2a1c11, #180f07);
-  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .85), 0 0 0 1px #4a3520;
+  background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .5), 0 0 0 1px var(--kk-card-border);
 }
 .kk-forge-canvas { position: absolute; inset: 0; }
 .kk-forge-stage canvas { display: block; }
-.kk-forge-hint { font: 400 10.5px/1.4 var(--kk-font); color: rgba(240, 220, 176, .5); }
+.kk-forge-hint { font: 400 10.5px/1.4 var(--kk-font); color: var(--kk-card-text-dim); }
 .kk-forge-form { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; overflow-y: auto; }
 .kk-forge-label {
   font: 600 10px/1 var(--kk-font);
   letter-spacing: .18em;
   text-transform: uppercase;
-  color: rgba(240, 220, 176, .62);
+  color: var(--kk-card-text-dim);
   margin-bottom: 6px;
 }
 .kk-forge-input {
@@ -706,29 +724,29 @@
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  background: linear-gradient(#2a1c11, #180f07);
-  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .85), 0 0 0 1px #4a3520;
+  background: linear-gradient(var(--kk-card-input-bg-1), var(--kk-card-input-bg-2));
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .35), 0 0 0 1px var(--kk-card-input-border);
   border: 0;
   font: 500 13.5px/1 var(--kk-font);
   letter-spacing: .03em;
-  color: #f0dcb0;
-  caret-color: #e0c48a;
+  color: var(--kk-card-text);
+  caret-color: var(--kk-card-caret);
 }
-/* brass two-up toggle (gender, body, pose) */
-.kk-toggle { display: flex; border-radius: 8px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .28); }
+/* two-up toggle (gender, body, pose) */
+.kk-toggle { display: flex; border-radius: 8px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--kk-card-input-border); }
 .kk-toggle button {
   flex: 1;
   padding: 10px 12px;
   border: 0;
   cursor: pointer;
-  background: rgba(0, 0, 0, .25);
+  background: rgba(0, 0, 0, .18);
   font: 600 11.5px/1 var(--kk-font);
-  color: rgba(240, 220, 176, .62);
+  color: var(--kk-card-text-dim);
 }
 .kk-toggle button.on {
-  background: linear-gradient(#e6cf9c, #b18f4e);
-  color: #2a1c11;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55);
+  background: linear-gradient(var(--kk-card-accent-bg-1), var(--kk-card-accent-bg-2));
+  color: var(--kk-card-accent-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4);
 }
 /* all eight callings visible at once — a 4x2 grid, never a carousel */
 .kk-callings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -742,15 +760,15 @@
   border: 0;
   cursor: pointer;
   border-radius: 8px;
-  background: rgba(0, 0, 0, .25);
-  box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .18);
-  color: rgba(240, 220, 176, .72);
+  background: rgba(0, 0, 0, .18);
+  box-shadow: inset 0 0 0 1px var(--kk-card-input-border);
+  color: var(--kk-card-text-dim);
 }
-.kk-calling:hover { background: rgba(0, 0, 0, .12); }
+.kk-calling:hover { background: rgba(0, 0, 0, .08); }
 .kk-calling.on {
-  background: linear-gradient(#e6cf9c, #b18f4e);
-  color: #2a1c11;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 #6f5526;
+  background: linear-gradient(var(--kk-card-accent-bg-1), var(--kk-card-accent-bg-2));
+  color: var(--kk-card-accent-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 2px 0 var(--kk-card-accent-border);
 }
 .kk-calling .nm { font: 600 10.5px/1.2 var(--kk-font); text-align: center; }
 .kk-calling .kit { font: 400 9px/1.2 var(--kk-font); opacity: .72; text-align: center; }
@@ -774,7 +792,7 @@
   cursor: pointer;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .45);
 }
-.kk-swatch.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .45), 0 0 0 2px #e0c48a; }
+.kk-swatch.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .45), 0 0 0 2px var(--kk-card-accent-border); }
 .kk-faces { display: flex; gap: 6px; flex-wrap: wrap; }
 .kk-face {
   width: 44px;
@@ -784,12 +802,12 @@
   cursor: pointer;
   border-radius: 8px;
   overflow: hidden;
-  background: linear-gradient(#2a1c11, #180f07);
-  box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .22);
+  background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
+  box-shadow: inset 0 0 0 1px var(--kk-card-input-border);
 }
 .kk-face img { width: 100%; height: 100%; object-fit: contain; }
-.kk-face.on { box-shadow: inset 0 0 0 1px rgba(224, 196, 138, .22), 0 0 0 2px #e0c48a; }
-.kk-face:disabled { cursor: not-allowed; color: rgba(240, 220, 176, .45); }
+.kk-face.on { box-shadow: inset 0 0 0 1px var(--kk-card-input-border), 0 0 0 2px var(--kk-card-accent-border); }
+.kk-face:disabled { cursor: not-allowed; color: var(--kk-card-text-dim); }
 .kk-face:disabled svg { display: block; margin: auto; }
 
 /* ============================================================
