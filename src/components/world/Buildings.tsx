@@ -426,7 +426,12 @@ export default function Buildings() {
   // every building regardless of world put remote claimed-plot structures
   // in view (and, from certain angles, floating over the homestead) no
   // matter where the player actually stood.
-  const buildings = allBuildings.filter((b) => (b.world ?? null) === (destination ?? null));
+  // the Grand Keep's own PlacedBuilding entry (added 2026-07-30 so its
+  // interior can be entered — see gameStore's foundKeep) exists purely for
+  // interact-detection; KeepAssembly.tsx already owns 100% of its actual
+  // visual (foundation plate + sockets), so it's excluded here to avoid
+  // double-rendering a "Castle Foundation" mesh on top of that.
+  const buildings = allBuildings.filter((b) => (b.world ?? null) === (destination ?? null) && b.type !== 'keep');
   return (
     <group>
       {buildings.map((b) => (

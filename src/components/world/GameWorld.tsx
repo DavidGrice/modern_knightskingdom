@@ -24,7 +24,7 @@ import CourtDressing from './CourtDressing';
 import GuildHalls from './GuildHalls';
 import DragonOmen from './DragonOmen';
 import DragonSiege from './DragonSiege';
-import KeepInteriorRoom from './KeepInteriorRoom';
+import BuildingInteriorRoom from './BuildingInteriorRoom';
 import Signpost from './Signpost';
 import TemplateWorld from './TemplateWorld';
 import PlayerController from '../fps/PlayerController';
@@ -59,7 +59,7 @@ export default function GameWorld() {
       <Buildings />
       <Signpost />
       <Suspense fallback={null}>
-        <KeepInteriorRoom />
+        <BuildingInteriorRoom />
       </Suspense>
       <Suspense fallback={null}>
         <TemplateWorld />

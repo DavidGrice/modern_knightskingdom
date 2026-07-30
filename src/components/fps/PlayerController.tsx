@@ -9,11 +9,12 @@ import { useGameStore, TAX_COOLDOWN_MS } from '@/game/store/gameStore';
 import { LAND_TIERS, BUILDABLE_BY_ID, heightOf, labAssetId, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
-  EYE_HEIGHT, FISHING_DOCK, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_ENTER_RANGE, KEEP_INTERIOR, KEEP_THRONE_POS,
+  EYE_HEIGHT, FISHING_DOCK, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
   POND, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
 } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { NPCS, NPC_BY_ID, isNpcRevealed } from '@/game/data/npcs';
+import { INTERIORS, pocketFor } from '@/game/data/interiors';
 import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
@@ -44,7 +45,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'keep_enter' | 'keep_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part';
   station?: string;
 }
 
@@ -336,24 +337,35 @@ export default function PlayerController() {
 
   // ---- find what the player is looking at ----
   function findTarget(st: ReturnType<typeof useGameStore.getState>): Target | null {
-    // inside the keep: E opens the chest or collects taxes at the throne when close, otherwise leaves
+    // inside a building: the Grand Keep's own great hall still has its
+    // bespoke chest/throne interactions; every other generalised interior
+    // (data/interiors.ts) just offers a way back out
     if (st.interior) {
-      const toChest = Math.hypot(KEEP_CHEST_POS.x - pos.current.x, KEEP_CHEST_POS.z - pos.current.z);
-      if (toChest < INTERACT_RANGE) {
-        return {
-          id: 'keep_chest', kind: 'chest', duration: 0.8, actionable: true,
-          label: st.treasureOpened ? 'Open the empty chest' : 'Open the Royal Treasure Chest',
-        };
+      const insideKeep = st.buildings.find((b) => b.id === st.interior)?.type === 'keep';
+      if (insideKeep) {
+        const toChest = Math.hypot(KEEP_CHEST_POS.x - pos.current.x, KEEP_CHEST_POS.z - pos.current.z);
+        if (toChest < INTERACT_RANGE) {
+          return {
+            id: 'keep_chest', kind: 'chest', duration: 0.8, actionable: true,
+            label: st.treasureOpened ? 'Open the empty chest' : 'Open the Royal Treasure Chest',
+          };
+        }
+        const toThrone = Math.hypot(KEEP_THRONE_POS.x - pos.current.x, KEEP_THRONE_POS.z - pos.current.z);
+        if (toThrone < INTERACT_RANGE) {
+          const ready = Date.now() - st.lastTaxAt >= TAX_COOLDOWN_MS && st.villagers.length > 0;
+          return {
+            id: 'keep_throne', kind: 'collect_taxes', duration: 1.2, actionable: ready,
+            label: ready ? 'Collect Taxes from the Kingdom' : "The Treasury Isn't Ready Yet",
+          };
+        }
+        return { id: 'keep_exit', kind: 'interior_exit', duration: 0, actionable: true, label: 'Leave the Keep' };
       }
-      const toThrone = Math.hypot(KEEP_THRONE_POS.x - pos.current.x, KEEP_THRONE_POS.z - pos.current.z);
-      if (toThrone < INTERACT_RANGE) {
-        const ready = Date.now() - st.lastTaxAt >= TAX_COOLDOWN_MS && st.villagers.length > 0;
-        return {
-          id: 'keep_throne', kind: 'collect_taxes', duration: 1.2, actionable: ready,
-          label: ready ? 'Collect Taxes from the Kingdom' : "The Treasury Isn't Ready Yet",
-        };
-      }
-      return { id: 'keep_exit', kind: 'keep_exit', duration: 0, actionable: true, label: 'Leave the Keep' };
+      const building = st.buildings.find((b) => b.id === st.interior);
+      const def = building ? INTERIORS[building.type] : null;
+      return {
+        id: 'interior_exit', kind: 'interior_exit', duration: 0, actionable: true,
+        label: `Leave ${def?.doorLabel ?? 'the building'}`,
+      };
     }
     // mounted: E trains at a nearby quintain, jousts Richard at a gallop,
     // otherwise dismounts. Checked BEFORE the destination branch (Phase 20:
@@ -683,11 +695,16 @@ export default function PlayerController() {
         }
         continue;
       }
-      if (b.type === 'keep') {
-        consider(b.x, b.z, 2.0, {
-          id: b.id, kind: 'keep_enter', duration: 0, actionable: true, label: 'Enter the Keep',
-        }, KEEP_ENTER_RANGE);
-        continue;
+      {
+        // any building with a generalised interior (data/interiors.ts) offers
+        // a door prompt once finished — the Keep is just the first of these
+        const def = INTERIORS[b.type];
+        if (def && isBuilt(b)) {
+          consider(b.x, b.z, 2.0, {
+            id: b.id, kind: 'interior_enter', duration: 0, actionable: true, label: `Enter ${def.doorLabel}`,
+          }, def.enterRange);
+          continue;
+        }
       }
       if (b.type === 'bed') {
         const night = worldEnv.night > 0.45;
@@ -821,11 +838,10 @@ export default function PlayerController() {
     } else if (t.kind === 'detonate') {
       const b = st.buildings.find((x) => x.id === t.id);
       if (b) detonate(b);
-    } else if (t.kind === 'keep_enter') {
-      const b = st.buildings.find((x) => x.id === t.id);
-      if (b) st.enterKeep(b.x, b.z);
-    } else if (t.kind === 'keep_exit') {
-      st.exitKeep();
+    } else if (t.kind === 'interior_enter') {
+      st.enterInterior(t.id);
+    } else if (t.kind === 'interior_exit') {
+      st.exitInterior();
     } else if (t.kind === 'chest') {
       st.openTreasureChest();
     } else if (t.kind === 'collect_taxes') {
@@ -1002,27 +1018,37 @@ export default function PlayerController() {
       let nz = p.z + dir.z * speed * dt;
 
       // collisions: buildings (AABB, unless we can step onto or walk under
-      // them), trees & rocks (circles), pond, world bounds — or, inside the
-      // keep's great hall, the room's own walls and furniture instead
+      // them), trees & rocks (circles), pond, world bounds — or, inside a
+      // generalised interior (data/interiors.ts), that room's own walls
+      // (and, specifically inside the Keep, its bespoke furniture) instead
       const eyeOff = riding ? EYE_HEIGHT + 0.85 : EYE_HEIGHT;
       const feetY = p.y - eyeOff;
       if (st.interior) {
-        const ix = KEEP_INTERIOR.halfX - 0.6;
-        const iz = KEEP_INTERIOR.halfZ - 0.6;
-        nx = THREE.MathUtils.clamp(nx, KEEP_INTERIOR.x - ix, KEEP_INTERIOR.x + ix);
-        nz = THREE.MathUtils.clamp(nz, KEEP_INTERIOR.z - iz, KEEP_INTERIOR.z + iz);
-        // simple obstacles: the throne (back wall) and the treasure chest (corner)
-        for (const [ox, oz, r] of [
-          [KEEP_INTERIOR.x, KEEP_INTERIOR.z + KEEP_INTERIOR.halfZ - 1.2, 1.1],
-          [KEEP_CHEST_POS.x, KEEP_CHEST_POS.z, 0.7],
-        ] as const) {
-          const dx = nx - ox;
-          const dz = nz - oz;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < r * r && d2 > 1e-6) {
-            const d = Math.sqrt(d2);
-            nx = ox + (dx / d) * r;
-            nz = oz + (dz / d) * r;
+        const insideBuilding = st.buildings.find((b) => b.id === st.interior);
+        const def = insideBuilding ? INTERIORS[insideBuilding.type] : null;
+        if (def && insideBuilding) {
+          const pocket = pocketFor(insideBuilding.type, insideBuilding.id);
+          const ix = def.halfX - 0.6;
+          const iz = def.halfZ - 0.6;
+          nx = THREE.MathUtils.clamp(nx, pocket.x - ix, pocket.x + ix);
+          nz = THREE.MathUtils.clamp(nz, pocket.z - iz, pocket.z + iz);
+          // the Keep's own bespoke obstacles: the throne (back wall) and the
+          // treasure chest (corner) — both fixed at KEEP_INTERIOR's own
+          // world position, since that pocket never moves
+          if (insideBuilding.type === 'keep') {
+            for (const [ox, oz, r] of [
+              [KEEP_INTERIOR.x, KEEP_INTERIOR.z + KEEP_INTERIOR.halfZ - 1.2, 1.1],
+              [KEEP_CHEST_POS.x, KEEP_CHEST_POS.z, 0.7],
+            ] as const) {
+              const dx = nx - ox;
+              const dz = nz - oz;
+              const d2 = dx * dx + dz * dz;
+              if (d2 < r * r && d2 > 1e-6) {
+                const d = Math.sqrt(d2);
+                nx = ox + (dx / d) * r;
+                nz = oz + (dz / d) * r;
+              }
+            }
           }
         }
       } else if (st.destination) {
@@ -1060,6 +1086,13 @@ export default function PlayerController() {
         for (const b of st.buildings) {
           if (!isBuilt(b)) continue; // walk freely through a ghost outline
           if (b.type === 'gate' && (st.gateOpen[b.id] ?? true)) continue; // raised — passable
+          // the Keep's own PlacedBuilding entry exists purely for interact-
+          // detection (foundKeep, gameStore.ts) — its real footprint is a
+          // flat courtyard plate (KeepAssembly.tsx) with no collision of its
+          // own; the individual raised pieces don't have real collision yet
+          // either (a separate, already-flagged gap — "J51 has no damage or
+          // move behaviour" — not something to half-fake here)
+          if (b.type === 'keep') continue;
           const base = b.y ?? 0;
           const dx = nx - b.x;
           const dz = nz - b.z;

@@ -3518,10 +3518,40 @@ block rather than being started at the end of a session.
   rather than per-player-location. L66 just tied labour to proximity TO THE
   PLAYER, so that rule needs a per-settlement meaning first. Design this
   before anything else in the empire arc.
-- [TODO] **Generalised interiors.** Quests come from allied NPCs indoors, so ordinary
-  village buildings need enterable interiors with NPCs in them.
-  `KeepInteriorRoom.tsx` is the existing pattern to generalise — one room, one
-  door, one occupant list — rather than something to invent.
+[COMPLETE] **Generalised interiors.** `KeepInteriorRoom.tsx` — a one-off, hand-placed room
+built specifically for the Grand Keep — is now `BuildingInteriorRoom.tsx`: any buildable type can
+offer an enterable, sealed room by adding one entry to a new `data/interiors.ts`, instead of a
+bespoke component. `st.interior` generalised from a plain boolean (which only ever meant "in the
+Grand Keep") to the id of whichever `PlacedBuilding` is currently entered; `enterKeep`/`exitKeep`
+became generic `enterInterior(buildingId)`/`exitInterior()`. Every non-Keep interior gets a
+deterministic "pocket" position — a hidden, out-of-the-way spot derived from the building's own id
+(`pocketFor`), so any number of instances of the same building type can never collide, the same
+"tucked in an empty corner of the map, entered by teleport, no walk-in door" shape the Keep's own
+room always used. The Keep keeps its bespoke furniture (throne, banners, banquet table, chest) as
+extra dressing layered on the same generic shell every other interior now shares.
+
+**A genuinely pre-existing bug turned up doing this, not something the refactor introduced:**
+`foundKeep()` (`gameStore.ts`) only ever wrote to `st.keep` (the socket-tracking state) — nothing
+ever added a matching `PlacedBuilding` with `type: 'keep'` to `st.buildings`, so
+`PlayerController.tsx`'s own interact-detection loop, which finds "Enter the Keep" by scanning
+`st.buildings` for that type, could never actually match anything. "Enter the Keep" was unreachable
+regardless of this work. Fixed by having `foundKeep()` add that `PlacedBuilding` alongside `st.keep`
+— built immediately, since the foundation reads as already laid the moment it's placed. Had to audit
+every OTHER system that scans `st.buildings` unconditionally once that entry existed: excluded it
+from `Buildings.tsx`'s generic mesh rendering (`KeepAssembly.tsx` already owns 100% of the Keep's
+real visual — this would have doubled it) and from `PlayerController.tsx`'s AABB collision loop (the
+Keep buildable's own catalog entry has a real footprint/height that has nothing to do with the flat
+courtyard `KeepAssembly.tsx` actually renders, and would have installed an invisible wall).
+
+**Second interior, proving the generalisation is real and not just a same-building refactor:** the
+Stable now has one too — simple hay-and-tool-rack dressing, no occupant. Deliberately left without an
+NPC: real "quests from allied NPCs indoors" content is its own separate piece of work, not something
+to fake here just to check a box.
+
+Verified live end-to-end: founded and entered the Keep — identical to the pre-refactor room, chest
+and throne interactions both intact, exited cleanly back onto the real foundation with no phantom
+collision; placed and entered a Stable — its own distinct room and dressing, `interior` correctly
+tracking a second, different building id.
 
 ## Pointer lock, corrected again — 2026-07-26 [COMPLETE]
 

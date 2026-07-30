@@ -47,8 +47,9 @@ import { worldEnv, seasonOf } from '../env';
 import { playerState, resetPlayerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
-import { POND, FISHING_DOCK, KEEP_ENTER_SPAWN, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR } from '../data/world';
+import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR } from '../data/world';
 import { WORLD_DESTINATION_BY_ID } from '../data/worlds';
+import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
 import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST } from '../dungeon';
 
@@ -164,8 +165,11 @@ interface GameState {
    *  the player's own Satchel — stocked by raids/dungeon clears (or donated
    *  from the Satchel) and drawn down when a villager equips a piece. */
   armory: Partial<Record<ItemId, number>>;
-  interior: boolean;              // true while inside the Grand Keep's great hall
-  enteredKeepPos: [number, number] | null; // outdoor keep position to return to on exit
+  /** the id of the PlacedBuilding whose interior the player is currently
+   *  inside, null while outdoors — generalised 2026-07-30 from a plain
+   *  boolean that only ever meant "in the Grand Keep" (see data/interiors.ts) */
+  interior: string | null;
+  enteredInteriorPos: [number, number] | null; // outdoor position to return to on exit
   treasureOpened: boolean;        // one-time reward already claimed from the keep's chest
   dragonSeen: boolean;            // witnessed the dragon's night flyover (drives its Deed)
   dragonSieges: number;           // dragonfire sieges weathered (Flame and Stone deed)
@@ -263,8 +267,8 @@ interface GameState {
   unequipDefenderLoadout: (villagerId: string) => void;
   stationDefender: (villagerId: string, buildingId: string | null) => void;
   gainDefenderXp: (villagerId: string, amount: number) => void;
-  enterKeep: (x: number, z: number) => void;
-  exitKeep: () => void;
+  enterInterior: (buildingId: string) => void;
+  exitInterior: () => void;
   openTreasureChest: () => void;
   setTimeOfDay: (t: number) => void;
   setDayCount: (n: number) => void;
@@ -573,8 +577,8 @@ function createGameStore() {
     villagers: [],
     villagerProgress: {},
     armory: {},
-    interior: false,
-    enteredKeepPos: null,
+    interior: null,
+    enteredInteriorPos: null,
     treasureOpened: false,
     dragonSeen: false,
     dragonSieges: 0,
@@ -617,7 +621,7 @@ function createGameStore() {
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
-        interior: false, enteredKeepPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
+        interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
       });
       worldEnv.time = 0.3;
       worldEnv.dayCount = 0;
@@ -677,7 +681,7 @@ function createGameStore() {
         villagers: s.villagers ?? [],
         villagerProgress: {},
         armory: s.armory ?? {},
-        interior: false, enteredKeepPos: null, treasureOpened: s.treasureOpened ?? false, dragonSeen: s.dragonSeen ?? false,
+        interior: null, enteredInteriorPos: null, treasureOpened: s.treasureOpened ?? false, dragonSeen: s.dragonSeen ?? false,
         dragonSieges: s.dragonSieges ?? 0, dragonRouted: s.dragonRouted ?? false,
       });
       worldEnv.time = s.timeOfDay ?? 0.3;
@@ -2005,20 +2009,23 @@ function createGameStore() {
       if (tiers !== st.challengeTiers) set({ challengeTiers: tiers, dirty: true });
     },
 
-    enterKeep: (x, z) => {
+    enterInterior: (buildingId) => {
       const st = get();
       if (st.interior) return;
-      set({ interior: true, enteredKeepPos: [x, z], panel: 'none' });
-      playerState.pendingTeleport = { ...KEEP_ENTER_SPAWN };
+      const b = st.buildings.find((bb) => bb.id === buildingId);
+      const def = b ? INTERIORS[b.type] : null;
+      if (!b || !def) return;
+      set({ interior: buildingId, enteredInteriorPos: [b.x, b.z], panel: 'none' });
+      playerState.pendingTeleport = enterSpawnFor(def, pocketFor(b.type, b.id));
       audio.play('door_open', 0.7);
-      st.notify('You step into the great hall of your keep.', true);
+      st.notify(`You step into ${def.name}.`, true);
     },
 
-    exitKeep: () => {
+    exitInterior: () => {
       const st = get();
       if (!st.interior) return;
-      const pos = st.enteredKeepPos ?? [0, 20];
-      set({ interior: false, enteredKeepPos: null });
+      const pos = st.enteredInteriorPos ?? [0, 20];
+      set({ interior: null, enteredInteriorPos: null });
       playerState.pendingTeleport = { x: pos[0], z: pos[1] + 6, yaw: 0 };
       audio.play('door_open', 0.7);
     },
@@ -2513,7 +2520,16 @@ function createGameStore() {
     foundKeep: (x, z) => {
       const st = get();
       if (st.keep) { st.notify('Your foundation is already laid.'); return; }
-      set({ keep: { x, z, parts: {}, built: {} }, dirty: true });
+      // a real PlacedBuilding, `type: 'keep'`, alongside the socket-tracking
+      // `st.keep` state — a genuinely pre-existing gap found generalising the
+      // interior system: nothing ever added one, so the interact-detection
+      // loop's own `b.type === 'keep'` check (PlayerController.tsx) could
+      // never actually match anything, and "Enter the Keep" was unreachable
+      // regardless of this refactor. Built immediately — the FOUNDATION reads
+      // as already laid the moment it's placed; the individual socket pieces
+      // on top keep their own separate construction time (workKeepPart).
+      const placed: PlacedBuilding = { id: `b${buildSeq++}`, type: 'keep', x, z, y: 0, rot: 0, built: 1, world: null };
+      set({ keep: { x, z, parts: {}, built: {} }, buildings: [...st.buildings, placed], dirty: true });
       audio.play('brick_link', 0.8);
       st.notify('Foundation laid. Choose a corner and raise something on it.', true);
     },
