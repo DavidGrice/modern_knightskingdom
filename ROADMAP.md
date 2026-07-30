@@ -2915,8 +2915,22 @@ dropped into it always lines up with its neighbours.
 - [TODO] **J51 has no damage or move behaviour.** A raised piece cannot be knocked
   down by a siege, and the foundation cannot be picked up and re-laid. Raiders
   ignore the castle entirely.
-- [TODO] **Defenders do not use the walls.** `KeepPart.walkway` records how high each
-  piece's wall walk is, but nothing posts a defender to it yet.
+[COMPLETE] **Defenders do not use the walls.** `KeepPart.walkway` records how high each
+piece's wall walk is; a defender can now actually be posted to it. Stationing already had exactly
+this shape for a homestead Watch Tower — `stationId` pointing at a `PlacedBuilding`, `elevated`
+gating "hold the battlement, no ground circuit" (`Defenders.tsx`) and ground-enemy targeting
+skipping any elevated defender outright (`Enemies.tsx`) — but a Keep wall piece isn't a
+`PlacedBuilding` at all; it lives in `st.keep.parts`/`st.keep.built`, keyed by socket id, not in
+`st.buildings`. Rather than force it into that shape, `stationId` now also accepts
+`"keep:<socketId>"` as a real second station format: `Defenders.tsx` detects the prefix, reads the
+socket's world position (`keep.x/z` + the socket's own local offset) and its raised part's
+`walkway` value instead of `heightOf('tower')`, and everything downstream — the "hold the
+battlement" movement branch, the ground-enemy skip — already worked generically off the resulting
+`elevated`/`postY` and needed no changes at all. `VillagersPanel.tsx`'s station picker grows a
+🏰 button per finished walled/turreted socket, alongside the existing 🗼 Tower buttons. Verified
+live: founded a keep, raised and finished a Crenellated Wall on its north socket, stationed a
+defender there — they walk to the wall and hold position exactly on the battlement, screenshot-
+confirmed standing at the correct walkway height, not floating or sunk into the stone.
 
 ---
 

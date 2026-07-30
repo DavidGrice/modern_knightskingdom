@@ -15,6 +15,7 @@ import { ArmorySection } from './NpcEquipPanel';
 import { levelFromXp, xpForLevel } from '@/game/data/ranks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { DefenderLoadout, ItemId, VillagerJob } from '@/game/types';
+import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import Ico from '../ui/Ico';
 
 export default function VillagersPanel() {
@@ -36,9 +37,20 @@ export default function VillagersPanel() {
   // toward villager arrivals or read as a stationable tower here
   const buildings = useGameStore((s) => s.buildings).filter(isHomeBuilding);
 
+  const keep = useGameStore((s) => s.keep);
+
   const beds = buildings.filter((b) => b.type === 'bed').length;
   const next = villagers.length < MAX_VILLAGERS ? villagerRequirement(villagers.length + 1) : null;
   const towers = buildings.filter((b) => b.type === 'tower' && isBuilt(b));
+  // J51 (rest) · a raised, finished KeepPart with its own walkway is a
+  // station too — same "archers see further from it" reasoning as a tower,
+  // read off KeepPart.walkway instead of a fixed buildable height
+  const keepWalls = keep
+    ? KEEP_SOCKETS.filter((s) => {
+      const part = KEEP_PART_BY_ID[keep.parts[s.id] ?? ''];
+      return part?.walkway && (keep.built[s.id] ?? 0) >= 1;
+    })
+    : [];
 
   return (
     <div className="game-panel clickable menu-family">
@@ -277,9 +289,26 @@ export default function VillagersPanel() {
                         🗼 Tower {i + 1}
                       </button>
                     ))}
-                    {towers.length === 0 && (
+                    {keepWalls.map((s) => {
+                      const stationId = `keep:${s.id}`;
+                      return (
+                        <button
+                          key={stationId}
+                          className="menu-btn small"
+                          style={{
+                            margin: 0, width: 'auto', padding: '5px 10px',
+                            opacity: v.stationId === stationId ? 1 : 0.65,
+                            borderColor: v.stationId === stationId ? 'var(--gold)' : undefined,
+                          }}
+                          onClick={() => stationDefender(v.id, stationId)}
+                        >
+                          🏰 {s.name}
+                        </button>
+                      );
+                    })}
+                    {towers.length === 0 && keepWalls.length === 0 && (
                       <span style={{ fontSize: 11.5, color: 'var(--parchment-dark)', fontStyle: 'italic' }}>
-                        Build a Watch Tower to station a defender atop it.
+                        Build a Watch Tower, or raise a walled Keep piece, to station a defender atop it.
                       </span>
                     )}
                   </div>
