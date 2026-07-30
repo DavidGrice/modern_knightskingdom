@@ -10,6 +10,7 @@ import { loadFpsArms, type FpsArm, type FpsArms } from '@/lib/rigExtract';
 import { labHands } from '@/game/data/labCapabilities';
 import { playerState } from './PlayerController';
 import { combatState, FULL_DRAW_TIME } from '@/game/combat';
+import { ridingState } from '@/game/riding';
 import RealWeapon from '../character/RealWeapon';
 import RealShield from '../character/RealShield';
 
@@ -248,6 +249,10 @@ const MOUNT = {
   // paper; only screenshotting it at scale made the roll obvious). +0.5 on
   // z squares the arms up without touching the pitch.
   crossbow: [-Math.PI / 2, 0, 0.5] as [number, number, number],
+  // L62 (rest) · couched and levelled toward a target ahead of the horse,
+  // rather than the sword's more upright ready stance — measured live the
+  // same way as the crossbow's own roll, below
+  lance: [-Math.PI / 2, 0, 0] as [number, number, number],
   //   tool — H34. There is no pickaxe or hammer mold anywhere in the
   //          extraction (the lab's only `pickaxe` is a trait on a defence
   //          tower, not a held part), so these four stay procedural. What
@@ -341,6 +346,11 @@ export default function Viewmodel() {
   const [drawProgress, setDrawProgress] = useState(0);
   const [blockShield, setBlockShield] = useState(false);
   const [bolts, setBolts] = useState(0);
+  // L62 (rest) · couching a lance is a charge posture, not a standing one —
+  // tracked the same polled way as ranged/draw state above so the tool
+  // useMemo below actually re-renders when it flips, since ridingState and
+  // combatState are plain mutable objects React has no other way to see.
+  const [lanceMode, setLanceMode] = useState(false);
   useEffect(() => {
     const t = setInterval(() => {
       const inv = useGameStore.getState().inventory;
@@ -350,6 +360,7 @@ export default function Viewmodel() {
         && (bow ? (inv.longbow ?? 0) > 0 : (inv.crossbow ?? 0) > 0),
       );
       setBowMode(bow);
+      setLanceMode(ridingState.active && combatState.galloping);
       setDrawProgress(
         combatState.drawStart > 0
           ? Math.min(1, (performance.now() - combatState.drawStart) / (FULL_DRAW_TIME * 1000))
@@ -366,6 +377,11 @@ export default function Viewmodel() {
   // showing one — 'fist' (no matching render branch below, just the bare
   // arm+hand mesh already drawn unconditionally) is the honest default.
   const tool = useMemo(() => {
+    // L62 (rest) · a charging rider couches the lance over whatever else
+    // they'd otherwise be holding — the "Couch your lance!" prompt
+    // (PlayerController's own joust interaction) implies exactly this
+    // posture, but nothing ever actually rendered one
+    if (lanceMode) return 'lance';
     if (rangedMode) return bowMode ? 'longbow' : 'crossbow';
     if (targetKind === 'rock' && (inventory.pickaxe ?? 0) > 0) return 'pickaxe';
     if (targetKind === 'fishing' && (inventory.fishing_rod ?? 0) > 0) return 'rod';
@@ -373,7 +389,7 @@ export default function Viewmodel() {
     if (targetKind === 'construct' && (inventory.hammer ?? 0) > 0) return 'hammer';
     if ((inventory.sword ?? 0) > 0) return 'sword';
     return 'fist';
-  }, [rangedMode, bowMode, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
+  }, [lanceMode, rangedMode, bowMode, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
 
   useFrame((_, dt) => {
     const o = outer.current;
@@ -468,6 +484,16 @@ export default function Viewmodel() {
           {tool === 'sword' && (
             <group rotation={MOUNT.sword}>
               <RealWeapon id="sword" fallback={<Sword />} />
+            </group>
+          )}
+          {/* L62 (rest) · couched: tucked under the arm and levelled at the
+              target, the same real mold "spear" has always used for a
+              standing pose (lib/weaponParts) — the extraction has no mold
+              cast specifically for a mounted grip, so this reuses it rather
+              than inventing a second "lance" weapon id for one pose */}
+          {tool === 'lance' && (
+            <group rotation={MOUNT.lance} scale={0.85}>
+              <RealWeapon id="spear" fallback={null} />
             </group>
           )}
           {/* levelled downrange: +Y rotated a quarter turn onto -Z */}

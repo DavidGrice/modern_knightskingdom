@@ -3065,9 +3065,31 @@ once screenshotted at scale, invisible at the viewmodel's actual small size.
 A +0.5 roll squares them up without touching the pitch. The sword's own pose
 was checked the same way and found to already read correctly — no change
 needed there.
-- [TODO] **L62 (rest) · lance and halberd from the saddle.** Ranged works; the lance
-  still only exists inside the joust mechanic, and the halberd has no mounted
-  pose.
+[COMPLETE] **L62 (rest) · a couched lance from the saddle.** `joustRichard()`
+(`gameStore.ts`) was always a pure numeric outcome — hit chance, gold, XP —
+with nothing rendered for it, and `weaponParts.ts`'s own `spear` mold (grip
+normalized, ready to use) had zero consumers anywhere in the codebase. The
+"Couch your lance!" prompt implied a posture that never actually existed.
+Viewmodel.tsx now polls `ridingState.active && combatState.galloping` (the
+same condition that prompt already gates on) into real React state — reading
+those plain mutable objects directly in a `useMemo` wouldn't have re-rendered
+when they changed — and couches the real `spear` mold, levelled toward a
+target ahead of the horse, ahead of whatever else would otherwise be held.
+Verified live: forcing a mounted gallop renders a real couched lance angled
+toward the reticle, where nothing rendered before.
+
+**The halberd's own "no mounted pose" turned out not to be a distinct bug**,
+on inspection of how a mounted defender actually renders (`Defenders.tsx`):
+every loadout — sword_shield, bow, halberd alike — gets the exact same
+treatment, the whole standing rig plus whichever weapon is portalled onto its
+arm joint, lifted uniformly by `SADDLE_Y`. The weapon's pose relative to the
+rider's own hand is unchanged and already correct; nothing singles halberd
+out for worse treatment than sword or bow get. What's actually missing is
+bigger than any one weapon: there is no real seated-rider animation at all
+for ANY loadout, so a mounted defender's legs still play their standing/walk
+clip while floating above the saddle rather than sitting in it. That belongs
+with the still-open "Comprehensive AI/animation rig improvements" item below,
+not as a halberd-specific fix.
 
 ## Future · build from the real instruction sets [TODO]
 
@@ -3449,7 +3471,6 @@ block rather than being started at the end of a session.
   village buildings need enterable interiors with NPCs in them.
   `KeepInteriorRoom.tsx` is the existing pattern to generalise — one room, one
   door, one occupant list — rather than something to invent.
-- [TODO] **L62 (rest) · lance and halberd from the saddle.**
 
 ## Pointer lock, corrected again — 2026-07-26 [COMPLETE]
 
