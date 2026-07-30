@@ -37,10 +37,27 @@ function Foundation() {
 export default function KeepAssembly() {
   const keep = useGameStore((s) => s.keep);
   const destination = useGameStore((s) => s.destination);
+  const buildings = useGameStore((s) => s.buildings);
+  const openBuildingMenu = useGameStore((s) => s.openBuildingMenu);
   if (!keep || destination) return null;
 
   return (
-    <group position={[keep.x, 0, keep.z]}>
+    <group
+      position={[keep.x, 0, keep.z]}
+      // L72's click-to-open-menu, extended to the foundation itself — the
+      // keep's own PlacedBuilding (game/store/gameStore.ts's foundKeep) is
+      // deliberately not rendered by Buildings.tsx (KeepAssembly already
+      // owns every visual here), so it needs its own click handler to reach
+      // the same "Move the foundation" action BuildingMenuPanel offers it.
+      onClick={(e: any) => {
+        const st = useGameStore.getState();
+        if (!st.buildMode || st.buildSelection || st.movingBuilding) return;
+        const b = buildings.find((x) => x.type === 'keep');
+        if (!b) return;
+        e.stopPropagation();
+        openBuildingMenu(b.id);
+      }}
+    >
       <Suspense fallback={null}>
         <Foundation />
       </Suspense>

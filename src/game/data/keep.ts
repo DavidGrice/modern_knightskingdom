@@ -125,6 +125,9 @@ export interface KeepState {
   parts: Record<string, string>;
   /** socket id -> 0..1 construction progress, same hammer work as any site */
   built: Record<string, number>;
+  /** socket id -> current siege HP; absent = full (maxHpForPart). Absent
+   *  entirely on saves from before a raised piece could be knocked down. */
+  hp?: Record<string, number>;
 }
 
 /** the castle is "finished" once every socket carries a completed piece */
@@ -135,4 +138,12 @@ export function keepComplete(k: KeepState): boolean {
 export function keepProgress(k: KeepState): number {
   const done = KEEP_SOCKETS.reduce((n, s) => n + Math.min(1, k.built[s.id] ?? 0), 0);
   return done / KEEP_SOCKETS.length;
+}
+
+/** structural HP, the same cost-derived formula buildables.ts's maxHpFor
+ *  uses for every other structure — pricier pieces shrug off more siege
+ *  damage before they come down. */
+export function maxHpForPart(part: KeepPart): number {
+  const totalCost = Object.values(part.cost).reduce((s: number, n) => s + (n ?? 0), 0);
+  return Math.max(15, Math.round(totalCost * 3));
 }

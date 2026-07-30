@@ -9,7 +9,25 @@ import { playerState } from './playerState';
 import { labExplosive } from './data/labCapabilities';
 import { labAssetId } from './data/buildables';
 import { fireProp } from '@/components/world/RiggedProp';
+import { KEEP_SOCKETS } from './data/keep';
 import type { PlacedBuilding } from './types';
+
+/** J51 · every finished keep piece within `radius` of (x, z) takes the same
+ *  hit an ordinary building would — the keep has no PlacedBuilding entries
+ *  of its own per piece (see gameStore's foundKeep), so the splash-damage
+ *  loops below need this alongside their `st.buildings` loop rather than in
+ *  place of it. */
+function damageKeepNear(x: number, z: number, radius: number, amount: number, cause: string) {
+  const st = useGameStore.getState();
+  const keep = st.keep;
+  if (!keep) return;
+  for (const sock of KEEP_SOCKETS) {
+    const wx = keep.x + sock.x;
+    const wz = keep.z + sock.z;
+    if (Math.hypot(wx - x, wz - z) > radius) continue;
+    st.damageKeepPart(sock.id, amount, cause);
+  }
+}
 
 export interface Cannonball {
   id: number;
@@ -98,6 +116,7 @@ export function explodeBall(ball: Cannonball) {
     if (d > 3.2) continue;
     st.damageBuilding(b.id, 18, 'was blasted');
   }
+  damageKeepNear(ball.pos.x, ball.pos.z, 3.2, 18, 'was blasted');
   useSiegeStore.getState().removeBall(ball.id);
 }
 
@@ -139,6 +158,7 @@ export function detonate(charge: PlacedBuilding) {
       if (Math.hypot(b.x - x, b.z - z) > 5) continue;
       st.damageBuilding(b.id, 45, 'was blown apart');
     }
+    damageKeepNear(x, z, 5, 45, 'was blown apart');
   }
   // caught in your own blast
   if (Math.hypot(playerState.x - x, playerState.z - z) < 4.5) damagePlayer(2);
@@ -161,6 +181,17 @@ export function ramCheck(rammerId: string, x: number, z: number) {
   const now = performance.now();
   if (now - lastRamHitAt < 900) return;
   const st = useGameStore.getState();
+  if (st.keep) {
+    for (const sock of KEEP_SOCKETS) {
+      const wx = st.keep.x + sock.x;
+      const wz = st.keep.z + sock.z;
+      if (Math.hypot(wx - x, wz - z) > 2.1) continue;
+      lastRamHitAt = now;
+      audio.play('thud', 0.85);
+      st.damageKeepPart(sock.id, 12, 'was rammed');
+      return;
+    }
+  }
   for (const b of st.buildings) {
     if (b.id === rammerId) continue;
     const d = Math.hypot(b.x - x, b.z - z);

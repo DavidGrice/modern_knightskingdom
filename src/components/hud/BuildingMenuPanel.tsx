@@ -23,6 +23,7 @@ export default function BuildingMenuPanel() {
   const inventory = useGameStore((s) => s.inventory);
   const setPanel = useGameStore((s) => s.setPanel);
   const pickup = useGameStore((s) => s.pickupBuilding);
+  const pickupKeep = useGameStore((s) => s.pickupKeep);
   const remove = useGameStore((s) => s.removeBuilding);
   const mountCharge = useGameStore((s) => s.mountCharge);
 
@@ -30,12 +31,18 @@ export default function BuildingMenuPanel() {
   if (!b) return null;
   const def = BUILDABLE_BY_ID[b.type];
   const isWall = def?.category === 'walls';
+  // J51 · the keep's synthetic PlacedBuilding exists purely for interact
+  // detection (see gameStore's foundKeep) — everything it actually IS lives
+  // in st.keep, so it gets its own narrower menu: relocate the foundation
+  // (every socket travels with it), never a plain "take it down" that would
+  // orphan a whole assembled castle in one click.
+  const isKeep = b.type === 'keep';
   const charges = CHARGES.map((c) => BUILDABLE_BY_ID[c]).filter(Boolean);
 
   return (
     <div className="game-panel clickable" style={{ minWidth: 420 }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <h2>{def?.name ?? b.type}</h2>
+      <h2>{isKeep ? 'The Grand Keep' : (def?.name ?? b.type)}</h2>
       {!isBuilt(b) && (
         <div className="loading-note" style={{ marginBottom: 10 }}>
           Still a site — {Math.round((b.built ?? 0) * 100)}% built.
@@ -44,18 +51,29 @@ export default function BuildingMenuPanel() {
 
       <div className="creator-section" style={{ marginBottom: 8 }}>Actions</div>
       <div className="keep-options">
-        <button className="keep-option" onClick={() => { setPanel('none'); pickup(b.id); }}>
-          <div className="keep-option-body">
-            <div className="keep-option-name">Move it</div>
-            <div className="keep-option-blurb">Pick the piece up and set it down somewhere else.</div>
-          </div>
-        </button>
-        <button className="keep-option" onClick={() => { setPanel('none'); remove(b.id); }}>
-          <div className="keep-option-body">
-            <div className="keep-option-name">Take it down</div>
-            <div className="keep-option-blurb">Dismantle it and get its pieces back.</div>
-          </div>
-        </button>
+        {isKeep ? (
+          <button className="keep-option" onClick={() => { setPanel('none'); pickupKeep(); }}>
+            <div className="keep-option-body">
+              <div className="keep-option-name">Move the foundation</div>
+              <div className="keep-option-blurb">Pick up the whole castle — every socket, as built — and lay it down somewhere else.</div>
+            </div>
+          </button>
+        ) : (
+          <>
+            <button className="keep-option" onClick={() => { setPanel('none'); pickup(b.id); }}>
+              <div className="keep-option-body">
+                <div className="keep-option-name">Move it</div>
+                <div className="keep-option-blurb">Pick the piece up and set it down somewhere else.</div>
+              </div>
+            </button>
+            <button className="keep-option" onClick={() => { setPanel('none'); remove(b.id); }}>
+              <div className="keep-option-body">
+                <div className="keep-option-name">Take it down</div>
+                <div className="keep-option-blurb">Dismantle it and get its pieces back.</div>
+              </div>
+            </button>
+          </>
+        )}
       </div>
 
       {isWall && (
