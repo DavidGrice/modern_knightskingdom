@@ -2912,9 +2912,50 @@ dropped into it always lines up with its neighbours.
   authored in those families rather than as a hand-picked bill of distinct
   SKUs ("2× Tower Piece 2×2, 4× Wall Section 1×4"). Doing that means authoring
   46 bills by hand and is a content pass, not a code one.
-- [TODO] **J51 has no damage or move behaviour.** A raised piece cannot be knocked
-  down by a siege, and the foundation cannot be picked up and re-laid. Raiders
-  ignore the castle entirely.
+[COMPLETE] **J51 has damage and move behaviour.** A raised keep piece now has real
+structural HP (`maxHpForPart` in `data/keep.ts` — the same cost-derived formula
+`maxHpFor` already used for every ordinary building), tracked per socket in a new
+`KeepState.hp`. `damageKeepPart` (gameStore.ts) is the keep's own `damageBuilding`:
+chip away at a piece and, past 0 HP, the socket clears — half its materials
+refunded — back to the bare marker course `KeepAssembly.tsx` already draws for an
+empty socket. Every existing siege source that already damages ordinary buildings
+now also reaches the keep: cannon splash, a detonated charge, and the pushable
+battering ram all check the keep's sockets alongside `st.buildings` (`siege.ts`'s
+new `damageKeepNear` helper, and a keep-first branch in `ramCheck`). Dragonfire is
+deliberately left out — its whole point is "wood burns, stone holds," and keep
+pieces are built almost entirely from stone, so torching them would undercut the
+mechanic it's there to teach, not extend it.
+
+**Raiders no longer ignore the castle.** A raid mob (bandit, Gilbert, Cedric,
+royal knight — never an ambient night skeleton) that ends up within striking
+range of a finished keep piece batters it instead of walking through as if it
+were not there, at the same priority tier the existing defender-vs-mob skirmish
+lines already use (closer target wins). This is proximity-only, not a chase: the
+keep has no collision volumes or nav-grid obstacles of its own yet, so a raider
+only ever notices a piece it has already wandered or chased right up against —
+teaching the nav grid to route (and raiders to detour) around a real castle wall
+is real scope of its own, left for later rather than folded in here.
+
+**The foundation can be picked up and re-laid.** `pickupKeep`/`finishMove`/
+`cancelMove` (gameStore.ts) carry every socket's part, build progress and HP
+with it, lossless, through the exact same `movingBuilding` ghost-placement flow
+an ordinary building already uses — reusing `evalPlacement`'s region/overlap
+checks for free rather than inventing a second validation path. The keep has no
+rotation of its own (`KeepAssembly.tsx` renders it unrotated regardless of
+`PlacedBuilding.rot`), so a relocation always lands unrotated no matter how the
+ghost looked mid-placement. `BuildingMenuPanel.tsx` gives the keep's synthetic
+foundation entry its own narrower menu — "Move the foundation" only, never a
+plain "take it down" that would orphan an assembled castle in one click — and
+`KeepAssembly.tsx` gets the click-to-open-menu handler `Buildings.tsx` already
+uses for every other building (the keep's own entry is deliberately excluded
+from that component's render loop, so it needed its own).
+
+Verified live: partial damage and knockdown-with-refund on a raised wall; pickup
+→ evalPlacement → finishMove round-trip preserving every socket exactly;
+cancel-move restoring the original foundation unchanged; the real "Move the
+foundation" button clicked through the actual DOM with no console errors; and,
+in the unpaused live frame loop (not a scripted call), a spawned raid bandit
+independently discovering and battering down a finished wall on its own.
 [COMPLETE] **Defenders do not use the walls.** `KeepPart.walkway` records how high each
 piece's wall walk is; a defender can now actually be posted to it. Stationing already had exactly
 this shape for a homestead Watch Tower — `stationId` pointing at a `PlacedBuilding`, `elevated`

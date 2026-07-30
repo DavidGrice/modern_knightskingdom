@@ -163,6 +163,8 @@ export interface SaveGame {
     x: number; z: number;
     parts: Record<string, string>;
     built: Record<string, number>;
+    /** socket id -> siege HP; absent = full (see data/keep's maxHpForPart) */
+    hp?: Record<string, number>;
   } | null;
   /** M · the set on the workshop bench, and the sets already built */
   workshop?: { setNum: string; step: number } | null;

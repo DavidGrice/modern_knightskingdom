@@ -28,6 +28,7 @@ import { roadEntry } from '@/game/data/road';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
 import { defenderState } from '@/game/defenders';
 import { dungeonState } from '@/game/dungeon';
+import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { destinationGroundY } from '../world/TemplateWorld';
 
 const CONFIGS: Record<string, CharacterConfig> = {
@@ -76,6 +77,10 @@ const CONFIGS: Record<string, CharacterConfig> = {
 
 const ATTACK_DMG: Record<string, number> = { skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2 };
 const ATTACK_CD: Record<string, number> = { skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4 };
+/** J51 follow-up: structural damage per hit against a keep piece — a
+ *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
+ *  pool), closer to what the player's own ram/cannon already deal it */
+const RAID_SIEGE_DMG: Record<string, number> = { bandit: 9, gilbert: 12, cedric: 18, royal: 12 };
 /** a distinct voice bark on defeat, where the original bank has one (Deed-worthy antagonists only) */
 const DEATH_BARK: Partial<Record<string, SoundName>> = {
   bandit: 'random_weezil', gilbert: 'random_gilbert', cedric: 'random_cedric',
@@ -230,6 +235,28 @@ function Enemy({ data }: { data: EnemyData }) {
       }
       if (m.alertT) m.alertT = Math.max(0, m.alertT - dt);
 
+      // J51 follow-up: a raid mob that ends up next to a FINISHED keep piece
+      // batters it instead of walking through as if it were not there —
+      // proximity only (the keep has no collision volumes of its own yet, so
+      // this is not a chase target the way a defender is — a raider only
+      // ever notices one it has already wandered/chased right up against).
+      // Ordinary night skeletons are not raiders and leave the castle alone.
+      let keepTarget: { socketId: string; x: number; z: number; name: string } | null = null;
+      let keepD = Infinity;
+      if (data.raid && !st.destination && st.keep) {
+        for (const sock of KEEP_SOCKETS) {
+          const partId = st.keep.parts[sock.id];
+          if (!partId || (st.keep.built[sock.id] ?? 0) < 1) continue;
+          const wx = st.keep.x + sock.x;
+          const wz = st.keep.z + sock.z;
+          const dd = Math.hypot(wx - m.x, wz - m.z);
+          if (dd < 3.4 && dd < keepD) {
+            keepD = dd;
+            keepTarget = { socketId: sock.id, x: wx, z: wz, name: KEEP_PART_BY_ID[partId]?.name ?? 'the castle' };
+          }
+        }
+      }
+
       // homestead skirmish lines (AI wave 2): if a sworn defender stands
       // closer than the player, fight THEM — raids and night hunts become
       // real defender-vs-mob battles instead of everything beelining the
@@ -245,7 +272,17 @@ function Enemy({ data }: { data: EnemyData }) {
           if (dd < 16 && dd < defD) { defD = dd; defTarget = dsd; defId = vid; }
         }
       }
-      if (defTarget && defD < d) {
+      if (keepTarget && keepD < d && keepD < defD) {
+        m.state = 'attack';
+        m.attackCd -= dt;
+        const ndx = keepTarget.x - m.x;
+        const ndz = keepTarget.z - m.z;
+        m.yaw = Math.atan2(-ndx, -ndz);
+        if (m.attackCd <= 0) {
+          m.attackCd = ATTACK_CD[data.kind];
+          st.damageKeepPart(keepTarget.socketId, RAID_SIEGE_DMG[data.kind] ?? 8, `was battered by ${CONFIGS[data.kind].name}`);
+        }
+      } else if (defTarget && defD < d) {
         if (defD < 1.7) {
           m.state = 'attack';
           m.attackCd -= dt;

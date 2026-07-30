@@ -10,7 +10,7 @@ import { ROAD_HALF_WIDTH, ROAD_TILE, roadEntry, routeCells } from '../data/road'
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
 import { arriveByRoad, villagerMobs } from '../villagerMobs';
 import { npcMobs } from '../npcMobs';
-import { KEEP_PART_BY_ID, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, type KeepState } from '../data/keep';
+import { KEEP_PART_BY_ID, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, maxHpForPart, type KeepState } from '../data/keep';
 import { brickLabel } from '../data/brickResources';
 import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
 import { stabledHorses } from '../riding';
@@ -325,10 +325,17 @@ interface GameState {
   raiseKeepPart: (socketId: string, partId: string) => void;
   /** one hammer swing's worth of work on a socket's piece */
   workKeepPart: (socketId: string, amount: number) => void;
+  /** J51 · a raised piece takes siege damage — knocked down (socket cleared,
+   *  half materials refunded) at 0 HP, same shape as damageBuilding */
+  damageKeepPart: (socketId: string, amount: number, cause?: string) => void;
   removeBuilding: (id: string, consumed?: boolean) => void;
   /** resolve stacking elevation + validity for a ghost at (x, z) */
   evalPlacement: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3, ignoreId?: string) => { y: number; valid: boolean };
   pickupBuilding: (id: string) => void;
+  /** J51 · pick the whole foundation up — every socket's part/progress/HP
+   *  travels with it, ready to set down again via the same movingBuilding
+   *  ghost flow an ordinary building uses */
+  pickupKeep: () => void;
   cancelMove: () => void;
   finishMove: (x: number, z: number, rot: 0 | 1 | 2 | 3) => boolean;
   undoLast: () => void;
@@ -402,6 +409,11 @@ let blueprintSeq = 1;
 let lastJoustAt = 0;
 /** ids of buildings placed this session, newest last (undo stack) */
 let placeHistory: string[] = [];
+/** J51 · the keep's own parts/built/hp while its foundation is being carried
+ *  (movingBuilding only has room for a plain PlacedBuilding's own fields) —
+ *  set by pickupKeep, consumed by cancelMove/finishMove, always null
+ *  otherwise. Ephemeral like movingBuilding itself: never persisted. */
+let carriedKeepExtra: { parts: Record<string, string>; built: Record<string, number>; hp: Record<string, number> } | null = null;
 
 /** Simple deterministic RNG so the world layout is stable across sessions. */
 function mulberry32(seed: number) {
@@ -2586,6 +2598,40 @@ function createGameStore() {
       }
     },
 
+    damageKeepPart: (socketId, amount, cause) => {
+      const st = get();
+      const keep = st.keep;
+      if (!keep) return;
+      const partId = keep.parts[socketId];
+      const part = partId ? KEEP_PART_BY_ID[partId] : null;
+      // only a finished piece can be sieged — a bare socket or a construction
+      // ghost has nothing standing on it yet to knock down
+      if (!part || (keep.built[socketId] ?? 0) < 1) return;
+      const max = maxHpForPart(part);
+      const hp = (keep.hp?.[socketId] ?? max) - amount;
+      if (hp > 0) {
+        set({ keep: { ...keep, hp: { ...keep.hp, [socketId]: hp } }, dirty: true });
+        audio.play('brick_collide', 0.6);
+        return;
+      }
+      // knocked down: back to a bare socket, half its materials recovered —
+      // same rubble rate damageBuilding uses for an ordinary structure
+      const parts = { ...keep.parts };
+      delete parts[socketId];
+      const built = { ...keep.built };
+      delete built[socketId];
+      const hpRest = { ...keep.hp };
+      delete hpRest[socketId];
+      const inv = { ...st.inventory };
+      for (const [itemId, n] of Object.entries(part.cost)) {
+        const refund = Math.floor((n as number) / 2);
+        if (refund > 0) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + refund;
+      }
+      set({ keep: { ...keep, parts, built, hp: hpRest }, inventory: inv, dirty: true });
+      audio.play('brick_collide', 0.8);
+      st.notify(`${part.name} ${cause ?? 'was battered down'}! Half materials recovered.`, true);
+    },
+
     constructBuilding: (id, amount) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
@@ -2636,26 +2682,64 @@ function createGameStore() {
       audio.play('brick_collide', 0.5);
     },
 
+    pickupKeep: () => {
+      const st = get();
+      const keep = st.keep;
+      const b = st.buildings.find((x) => x.type === 'keep');
+      if (!keep || !b || st.movingBuilding) return;
+      // every socket's part/progress/HP travels with the foundation, lossless
+      // — carried outside movingBuilding (a plain PlacedBuilding has nowhere
+      // to hold that) and restored by cancelMove/finishMove below
+      carriedKeepExtra = { parts: keep.parts, built: keep.built, hp: keep.hp ?? {} };
+      set({
+        keep: null,
+        buildings: st.buildings.filter((x) => x.id !== b.id),
+        movingBuilding: b,
+        buildSelection: null,
+        dirty: true,
+      });
+      audio.play('brick_collide', 0.5);
+    },
+
     cancelMove: () => {
       const st = get();
-      if (!st.movingBuilding) return;
-      set({ buildings: [...st.buildings, st.movingBuilding], movingBuilding: null });
+      const mv = st.movingBuilding;
+      if (!mv) return;
+      const restoredKeep = mv.type === 'keep' && carriedKeepExtra
+        ? { x: mv.x, z: mv.z, ...carriedKeepExtra }
+        : null;
+      carriedKeepExtra = null;
+      set({
+        buildings: [...st.buildings, mv],
+        movingBuilding: null,
+        ...(restoredKeep ? { keep: restoredKeep } : {}),
+      });
     },
 
     finishMove: (x, z, rot) => {
       const st = get();
       const mv = st.movingBuilding;
       if (!mv) return false;
-      const { y, valid } = st.evalPlacement(mv.type, x, z, rot, mv.id);
+      // the keep's socket layout has no rotation of its own (KeepAssembly.tsx
+      // renders it unrotated regardless of PlacedBuilding.rot) — force 0 so a
+      // rotated ghost during placement can never leave the synthetic entry
+      // and the real KeepState disagreeing about which way it faces
+      const placeRot = mv.type === 'keep' ? 0 : rot;
+      const { y, valid } = st.evalPlacement(mv.type, x, z, placeRot, mv.id);
       if (!valid) {
         audio.play('brick_collide', 0.5);
         return false;
       }
+      const restoredKeep = mv.type === 'keep' && carriedKeepExtra
+        ? { x, z, ...carriedKeepExtra }
+        : null;
+      carriedKeepExtra = null;
       set({
         // world stamped to wherever it's actually being set down — covers the
         // edge case of a pickup→travel→place happening in one build session
-        buildings: [...st.buildings, { ...mv, x, z, y, rot, world: st.destination ?? null }],
+        buildings: [...st.buildings, { ...mv, x, z, y, rot: placeRot, world: st.destination ?? null }],
         movingBuilding: null,
+        ...(restoredKeep ? { keep: restoredKeep } : {}),
         dirty: true,
       });
       audio.play('brick_link', 0.7);
