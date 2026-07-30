@@ -256,3 +256,85 @@
 :root[data-kk-lane='leather'] .kk-vitals-name,
 :root[data-kk-lane='leather'] .kk-objective-title,
 :root[data-kk-lane='leather'] .kk-prompt-verb { color: #f0dcb0; }
+
+/* ============================================================
+   CARD TOKENS (2026-07-29) — the front-door screens' own distinctive
+   surfaces (the login plaque/sign-in card, the character forge's stage
+   and name field) were never wired to the lane at all: each screen just
+   kept whichever single recipe its own mockup shipped with (login =
+   Millennium Chrome, forge = Guild Leather), hardcoded, regardless of
+   what the player picked in Options. That's what "login is a different
+   theme from the character creator" actually was — not a missing
+   background (kk-screen-* fixed that part already) but every card,
+   input and button INSIDE those screens still being the one baked-in
+   look. These eight custom properties are that missing lane hookup:
+   defined once here per lane, referenced by kk-screens.css's own card
+   rules instead of a hardcoded hex value, so both screens (and any
+   future one) pick up the SAME chosen lane's card language together.
+   Chrome and leather's own values below are exactly what was already
+   hardcoded — nothing changes for a player who never touches Options —
+   glass and metal are the two that previously had no card recipe at all. */
+:root {
+  --kk-card-bg-1: rgba(16, 24, 20, .88);
+  --kk-card-bg-2: rgba(8, 14, 11, .94);
+  --kk-card-border: rgba(255, 255, 255, .18);
+  --kk-card-border-top: rgba(255, 255, 255, .46);
+  --kk-card-text: #eafaf0;
+  --kk-card-text-dim: rgba(234, 250, 240, .58);
+  --kk-card-input-bg-1: rgba(255, 255, 255, .09);
+  --kk-card-input-bg-2: rgba(255, 255, 255, .03);
+  --kk-card-input-border: rgba(255, 255, 255, .22);
+  --kk-card-caret: var(--kk-aero);
+  --kk-card-accent-bg-1: rgba(168, 245, 205, .9);
+  --kk-card-accent-bg-2: rgba(110, 231, 168, .78);
+  --kk-card-accent-text: #0e1712;
+  --kk-card-accent-border: var(--kk-aero-deep);
+}
+:root[data-kk-lane='metal'] {
+  --kk-card-bg-1: #1e212b;
+  --kk-card-bg-2: #0f1117;
+  --kk-card-border: var(--kk-n-800);
+  --kk-card-border-top: var(--kk-a-400);
+  --kk-card-text: var(--kk-n-100);
+  --kk-card-text-dim: var(--kk-n-500);
+  --kk-card-input-bg-1: rgba(255, 255, 255, .05);
+  --kk-card-input-bg-2: rgba(0, 0, 0, .2);
+  --kk-card-input-border: var(--kk-n-700);
+  --kk-card-caret: var(--kk-a-400);
+  --kk-card-accent-bg-1: #2a2440;
+  --kk-card-accent-bg-2: #171426;
+  --kk-card-accent-text: var(--kk-a-400);
+  --kk-card-accent-border: var(--kk-a-400);
+}
+:root[data-kk-lane='chrome'] {
+  --kk-card-bg-1: rgba(238, 247, 255, .94);
+  --kk-card-bg-2: rgba(186, 212, 232, .92);
+  --kk-card-border: #4f7191;
+  --kk-card-border-top: #fff;
+  --kk-card-text: #12293d;
+  --kk-card-text-dim: #3b6183;
+  --kk-card-input-bg-1: #f9fcff;
+  --kk-card-input-bg-2: #e2edf7;
+  --kk-card-input-border: #5d7f9c;
+  --kk-card-caret: #ff8a00;
+  --kk-card-accent-bg-1: #e2fb72;
+  --kk-card-accent-bg-2: #8fb81c;
+  --kk-card-accent-text: #243100;
+  --kk-card-accent-border: #566f00;
+}
+:root[data-kk-lane='leather'] {
+  --kk-card-bg-1: #2a1c11;
+  --kk-card-bg-2: #180f07;
+  --kk-card-border: #4a3520;
+  --kk-card-border-top: rgba(224, 196, 138, .16);
+  --kk-card-text: #f0dcb0;
+  --kk-card-text-dim: rgba(240, 220, 176, .62);
+  --kk-card-input-bg-1: #2a1c11;
+  --kk-card-input-bg-2: #180f07;
+  --kk-card-input-border: #4a3520;
+  --kk-card-caret: #e0c48a;
+  --kk-card-accent-bg-1: #e6cf9c;
+  --kk-card-accent-bg-2: #b18f4e;
+  --kk-card-accent-text: #2a1c11;
+  --kk-card-accent-border: #6f5526;
+}
