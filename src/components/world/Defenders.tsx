@@ -22,6 +22,7 @@ import { dragonAir } from './DragonOmen';
 import { horses, mountOf } from '@/game/riding';
 import RiggedProp from './RiggedProp';
 import { BUILD_REGION, heightOf } from '@/game/data/buildables';
+import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from './Villagers';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { RiggedMinifig } from '@/lib/minifigRig';
@@ -42,6 +43,7 @@ const RECOVER_MS = 45000; // real time knocked out before returning to the fight
 
 function DefenderFigure({ villager }: { villager: Villager }) {
   const buildings = useGameStore((s) => s.buildings);
+  const keep = useGameStore((s) => s.keep);
   const enemies = useEnemyStore((s) => s.enemies);
   const gainDefenderXp = useGameStore((s) => s.gainDefenderXp);
   const recordKill = useGameStore((s) => s.recordKill);
@@ -59,12 +61,27 @@ function DefenderFigure({ villager }: { villager: Villager }) {
   // shared derived-plus-override look, same as every other homestead figure
   const config: CharacterConfig = useMemo(() => villagerConfig(villager), [villager]);
 
-  const station = villager.stationId ? buildings.find((b) => b.id === villager.stationId) ?? null : null;
+  // J51 (rest) · a keep-wall station is stored as `stationId = "keep:<socketId>"`
+  // rather than a building id, since KeepPart pieces live in `st.keep`, not
+  // `st.buildings` — reads `KeepPart.walkway` (keep.ts) the same way a tower
+  // station already reads `heightOf('tower')` below.
+  const keepSocketId = villager.stationId?.startsWith('keep:') ? villager.stationId.slice(5) : null;
+  const keepSocket = keepSocketId ? SOCKET_BY_ID[keepSocketId] : null;
+  const keepPart = keep && keepSocketId ? KEEP_PART_BY_ID[keep.parts[keepSocketId] ?? ''] : null;
+  // an unraised or unfinished piece is just a marker course — no walkway to stand on
+  const keepBuilt = !!(keep && keepSocketId && (keep.built[keepSocketId] ?? 0) >= 1);
+
+  const station = keepSocketId ? null
+    : villager.stationId ? buildings.find((b) => b.id === villager.stationId) ?? null : null;
   // an unfinished tower is just a ghost outline — no battlement to stand on
-  const elevated = station?.type === 'tower' && !!station && isBuilt(station);
-  const postX = station ? station.x : HOME_X + Math.cos(h) * 5;
-  const postZ = station ? station.z : HOME_Z + Math.sin(h) * 5;
-  const postY = elevated ? (station!.y ?? 0) + heightOf('tower') : 0;
+  const elevated = keepSocket && keep
+    ? keepBuilt && !!keepPart?.walkway
+    : station?.type === 'tower' && !!station && isBuilt(station);
+  const postX = keepSocket && keep ? keep.x + keepSocket.x : station ? station.x : HOME_X + Math.cos(h) * 5;
+  const postZ = keepSocket && keep ? keep.z + keepSocket.z : station ? station.z : HOME_Z + Math.sin(h) * 5;
+  const postY = keepSocket && keep
+    ? (elevated ? keepPart!.walkway! : 0)
+    : elevated ? (station!.y ?? 0) + heightOf('tower') : 0;
 
   const ds = useMemo(() => registerDefender(villager.id, postX, postY, postZ), [villager.id]); // eslint-disable-line react-hooks/exhaustive-deps
   ds.postX = postX; ds.postY = postY; ds.postZ = postZ; ds.elevated = elevated;
