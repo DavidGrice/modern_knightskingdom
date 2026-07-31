@@ -513,24 +513,31 @@ export default function PlayerController() {
       } else if (n.kind === 'fishing') {
         const hasRod = (st.inventory.fishing_rod ?? 0) > 0;
         const unlocked = st.unlocks.includes('fishing');
-        if (!unlocked || !hasRod) {
-          consider(n.x, n.z, 0.9, {
-            id: n.id, kind: 'fishing', duration: 1, actionable: false,
-            label: !unlocked ? 'The fish ignore you… (locked)' : 'You need a Fishing Rod',
-          });
-        } else if (fishingState.nodeId !== n.id) {
-          consider(n.x, n.z, 0.9, {
-            id: n.id, kind: 'fishing', duration: 0.8 * wornPenalty('fishing_rod'), actionable: true, label: 'Cast your line',
-          });
-        } else if (fishingState.phase === 'waiting') {
-          consider(n.x, n.z, 0.9, {
-            id: n.id, kind: 'fishing', duration: 1, actionable: false, label: 'Watching the water…',
-          });
-        } else {
-          consider(n.x, n.z, 0.9, {
-            id: n.id, kind: 'fishing', duration: 0.06, actionable: true, label: 'Bite!',
-          });
-        }
+        const target: Target = !unlocked || !hasRod
+          ? { id: n.id, kind: 'fishing', duration: 1, actionable: false,
+              label: !unlocked ? 'The fish ignore you… (locked)' : 'You need a Fishing Rod' }
+          : fishingState.nodeId !== n.id
+            ? { id: n.id, kind: 'fishing', duration: 0.8 * wornPenalty('fishing_rod'), actionable: true, label: 'Cast your line' }
+            : fishingState.phase === 'waiting'
+              ? { id: n.id, kind: 'fishing', duration: 1, actionable: false, label: 'Watching the water…' }
+              : { id: n.id, kind: 'fishing', duration: 0.06, actionable: true, label: 'Bite!' };
+        // the dock's own interact point, unchanged
+        consider(n.x, n.z, 0.9, target);
+        // Requested 2026-07-30: fishing shouldn't need the one specific dock
+        // plank — cast from anywhere along the pond's edge instead. Reuses
+        // the SAME `consider()` distance+facing check unchanged, just feeds
+        // it the player's own nearest point on the pond's circle each frame
+        // instead of the dock's fixed coordinate, so the same INTERACT_RANGE
+        // bubble effectively wraps the whole shoreline rather than sitting
+        // on one point. Everything downstream (fishingState, the rod swing,
+        // the catch) still keys off the one real `fishspot` node id
+        // regardless of where the cast actually started.
+        const toPondX = p.x - POND.x;
+        const toPondZ = p.z - POND.z;
+        const distFromCenter = Math.hypot(toPondX, toPondZ) || 1;
+        const edgeX = POND.x + (toPondX / distFromCenter) * POND.radius;
+        const edgeZ = POND.z + (toPondZ / distFromCenter) * POND.radius;
+        consider(edgeX, edgeZ, 0.9, target, INTERACT_RANGE);
       }
     }
     // wild horses can be ridden

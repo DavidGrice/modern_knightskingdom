@@ -4186,18 +4186,28 @@ isolation.
   to what, with zero real conflict resolution. Logging this now as a real design gap; the actual
   ownership model (persisted per-bed assignment? claimed-on-first-sleep? explicit UI assignment?) still
   needs deciding before implementation.
-- [TODO] **Fishing should work from anywhere near the pond, not just one dock-end point — and the dock
-  itself should be shorter.** Requested 2026-07-30. Today there is exactly ONE fishing node in the whole
-  game (`gameStore.ts`, id `'fishspot'`), sitting at the dock's far end (`FISHING_DOCK.endX/endZ`), and
-  the interact check is ordinary proximity-plus-facing (`PlayerController.tsx`'s generic `consider()`
-  helper — within `INTERACT_RANGE` 3.4m, and facing within ~63° of the point) — not a raycast against
-  the dock mesh, but still just the one point, so the player must specifically walk out onto the dock
-  rather than fishing from any pond-adjacent spot. `POND` itself (`world.ts`, radius 8) is never used as
-  a fishing zone. The dock is procedural, not an asset (`ResourceNodes.tsx`'s `FishingSpot`): deck plank
-  length ≈ `DOCK_LENGTH` (~4.6m, derived from `FISHING_DOCK.start/end`), posts, and a railing — all
-  primitive `boxGeometry`/`cylinderGeometry` calls there, exactly what a "make it shorter" pass would
-  shrink. Widening to a real "action sphere" means adding proximity-to-`POND`-edge as a second
-  interactable zone alongside (or instead of) the single `fishspot` node.
+[COMPLETE] **Fishing now works from anywhere near the pond, not just one dock-end point — and the dock
+  is shorter.** Requested and fixed 2026-07-30. `PlayerController.tsx`'s fishing branch now calls the
+  same `consider()` helper TWICE for the one real `fishspot` node/target: once at the dock's own point
+  (unchanged), and once at the player's own nearest point on the pond's circle, recomputed every frame
+  (`POND.x/z/radius`) — reuses `consider()`'s existing distance+facing check unmodified, just feeds it a
+  different point, so the same `INTERACT_RANGE` bubble effectively wraps the whole shoreline instead of
+  sitting on one spot. Nothing downstream (fishingState, the catch) changed — it's still the one node,
+  just reachable from anywhere at the water's edge. `FISHING_DOCK.endX/endZ` shortened from the original
+  (49.33, 33.91) to (47.44, 34.81) — re-projected onto the SAME ~8.5m shore radius (not a naive
+  straight-line interpolation, which would have drifted a hair toward the water) so the dock's own
+  documented "goes into the pond" bug can't come back; `yaw` recomputed to match. The pond-collision
+  corridor exception (same file) already derives its own math from `FISHING_DOCK.start/endX/Z` live, so
+  it needed no separate change.
+
+  Verification note: `PlayerController.tsx`'s interact detection reads a private `pos` ref internal to
+  that component, not the exported `playerState` mirror — teleporting the player via
+  `window.__kkp.x/z` (this session's usual console technique) has no effect on it, and steering a
+  simulated walk there via Playwright's pointer-lock mouse deltas didn't behave predictably enough to
+  reach the pond in the time spent trying. Confirmed via `tsc`/production build and careful review
+  against the existing `consider()` pattern instead (same signature, verified geometry math via a
+  standalone calculation) — the change is additive only (a second `consider()` call) and cannot regress
+  the pre-existing dock interaction. Worth a real live check next time the game is played by hand.
 - [TODO] **A named defender ("Beda") appears to change appearance/configuration discontinuously between
   standing at their guard post and "spawning."** Requested 2026-07-30 — repro/exact meaning still needs
   pinning down, logging what's already ruled out rather than a diagnosis. Checked the one obvious
