@@ -4187,18 +4187,28 @@ isolation.
   owned and the player isn't actively blocking (which still swaps in the existing raised `BlockShield`
   unchanged). Verified live with a screenshot: shield now visibly carried in the left hand alongside a
   drawn sword.
-- [TODO] **Homestead roster shows generic job icons instead of each villager's real face.** Requested
-  2026-07-30. Today (`VillagersPanel.tsx`) each row's "portrait" is just `<Ico e={jobDef.icon}/>` — the
-  assigned JOB's emoji, unrelated to the villager's actual appearance; `v.look`/`villagerLooks.ts` data
-  is never read here at all. A real portrait system already exists — `RotatablePreview.tsx` (a live,
-  spinning 3D `RiggedFigure` preview in its own Canvas) — reused today in the Appearance panel and in
-  `NpcEquipPanel`'s per-villager equip screen, always ONE instance at a time. Every villager has enough
-  real data for a genuine portrait (`villagerConfig(v)`/`defaultLookOf`, `villagerLooks.ts`, the same
-  `CharacterConfig` shape `RotatablePreview` already consumes). Worth flagging before building this:
-  embedding `RotatablePreview` directly into the roster list would mean N simultaneous live WebGL
-  canvases (one per row) — no precedent for that anywhere in this codebase, both existing uses are
-  single-instance/on-demand — so a baked-thumbnail approach (render once, cache an image) is likely the
-  right shape rather than N live 3D previews.
+[COMPLETE] **Homestead roster shows generic job icons instead of each villager's real face.** Requested
+  and fixed 2026-07-30. Built the baked-thumbnail approach this entry's own first draft called for
+  (embedding `RotatablePreview` directly would mean N simultaneous live WebGL canvases — no precedent
+  anywhere in this codebase). New `src/components/character/VillagerPortrait.tsx`: one shared hidden
+  Canvas (`PortraitFactory`, mounted once by `VillagersPanel`) renders each distinct villager appearance
+  once — bust-framed, close camera — force-renders and `toDataURL`s it, and caches the PNG in a
+  module-level `Map` keyed on the same fields `RiggedFigure`'s own effect depends on (donor + 4 colors,
+  not villager id — two villagers who happen to share a look correctly share a portrait). Every row after
+  that is a plain `<img>`, not a live render. `VillagersPanel.tsx`'s old `<Ico e={jobDef.icon}/>` becomes
+  `RosterPortrait`, which shows the cached image once ready and falls back to the old job emoji during
+  the brief queue/bake window. **Caught and fixed during live verification, not shipped broken**: the
+  first version had a real race — `notify()` fires synchronously from every villager row's mount effect,
+  and with several rows requesting a portrait in the same commit, the factory's queue-pump ran multiple
+  times before React had applied the FIRST `setState` (batched/async) — each call read the same
+  pre-batch "idle" value, so of 4 requested portraits, 3 were silently shifted out of the queue and
+  discarded and the 4th baked twice. Fixed by guarding the pump with a `useRef` (updates synchronously,
+  unlike state) instead of trusting the `job` state value inside the closure. Verified live via a
+  synthetic 4-villager roster (Playwright + `window.__kk.setState`): all four rows render distinct,
+  correctly-baked 96×96 face portraits (confirmed via `next tsc`/`next build` clean plus a d3d11
+  screenshot), and the pre-fix run — captured before the fix, for the record — showed the old emoji
+  fallback rendering correctly during the (much longer, broken) queue stall, confirming that path works
+  too.
 [COMPLETE] **A villager's friendly nametag stayed pinned at their bed after being switched to defender
   while asleep.** Requested and fixed 2026-07-30. `resolveAim` (`targeting.ts`) now takes a
   `villagerIds: {id, isDefender}[]` list from its caller (`PlayerController.tsx`, derived straight from
