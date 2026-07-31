@@ -1,5 +1,4 @@
-import type { DefenderLoadout, ItemId, PlacedBuilding, Villager, VillagerJob } from '../types';
-import { isBuilt, isHomeBuilding } from '../types';
+import type { DefenderLoadout, ItemId, VillagerJob } from '../types';
 import { BUILD_REGION } from './buildables';
 import { hashId } from './villagerLooks';
 
@@ -53,20 +52,6 @@ export function villagerHomeSpot(id: string): { x: number; z: number } {
   };
 }
 
-/** Which bed (if any) this villager has claimed for the night, by stable
- *  rank among non-defender roster villagers — one sleeper per bed, never
- *  "everyone seeks the nearest bed" (the Phase 22 fix this preserves
- *  verbatim). Falls back to the villager's own home spot when they have no
- *  bed of their own, including before any beds exist at all. */
-export function assignedSleepSpot(
-  villagerId: string, villagers: Villager[], buildings: PlacedBuilding[],
-): { x: number; z: number } {
-  const beds = buildings.filter((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b));
-  const sleepers = villagers.filter((v) => v.job !== 'defender');
-  const rank = sleepers.findIndex((v) => v.id === villagerId);
-  const bed = rank >= 0 && rank < beds.length ? beds[rank] : null;
-  return bed ? { x: bed.x, z: bed.z } : villagerHomeSpot(villagerId);
-}
 
 export interface JobDef {
   id: VillagerJob;

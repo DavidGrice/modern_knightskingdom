@@ -179,9 +179,14 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       // the shift.
       //
       // The target check above already ran, so a daylight threat still gets
-      // answered either way. Each defender claims their own
-      // bed by stable rank (Villagers.tsx ranks non-defenders for the same
-      // beds at night, so the two shifts never fight over a mattress).
+      // answered either way. Each defender claims their own bed — a real
+      // persisted ownership (`gameStore.claimBed`, requested 2026-07-30 to
+      // replace this and Villagers.tsx's `assignedSleepSpot` own independent
+      // rank computations, which had no way to notice if they'd picked the
+      // same bed) — sharing the SAME claim pool day-sleepers use, so the two
+      // shifts can no longer double-book a mattress. Falls back to the
+      // guard's own post, not a bed, when none is available to claim — a
+      // defender's own resting spot, distinct from a plain villager's.
       // L67 · every standing order keeps the shift, not just patrol and
       // scout. `attack` with nothing left to attack used to fall through to
       // the circuit below, so a guard told to charge went on walking rounds
@@ -190,13 +195,11 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       // called for directly.
       if (!isWatchHours(worldEnv.time) && order !== 'follow') {
         const st = useGameStore.getState();
-        const beds = st.buildings.filter((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b));
-        const guards = st.villagers.filter((v) => v.job === 'defender');
-        const rank = guards.findIndex((v) => v.id === villager.id);
-        // count back from the end so guards take the beds the day shift isn't in
-        const bed = rank >= 0 && rank < beds.length ? beds[beds.length - 1 - rank] : null;
-        const rx = bed ? bed.x : ds.postX;
-        const rz = bed ? bed.z : ds.postZ;
+        const hasClaimableBed = st.buildings.some((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b)
+          && (b.owner === villager.id || !b.owner));
+        const rest = hasClaimableBed ? st.claimBed(villager.id) : { x: ds.postX, z: ds.postZ };
+        const rx = rest.x;
+        const rz = rest.z;
         const dxR = rx - ds.x;
         const dzR = rz - ds.z;
         const dR = Math.hypot(dxR, dzR);
@@ -211,7 +214,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
           yaw.current += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
-        g.position.set(ds.x, bed ? 0 : ds.postY, ds.z);
+        g.position.set(ds.x, hasClaimableBed ? 0 : ds.postY, ds.z);
         g.rotation.y = yaw.current + Math.PI;
         return;
       }

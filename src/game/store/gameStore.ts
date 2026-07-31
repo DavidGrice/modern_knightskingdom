@@ -30,7 +30,7 @@ import { PLAYER_ATTRS, attrPointsEarned, attrPointsSpent } from '../data/playerA
 import { COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult } from '../data/companionTraits';
 import { GUILD_BY_ID, guildEligible, SWITCH_TITHE } from '../data/guilds';
 import { TALENT_BY_ID, talentBuyable } from '../data/skillTree';
-import { DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, VILLAGER_NAMES, villagerRequirement } from '../data/villagers';
+import { DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
 import { RECIPES } from '../data/recipes';
 import { capOf, labDamagedForm } from '../data/labCapabilities';
@@ -268,6 +268,10 @@ interface GameState {
   setVillagerLook: (villagerId: string, look: Partial<NonNullable<Villager['look']>>) => void;
   resetVillagerLook: (villagerId: string) => void;
   assignJob: (villagerId: string, job: VillagerJob) => void;
+  /** the villager's owned bed if they have one, else claims the first free
+   *  one (persisted on the building itself, see `PlacedBuilding.owner`),
+   *  else their own fixed home spot if no bed is available at all */
+  claimBed: (villagerId: string) => { x: number; z: number };
   setDefenderLoadout: (villagerId: string, loadout: DefenderLoadout) => void;
   unequipDefenderLoadout: (villagerId: string) => void;
   stationDefender: (villagerId: string, buildingId: string | null) => void;
@@ -1798,6 +1802,36 @@ function createGameStore() {
       set({ villagers, villagerProgress, dirty: true });
       const name = st.villagers.find((v) => v.id === villagerId)?.name ?? 'Villager';
       st.notify(job === 'idle' ? `${name} is now unassigned.` : `${name} is now your ${jobDef.label.toLowerCase()}.`);
+    },
+
+    // Requested 2026-07-30: "beds... should be exclusively owned by one
+    // villager, no other npc can take their place." The old assignment
+    // (both `villagers.ts`'s own `assignedSleepSpot` helper, now removed,
+    // AND Defenders.tsx's own separate rank math for resting guards) was
+    // recomputed fresh from ROSTER RANK on every call — not a stored
+    // relationship, so a job
+    // switch, a new recruit, or a demolished bed could silently reshuffle
+    // who slept where, and the two independent rank computations had no way
+    // to notice if they picked the same bed. A bed is now claimed ONCE,
+    // permanently, the first time a villager needs one — freed only by
+    // demolishing the bed itself (villagers are never removed from the
+    // roster once recruited, so that is the only real release path). One
+    // shared claim pool for both day-sleepers and resting defenders, so the
+    // two can no longer double-book the same bed.
+    claimBed: (villagerId) => {
+      const st = get();
+      const beds = st.buildings.filter((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b));
+      const mine = beds.find((b) => b.owner === villagerId);
+      if (mine) return { x: mine.x, z: mine.z };
+      const free = beds.find((b) => !b.owner);
+      if (free) {
+        set({
+          buildings: st.buildings.map((b) => (b.id === free.id ? { ...b, owner: villagerId } : b)),
+          dirty: true,
+        });
+        return { x: free.x, z: free.z };
+      }
+      return villagerHomeSpot(villagerId);
     },
 
     // weapons are drawn from the shared Armory (2026-07-20 rework), same as

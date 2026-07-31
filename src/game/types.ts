@@ -99,6 +99,13 @@ export interface PlacedBuilding {
    *  above the homestead (buildings have no terrain to sit "inside" from a
    *  distant viewer's angle). Older saves (pre-field) implicitly mean home. */
   world?: string | null;
+  /** Requested 2026-07-30: "beds... should be exclusively owned by one
+   *  villager, no other npc can take their place." Meaningful only for
+   *  `type: 'bed'` — the villager id who has claimed it (see
+   *  `gameStore.claimBed`). Absent/null = unclaimed. Freed only by
+   *  demolishing the bed; villagers are never removed from the roster once
+   *  recruited, so that is the only real release path. */
+  owner?: string | null;
 }
 
 /** a piece counts as real (interactable, standable, functional) only once
