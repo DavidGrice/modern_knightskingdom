@@ -82,9 +82,15 @@ export default function GameWorld() {
         <CedricSiege />
       </Suspense>
       {buildMode ? <BuildController /> : <PlayerController />}
+      {/* the player's own body stays visible in build mode too — it used to
+          vanish entirely (not just uninteractable) because this was folded
+          into the same condition that swaps the controller/viewmodel, which
+          genuinely are FPS-combat-only */}
+      <Suspense fallback={null}>
+        <PlayerAvatar />
+      </Suspense>
       {!buildMode && (
         <Suspense fallback={null}>
-          <PlayerAvatar />
           <Viewmodel />
           <CombatController />
         </Suspense>

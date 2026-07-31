@@ -748,7 +748,12 @@ function SkillsPanel() {
               {locked ? (
                 <div className="s-locked">Locked — progress the quest line to learn this.</div>
               ) : (
-                <div className="xpbar"><div style={{ width: `${Math.round((cur / next) * 100)}%` }} /></div>
+                <>
+                  <div className="xpbar"><div style={{ width: `${Math.round((cur / next) * 100)}%` }} /></div>
+                  <div style={{ fontSize: 11, color: 'var(--parchment-dark)', marginTop: 3 }}>
+                    {cur} / {next} XP to next level
+                  </div>
+                </>
               )}
             </div>
           </div>

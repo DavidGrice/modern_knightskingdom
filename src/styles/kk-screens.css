@@ -276,14 +276,14 @@
   font: 700 30px/1.05 var(--kk-font-display);
   letter-spacing: -.03em;
   color: var(--kk-text);
-  text-shadow: 0 0 22px rgba(181, 171, 252, .4);
+  text-shadow: 0 0 22px var(--kk-card-accent-border);
 }
 .kk-menu-welcome {
   margin-top: 11px;
   font: 600 10.5px/1 var(--kk-font);
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: var(--kk-a-500);
+  color: var(--kk-card-text-dim);
 }
 .kk-menu-items { margin-top: 34px; display: flex; flex-direction: column; gap: 8px; }
 /* sheared steel plate — the Metalheart signature */
@@ -316,7 +316,7 @@
   font: 700 9.5px/1 var(--kk-font-num);
   color: var(--kk-text-faint);
 }
-.kk-menu-item.primary .kk-menu-key { color: var(--kk-a-500); }
+.kk-menu-item.primary .kk-menu-key { color: var(--kk-card-accent-border); }
 .kk-menu-signout {
   margin-top: auto;
   display: flex;
