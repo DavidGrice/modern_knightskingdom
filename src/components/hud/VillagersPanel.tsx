@@ -14,9 +14,26 @@ import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/dat
 import { ArmorySection } from './NpcEquipPanel';
 import { levelFromXp, xpForLevel } from '@/game/data/ranks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
-import type { DefenderLoadout, ItemId, VillagerJob } from '@/game/types';
+import type { DefenderLoadout, ItemId, Villager, VillagerJob } from '@/game/types';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
+import { villagerConfig } from '@/game/data/villagerLooks';
+import { PortraitFactory, usePortrait } from '../character/VillagerPortrait';
 import Ico from '../ui/Ico';
+
+/** the roster's own real-face portrait (2026-07-30), falling back to the old
+ *  job emoji for the brief window before a look's thumbnail finishes baking */
+function RosterPortrait({ villager, fallbackIcon }: { villager: Villager; fallbackIcon: string }) {
+  const url = usePortrait(villagerConfig(villager));
+  return (
+    <div className="icon">
+      {url ? (
+        <img src={url} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <Ico e={fallbackIcon} />
+      )}
+    </div>
+  );
+}
 
 export default function VillagersPanel() {
   // stabledHorses is a mutable leaf module (no store churn for a per-frame
@@ -54,6 +71,7 @@ export default function VillagersPanel() {
 
   return (
     <div className="game-panel clickable menu-family">
+      <PortraitFactory />
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <MenuTabs />
       <h2>Homestead Roster</h2>
@@ -79,7 +97,7 @@ export default function VillagersPanel() {
         const nextXp = xpForLevel(level + 1) - xpForLevel(level);
         return (
           <div className="recipe-row" key={v.id} style={{ alignItems: 'flex-start' }}>
-            <div className="icon"><Ico e={jobDef.icon} /></div>
+            <RosterPortrait villager={v} fallbackIcon={jobDef.icon} />
             <div className="r-main">
               <div className="r-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {v.name}
