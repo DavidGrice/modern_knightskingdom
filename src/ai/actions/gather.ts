@@ -15,6 +15,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { isWorkingHours } from '@/game/data/villagers';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
+import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
 import type { ItemId, VillagerJob } from '@/game/types';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
@@ -230,9 +231,20 @@ export const GATHER_RESOURCE: Action = {
       curve: boolCurve,
     },
     {
+      // Reported 2026-07-30: AI villagers were harvesting nodes on grounds
+      // the player hadn't unlocked yet — this Action never checked deed
+      // ownership at all, unlike PlayerController's own interact prompt
+      // (`groundOpen(gr, st.landTier)`), the exact "player-side gate never
+      // ported to the AI path" shape already flagged elsewhere in this
+      // project. A node with no `ground` (starter area, open-water fishing,
+      // road-verge trees) stays ungated, matching the player's own rule.
       name: 'target_usable',
       input: (agent, ctx) => {
         if (!ctx.target?.available) return 0;
+        if (ctx.target.ground) {
+          const gr = GROUND_BY_ID[ctx.target.ground];
+          if (gr && !groundOpen(gr, useGameStore.getState().landTier)) return 0;
+        }
         const blockedUntil = agent.bb.blockedTargets.get(ctx.target.id);
         if (blockedUntil === undefined) return 1;
         if (blockedUntil > ctx.now) return 0;

@@ -4100,16 +4100,16 @@ isolation.
   the genuine first-ever parse of a URL `preloadCommonAssets` didn't warm (a piece not in the common
   list, or a cold cache after a fresh deploy) — worth a live trace to confirm rather than assuming the
   old normalization cost is back, since the code shows it shouldn't be.
-- [TODO] **AI villagers harvest resource nodes on grounds the player hasn't unlocked yet.** Requested
-  2026-07-30. The player's own gate is real: `PlayerController.tsx` checks
-  `groundOpen(gr, st.landTier)` (`grounds.ts`) for any node carrying a `ground` field and refuses the
-  interact prompt beyond it ("needs the … deed"). The AI's `GATHER_RESOURCE` action
-  (`src/ai/actions/gather.ts`) has six considerations — capacity, job match, target usable, work hours,
-  threat, proximity/energy — and NONE of them check ground ownership at all; `target_usable` only checks
-  respawn/hit-count availability. Same shape as the already-flagged Might/Craft/Wit-trip-bonus gap: a
-  real player-side rule that was never ported to the newer AI path. Nodes with no `ground` field (the
-  starter area, open-water fishing, road-verge trees) are meant to stay ungated by design — the fix's
-  scope is just nodes that DO carry one.
+[COMPLETE] **AI villagers harvested resource nodes on grounds the player hadn't unlocked yet.**
+  Requested and fixed 2026-07-30. `TargetRegistry.ts`'s `Target` interface gained an optional `ground`
+  field, threaded through from `ResourceNodeState.ground` in `nodeTarget()`. `gather.ts`'s
+  `target_usable` consideration now scores 0 for a target carrying a ground the player's `landTier`
+  doesn't yet cover, via the exact same `groundOpen(gr, landTier)` (`grounds.ts`) the player's own
+  interact prompt already used — no new gate invented, the existing one just reused. Nodes with no
+  `ground` (starter area, open-water fishing, road-verge trees) stay ungated, unaffected. Verified live:
+  a miner positioned at a locked quarry rock node (tier 1, landTier 0) never reserved it across a 4s
+  window; a lumberjack in the same run correctly found and began gathering an ungated road-verge tree
+  instead, confirming the gate blocks locked ground without breaking the AI gather pipeline generally.
 - [TODO] **The merchant (and NPCs generally) cut corners instead of preferring roads; roads have zero
   gameplay effect today.** Requested 2026-07-30. The merchant already paths via the real A* nav grid
   (`Merchant.tsx` calls `navSteer`→`findPath`, not a straight line) — the corner-cutting isn't a missing
@@ -4153,33 +4153,27 @@ isolation.
   canvases (one per row) — no precedent for that anywhere in this codebase, both existing uses are
   single-instance/on-demand — so a baked-thumbnail approach (render once, cache an image) is likely the
   right shape rather than N live 3D previews.
-- [TODO] **A villager's friendly nametag stays pinned at their bed after being switched to defender while
-  asleep.** Requested 2026-07-30 — confirmed real bug, not a display glitch. The nametag is the
-  crosshair aim-card (`src/game/targeting.ts`), which for villagers reads position from the
-  `villagerMobs` leaf module, written every frame ONLY by `Villagers.tsx`'s per-figure render loop.
-  `Villagers.tsx` explicitly filters out defenders (`.filter(v => v.job !== 'defender')`), so the moment
-  `assignJob` flips a villager to `'defender'` (`gameStore.ts`, which only patches `v.job` — touches no
-  position state at all), `Villagers.tsx` stops rendering that id and `villagerMobs[id]` is FROZEN at
-  whatever it last held — the bed's fixed coordinates, if they were asleep at the switch. The actual
-  defender figure moves fine afterward, driven by a completely separate `defenderState` leaf module
-  (`src/game/defenders.ts`) that never writes back into `villagerMobs`. Two independent position stores
-  that never hand off to each other on a job change — the fix needs `assignJob` (or the aim-card lookup
-  itself) to stop trusting `villagerMobs` once a villager becomes a defender, falling back to
-  `defenderState` instead.
-- [TODO] **Phantom "hauled supplies" notifications for villagers who are actually asleep.** Requested
-  2026-07-30 (reported: "Alric" notified as delivering while asleep) — confirmed real, and it's the
-  LEGACY system, not the new AI path. The notify text (`` `${delivered.join(', ')} hauled supplies to
-  the ${toStore ? 'stockpile' : 'stores'}.` ``) lives in `gameStore.ts`'s old `tickVillagers`, which
-  gates only on the GLOBAL clock (`isWorkingHours`, a flat 5:00-20:00 window) and a per-villager
-  `workSignals[v.id]?.active` flag — a flag the AI reasoner clears the instant `SLEEP` interrupts a
-  working villager (sleep has interrupt-priority 3 vs work's 1). Once cleared, `tickVillagers` falls
-  through to its own `villagerAtWork()` fallback, which counts ANY villager standing near the homestead
-  center as "at work" — including one standing at their assigned bed. `tickVillagers` never looks at the
-  AI reasoner's actual activity/sleep state at all, and the timing gap is real: `SLEEP` triggers around
-  18:10 in-game (`worldEnv.night > 0.6`), a full ~2 hours before the old system's 20:00 cutoff. The new
-  AI `haul.ts` path has no equivalent notify at all — this is purely the old timer system still running
-  unaware of what the new one is doing, the same "two systems, not fully unified" shape as other AI gaps
-  already logged in this file.
+[COMPLETE] **A villager's friendly nametag stayed pinned at their bed after being switched to defender
+  while asleep.** Requested and fixed 2026-07-30. `resolveAim` (`targeting.ts`) now takes a
+  `villagerIds: {id, isDefender}[]` list from its caller (`PlayerController.tsx`, derived straight from
+  `st.villagers`) instead of iterating the `villagerMobs` leaf module's own keys — for each id it reads
+  `defenderState[id]` when `isDefender`, `villagerMobs[id]` otherwise, so the position source always
+  matches the villager's REAL current job rather than whichever of the two independent, never-handed-off
+  position stores happened to have data. Verified live: a stale `villagerMobs` entry at (999,999) and a
+  live `defenderState` entry at (0,-10) for the same id — the aim-card resolved to the live defender
+  position, not the stale one.
+[COMPLETE] **Phantom "hauled supplies" notifications for villagers who were actually asleep.** Requested
+  and fixed 2026-07-30 (reported: "Alric" notified as delivering while asleep) — confirmed real, and it
+  was the LEGACY `tickVillagers` system, not the new AI path. Fixed at the source rather than teaching
+  `tickVillagers` a new check: `sleep.ts`'s `SleepActivity` now publishes through the exact same
+  `workSignal` channel `gather.ts`/`haul.ts` already use to tell `tickVillagers` "the AI has real
+  presence here, trust it" (`setWorkSignal(agent.id, {active:true, targetId:null, kind:'sleep'})` on
+  `start()`, cleared on `abort()`). `tickVillagers` already had an unconditional
+  `if (workSignals[v.id]?.active) continue;` guard before ever reaching its own looser
+  `villagerAtWork()` proximity fallback — sleep now trips that same guard, freezing (and correctly
+  resuming) trip progress exactly the way it already did for active gather/haul, with zero new logic in
+  `gameStore.ts` itself. Verified live: notifications stayed empty and progress frozen while the sleep
+  signal was active; clearing it let the same villager complete and notify normally afterward.
 - [TODO] **Beds (and other NPC-specific objects) should be exclusively owned by one villager — needs
   further design exploration before scoping a fix.** Requested 2026-07-30. Today's assignment
   (`assignedSleepSpot()`, `villagers.ts`) is RANK-based and recomputed fresh every call, not a stored

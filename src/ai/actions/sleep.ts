@@ -8,6 +8,7 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { assignedSleepSpot } from '@/game/data/villagers';
+import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 
@@ -19,6 +20,15 @@ class SleepActivity implements Activity {
     const st = useGameStore.getState();
     const spot = assignedSleepSpot(agent.id, st.villagers, st.buildings);
     agent.intent = { type: 'MOVE_TO', position: spot, speed: 'walk', stopDistance: STOP_DISTANCE };
+    // Reported 2026-07-30: gameStore.ts's legacy tickVillagers timer kept
+    // crediting completed hauls (and firing the "hauled supplies" notify)
+    // for villagers actually asleep in bed — it only ever trusted
+    // workSignals for an ACTIVE gather/haul, never learned this reasoner
+    // put someone to bed, so its own proximity fallback just saw "near
+    // home" and assumed working. Same signal channel gather.ts/haul.ts
+    // already publish through, so villagerAtWork() has one place to check
+    // rather than a second parallel "is asleep" query.
+    setWorkSignal(agent.id, { active: true, targetId: null, kind: 'sleep' });
   }
 
   update(_agent: Agent, _dt: number, _now: number): ActivityStatus {
@@ -33,6 +43,7 @@ class SleepActivity implements Activity {
 
   abort(agent: Agent): void {
     agent.intent = null;
+    clearWorkSignal(agent.id);
   }
 }
 
