@@ -24,6 +24,15 @@ function onBattlement(): boolean {
   return playerState.y > EYE_HEIGHT + 0.15;
 }
 
+/** `Target.kind` values (PlayerController.tsx) driven by holding the attack
+ *  button (`combatState.lmbDown`) instead of firing a normal swing/shot —
+ *  construction sites originally, gathering ('tree'/'rock'/'fishing'/'herb')
+ *  added 2026-07-30 for mechanical consistency with how attacking already
+ *  works. The single source both `CombatController`'s mousedown guard (don't
+ *  ALSO swing/fire when the hold is meant for the tool in hand) and
+ *  `PlayerController`'s own prompt/held-input logic read from. */
+export const CLICK_HELD_TARGET_KINDS = new Set(['construct', 'tree', 'rock', 'fishing', 'herb']);
+
 export const combatState = {
   hp: 10,
   maxHp: 10,

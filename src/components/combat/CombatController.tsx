@@ -3,7 +3,7 @@
 // stamina drain/regen, slow health regen, knock-out teleport handling.
 import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME } from '@/game/combat';
+import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_HELD_TARGET_KINDS } from '@/game/combat';
 import { useGameStore } from '@/game/store/gameStore';
 import { crewState } from '@/game/crew';
 
@@ -25,11 +25,13 @@ export default function CombatController() {
         // only swing when the pointer is locked (the first unlocked click locks it)
         if (document.pointerLockElement !== el && st.cameraMode === 'fps') return;
         combatState.lmbDown = true;
-        // aiming at an unbuilt construction site: the hold drives hammer
-        // progress (PlayerController's hold-to-act loop, keyed off lmbDown)
-        // instead of a normal attack swing — holding LMB to build, matching
-        // the same "click and hold" feel as the aerial build-mode placement
-        if (st.targetKind === 'construct') return;
+        // aiming at an unbuilt construction site, or a gatherable node: the
+        // hold drives hammer/tool progress (PlayerController's hold-to-act
+        // loop, keyed off lmbDown) instead of a normal attack swing — holding
+        // LMB to build or gather, matching the same "click and hold" feel as
+        // the aerial build-mode placement (requested 2026-07-30, "for
+        // mechanical consistency" with the way attacking already works)
+        if (CLICK_HELD_TARGET_KINDS.has(st.targetKind ?? '')) return;
         // crewing a siege engine: the attack button looses the ENGINE, not
         // your sword (PlayerController's crew block reads lmbDown)
         if (crewState.engineId) return;

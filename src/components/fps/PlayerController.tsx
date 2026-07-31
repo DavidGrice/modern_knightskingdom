@@ -20,7 +20,7 @@ import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
 import { touchState } from '@/game/touchInput';
-import { combatState, useEnemyStore } from '@/game/combat';
+import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS } from '@/game/combat';
 import { fishingState, startFishing, tickFishing } from '@/game/fishing';
 import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
 import { detonate, fireCannon, quintainHit, ramCheck } from '@/game/siege';
@@ -1284,27 +1284,29 @@ export default function PlayerController() {
         tickFishing(fishNode, dist, st.notify);
       }
 
-      // interaction targeting + hold-E (construction sites are the one
-      // exception — held via LMB/combatState.lmbDown instead, so "building"
-      // uses the same click-and-hold feel as the aerial build-mode
-      // placement and the ordinary attack button, not a separate E prompt)
+      // interaction targeting + hold-E (construction sites AND gathering —
+      // 'tree'/'rock'/'fishing'/'herb', requested 2026-07-30 "for mechanical
+      // consistency" — are held via LMB/combatState.lmbDown instead, so
+      // building and gathering both use the same click-and-hold feel as the
+      // aerial build-mode placement and the ordinary attack button, not a
+      // separate E prompt)
       const target = findTarget(st);
       st.setTargetKind(target ? (target.kind === 'rock' ? 'rock' : target.kind === 'fishing' ? 'fishing' : target.kind) : null);
-      const isConstruct = target?.kind === 'construct';
+      const isClickHeld = !!target && CLICK_HELD_TARGET_KINDS.has(target.kind);
       st.setPrompt(
         target
           ? target.duration > 0
-            ? target.actionable ? `${isConstruct ? 'Hold Click' : 'Hold E'} — ${target.label}` : target.label
+            ? target.actionable ? `${isClickHeld ? 'Hold Click' : 'Hold E'} — ${target.label}` : target.label
             : `E — ${target.label}`
           : null,
       );
       talkCooldown.current = Math.max(0, talkCooldown.current - dt);
-      // keyboard's E no longer drives construction (that's now the attack
-      // button's job, matching the aerial build-mode's click-and-hold feel)
-      // — but gamepad/touch have no separate "hold to build" input mapped,
-      // so their interact button (pad.current, NOT the real keyboard key)
-      // still works for it, same as always
-      const heldInput = isConstruct ? (combatState.lmbDown || pad.current[kb.interact]) : isDown(kb.interact);
+      // keyboard's E no longer drives construction/gathering (that's now the
+      // attack button's job, matching the aerial build-mode's click-and-hold
+      // feel) — but gamepad/touch have no separate "hold to build/gather"
+      // input mapped, so their interact button (pad.current, NOT the real
+      // keyboard key) still works for it, same as always
+      const heldInput = isClickHeld ? (combatState.lmbDown || pad.current[kb.interact]) : isDown(kb.interact);
       if (!heldInput) {
         holdJustCompletedId.current = null;
         holdJustCompletedKind.current = null;
