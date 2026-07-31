@@ -108,6 +108,16 @@ const KIND_XP: Record<EnemyKind, number> = {
 const KIND_XP_RANGED: Record<EnemyKind, number> = {
   skeleton: 24, bandit: 34, gilbert: 50, cedric: 165, storm: 0, royal: 45,
 };
+/** melee damage per hit and attack cooldown, by kind — moved here (were
+ *  local to Enemies.tsx's own AI loop) so the Bestiary can surface the same
+ *  real numbers the fight itself uses, instead of authoring a second,
+ *  driftable copy just for display. */
+export const ATTACK_DMG: Record<EnemyKind, number> = {
+  skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2,
+};
+export const ATTACK_CD: Record<EnemyKind, number> = {
+  skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4,
+};
 /** One possible item in an enemy's purse. `chance` is rolled independently per
  *  entry, then a quantity is picked in [min, max] — so a kill can turn up
  *  nothing, a scrap, or a genuinely good haul. */

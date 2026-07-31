@@ -4100,15 +4100,23 @@ isolation.
   `heldInput`'s own ternary — it reads `combatState.lmbDown` instead of the E key, and its prompt swaps
   to "Hold Click." Extending that same branch to the gather kinds is a small, well-precedented change,
   not a new mechanic.
-- [TODO] **Bestiary entries need real lore — strengths/weaknesses, not just a Vigour number and one
-  flavor line.** Requested 2026-07-30 ("journal entries about strengths, weaknesses, etc."). Today's
-  `BestiaryPanel` shows, per scanned kind: name, Vigour (=max HP), Felled (=lifetime kill count), one
-  hand-authored `BLURB` sentence (inline in the panel component, not in `src/game/data/`), and a
-  "Carries:" loot line. Missing entirely from the UI: attack damage and attack cooldown, even though
-  both already exist as real numbers (`ATTACK_DMG`/`ATTACK_CD` in `Enemies.tsx`) — they're just never
-  surfaced. No dedicated per-kind lore/description data file exists anywhere; real "strengths/
-  weaknesses" text (flees at low HP, elevated-immune, no-damage duel mechanic for Storm, etc.) would
-  need to be authored fresh, though the mechanical HOOKS to describe are all real and already coded.
+[COMPLETE] **Bestiary entries need real lore — strengths/weaknesses, not just a Vigour number and one
+  flavor line.** Requested and fixed 2026-07-30. `ATTACK_DMG`/`ATTACK_CD` (real per-kind numbers, were
+  local to `Enemies.tsx`'s own AI loop) moved to `combat.ts` and exported, next to the kind's other
+  cross-cutting stats (`KIND_HP`/`KIND_LABEL`/`KIND_XP`) — single source of truth, `Enemies.tsx` now
+  imports them instead of holding its own copy. New `src/game/data/bestiary.ts` holds a real per-kind
+  `BESTIARY_LORE` (strength/weakness pair), authored against the actual coded mechanics, not invented:
+  skeleton (lowest Vigour, never spawns solo), bandit (~40% roll ranged at spawn and hold range instead
+  of closing — `combat.ts`'s own spawn roll from this session's ranged-loadout work — and break/flee
+  under 2 Vigour), Gilbert (tougher than his own raiders and, unlike them, absent from the flee
+  condition entirely — never breaks), Cedric (45 Vigour, by far the toughest, but flees everywhere
+  except his own sanctioned final-stand fight — Cedric's Siege), Royal Knight (always sword-and-shield,
+  never rolls ranged, never breaks). `BestiaryPanel` now shows Vigour, a new **Attack** row (dmg / cooldown
+  from the real tables), Felled, the existing blurb, then **Strength**/**Weakness** lines from the new
+  lore file, then Carries — verified live via a d3d11 screenshot with all five recorded kinds, every
+  field rendering correctly. Storm stays excluded from the book (a duel, not a scannable foe, per the
+  panel's own existing `KINDS` list) — its lore entry exists only so the `Record<EnemyKind, …>` stays
+  total, same convention the existing `BLURB` map already used for it.
 - [TODO] **Building placement can stutter on first load — worth a fresh look, most of the known cost is
   already fixed.** Requested 2026-07-30 ("it pauses the game engine while it loads... needs to be
   seamless"). Buildings load via `useGLTF` wrapped in `<Suspense>` (`Buildings.tsx`), which per React/R3F
