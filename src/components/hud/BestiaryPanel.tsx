@@ -9,9 +9,10 @@
 // the same "show the grid empty rather than replacing it with a sentence"
 // rule the UI pack asks for everywhere else.
 import { useGameStore } from '@/game/store/gameStore';
-import { KIND_LABEL, LOOT_TABLES, maxHpOf, type EnemyKind } from '@/game/combat';
+import { KIND_LABEL, LOOT_TABLES, maxHpOf, ATTACK_DMG, ATTACK_CD, type EnemyKind } from '@/game/combat';
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
+import { BESTIARY_LORE } from '@/game/data/bestiary';
 import MenuTabs from './MenuTabs';
 import KkIcon from '../ui/KkIcon';
 
@@ -60,8 +61,15 @@ export default function BestiaryPanel() {
                 {known ? (
                   <>
                     <div className="kk-book-row"><span>Vigour</span><b>{maxHpOf(k)}</b></div>
+                    <div className="kk-book-row"><span>Attack</span><b>{ATTACK_DMG[k]} dmg / {ATTACK_CD[k]}s</b></div>
                     <div className="kk-book-row"><span>Felled</span><b>{kills[k] ?? 0}</b></div>
                     <div className="kk-book-loot">{BLURB[k]}</div>
+                    {BESTIARY_LORE[k].strength && (
+                      <div className="kk-book-loot"><b>Strength:</b> {BESTIARY_LORE[k].strength}</div>
+                    )}
+                    {BESTIARY_LORE[k].weakness && (
+                      <div className="kk-book-loot"><b>Weakness:</b> {BESTIARY_LORE[k].weakness}</div>
+                    )}
                     {loot && <div className="kk-book-loot"><b>Carries:</b> {loot}</div>}
                   </>
                 ) : (

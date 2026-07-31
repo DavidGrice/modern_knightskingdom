@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ArmShield, HeldCrossbow, HeldHalberd, HeldSword } from '../character/Equipment';
-import { useEnemyStore, damagePlayer, resolveDuel, combatState, type EnemyData } from '@/game/combat';
+import { useEnemyStore, damagePlayer, resolveDuel, combatState, ATTACK_DMG, ATTACK_CD, type EnemyData } from '@/game/combat';
 import type { SoundName } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
@@ -75,8 +75,6 @@ const CONFIGS: Record<string, CharacterConfig> = {
   },
 };
 
-const ATTACK_DMG: Record<string, number> = { skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2 };
-const ATTACK_CD: Record<string, number> = { skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4 };
 /** crossbow-armed bandits (`data.ranged`): hold at range and hit-scan
  *  instead of closing to melee, mirroring Defenders.tsx's own bow loadout
  *  (`target.hp -= dmg` applied directly at range-check time, no projectile) */
