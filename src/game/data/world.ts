@@ -15,8 +15,12 @@ export const POND = { x: 52, z: 42, radius: 8 };
 // Phase 18; this one runs tangentially alongside the shore instead.
 export const FISHING_DOCK = {
   startX: 45.5, startZ: 36.5, // shore end (the old sign spot)
-  endX: 49.33, endZ: 33.91,   // far end, along the bank, not toward the center
-  yaw: 2.1643,                // faces along the shoreline from start to end
+  // Requested 2026-07-30: shortened from the original (49.33, 33.91) — still
+  // re-projected onto the same ~8.5m shore radius (not just interpolated
+  // straight-line, which would have drifted a hair toward the water) so the
+  // "goes into the pond" bug two comments up can't come back.
+  endX: 47.44, endZ: 34.81,   // far end, along the bank, not toward the center
+  yaw: 2.2874,                // recomputed to match the shortened endpoint's own direction
   halfWidth: 0.6,
 };
 // Phase 20: the King holds court at his own castle (template-01, The King's
