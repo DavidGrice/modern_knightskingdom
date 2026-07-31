@@ -20,6 +20,7 @@ import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWorld';
 import { dungeonState, type DungeonLayout } from './dungeon';
 import { useGameStore } from './store/gameStore';
+import { onRoad } from './data/road';
 import navgridConfig from '../ai/config/navgrid.json';
 
 // Phase 2, iteration 2.5 — scratch vectors for height rasterization, reused
@@ -47,6 +48,11 @@ const AGENT_RADIUS = 0.55;
 /** a box only blocks if it actually intersects the band a walker occupies */
 const WALK_LOW = 0.55;   // matches PlayerController's STEP_UP: lower is a kerb
 const WALK_HIGH = 1.7;   // above this it is an overhang you pass beneath
+/** Requested 2026-07-30: A* prefers a road cell over open ground by this
+ *  fraction of its ordinary step cost — real enough to route someone onto
+ *  the carriageway for a route that already runs near it, not so cheap a
+ *  route detours far out of the way to touch one. */
+const ROAD_STEP_MULT = 0.6;
 
 const NEIGHBOURS: [number, number, number][] = [
   [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
@@ -126,6 +132,27 @@ export class NavGrid {
   private heights: Float32Array | null = null;
   private heightsStale = true;
   private readonly maxStep: number;
+
+  // Requested 2026-07-30: NPCs should prefer the road over cutting across
+  // grass. The route is fixed for the whole run and only meaningful on the
+  // home grid (road.ts's SIGNPOST-anchored route is a home-world concept —
+  // a destination/dungeon grid's own coordinates could coincidentally fall
+  // in the same numeric range without this meaning anything there), so it is
+  // built once, lazily, rather than per rebuild() call like the (building-
+  // dependent) obstacle grid above it.
+  private roadMask: Uint8Array | null = null;
+
+  private ensureRoadMask(): void {
+    if (this.roadMask || this.region !== null) return;
+    const n = this.dim * this.dim;
+    const mask = new Uint8Array(n);
+    for (let i = 0; i < this.dim; i++) {
+      for (let j = 0; j < this.dim; j++) {
+        if (onRoad(this.toWorldX(i), this.toWorldZ(j))) mask[this.idx(i, j)] = 1;
+      }
+    }
+    this.roadMask = mask;
+  }
 
   // A* scratch, allocated once per instance — see iteration 2.2's own
   // comment (still accurate) on why this is not allocated per search.
@@ -516,6 +543,7 @@ export class NavGrid {
     sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, _layer = 0,
   ): { x: number; z: number }[] | null {
     this.ensureHeights();
+    this.ensureRoadMask();
     if (!this.inBounds(sx, sz)) return null;
     let gx = tx, gz = tz;
     if (!this.inBounds(tx, tz)) {
@@ -592,7 +620,16 @@ export class NavGrid {
         // this never fires there — exactly "skip step checks entirely."
         if (this.heights && Math.abs(this.heights[n] - this.heights[cur]) > this.maxStep) continue;
         this.touch(n);
-        const tentative = this.gScore[cur] + cost;
+        // Requested 2026-07-30: "use roads first, then grass" — a road cell
+        // costs less to step onto, so a route that runs alongside or through
+        // one is preferred over an equally-short line across open ground,
+        // without being SO cheap that a walker detours far out of their way
+        // chasing it. This makes the heuristic below mildly inadmissible
+        // (h() assumes unit cost) in road-heavy stretches — accepted, same
+        // as every other "good enough, not provably optimal" tradeoff this
+        // search already makes (maxNodes cutoff, octile approximation).
+        const stepCost = this.roadMask && this.roadMask[n] ? cost * ROAD_STEP_MULT : cost;
+        const tentative = this.gScore[cur] + stepCost;
         if (tentative >= this.gScore[n]) continue;
         this.cameFrom[n] = cur;
         this.gScore[n] = tentative;

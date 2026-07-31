@@ -4123,23 +4123,40 @@ isolation.
   a miner positioned at a locked quarry rock node (tier 1, landTier 0) never reserved it across a 4s
   window; a lumberjack in the same run correctly found and began gathering an ungated road-verge tree
   instead, confirming the gate blocks locked ground without breaking the AI gather pipeline generally.
-- [TODO] **The merchant (and NPCs generally) cut corners instead of preferring roads; roads have zero
-  gameplay effect today.** Requested 2026-07-30. The merchant already paths via the real A* nav grid
-  (`Merchant.tsx` calls `navSteer`→`findPath`, not a straight line) — the corner-cutting isn't a missing
-  pathing system, it's that `navgrid.ts` has ZERO concept of roads at all (confirmed: no "road" match
-  anywhere in the file). Neighbour costs are uniform; obstacles come only from building collision +
-  terrain exclusions. `road.ts` is purely visual/geometric — tile masks for rendering and placement
-  helpers, no nav-cost or speed-multiplier field. So A* correctly finds the shortest CLEAR route, which
-  is exactly "cuts corners across grass" since a road imposes no preference over open ground. No
-  road-based speed boost exists anywhere in the game today either (grep for it in `playerState.ts`/
-  `PlayerController.tsx` turns up nothing). The requested "roads first, then grass" AI preference needs
-  road tiles to carry a real lower traversal cost in the nav grid (not just rendering data), and a
-  player/NPC speed multiplier while standing on one is a separate, additive mechanic. On "part of our
-  advanced building mechanics for attribute points": there's already a relevant STUB worth reusing
-  rather than duplicating — `attributes.ts`'s `externalCapacityBonus()` always returns 0 today, commented
-  as the unbuilt hook for "a placed building passively grants villager bonuses just by existing on the
-  grid" (this file's own "Building-conferred villager attribute bonuses" entry) — a road speed bonus is
-  the same shape of mechanic and could ride the same eventual hook.
+[COMPLETE] **The merchant (and NPCs generally) cut corners instead of preferring roads; roads have zero
+  gameplay effect today.** Requested and fixed 2026-07-30. `road.ts` gained `distanceToRoad`/`onRoad`,
+  the road's real printed-carriageway geometry (not just "which 12.8m tile," which includes the grassy
+  verge — see the tree-scatter avoidance just above `routeCells()` in `gameStore.ts`): segments built by
+  walking the same raw waypoints `routeCells()` itself gap-fills, but WITHOUT that function's own
+  deduplication — `routeCells()`'s returned array collapses a revisited cell (the branch north off the
+  junction reuses a cell the westward run already passed through), which left two of its "consecutive"
+  entries a full diagonal cell apart; segments built naively from that array would have inserted a
+  phantom shortcut straight across open grass at exactly the branch (caught live during verification,
+  before shipping — a point 5.6m off the true road, well outside its ~2.9m half-width, was reading as
+  "on road" until this was fixed). `NavGrid` (`navgrid.ts`) now precomputes a `roadMask` (home grid only
+  — the route is a homestead-anchored concept, built lazily once since it's static for the run) and
+  discounts a road cell's step cost to 60% in the A* search, so a route that runs alongside the road now
+  prefers it over an equal-length line through open ground. `PlayerController.tsx` also gets a genuine
+  `ROAD_SPEED_MULT` (1.3×) movement bonus while standing on one, out in the open (not mid-destination,
+  not indoors). Verified live: `onRoad()` correctly true on-route/false 5.6m off; a pathfind from near
+  home to the west arm now bends through the junction and hugs the road's own centreline (waypoints at
+  z≈38.5, matching the printed road) instead of cutting a pure diagonal; the computed player `speed`
+  sampled live mid-movement read exactly 5.2 (4 × 1.3) while on the road and 4 while off it, consistently
+  across 5 samples each — a wall-clock "how far did 2s of held key actually cover" race came out noisy
+  under Playwright/swiftshader frame-timing (a testing-environment artifact matching this session's own
+  earlier precedent, not a code issue), so the live-sampled instantaneous speed value is the verification
+  of record here. On "part of our advanced building mechanics for attribute points": today's road is
+  still the one fixed, pre-authored route (no player-placeable road piece exists — confirmed, no `'road'`
+  buildable type in `buildables.ts`), so this reads as a homestead-road perk rather than a per-placement
+  one; `attributes.ts`'s `externalCapacityBonus()` stub (always 0, reserved for "a placed building
+  passively grants a bonus just by existing on the grid") remains the natural home for a future
+  per-tile version of this same mechanic once roads themselves are player-placeable — noted in `road.ts`
+  itself, not just here, so it isn't lost. NPC-side speed bonus (villagers/merchant/raiders also moving
+  faster while on the road, not just the player) is a natural follow-up, not yet wired — `navSteer`'s own
+  spec doc treats its `(agent, tx, tz, dt) → {nx, nz, dist}` signature as fixed, so a caller-side check
+  (each of `Villagers.tsx`/`Merchant.tsx`/`Enemies.tsx`'s own several movement sites reading `onRoad`
+  itself) is the correct next shape, deliberately left out of this pass to keep it to the reported
+  scope (pathing preference + a tangible, testable speed mechanic) rather than touching five more files.
 [COMPLETE] **XP display was missing the actual numbers to next level in the Abilities panel — not a
   real XP/level formula disconnect.** Requested and fixed 2026-07-30. Confirmed `xpForLevel`/`levelFromXp`
   (`ranks.ts`, quadratic curve) are the single source of truth reused consistently everywhere — no

@@ -31,6 +31,7 @@ import { npcMobs } from '@/game/npcMobs';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
+import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
 import { destinationGroundY } from '../world/TemplateWorld';
 import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labOccupyMode } from '@/game/data/labCapabilities';
 import { aimState, resolveAim } from '@/game/targeting';
@@ -1027,7 +1028,12 @@ export default function PlayerController() {
       combatState.sprinting = running;
       if (running) combatState.stamina = Math.max(0, combatState.stamina - 8 * dt);
       const sprint = riding ? galloping : running;
-      const speed = riding ? (galloping ? 11 : 6) : sprint ? 7 : 4;
+      // Requested 2026-07-30, "part of our advanced building mechanics":
+      // the road is home-only (road.ts's route is anchored off the
+      // homestead's own SIGNPOST) and only real out in the open, not inside
+      // a building's interior pocket.
+      const onRoadNow = !st.destination && !st.interior && onRoad(pos.current.x, pos.current.z);
+      const speed = (riding ? (galloping ? 11 : 6) : sprint ? 7 : 4) * (onRoadNow ? ROAD_SPEED_MULT : 1);
       if (isMoving) statsAccum.distanceMeters += speed * dt;
       const p = pos.current;
       let nx = p.x + dir.x * speed * dt;
