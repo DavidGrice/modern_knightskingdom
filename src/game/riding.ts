@@ -6,7 +6,7 @@
 export interface HorseMob {
   id: string;
   url: string; // which catalog model/color this instance renders — carried
-  // into ridingState on mount so the mounted view matches (see RideHorse.tsx)
+  // into ridingState on mount so the mounted view matches (see MountedHorse.tsx)
   x: number; z: number; yaw: number;
   tx: number; tz: number;
   pause: number;

@@ -29,7 +29,7 @@ export default function PlayerAvatar() {
   useFrame(() => {
     const g = holder.current;
     if (g) {
-      g.visible = !playerState.riding; // the RideHorse renderer shows the seated rider
+      g.visible = !playerState.riding; // MountedHorse.tsx shows the seated rider instead
       g.position.set(playerState.x, playerState.y, playerState.z);
       g.rotation.y = playerState.yaw + Math.PI; // model faces +Z; movement forward is -Z
     }

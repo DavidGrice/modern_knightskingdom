@@ -4019,20 +4019,26 @@ isolation.
   tokens. Scoped to text only, per the report; `.kk-menu-item.primary`'s background gradient/icon fill
   (a separate "Metalheart signature" visual, not text color) is untouched. Verified live: `--kk-card-text-dim`
   resolves to four distinct, non-violet values across all four lanes.
-- [TODO] **Riding a horse is a sine-wave bob, not the rig's own gait.** Reported 2026-07-30. Two
-  components render the mount at once, both gated on the same `ridingState.active`: `RideHorse.tsx`
-  loads a plain cloned mesh with no bone hierarchy at all and just offsets the whole group's Y by
-  `Math.abs(Math.sin(bob)) * 0.09` — that's the visible bob the player actually sees, since this mesh
-  sits on top. `MountedHorse.tsx` (mounted alongside it in `GameWorld.tsx`) DOES drive real named
-  leg/head/tail bones from the rig lab via `RiggedProp`, with diagonal-gait phase offsets — but it's
-  still procedural sine under the hood too, just per-bone instead of whole-group, and isn't what
-  renders for the rider. Checked the rig lab itself for richer data before writing this up:
-  `capabilities.json`'s horse entries (`l7339200`/`l7339211`, `rigClass:"horse"`) carry only mount
-  sockets and the same bone-role names (`leg_upper#0..3` etc.) `RiggedProp` already procedurally drives
-  elsewhere — no animation-clip names, no gait metadata, nothing richer sitting unused. The real fix is
-  either dropping `RideHorse.tsx`'s separate unrigged mesh in favor of `MountedHorse.tsx`'s already-
-  rigged one (with its procedural gait tuned to read as a real canter, not a bob), or authoring true
-  clips — neither exists today.
+[COMPLETE] **Riding a horse was a sine-wave bob, not the rig's own gait.** Reported and fixed
+  2026-07-30. `RideHorse.tsx` — the plain cloned, unrigged mesh whose whole-group
+  `Math.abs(Math.sin(bob)) * 0.09` Y-offset was the bob the player actually saw, drawn on top of
+  `MountedHorse.tsx`'s already-correct rigged one — is deleted outright. The seated rider (previously
+  RideHorse.tsx's only real job besides the bob) now lives in `MountedHorse.tsx` itself, at the same
+  local seat offset, riding the one real `RiggedProp`-driven horse with its per-bone `gaitSpeed`
+  animation (leg/head/tail bones from the rig lab, phase-offset for a diagonal gait, sped by real ground
+  displacement — unchanged, already correct, just finally the only mesh rendering). Confirmed via the
+  rig lab itself (`capabilities.json`'s horse entries) that no richer animation-clip data exists to wire
+  up instead — this was always going to be procedural, and `MountedHorse.tsx`'s procedural gait is what
+  survives. Updated three stale code comments elsewhere that pointed at `RideHorse.tsx` by name
+  (`PlayerAvatar.tsx`, `riding.ts`, `Merchant.tsx`).
+
+  Verified: `tsc`/production build clean with the file gone and no dangling references; a live
+  screenshot in FPS view shows the rigged horse's neck/mane with no duplicate mesh and no console
+  errors. **Found but left open, out of scope for this fix**: in third-person camera mode while riding,
+  the player's own standing figure (`PlayerAvatar.tsx`) did not visibly hide the way its own
+  `g.visible = !playerState.riding` line says it should — but that exact line is untouched, original
+  code (only its comment changed), so this is a pre-existing gap this pass surfaced, not a regression it
+  introduced. Worth its own look.
 [COMPLETE] **The player's own avatar disappeared in build mode.** Reported and fixed 2026-07-30.
   `GameWorld.tsx` now mounts `<PlayerAvatar />` unconditionally, split out of the `!buildMode` block that
   correctly still gates `<Viewmodel />`/`<CombatController />` (genuinely FPS-combat-only). Verified live:
@@ -4222,3 +4228,11 @@ isolation.
   configuration" for a frame or two. Needs a live repro (ideally a screenshot or a description of exactly
   when it happens — job change, day/night watch-shift handoff, recovering from downed) before it can be
   scoped as a real fix rather than a guess.
+- [TODO] **The player's own standing figure doesn't hide in third-person while riding.** Found
+  2026-07-30 while fixing the horse-riding sine-bob (above), not something that regressed from that fix
+  — `PlayerAvatar.tsx`'s own `g.visible = !playerState.riding` line is untouched, original code. Live
+  testing with `ridingState.active`/`playerState.riding` both confirmed `true` still showed the normal
+  standing figure in a third-person screenshot, with the mounted horse mesh not visibly rendering in
+  that same shot either. Not chased further this pass (out of scope, and the console-only test rig used
+  to force riding state may not fully match what a real in-game mount does) — worth a real repro by
+  hand, riding a real wild horse and swapping to third person, before diagnosing further.
