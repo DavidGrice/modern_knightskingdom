@@ -38,6 +38,13 @@ export interface Target {
    *  this — always undefined for a node target, and never read for one,
    *  since every node's own anchor rule is 'radial'. */
   rot?: 0 | 1 | 2 | 3;
+  /** node: the named ground it seeded in (ResourceNodeState.ground),
+   *  absent for a node with none (starter area, open-water fishing,
+   *  road-verge trees — all worked without a deed by design) and always
+   *  absent for a building target. Threaded through so gather_resource can
+   *  gate on deed ownership the same way PlayerController already does —
+   *  see that action's own `target_usable` consideration. */
+  ground?: string;
 }
 
 function nodeTarget(n: ResourceNodeState): Target {
@@ -45,6 +52,7 @@ function nodeTarget(n: ResourceNodeState): Target {
     id: `node:${n.id}`, source: 'node', kind: n.kind, x: n.x, z: n.z, region: null,
     available: n.respawnAt === null && n.hitsLeft > 0,
     anchorRule: anchorRuleFor('node', n.kind),
+    ground: n.ground,
   };
 }
 

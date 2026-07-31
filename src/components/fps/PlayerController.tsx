@@ -1385,6 +1385,7 @@ export default function PlayerController() {
           (id) => NPC_BY_ID[id]?.name ?? 'Stranger',
           (id) => st.villagers.find((v) => v.id === id)?.name ?? 'Villager',
           (k) => st.bestiary.includes(k),
+          st.villagers.map((v) => ({ id: v.id, isDefender: v.job === 'defender' })),
         );
       }
     }

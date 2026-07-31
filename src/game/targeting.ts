@@ -11,6 +11,7 @@
 import { hitTestCharacter, hitboxes } from './hitbox';
 import { npcMobs } from './npcMobs';
 import { villagerMobs } from './villagerMobs';
+import { defenderState } from './defenders';
 
 export type Standing = 'hostile' | 'friendly' | 'neutral';
 
@@ -83,6 +84,15 @@ export function resolveAim(
   npcName: (id: string) => string,
   villagerName: (id: string) => string,
   isKnown: (kind: string) => boolean,
+  /** every current villager id, tagged with whether they're presently a
+   *  defender — Villagers.tsx and Defenders.tsx are two entirely separate
+   *  render trees with their own live position store (villagerMobs vs
+   *  defenderState), and only ONE of them is actually being written to for
+   *  a given villager right now. Reading the wrong one for a villager who
+   *  just switched jobs is what pinned a nametag at their bed forever after
+   *  becoming a defender — the id alone isn't enough to know which store is
+   *  live, so the caller (which has the real Villager.job) says so. */
+  villagerIds: { id: string; isDefender: boolean }[] = [],
 ): AimTarget | null {
   let best: AimTarget | null = null;
   let bestT = Infinity;
@@ -127,12 +137,14 @@ export function resolveAim(
       x: m.x, z: m.z, height: FRIENDLY_HEIGHT };
   }
 
-  for (const [id, m] of Object.entries(villagerMobs)) {
-    const t = hitCylinder(ox, oy, oz, dx, dy, dz, m.x, m.z, FRIENDLY_RADIUS, FRIENDLY_HEIGHT);
+  for (const { id, isDefender } of villagerIds) {
+    const pos = isDefender ? defenderState[id] : villagerMobs[id];
+    if (!pos) continue;
+    const t = hitCylinder(ox, oy, oz, dx, dy, dz, pos.x, pos.z, FRIENDLY_RADIUS, FRIENDLY_HEIGHT);
     if (t === null || t >= bestT) continue;
     bestT = t;
     best = { key: `villager:${id}`, kind: 'villager', name: villagerName(id), standing: 'friendly', distance: t,
-      x: m.x, z: m.z, height: FRIENDLY_HEIGHT };
+      x: pos.x, z: pos.z, height: FRIENDLY_HEIGHT };
   }
 
   return best;
