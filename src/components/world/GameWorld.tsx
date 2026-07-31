@@ -37,7 +37,6 @@ import Enemies from '../combat/Enemies';
 import RaiderRam from '../combat/RaiderRam';
 import Cannonballs from '../combat/Cannonballs';
 import Bolts from '../combat/Bolts';
-import RideHorse from '../fps/RideHorse';
 import AiRuntime from '@/ai/AiRuntime';
 
 export default function GameWorld() {
@@ -103,7 +102,6 @@ export default function GameWorld() {
       <Bolts />
       {/* NPC_AI_SPEC §2 — steps the agent scheduler; renders nothing */}
       <AiRuntime />
-      {!buildMode && <RideHorse />}
     </>
   );
 }

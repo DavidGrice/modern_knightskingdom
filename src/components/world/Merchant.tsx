@@ -58,7 +58,7 @@ function stageFor(time: number): Stage {
 
 // the merchant's "cart": a yoked two-horse team hauling a shared tow-bar with
 // a chest slung between them (oc6095b3) — same source model, normalized to
-// the same height as a rideable horse (see RideHorse.tsx) so the pair reads
+// the same height as a rideable horse (see MountedHorse.tsx) so the pair reads
 // at true horse scale. Parented under the same group as the merchant, so it
 // travels with him for free — "along with the horses" needs no extra code.
 // Reported 2026-07-28: the team stood frozen mid-stride while walking. The
