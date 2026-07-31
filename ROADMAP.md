@@ -4008,3 +4008,213 @@ isolation.
   trace, not assumed. Not a bug (the trip genuinely finishes, verified), but worth a deliberate call
   later: is "distance now has a real, felt cost" the intended balance change, or does target scoring
   want a stronger nearest-node bias than proximity alone gives it today.
+
+## Bugs logged 2026-07-30, not yet fixed
+
+[COMPLETE] **`.kk-menu-welcome` (and a couple neighbors) leaked the raw violet accent instead of the
+  themed one.** Reported and fixed 2026-07-30. `.kk-menu-welcome`'s `color` now routes through
+  `var(--kk-card-text-dim)` (matching `.kk-plaque-tag`'s own small-caps label treatment), `.kk-menu-word`'s
+  text-shadow glow and `.kk-menu-item.primary .kk-menu-key`'s color now route through
+  `var(--kk-card-accent-border)` — all per-lane instead of the fixed violet `--kk-a-400`/`--kk-a-500`
+  tokens. Scoped to text only, per the report; `.kk-menu-item.primary`'s background gradient/icon fill
+  (a separate "Metalheart signature" visual, not text color) is untouched. Verified live: `--kk-card-text-dim`
+  resolves to four distinct, non-violet values across all four lanes.
+- [TODO] **Riding a horse is a sine-wave bob, not the rig's own gait.** Reported 2026-07-30. Two
+  components render the mount at once, both gated on the same `ridingState.active`: `RideHorse.tsx`
+  loads a plain cloned mesh with no bone hierarchy at all and just offsets the whole group's Y by
+  `Math.abs(Math.sin(bob)) * 0.09` — that's the visible bob the player actually sees, since this mesh
+  sits on top. `MountedHorse.tsx` (mounted alongside it in `GameWorld.tsx`) DOES drive real named
+  leg/head/tail bones from the rig lab via `RiggedProp`, with diagonal-gait phase offsets — but it's
+  still procedural sine under the hood too, just per-bone instead of whole-group, and isn't what
+  renders for the rider. Checked the rig lab itself for richer data before writing this up:
+  `capabilities.json`'s horse entries (`l7339200`/`l7339211`, `rigClass:"horse"`) carry only mount
+  sockets and the same bone-role names (`leg_upper#0..3` etc.) `RiggedProp` already procedurally drives
+  elsewhere — no animation-clip names, no gait metadata, nothing richer sitting unused. The real fix is
+  either dropping `RideHorse.tsx`'s separate unrigged mesh in favor of `MountedHorse.tsx`'s already-
+  rigged one (with its procedural gait tuned to read as a real canter, not a bob), or authoring true
+  clips — neither exists today.
+[COMPLETE] **The player's own avatar disappeared in build mode.** Reported and fixed 2026-07-30.
+  `GameWorld.tsx` now mounts `<PlayerAvatar />` unconditionally, split out of the `!buildMode` block that
+  correctly still gates `<Viewmodel />`/`<CombatController />` (genuinely FPS-combat-only). Verified live:
+  no errors entering/exiting build mode with the avatar mounted throughout.
+[COMPLETE] **Herb patches stayed bright through dark, rainy weather — a fixed emissive floor that
+  ignored rain.** Reported and fixed 2026-07-30. `InstancedProp` now runs a `useFrame` that rescales
+  every self-lit sub-mesh's `emissiveIntensity` each frame by the same `rainDim = 1 - worldEnv.rain*0.45`
+  formula `DayNight.tsx` already uses for light sources, instead of the fixed constant baked in once at
+  material-creation time. Night alone is deliberately untouched — the O6 night-visibility purpose still
+  holds — only rain now dims the glow, matching everything around it.
+- [TODO] **Named grounds are clustered north, leaving no clear direction for kingdom expansion.**
+  Requested 2026-07-30. Coordinates (`grounds.ts`, homestead center is `(0,0)` per `BUILD_REGION`):
+  Home Grove (30,62, SE), Northwood Stand (-72,8, W), Herb Meadow (-62,-46, NW), Old Quarry (62,-6, E),
+  Iron Seam (62,-48, NE), Deepwood (0,-64, N). Compass convention confirmed two independent ways
+  (`keep.ts`'s North Wall socket at `z:-H+1.2` vs South at `z:H-1.2`; `Compass.tsx`'s bearing math) —
+  **-Z is north**, so Herb Meadow/Old Quarry/Iron Seam/Deepwood (the whole tier-0→3 ground progression)
+  all sit on the north side; only Home Grove and Northwood Stand don't. Worth flagging: the EARLIER
+  "Grounds became grid sections" entry (marked COMPLETE elsewhere in this file) describes these same
+  coordinates with inverted directions ("Herb Meadow south-west", "Deepwood due south") — `road.ts` has
+  the identical inversion in its own comments — so that prior pass's directional reasoning was already
+  backwards and never actually vacated south. South/southwest isn't free either, though: `SPAWN`,
+  `SIGNPOST`, the pond/fishing dock, the starter-village huts, and the road route itself all live there
+  (`world.ts`/`road.ts`) — no direction is actually clear today. `LAND_TIERS`/`BUILD_REGION` grow as a
+  symmetric square about the origin with no directional-growth mechanic at all, so this is really two
+  problems: relocating the grounds AND deciding what "expansion" should mean directionally before the
+  empire system (9 disjoint `WORLD_DESTINATIONS`, unaffected by any of this) gets built out further.
+- [TODO] **Enemy NPCs need ranged weapons and shields, not just swords/halberds.** Requested 2026-07-30.
+  Today (`Enemies.tsx`): bandit/gilbert carry `HeldHalberd`; royal/cedric/skeleton carry `HeldSword`;
+  only royal/cedric also carry `ArmShield`. No enemy kind uses any ranged weapon — there's no `HeldBow`
+  component at all, and `HeldCrossbow` exists only for player-allied defenders (`Defenders.tsx`, backed
+  by real ranged AI: `BOW_RANGE`, its own attack cooldown/damage). Enemies are 100% melee today — the
+  whole enemy state machine only has `chase`/`attack` states driving a sword-swing animation; there is
+  no enemy-side bolt/arrow-firing behavior at all (`combat.ts`'s `fireBolt`/`stepBolt` are player-only).
+  So this is genuinely two asks, not one: the holdable-prop visual swap, AND new ranged AI (aim, fire
+  cooldown, a projectile) for whichever kinds get it. Bandit/Gilbert's own donor rig already has a
+  MOLDED crossbow baked in (`npcs.ts`), currently thrown away via `keepProps:false` because they already
+  carry a halberd — a crossbow-bandit variant needs zero new art, just the AI and a loadout choice.
+- [TODO] **Hold left-click to gather, matching how attacking already works.** Requested 2026-07-30, "for
+  mechanical consistency." Today, gathering (`tree`/`rock`/`fishing`/`herb`) is hold-E
+  (`PlayerController.tsx`'s `heldInput` reads `isDown(kb.interact)`, prompt literally reads "Hold E —
+  …"), while attacking is a discrete left-click swing (`CombatController.tsx`'s `onMouseDown` →
+  `playerAttack()`, gated by cooldown, no hold). There is already a working precedent for exactly the
+  requested pattern: `Target.kind === 'construct'` (an unbuilt site) is the ONE existing exception in
+  `heldInput`'s own ternary — it reads `combatState.lmbDown` instead of the E key, and its prompt swaps
+  to "Hold Click." Extending that same branch to the gather kinds is a small, well-precedented change,
+  not a new mechanic.
+- [TODO] **Bestiary entries need real lore — strengths/weaknesses, not just a Vigour number and one
+  flavor line.** Requested 2026-07-30 ("journal entries about strengths, weaknesses, etc."). Today's
+  `BestiaryPanel` shows, per scanned kind: name, Vigour (=max HP), Felled (=lifetime kill count), one
+  hand-authored `BLURB` sentence (inline in the panel component, not in `src/game/data/`), and a
+  "Carries:" loot line. Missing entirely from the UI: attack damage and attack cooldown, even though
+  both already exist as real numbers (`ATTACK_DMG`/`ATTACK_CD` in `Enemies.tsx`) — they're just never
+  surfaced. No dedicated per-kind lore/description data file exists anywhere; real "strengths/
+  weaknesses" text (flees at low HP, elevated-immune, no-damage duel mechanic for Storm, etc.) would
+  need to be authored fresh, though the mechanical HOOKS to describe are all real and already coded.
+- [TODO] **Building placement can stutter on first load — worth a fresh look, most of the known cost is
+  already fixed.** Requested 2026-07-30 ("it pauses the game engine while it loads... needs to be
+  seamless"). Buildings load via `useGLTF` wrapped in `<Suspense>` (`Buildings.tsx`), which per React/R3F
+  semantics shows a fallback rather than blocking the frame loop outright, and `preloadCommonAssets()`
+  (called once on mount from `GameScreen.tsx`) already warms every buildable's GLTF ahead of placement
+  via `useGLTF.preload`. The actual synchronous stall this used to have — a full clone + two `Box3`
+  passes + shadow/normal traversal + alpha-mask check, run fresh on EVERY placement instance — was
+  already fixed by `normalizedPropCache` in `PropModel.tsx` (see that commit's own message, "Cache
+  normalized props across instances, not per-component"). Whatever's still being felt is most likely
+  the genuine first-ever parse of a URL `preloadCommonAssets` didn't warm (a piece not in the common
+  list, or a cold cache after a fresh deploy) — worth a live trace to confirm rather than assuming the
+  old normalization cost is back, since the code shows it shouldn't be.
+- [TODO] **AI villagers harvest resource nodes on grounds the player hasn't unlocked yet.** Requested
+  2026-07-30. The player's own gate is real: `PlayerController.tsx` checks
+  `groundOpen(gr, st.landTier)` (`grounds.ts`) for any node carrying a `ground` field and refuses the
+  interact prompt beyond it ("needs the … deed"). The AI's `GATHER_RESOURCE` action
+  (`src/ai/actions/gather.ts`) has six considerations — capacity, job match, target usable, work hours,
+  threat, proximity/energy — and NONE of them check ground ownership at all; `target_usable` only checks
+  respawn/hit-count availability. Same shape as the already-flagged Might/Craft/Wit-trip-bonus gap: a
+  real player-side rule that was never ported to the newer AI path. Nodes with no `ground` field (the
+  starter area, open-water fishing, road-verge trees) are meant to stay ungated by design — the fix's
+  scope is just nodes that DO carry one.
+- [TODO] **The merchant (and NPCs generally) cut corners instead of preferring roads; roads have zero
+  gameplay effect today.** Requested 2026-07-30. The merchant already paths via the real A* nav grid
+  (`Merchant.tsx` calls `navSteer`→`findPath`, not a straight line) — the corner-cutting isn't a missing
+  pathing system, it's that `navgrid.ts` has ZERO concept of roads at all (confirmed: no "road" match
+  anywhere in the file). Neighbour costs are uniform; obstacles come only from building collision +
+  terrain exclusions. `road.ts` is purely visual/geometric — tile masks for rendering and placement
+  helpers, no nav-cost or speed-multiplier field. So A* correctly finds the shortest CLEAR route, which
+  is exactly "cuts corners across grass" since a road imposes no preference over open ground. No
+  road-based speed boost exists anywhere in the game today either (grep for it in `playerState.ts`/
+  `PlayerController.tsx` turns up nothing). The requested "roads first, then grass" AI preference needs
+  road tiles to carry a real lower traversal cost in the nav grid (not just rendering data), and a
+  player/NPC speed multiplier while standing on one is a separate, additive mechanic. On "part of our
+  advanced building mechanics for attribute points": there's already a relevant STUB worth reusing
+  rather than duplicating — `attributes.ts`'s `externalCapacityBonus()` always returns 0 today, commented
+  as the unbuilt hook for "a placed building passively grants villager bonuses just by existing on the
+  grid" (this file's own "Building-conferred villager attribute bonuses" entry) — a road speed bonus is
+  the same shape of mechanic and could ride the same eventual hook.
+[COMPLETE] **XP display was missing the actual numbers to next level in the Abilities panel — not a
+  real XP/level formula disconnect.** Requested and fixed 2026-07-30. Confirmed `xpForLevel`/`levelFromXp`
+  (`ranks.ts`, quadratic curve) are the single source of truth reused consistently everywhere — no
+  formula bug anywhere. Correction to this entry's own first draft: `VillagersPanel.tsx` does NOT
+  actually render `curXp`/`nextXp` as text either (checked directly while fixing this) — it has the exact
+  same "computed but only used for bar width" gap `SkillsPanel` had. Fixed only `SkillsPanel` (the panel
+  actually reported), adding a `{cur} / {next} XP to next level` line under each skill's bar.
+[COMPLETE] **A crafted shield never appeared in the FPS viewmodel's left hand.** Requested and fixed
+  2026-07-30. `Viewmodel.tsx` now derives `hasShield` from inventory ownership (same convention as the
+  sword branch) and renders a new `CarriedShield` — lowered, at-rest, sharing `BlockShield`'s underlying
+  `RealShield`/fallback geometry via an extracted `ShieldFace` — on the off-hand arm whenever a shield is
+  owned and the player isn't actively blocking (which still swaps in the existing raised `BlockShield`
+  unchanged). Verified live with a screenshot: shield now visibly carried in the left hand alongside a
+  drawn sword.
+- [TODO] **Homestead roster shows generic job icons instead of each villager's real face.** Requested
+  2026-07-30. Today (`VillagersPanel.tsx`) each row's "portrait" is just `<Ico e={jobDef.icon}/>` — the
+  assigned JOB's emoji, unrelated to the villager's actual appearance; `v.look`/`villagerLooks.ts` data
+  is never read here at all. A real portrait system already exists — `RotatablePreview.tsx` (a live,
+  spinning 3D `RiggedFigure` preview in its own Canvas) — reused today in the Appearance panel and in
+  `NpcEquipPanel`'s per-villager equip screen, always ONE instance at a time. Every villager has enough
+  real data for a genuine portrait (`villagerConfig(v)`/`defaultLookOf`, `villagerLooks.ts`, the same
+  `CharacterConfig` shape `RotatablePreview` already consumes). Worth flagging before building this:
+  embedding `RotatablePreview` directly into the roster list would mean N simultaneous live WebGL
+  canvases (one per row) — no precedent for that anywhere in this codebase, both existing uses are
+  single-instance/on-demand — so a baked-thumbnail approach (render once, cache an image) is likely the
+  right shape rather than N live 3D previews.
+- [TODO] **A villager's friendly nametag stays pinned at their bed after being switched to defender while
+  asleep.** Requested 2026-07-30 — confirmed real bug, not a display glitch. The nametag is the
+  crosshair aim-card (`src/game/targeting.ts`), which for villagers reads position from the
+  `villagerMobs` leaf module, written every frame ONLY by `Villagers.tsx`'s per-figure render loop.
+  `Villagers.tsx` explicitly filters out defenders (`.filter(v => v.job !== 'defender')`), so the moment
+  `assignJob` flips a villager to `'defender'` (`gameStore.ts`, which only patches `v.job` — touches no
+  position state at all), `Villagers.tsx` stops rendering that id and `villagerMobs[id]` is FROZEN at
+  whatever it last held — the bed's fixed coordinates, if they were asleep at the switch. The actual
+  defender figure moves fine afterward, driven by a completely separate `defenderState` leaf module
+  (`src/game/defenders.ts`) that never writes back into `villagerMobs`. Two independent position stores
+  that never hand off to each other on a job change — the fix needs `assignJob` (or the aim-card lookup
+  itself) to stop trusting `villagerMobs` once a villager becomes a defender, falling back to
+  `defenderState` instead.
+- [TODO] **Phantom "hauled supplies" notifications for villagers who are actually asleep.** Requested
+  2026-07-30 (reported: "Alric" notified as delivering while asleep) — confirmed real, and it's the
+  LEGACY system, not the new AI path. The notify text (`` `${delivered.join(', ')} hauled supplies to
+  the ${toStore ? 'stockpile' : 'stores'}.` ``) lives in `gameStore.ts`'s old `tickVillagers`, which
+  gates only on the GLOBAL clock (`isWorkingHours`, a flat 5:00-20:00 window) and a per-villager
+  `workSignals[v.id]?.active` flag — a flag the AI reasoner clears the instant `SLEEP` interrupts a
+  working villager (sleep has interrupt-priority 3 vs work's 1). Once cleared, `tickVillagers` falls
+  through to its own `villagerAtWork()` fallback, which counts ANY villager standing near the homestead
+  center as "at work" — including one standing at their assigned bed. `tickVillagers` never looks at the
+  AI reasoner's actual activity/sleep state at all, and the timing gap is real: `SLEEP` triggers around
+  18:10 in-game (`worldEnv.night > 0.6`), a full ~2 hours before the old system's 20:00 cutoff. The new
+  AI `haul.ts` path has no equivalent notify at all — this is purely the old timer system still running
+  unaware of what the new one is doing, the same "two systems, not fully unified" shape as other AI gaps
+  already logged in this file.
+- [TODO] **Beds (and other NPC-specific objects) should be exclusively owned by one villager — needs
+  further design exploration before scoping a fix.** Requested 2026-07-30. Today's assignment
+  (`assignedSleepSpot()`, `villagers.ts`) is RANK-based and recomputed fresh every call, not a stored
+  relationship: it filters beds and non-defender villagers, then maps `beds[villagerRosterIndex]` — no
+  `owner` field exists anywhere in `PlacedBuilding` (`types.ts`) or on `Villager`. Defenders get a
+  second, independent version of the same rank math off the OPPOSITE end of the same bed array
+  (`Defenders.tsx`), a deliberate day/night-shift split. Recruiting is loosely gated on bed COUNT
+  (`villagerRequirement(n).beds = n` before the Nth recruit is allowed), but nothing re-checks after —
+  demolishing a bed, reordering the roster, or a job switch can all silently reshuffle who's "assigned"
+  to what, with zero real conflict resolution. Logging this now as a real design gap; the actual
+  ownership model (persisted per-bed assignment? claimed-on-first-sleep? explicit UI assignment?) still
+  needs deciding before implementation.
+- [TODO] **Fishing should work from anywhere near the pond, not just one dock-end point — and the dock
+  itself should be shorter.** Requested 2026-07-30. Today there is exactly ONE fishing node in the whole
+  game (`gameStore.ts`, id `'fishspot'`), sitting at the dock's far end (`FISHING_DOCK.endX/endZ`), and
+  the interact check is ordinary proximity-plus-facing (`PlayerController.tsx`'s generic `consider()`
+  helper — within `INTERACT_RANGE` 3.4m, and facing within ~63° of the point) — not a raycast against
+  the dock mesh, but still just the one point, so the player must specifically walk out onto the dock
+  rather than fishing from any pond-adjacent spot. `POND` itself (`world.ts`, radius 8) is never used as
+  a fishing zone. The dock is procedural, not an asset (`ResourceNodes.tsx`'s `FishingSpot`): deck plank
+  length ≈ `DOCK_LENGTH` (~4.6m, derived from `FISHING_DOCK.start/end`), posts, and a railing — all
+  primitive `boxGeometry`/`cylinderGeometry` calls there, exactly what a "make it shorter" pass would
+  shrink. Widening to a real "action sphere" means adding proximity-to-`POND`-edge as a second
+  interactable zone alongside (or instead of) the single `fishspot` node.
+- [TODO] **A named defender ("Beda") appears to change appearance/configuration discontinuously between
+  standing at their guard post and "spawning."** Requested 2026-07-30 — repro/exact meaning still needs
+  pinning down, logging what's already ruled out rather than a diagnosis. Checked the one obvious
+  suspect first: both `Defenders.tsx` and `Villagers.tsx` derive a figure's look through the SAME shared
+  `villagerConfig(villager)` (`villagerLooks.ts`) — so this is not a look-derivation mismatch between the
+  two rendering paths (head/body donor, colors are consistent). Most likely candidates left, given
+  `Villagers.tsx`/`Defenders.tsx` are two entirely separate component trees (confirmed elsewhere in this
+  batch, re: the stale-nametag bug) with their OWN `RiggedFigure` mounts: (a) a loadout/equipment swap
+  when a villager's station assignment changes (bare-handed vs armed reads very differently at a
+  glance), or (b) a remount flash — switching which tree renders a given villager id can force a fresh
+  `RiggedFigure` load from a default pose before its real config settles, reading as "changes complete
+  configuration" for a frame or two. Needs a live repro (ideally a screenshot or a description of exactly
+  when it happens — job change, day/night watch-shift handoff, recovering from downed) before it can be
+  scoped as a real fix rather than a guess.

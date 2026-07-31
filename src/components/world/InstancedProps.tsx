@@ -10,7 +10,13 @@
 // draw call per node.
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 import { useGLTF, Instances, Instance } from '@react-three/drei';
+import { worldEnv } from '@/game/env';
+
+/** O6's self-illumination baseline — see its own comment below for why it
+ *  exists at all. */
+const SELF_LIT_INTENSITY = 0.18;
 
 interface SubMesh {
   geometry: THREE.BufferGeometry;
@@ -59,7 +65,7 @@ function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boole
       // the difference that actually matters at night.
       if (selfLit && material.emissive) {
         material.emissive.copy(material.color);
-        material.emissiveIntensity = 0.18;
+        material.emissiveIntensity = SELF_LIT_INTENSITY;
       }
       subMeshes.push({ geometry, material });
     });
@@ -112,6 +118,22 @@ export function InstancedProp({
   // reserved, stays reserved.
   const maxSeen = useRef(0);
   maxSeen.current = Math.max(maxSeen.current, nodes.length);
+  // Reported 2026-07-30: self-lit props (herb patches) stayed at full
+  // brightness through dark, rainy weather — the fixed intensity above was
+  // tuned to be subtle against FULL daylight ambient, but never dims back
+  // down when rain knocks that ambient down too (DayNight.tsx's own
+  // `rainDim` only ever touches light sources, never this emissive term).
+  // Scaled by the same rainDim formula here so it fades with the weather
+  // instead of sitting on top of it — night alone is untouched, since
+  // staying findable after dark is the one thing this was built for.
+  useFrame(() => {
+    if (!selfLit) return;
+    const rainDim = 1 - worldEnv.rain * 0.45;
+    for (const sm of subMeshes) {
+      const mat = sm.material as THREE.MeshStandardMaterial;
+      if (mat.emissive) mat.emissiveIntensity = SELF_LIT_INTENSITY * rainDim;
+    }
+  });
   if (nodes.length === 0) return null;
   return (
     <>

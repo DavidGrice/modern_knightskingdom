@@ -194,30 +194,44 @@ function Sword() {
   );
 }
 
+function ShieldFace() {
+  return (
+    <>
+      <mesh>
+        <boxGeometry args={[0.34, 0.44, 0.04]} />
+        <meshStandardMaterial color="#9aa0aa" metalness={0.4} roughness={0.45} />
+      </mesh>
+      <mesh position-z={0.015}>
+        <boxGeometry args={[0.26, 0.34, 0.02]} />
+        <meshStandardMaterial color="#b03a2e" roughness={0.7} />
+      </mesh>
+      <mesh position-z={0.035}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshStandardMaterial color="#c8a43c" metalness={0.7} roughness={0.3} />
+      </mesh>
+    </>
+  );
+}
+
 function BlockShield() {
   return (
     // +Math.PI from the third-person ArmShield's outward-facing angle: the
     // wielder's own eyes see the INSIDE of a raised shield (the arm strap/
     // hook), not the painted lion face an enemy in front of them would see.
     <group rotation={[0.1, 0.5 + Math.PI, 0]}>
-      <RealShield
-        fallback={
-          <>
-            <mesh>
-              <boxGeometry args={[0.34, 0.44, 0.04]} />
-              <meshStandardMaterial color="#9aa0aa" metalness={0.4} roughness={0.45} />
-            </mesh>
-            <mesh position-z={0.015}>
-              <boxGeometry args={[0.26, 0.34, 0.02]} />
-              <meshStandardMaterial color="#b03a2e" roughness={0.7} />
-            </mesh>
-            <mesh position-z={0.035}>
-              <sphereGeometry args={[0.05, 8, 8]} />
-              <meshStandardMaterial color="#c8a43c" metalness={0.7} roughness={0.3} />
-            </mesh>
-          </>
-        }
-      />
+      <RealShield fallback={<ShieldFace />} />
+    </group>
+  );
+}
+
+/** A crafted shield used to only ever appear while actively blocking — owning
+ *  one did nothing to the view otherwise. Carried at rest on the off-hand
+ *  arm instead, angled down and in rather than raised flat to the camera, so
+ *  it reads as "carried" and not "about to block." */
+function CarriedShield() {
+  return (
+    <group position={[0, -0.1, 0.05]} rotation={[0.55, 2.35, 0.35]} scale={0.7}>
+      <RealShield fallback={<ShieldFace />} />
     </group>
   );
 }
@@ -390,6 +404,9 @@ export default function Viewmodel() {
     if ((inventory.sword ?? 0) > 0) return 'sword';
     return 'fist';
   }, [lanceMode, rangedMode, bowMode, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
+  // ownership-based, same convention as `tool`'s sword branch — a crafted
+  // shield should be visibly carried, not only appear once you block with it
+  const hasShield = (inventory.shield ?? 0) > 0;
 
   useFrame((_, dt) => {
     const o = outer.current;
@@ -529,6 +546,7 @@ export default function Viewmodel() {
       {arms && !blockShield && (
         <group ref={offhand} position={[-OFFHAND_X, HAND_Y, -0.78]}>
           <RigArm arm={arms.left} side={1} />
+          {hasShield && <CarriedShield />}
         </group>
       )}
       {/* raised shield fills the shield-hand side of the view while blocking.
