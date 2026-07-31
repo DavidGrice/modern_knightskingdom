@@ -34,39 +34,70 @@ export interface Ground {
   lockedHint: string;
 }
 
+// Requested 2026-07-30: four of the original six sat on the north side
+// (-Z), confirmed two independent ways (`keep.ts`'s wall sockets,
+// `Compass.tsx`'s own bearing math) — leaving the whole south half, where
+// there was room for it, without a single ground and no clear sense of
+// "which way the kingdom actually grows." South/southwest isn't empty
+// ground, though: SPAWN, SIGNPOST, the starter village, the road's western
+// leg and its own verge trees all live there (see world.ts/road.ts) — so
+// the fix is a real redistribution, not just "flip the sign," and every new
+// position below is checked against that whole cluster, not eyeballed.
+// The Home Grove keeps its pond-side spot (its own flavour text is written
+// around that walk); Northwood Stand and the Herb Meadow move to fill the
+// two directions that had nothing at all (south-west and due south); Old
+// Quarry/Iron Seam/Deepwood keep their own compass character (E/NE/N) with
+// only enough of a nudge to clear the ground-vs-ground spacing check below
+// at their new neighbours' sizes. Net: N, NE, E, SE, S, SW — six distinct
+// directions instead of four crowded onto one side and two empty.
 export const GROUNDS: Ground[] = [
   {
     // east of the road and north of the pond (52, 42, r8) — the first wood
-    // you meet, and the walk to it passes the water
+    // you meet, and the walk to it passes the water. Unchanged: this is not
+    // one of the "clustered north" grounds, and the flavour text above
+    // depends on the pond-side spot specifically.
     id: 'grove', name: 'The Home Grove', kind: 'tree',
     x: 30, z: 62, halfX: 16, halfZ: 10, tier: 0, count: 6,
     lockedHint: 'Yours from the first day',
   },
   {
-    // well west of the road's western end (x -44.8) and clear of its northern
-    // branch, so a full stand of timber never grows across the highway
+    // moved from due west to south-west — the one direction the SW cluster
+    // (signpost, starter village, road) left nothing standing in. Far enough
+    // out on both axes to clear all three: west of the road's own western
+    // end (x -38.4) and south of Beda's hut (z 44) with room either way.
     id: 'northwood', name: 'Northwood Stand', kind: 'tree',
-    x: -72, z: 8, halfX: 18, halfZ: 16, tier: 0, count: 12,
+    x: -70, z: 70, halfX: 18, halfZ: 16, tier: 0, count: 12,
     lockedHint: 'Yours from the first day',
   },
   {
+    // moved from north-west to due south — the only direction with nothing
+    // in it at all until now; well clear of the road's own southward branch
+    // (out to z 64) and of the Home Grove's own south-east corner.
     id: 'herbmeadow', name: 'The Herb Meadow', kind: 'herb',
-    x: -62, z: -46, halfX: 14, halfZ: 14, tier: 0, count: 7,
+    x: -5, z: 90, halfX: 14, halfZ: 14, tier: 0, count: 7,
     lockedHint: 'Yours from the first day',
   },
   {
+    // due east, nudged off the equator just enough to clear the Home
+    // Grove/pond cluster to its south-east and Iron Seam's own spacing to
+    // its north — same direction as before, no longer crowding the north
+    // side against Iron Seam and Deepwood.
     id: 'quarry', name: 'The Old Quarry', kind: 'rock',
-    x: 62, z: -6, halfX: 14, halfZ: 16, tier: 1, count: 8,
+    x: 75, z: 5, halfX: 14, halfZ: 16, tier: 1, count: 8,
     lockedHint: 'Quarried under the Freehold deed',
   },
   {
+    // kept north-east — already a distinct direction from Deepwood's due
+    // north — nudged for spacing against the Old Quarry's own new box.
     id: 'ironseam', name: 'The Iron Seam', kind: 'rock', variant: 'iron',
-    x: 62, z: -48, halfX: 14, halfZ: 12, tier: 2, count: 5,
+    x: 62, z: -55, halfX: 14, halfZ: 12, tier: 2, count: 5,
     lockedHint: 'Dug under the Manor deed',
   },
   {
+    // kept due north — already the one ground with no east/west lean at
+    // all — nudged out slightly for spacing against Iron Seam's own box.
     id: 'deepwood', name: 'The Deepwood', kind: 'tree',
-    x: 0, z: -64, halfX: 20, halfZ: 12, tier: 3, count: 14,
+    x: 0, z: -70, halfX: 20, halfZ: 12, tier: 3, count: 14,
     lockedHint: 'Felled under the Barony deed',
   },
 ];
