@@ -115,6 +115,80 @@ export function roadEntry(): { x: number; z: number } {
   return { x: cx * ROAD_TILE, z: cz * ROAD_TILE };
 }
 
+/** Requested 2026-07-30: "NPCs should use roads first, then grass" plus a
+ *  speed bonus for actually walking one. Both need the same real geometry —
+ *  the printed carriageway's own centreline, not just "which 12.8m tile is
+ *  this" (a tile's grassy verge is not the road, see the tree-scatter avoidance
+ *  in gameStore.ts just above this file's own routeCells()).
+ *
+ *  NOT built from `routeCells()`'s own return value: that array is
+ *  DEDUPLICATED (`seen`, above) — where the branch north from the junction
+ *  reuses a cell the westward run already visited, `routeCells()` silently
+ *  drops the repeat, so two of its "consecutive" entries can land a full
+ *  diagonal jump apart (confirmed live: (-3,3)→(-1,4), not a shared edge).
+ *  Segments built from consecutive pairs of THAT array would insert a phantom
+ *  diagonal shortcut across open grass. This walks the same raw `CELLS`
+ *  waypoints with the identical x-then-z gap-fill `routeCells()` uses, but
+ *  emits one true unit-step segment per step instead of collapsing into a
+ *  deduplicated point list — a revisited cell just means an overlapping
+ *  (harmless) duplicate segment, not a dropped one. */
+let segmentsCache: { x0: number; z0: number; x1: number; z1: number }[] | null = null;
+function roadSegments() {
+  if (!segmentsCache) {
+    const segs: { x0: number; z0: number; x1: number; z1: number }[] = [];
+    let prev: [number, number] | null = null;
+    for (const [x, z] of CELLS) {
+      if (prev) {
+        let cx: number = prev[0];
+        let cz: number = prev[1];
+        while (cx !== x) {
+          const nx: number = cx + Math.sign(x - cx);
+          segs.push({ x0: cx * ROAD_TILE, z0: cz * ROAD_TILE, x1: nx * ROAD_TILE, z1: cz * ROAD_TILE });
+          cx = nx;
+        }
+        while (cz !== z) {
+          const nz: number = cz + Math.sign(z - cz);
+          segs.push({ x0: cx * ROAD_TILE, z0: cz * ROAD_TILE, x1: cx * ROAD_TILE, z1: nz * ROAD_TILE });
+          cz = nz;
+        }
+      }
+      prev = [x, z];
+    }
+    segmentsCache = segs;
+  }
+  return segmentsCache;
+}
+
+/** Perpendicular distance from (x, z) to the nearest point on the road's
+ *  printed centreline (clamped to each segment's own span). */
+export function distanceToRoad(x: number, z: number): number {
+  let best = Infinity;
+  for (const s of roadSegments()) {
+    const dx = s.x1 - s.x0, dz = s.z1 - s.z0;
+    const len2 = dx * dx + dz * dz;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - s.x0) * dx + (z - s.z0) * dz) / len2)) : 0;
+    const d = Math.hypot(x - (s.x0 + t * dx), z - (s.z0 + t * dz));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** True within the printed carriageway width, not the whole 12.8m tile. */
+export function onRoad(x: number, z: number): boolean {
+  return distanceToRoad(x, z) <= ROAD_HALF_WIDTH;
+}
+
+/** Movement speed multiplier while standing on the road — the "advanced
+ *  building mechanics for attribute points" ask from the same request: today
+ *  the road is the one fixed, pre-authored route (there is no player-placed
+ *  road piece yet, see this file's own module doc), so this reads as a
+ *  homestead-road perk rather than a per-placement bonus; `attributes.ts`'s
+ *  `externalCapacityBonus()` stub (currently always 0, reserved for "a placed
+ *  building passively grants a bonus just by existing on the grid") is the
+ *  natural home for a future per-tile version of this same mechanic. */
+export const ROAD_SPEED_MULT = 1.3;
+
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkroadEntry = roadEntry;
+  (window as unknown as Record<string, unknown>).__kkonRoad = onRoad;
 }
