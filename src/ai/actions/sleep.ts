@@ -1,13 +1,12 @@
 // PHASE_3_4_5_ACTUATION_AND_REASONER.md §5.6 / PHASE_2_NAVIGATION_AND_GATHERING.md
 // §3.4 — sleep: a utility-gated wrapper around the SAME night-bed-seek
 // behavior Villagers.tsx already had. Bed/target selection is not
-// reinvented (assignedSleepSpot, game/data/villagers.ts — the exact
-// rank-based bed assignment the old cascade branch already used) — only
-// the DECISION of when to sleep moves from a hardcoded "if night" check
-// into the reasoner.
+// reinvented (`gameStore.claimBed` — a persisted per-bed claim, requested
+// 2026-07-30 to replace the old roster-rank assignment this cascade branch
+// used to compute inline) — only the DECISION of when to sleep moves from a
+// hardcoded "if night" check into the reasoner.
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
-import { assignedSleepSpot } from '@/game/data/villagers';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
@@ -17,8 +16,7 @@ const STOP_DISTANCE = 0.6;
 
 class SleepActivity implements Activity {
   start(agent: Agent, _ctx: Context): void {
-    const st = useGameStore.getState();
-    const spot = assignedSleepSpot(agent.id, st.villagers, st.buildings);
+    const spot = useGameStore.getState().claimBed(agent.id);
     agent.intent = { type: 'MOVE_TO', position: spot, speed: 'walk', stopDistance: STOP_DISTANCE };
     // Reported 2026-07-30: gameStore.ts's legacy tickVillagers timer kept
     // crediting completed hauls (and firing the "hauled supplies" notify)

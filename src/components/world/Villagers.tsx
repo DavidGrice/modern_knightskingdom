@@ -188,9 +188,10 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     // that used to live here are DELETED, not just superseded: both now
     // route through the reasoner (src/ai/actions/flee.ts, sleep.ts),
     // whose Activities emit the exact same MOVE_TO target this cascade
-    // used to compute inline (HOME_X/HOME_Z for flee, assignedSleepSpot's
-    // same rank-based bed assignment for sleep — both now live in
-    // game/data/villagers.ts, the single remaining copy). The MOVE_TO
+    // used to compute inline (HOME_X/HOME_Z for flee, game/data/villagers.ts;
+    // sleep.ts now claims a real persisted bed via `gameStore.claimBed`,
+    // requested 2026-07-30 to replace the rank-based assignment this cascade
+    // used to compute). The MOVE_TO
     // splice at the top of this cascade (3.3) already picks that intent up
     // — every roster villager has a real Agent (rosterSync, 3.1) whose
     // archetype's intrinsic list already includes both action ids (5.3),

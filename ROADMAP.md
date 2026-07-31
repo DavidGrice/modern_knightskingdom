@@ -4236,18 +4236,28 @@ isolation.
   resuming) trip progress exactly the way it already did for active gather/haul, with zero new logic in
   `gameStore.ts` itself. Verified live: notifications stayed empty and progress frozen while the sleep
   signal was active; clearing it let the same villager complete and notify normally afterward.
-- [TODO] **Beds (and other NPC-specific objects) should be exclusively owned by one villager — needs
-  further design exploration before scoping a fix.** Requested 2026-07-30. Today's assignment
-  (`assignedSleepSpot()`, `villagers.ts`) is RANK-based and recomputed fresh every call, not a stored
-  relationship: it filters beds and non-defender villagers, then maps `beds[villagerRosterIndex]` — no
-  `owner` field exists anywhere in `PlacedBuilding` (`types.ts`) or on `Villager`. Defenders get a
-  second, independent version of the same rank math off the OPPOSITE end of the same bed array
-  (`Defenders.tsx`), a deliberate day/night-shift split. Recruiting is loosely gated on bed COUNT
-  (`villagerRequirement(n).beds = n` before the Nth recruit is allowed), but nothing re-checks after —
-  demolishing a bed, reordering the roster, or a job switch can all silently reshuffle who's "assigned"
-  to what, with zero real conflict resolution. Logging this now as a real design gap; the actual
-  ownership model (persisted per-bed assignment? claimed-on-first-sleep? explicit UI assignment?) still
-  needs deciding before implementation.
+[COMPLETE] **Beds (and other NPC-specific objects) should be exclusively owned by one villager.**
+  Requested 2026-07-30, "let's further explore this specific item" — the design decision this entry's
+  own first draft flagged as still open (persisted per-bed assignment vs. claimed-on-first-sleep vs.
+  explicit UI assignment) is **claimed-on-first-need, permanent**: the simplest model that needs no new
+  UI and no player attention, matching how the rest of the villager-assignment system already works
+  (automatic, background). `PlacedBuilding` gains `owner?: string | null` (`types.ts`), persisted for
+  free — buildings already round-trip through save/load as plain data, no schema plumbing needed. New
+  store action `gameStore.claimBed(villagerId)`: returns the villager's own bed if they already own one,
+  else claims the first unowned built home bed and returns it, else falls back to the villager's own
+  fixed home-ring spot (`villagerHomeSpot`) if nothing is available — one shared claim pool, replacing
+  BOTH the old independent rank computations (`villagers.ts`'s now-deleted `assignedSleepSpot`, used by
+  `sleep.ts`'s AI Activity, AND `Defenders.tsx`'s own separate inline rank math for resting guards, which
+  ranked from the OPPOSITE end of the same bed array on a deliberate day/night split) — the two could
+  never actually collide, but neither could tell if it had. A claim is freed only by demolishing the bed
+  itself, which needs no extra cleanup: ownership lives ON the building object, so removing it removes
+  the claim with it (villagers are never removed from the roster once recruited, so bed demolition is the
+  only real release path that exists). `Defenders.tsx` keeps its own distinct "rest at post, not a bed"
+  fallback when nothing is claimable, unchanged. Verified live (`window.__kk.setState`/`claimBed`): two
+  villagers claiming in sequence get two DISTINCT beds; the first re-claims the SAME bed (idempotent, no
+  re-roll); a third with no beds left correctly falls back to their own home spot; **reversing the
+  villagers array — exactly the kind of roster reshuffle that broke the old rank-based system — leaves
+  both existing claims unchanged**, the actual bug this fixes. `npx tsc --noEmit`/`npx next build` clean.
 [COMPLETE] **Fishing now works from anywhere near the pond, not just one dock-end point — and the dock
   is shorter.** Requested and fixed 2026-07-30. `PlayerController.tsx`'s fishing branch now calls the
   same `consider()` helper TWICE for the one real `fishspot` node/target: once at the dock's own point
