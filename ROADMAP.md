@@ -4091,15 +4091,21 @@ isolation.
   `combatState.hp` (matching `RANGED_DMG`/`RANGED_ATTACK_CD`); close-up d3d11 screenshots confirm the
   melee bandit (halberd + shield), ranged bandit (compact crossbow, no shield), and skeleton (sword +
   new shield) are all visually distinct. `npx tsc --noEmit` and `npx next build` both clean.
-- [TODO] **Hold left-click to gather, matching how attacking already works.** Requested 2026-07-30, "for
-  mechanical consistency." Today, gathering (`tree`/`rock`/`fishing`/`herb`) is hold-E
-  (`PlayerController.tsx`'s `heldInput` reads `isDown(kb.interact)`, prompt literally reads "Hold E —
-  …"), while attacking is a discrete left-click swing (`CombatController.tsx`'s `onMouseDown` →
-  `playerAttack()`, gated by cooldown, no hold). There is already a working precedent for exactly the
-  requested pattern: `Target.kind === 'construct'` (an unbuilt site) is the ONE existing exception in
-  `heldInput`'s own ternary — it reads `combatState.lmbDown` instead of the E key, and its prompt swaps
-  to "Hold Click." Extending that same branch to the gather kinds is a small, well-precedented change,
-  not a new mechanic.
+[COMPLETE] **Hold left-click to gather, matching how attacking already works.** Requested and fixed
+  2026-07-30. Extended construction's existing `combatState.lmbDown`-held pattern to the gather kinds:
+  new `CLICK_HELD_TARGET_KINDS` (`combat.ts`) — `{construct, tree, rock, fishing, herb}` — is the single
+  source both `PlayerController.tsx`'s prompt/`heldInput` logic ("Hold Click" vs "Hold E", which input
+  source drives the hold) and `CombatController.tsx`'s mousedown guard read from. That guard is the part
+  that matters most: without it, holding LMB on a tree would ALSO throw a sword swing (or fire a bolt)
+  the instant the button went down, since `onMouseDown` unconditionally set `lmbDown` and continued into
+  the attack branch — the construction-site exception already special-cased this
+  (`if (st.targetKind === 'construct') return;`) and now the gather kinds share the same early return.
+  Real keyboard E no longer drives any click-held target (matches the construction precedent exactly —
+  gamepad/touch's own interact button still works via `pad.current`, since neither has a separate
+  hold-to-act input mapped). Verified live: aiming at a tree shows "Hold Click — Chop Tree"; holding E
+  alone for a full duration gathers nothing (0 wood); holding LMB for the same real time gathers wood
+  (`actionProgress` reaches 1, inventory gains 3 wood) with stamina unchanged before/after (100→100),
+  confirming the click-held guard is doing its job — no sword swing fired alongside the gather.
 [COMPLETE] **Bestiary entries need real lore — strengths/weaknesses, not just a Vigour number and one
   flavor line.** Requested and fixed 2026-07-30. `ATTACK_DMG`/`ATTACK_CD` (real per-kind numbers, were
   local to `Enemies.tsx`'s own AI loop) moved to `combat.ts` and exported, next to the kind's other
