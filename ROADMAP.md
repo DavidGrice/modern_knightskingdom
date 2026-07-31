@@ -4065,17 +4065,24 @@ isolation.
   symmetric square about the origin with no directional-growth mechanic at all, so this is really two
   problems: relocating the grounds AND deciding what "expansion" should mean directionally before the
   empire system (9 disjoint `WORLD_DESTINATIONS`, unaffected by any of this) gets built out further.
-- [TODO] **Enemy NPCs need ranged weapons and shields, not just swords/halberds.** Requested 2026-07-30.
-  Today (`Enemies.tsx`): bandit/gilbert carry `HeldHalberd`; royal/cedric/skeleton carry `HeldSword`;
-  only royal/cedric also carry `ArmShield`. No enemy kind uses any ranged weapon — there's no `HeldBow`
-  component at all, and `HeldCrossbow` exists only for player-allied defenders (`Defenders.tsx`, backed
-  by real ranged AI: `BOW_RANGE`, its own attack cooldown/damage). Enemies are 100% melee today — the
-  whole enemy state machine only has `chase`/`attack` states driving a sword-swing animation; there is
-  no enemy-side bolt/arrow-firing behavior at all (`combat.ts`'s `fireBolt`/`stepBolt` are player-only).
-  So this is genuinely two asks, not one: the holdable-prop visual swap, AND new ranged AI (aim, fire
-  cooldown, a projectile) for whichever kinds get it. Bandit/Gilbert's own donor rig already has a
-  MOLDED crossbow baked in (`npcs.ts`), currently thrown away via `keepProps:false` because they already
-  carry a halberd — a crossbow-bandit variant needs zero new art, just the AI and a loadout choice.
+- [COMPLETE] **Enemy NPCs need ranged weapons and shields, not just swords/halberds.** Requested and
+  fixed 2026-07-30. `EnemyData` gained `ranged?: boolean` (`combat.ts`), rolled once per bandit at
+  spawn (`Math.random() < 0.4`) so a raiding party is now a mix rather than every bandit carrying the
+  same halberd — stable for the mob's whole life, and rolled at every one of `spawn()`'s many bandit
+  call sites (dusk raid, Cedric's war party, camp guards, the Sealed Crypt) for free. `Enemies.tsx`'s
+  AI branches a `data.ranged` bandit to hold at `RANGED_RANGE` (14) and hit-scan (`RANGED_DMG` 1.2 every
+  `RANGED_ATTACK_CD` 1.8s, same `target.hp -= dmg` pattern `Defenders.tsx`'s own bow loadout already
+  uses — no projectile object) instead of closing to melee, in both the defender-engagement and
+  player-engagement branches; the existing chase branch already stops short correctly since
+  `RANGED_RANGE` (14) sits inside its own 26-unit engage radius. Visual: `HeldCrossbow` (already used by
+  Defenders.tsx) swaps in for `HeldHalberd` on a ranged bandit; melee bandits, skeletons, royal knights,
+  and Cedric all now also carry `ArmShield` (previously only royal/cedric did) — two-handed wielders
+  (ranged bandits, halberd-carrying Gilbert) stay unshielded. Verified live (Playwright, `window.__kke`/
+  `window.__kkc`/`window.__kkp`): a single isolated ranged bandit held at its exact spawn distance
+  (10m) for 8+ seconds without closing, state `'attack'`, and dealt exactly 1.2 dmg per ~4s window to
+  `combatState.hp` (matching `RANGED_DMG`/`RANGED_ATTACK_CD`); close-up d3d11 screenshots confirm the
+  melee bandit (halberd + shield), ranged bandit (compact crossbow, no shield), and skeleton (sword +
+  new shield) are all visually distinct. `npx tsc --noEmit` and `npx next build` both clean.
 - [TODO] **Hold left-click to gather, matching how attacking already works.** Requested 2026-07-30, "for
   mechanical consistency." Today, gathering (`tree`/`rock`/`fishing`/`herb`) is hold-E
   (`PlayerController.tsx`'s `heldInput` reads `isDown(kb.interact)`, prompt literally reads "Hold E —

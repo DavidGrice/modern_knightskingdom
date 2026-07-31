@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ArmShield, HeldHalberd, HeldSword } from '../character/Equipment';
+import { ArmShield, HeldCrossbow, HeldHalberd, HeldSword } from '../character/Equipment';
 import { useEnemyStore, damagePlayer, resolveDuel, combatState, type EnemyData } from '@/game/combat';
 import type { SoundName } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
@@ -77,6 +77,12 @@ const CONFIGS: Record<string, CharacterConfig> = {
 
 const ATTACK_DMG: Record<string, number> = { skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2 };
 const ATTACK_CD: Record<string, number> = { skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4 };
+/** crossbow-armed bandits (`data.ranged`): hold at range and hit-scan
+ *  instead of closing to melee, mirroring Defenders.tsx's own bow loadout
+ *  (`target.hp -= dmg` applied directly at range-check time, no projectile) */
+const RANGED_RANGE = 14;
+const RANGED_ATTACK_CD = 1.8;
+const RANGED_DMG = 1.2;
 /** J51 follow-up: structural damage per hit against a keep piece — a
  *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
  *  pool), closer to what the player's own ram/cannon already deal it */
@@ -297,15 +303,15 @@ function Enemy({ data }: { data: EnemyData }) {
           st.damageKeepPart(keepTarget.socketId, RAID_SIEGE_DMG[data.kind] ?? 8, `was battered by ${CONFIGS[data.kind].name}`);
         }
       } else if (defTarget && defD < d) {
-        if (defD < 1.7) {
+        if (defD < (data.ranged ? RANGED_RANGE : 1.7)) {
           m.state = 'attack';
           m.attackCd -= dt;
           const ndx = defTarget.x - m.x;
           const ndz = defTarget.z - m.z;
           m.yaw = Math.atan2(-ndx, -ndz);
           if (m.attackCd <= 0) {
-            m.attackCd = ATTACK_CD[data.kind];
-            defTarget.hp -= ATTACK_DMG[data.kind] * data.scale;
+            m.attackCd = data.ranged ? RANGED_ATTACK_CD : ATTACK_CD[data.kind];
+            defTarget.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
             if (defTarget.hp <= 0 && defTarget.state === 'ok') {
               defTarget.state = 'downed';
               defTarget.downedUntil = Date.now() + 45000;
@@ -323,11 +329,15 @@ function Enemy({ data }: { data: EnemyData }) {
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);
         }
-      } else if (d < 1.8) {
+      } else if (d < (data.ranged ? RANGED_RANGE : 1.8)) {
         m.state = 'attack';
         m.attackCd -= dt;
+        // held at range rather than closing the last few metres (see the
+        // chase branch below), so — unlike melee, which already arrives
+        // facing its target — a crossbow bandit needs its own aim-turn here
+        if (data.ranged) m.yaw = Math.atan2(-(playerState.x - m.x), -(playerState.z - m.z));
         if (m.attackCd <= 0) {
-          m.attackCd = data.kind === 'storm'
+          m.attackCd = data.ranged ? RANGED_ATTACK_CD : data.kind === 'storm'
             // Silver Tongue trade-off perk: its own upside is trade prices
             // (gameStore.ts's sellItem/buyOffer) — the cost is Storm striking
             // faster here, the same direction reputation already pushes this
@@ -338,7 +348,8 @@ function Enemy({ data }: { data: EnemyData }) {
             : ATTACK_CD[data.kind];
           // a duel with Storm ends the instant either side lands a blow —
           // no lingering damage, just resolution (see combat.ts's resolveDuel)
-          if (data.kind === 'storm') resolveDuel(false, data.id);
+          if (data.ranged) damagePlayer(RANGED_DMG * data.scale);
+          else if (data.kind === 'storm') resolveDuel(false, data.id);
           else damagePlayer(ATTACK_DMG[data.kind] * data.scale);
         }
       } else if (d < 26 || (m.alertT ?? 0) > 0) {
@@ -488,18 +499,26 @@ function Enemy({ data }: { data: EnemyData }) {
           registerHitbox(String(data.id), measureHitBoxes(r));
         }}
       />
-      {/* bandits and Gilbert (their leader) carry the original halberd */}
-      {rig && (data.kind === 'bandit' || data.kind === 'gilbert')
+      {/* bandits: a raiding party mixes melee and ranged rather than every
+          raider carrying the same halberd (requested 2026-07-30) — the
+          `ranged` roll happens once at spawn (combat.ts), so it's stable for
+          the mob's whole life, and Enemies.tsx's own AI branches above
+          already read the same flag to hold-and-hit-scan at range instead of
+          closing to melee. Gilbert, their leader, always fights melee. */}
+      {rig && data.kind === 'bandit' && data.ranged
+        && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
+      {rig && ((data.kind === 'bandit' && !data.ranged) || data.kind === 'gilbert')
         && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
       {/* the crown's knights — and Cedric, their equal and opposite — fight
-          sword-and-shield, like the player's own kit. Skeletons carry just a
-          sword, no shield: requested 2026-07-28 alongside gilbert/royal's own
-          weapon-rig fixes above — with keepProps now off (it was never safe
-          to leave on, see the note above), skeleton and Cedric were the two
-          kinds left with nothing in their hands at all. */}
+          sword-and-shield, like the player's own kit. */}
       {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton')
         && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-      {rig && (data.kind === 'royal' || data.kind === 'cedric')
+      {/* shields (requested 2026-07-30): every melee kind now carries one —
+          a crossbow bandit's off-hand stays empty (it's a two-handed weapon,
+          same as Gilbert's halberd), and skeletons pick up the shield they
+          were the one melee kind still missing. */}
+      {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton'
+        || (data.kind === 'bandit' && !data.ranged))
         && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
     </group>
   );

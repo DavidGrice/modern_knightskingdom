@@ -226,6 +226,12 @@ export interface EnemyData {
    *  flee rather than die for good outside that one fight (see the flee-guard
    *  in Enemies.tsx). Meaningless for any other kind. */
   finalStand?: boolean;
+  /** Requested 2026-07-30: raiders shouldn't ALL be melee-only. Rolled once
+   *  at spawn for bandits (see spawn() below) — a ranged bandit holds at
+   *  range and hit-scans instead of closing to melee (Enemies.tsx), and
+   *  swaps its held prop from the halberd to the crossbow the same donor
+   *  rig already carries. Meaningless for any other kind. */
+  ranged?: boolean;
 }
 
 let enemySeq = 1;
@@ -254,6 +260,11 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       raid,
       dungeonRoom,
       finalStand,
+      // rolled once here rather than threaded through every one of spawn()'s
+      // many bandit call sites (the dusk raid, Cedric's war party, camp
+      // guards, the Sealed Crypt) — variety everywhere a bandit can appear,
+      // for free
+      ranged: kind === 'bandit' && Math.random() < 0.4,
       inventory: rollLoot(kind),
       mob: {
         x, z, yaw: Math.random() * Math.PI * 2,
