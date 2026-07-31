@@ -4049,22 +4049,30 @@ isolation.
   formula `DayNight.tsx` already uses for light sources, instead of the fixed constant baked in once at
   material-creation time. Night alone is deliberately untouched — the O6 night-visibility purpose still
   holds — only rain now dims the glow, matching everything around it.
-- [TODO] **Named grounds are clustered north, leaving no clear direction for kingdom expansion.**
-  Requested 2026-07-30. Coordinates (`grounds.ts`, homestead center is `(0,0)` per `BUILD_REGION`):
-  Home Grove (30,62, SE), Northwood Stand (-72,8, W), Herb Meadow (-62,-46, NW), Old Quarry (62,-6, E),
-  Iron Seam (62,-48, NE), Deepwood (0,-64, N). Compass convention confirmed two independent ways
-  (`keep.ts`'s North Wall socket at `z:-H+1.2` vs South at `z:H-1.2`; `Compass.tsx`'s bearing math) —
-  **-Z is north**, so Herb Meadow/Old Quarry/Iron Seam/Deepwood (the whole tier-0→3 ground progression)
-  all sit on the north side; only Home Grove and Northwood Stand don't. Worth flagging: the EARLIER
-  "Grounds became grid sections" entry (marked COMPLETE elsewhere in this file) describes these same
-  coordinates with inverted directions ("Herb Meadow south-west", "Deepwood due south") — `road.ts` has
-  the identical inversion in its own comments — so that prior pass's directional reasoning was already
-  backwards and never actually vacated south. South/southwest isn't free either, though: `SPAWN`,
-  `SIGNPOST`, the pond/fishing dock, the starter-village huts, and the road route itself all live there
-  (`world.ts`/`road.ts`) — no direction is actually clear today. `LAND_TIERS`/`BUILD_REGION` grow as a
-  symmetric square about the origin with no directional-growth mechanic at all, so this is really two
-  problems: relocating the grounds AND deciding what "expansion" should mean directionally before the
-  empire system (9 disjoint `WORLD_DESTINATIONS`, unaffected by any of this) gets built out further.
+[COMPLETE] **Named grounds are clustered north, leaving no clear direction for kingdom expansion.**
+  Requested and fixed 2026-07-30. Confirmed compass convention two independent ways (`keep.ts`'s North
+  Wall socket at `z:-H+1.2` vs South at `z:H-1.2`; `Compass.tsx`'s own bearing math, `atan2(-dx,-dz)`
+  with N at bearing 0) — **-Z is north, +X is east** — so the old layout really was four of six grounds
+  (Herb Meadow/Old Quarry/Iron Seam/Deepwood) on the north side, with the whole south half empty despite
+  not actually being clear: `SPAWN`, `SIGNPOST`, the starter-village huts, and the road's western leg
+  (plus its own verge trees) all live there (`world.ts`/`road.ts`). Redistributed in `grounds.ts`: the
+  Home Grove keeps its pond-side spot (SE — its own flavour text, "the walk to it passes the water", is
+  written around that); Northwood Stand moves from due west to south-west `(-70,70)` and the Herb Meadow
+  from north-west to due south `(-5,90)` — the two directions that had nothing at all; Old Quarry/Iron
+  Seam/Deepwood keep their own E/NE/N character, nudged only far enough to clear the ground-vs-ground
+  spacing check against their new neighbours. Net: N, NE, E, SE, S, SW — six distinct directions instead
+  of four crowded onto one side and two empty. Every new position was checked by hand against the whole
+  SW obstacle cluster (signpost, village, road + verge) and the pond, using centre-distance vs.
+  half-extent-sum for every ground pair, not eyeballed — then confirmed live: `grounds.ts`'s own
+  dev-mode self-check (`console.warn('[grounds] ... overlaps ...')`, already wired into `seedNodes`)
+  produced zero `[grounds]` warnings on a fresh guest run, and every ground seeded its FULL node count
+  (grove 6, northwood 12, herbmeadow 7, quarry 8, ironseam 5, deepwood 14) — confirming no ground is
+  silently losing placements to the build-region/starter-village/pond-shore exclusions at its new spot.
+  Scope note, left as-is deliberately: `LAND_TIERS`/`BUILD_REGION` still grow as a symmetric square about
+  the origin with no directional-growth mechanic — this pass fixes the CLUSTERING (a resource, a screen
+  direction), not a new "expand this way" system, which the original report itself flagged as a separate,
+  undecided design question ahead of the empire system (9 disjoint `WORLD_DESTINATIONS`, unaffected by
+  any of this).
 - [COMPLETE] **Enemy NPCs need ranged weapons and shields, not just swords/halberds.** Requested and
   fixed 2026-07-30. `EnemyData` gained `ranged?: boolean` (`combat.ts`), rolled once per bandit at
   spawn (`Math.random() < 0.4`) so a raiding party is now a mix rather than every bandit carrying the
