@@ -4302,3 +4302,122 @@ isolation.
   that same shot either. Not chased further this pass (out of scope, and the console-only test rig used
   to force riding state may not fully match what a real in-game mount does) — worth a real repro by
   hand, riding a real wild horse and swapping to third person, before diagnosing further.
+
+## Bugs logged 2026-07-31, not yet fixed
+
+- [TODO] **Bow-armed defenders snipe enemies from any distance, through walls — including from their
+  own bed.** Requested 2026-07-31 ("shooting through walls/objects... they should need to go and hunt
+  down enemies not stand and insta kill them from a bed in the center of the map"). Confirmed a real
+  logic-inversion bug, not just a tuning issue (`Defenders.tsx`, the range-gate around L311):
+  ```
+  const range = loadout === 'bow' ? BOW_RANGE + (...) : MELEE_RANGE;
+  const inRange = dT <= range;
+  if (!inRange && loadout !== 'bow') { /* chase */ } else { /* aim + deal target.hp -= dmg */ }
+  ```
+  For `loadout === 'bow'`, the guard `!inRange && loadout !== 'bow'` is FALSE regardless of `inRange` —
+  a bow defender always falls into the attack branch and always deals damage on cooldown (1.6s), with
+  `inRange`/`BOW_RANGE` computed but never actually consulted. There is no line-of-sight/raycast check
+  anywhere in this branch either, so a wall between the defender and the target has never mattered. The
+  outer bound isn't small: for the default `patrol`/off-duty order, `target` is picked from any enemy
+  within `ENGAGE_RADIUS` (22m) of the DEFENDER'S OWN position (L147, L150) — easily most of the
+  homestead interior — and for an explicit `attack` order, target selection is completely unbounded
+  distance from the PLAYER (`bestD = Infinity`, L138-142), so an attacking bow defender can snipe
+  anything anywhere near the player regardless of the defender's own location. Likely origin: `BOW_RANGE`
+  reads like it was meant to replace `MELEE_RANGE` in the range check for bow-wielders (so they hold at
+  a real distance instead of closing to melee), and the `&& loadout !== 'bow'` clause accidentally
+  short-circuited the whole gate instead. A real fix needs the attack branch to re-check `inRange`
+  (using `BOW_RANGE` for bow, `MELEE_RANGE` for melee) before dealing damage — currently the `else`
+  branch fires unconditionally — plus a real line-of-sight check (a raycast against the same collision
+  data `navgrid.ts`'s `collisionBoxesFor` already builds obstacle boxes from) before a ranged hit lands,
+  which does not exist for defenders at all today (`Enemies.tsx`'s own ranged bandits, shipped
+  2026-07-30, have the identical gap — `RANGED_RANGE`/hit-scan with no wall check either, worth fixing
+  together).
+- [TODO] **World layout: clear the whole north for kingdom expansion — forests to the south-west, the
+  Herb Meadow to mid-west, rocks/iron further south-east/east, the pond further east.** Requested
+  2026-07-31, directly superseding the six-way compass spread just shipped 2026-07-30 (`grounds.ts`,
+  "spread named grounds around the compass" — PR #111): that pass deliberately put one tree ground at
+  true north (Deepwood, `(0,-70)`) and one rock ground at north-east (Iron Seam, `(62,-55)`) specifically
+  to fill the previously-empty north/north-east; the new ask wants north empty again, for a different
+  reason (room to expand the kingdom there specifically, not just "no compass direction should be
+  empty"). Target layout as requested: all three TREE grounds (Home Grove, Northwood Stand, Deepwood)
+  in the south-west quadrant; the Herb Meadow moved from its current south spot `(-5,90)` to the middle
+  of the west quadrant (roughly `x` very negative, `z` near 0); both ROCK grounds (Old Quarry, Iron
+  Seam) in the south-east/east; `POND` (`world.ts`, currently `(52,42)`, already SE-ish) pushed further
+  east. Real obstacles any new placement must still clear (unchanged from the 2026-07-30 pass): `SPAWN`
+  `(0,26)`, `SIGNPOST` `(-16,36)`, the starter-village huts (`STARTER_VILLAGE_CLEAR`, `world.ts`), the
+  road's own route (`road.ts`'s `routeCells()`, currently anchored off `SIGNPOST` and running through the
+  south/south-west), and `KEEP_INTERIOR` (a fixed far-SE pocket, `(85,85)`) — all now concentrated in the
+  south half instead of spread across it, since almost every ground is relocating there too; will need
+  real spacing math against each OTHER, not just the fixed obstacles (the 2026-07-30 pass's own
+  center-distance-vs-half-extent-sum check, `grounds.ts`'s dev-mode `console.warn` assertion, is the
+  right tool to re-verify against, not eyeballing). Moving the pond specifically also moves
+  `FISHING_DOCK` (anchored to it, `world.ts`) and would shift `Grounds.tsx`'s pond-shore verge-tree
+  scatter and `gameStore.ts`'s `x > 30 && z > 20` pond-shore-stays-clear carve-out (`seedNodes`, ~L809) —
+  both keyed off `POND.x/z` already, so they follow automatically, but worth confirming live rather than
+  assumed. **Tied to the next entry**: relocating every ground away from the road's current one-route
+  layout only helps if the road actually reaches the new positions (see below) — doing one without the
+  other leaves 2026-07-30's own road-preference pathing (PR #110) routing raiders/villagers toward
+  grounds the road doesn't go near.
+- [TODO] **Extend the road network so it actually reaches each resource ground, not just the signpost.**
+  Requested 2026-07-31, continuous with the layout redesign above ("we can continue using the roads to
+  guide the npcs/user to each meadow/fenced area"). Today's road is ONE fixed, hand-authored route
+  (`road.ts`'s `CELLS`, a short run from the homestead to `SIGNPOST` plus one branch) — it has never
+  reached any of the six named grounds and wasn't designed to; the nav-cost preference shipped
+  2026-07-30 (PR #110, `navgrid.ts`'s `roadMask`/`ROAD_STEP_MULT`) makes AI actors prefer whatever road
+  exists, but there is nothing for it to prefer on the way to a ground today. A real fix branches `CELLS`
+  (or generalizes it — the T-junction/corner/cross piece selection in `Road.tsx` already reads a 4-bit
+  N/E/S/W mask per cell, `PIECES` in `road.ts`, so the piece-choosing logic doesn't need to change, only
+  the route data) out to each ground's own entrance, and re-derives `distanceToRoad()`/`onRoad()`
+  (`road.ts`, shipped 2026-07-30) from the same connected-segment walk once the route is bigger. Real
+  design question raised but not answered by the request: does every ground get its own spur, or do
+  spurs share trunk segments (cheaper to build/render, reads more like a real road network)? Worth
+  deciding before implementation, not guessing at.
+- [TODO] **A buildable, player-diggable pond/river/moat.** Requested 2026-07-31 ("we should be able to
+  dig and make our own pond/river later on for waterway in our kingdom... like real kingdoms had with
+  moats"). Confirmed there is currently NO terrain-modification mechanic of any kind — the only water
+  body in the game is the single hardcoded `POND` (`world.ts`), declared as one static circle in
+  `navTerrain.ts`'s `terrainExclusions` (`{id:'pond', shape:{kind:'circle',...}, traversal:'blocked'}`),
+  read once by `navgrid.ts`'s obstacle-grid build and by `Terrain.tsx`'s pond mesh — nothing about it is
+  data-driven from player action, and no buildable/placeable water piece exists in `buildables.ts`. A
+  real fix needs, at minimum: a new placeable "dig water" tool or buildable category, a way to grow
+  `terrainExclusions` (or a parallel player-water list navgrid also blocks/costs against) at runtime
+  instead of a fixed array evaluated once, and real mesh rendering for an arbitrary player-shaped water
+  body (today's pond is one fixed, hand-modeled circle — a general one needs either a flexible shape
+  (circle/rect per placement, matching how `Ground`/terrain exclusions already support both shapes) or a
+  full freeform system, a much bigger scope). Worth scoping as its own feature, not a quick add.
+- [TODO] **Elevation/terrain height, per map quadrant.** Requested 2026-07-31 ("adding some elevation to
+  our maps... elevating our map in quadrants"). The home world is flat by design today — confirmed
+  (`Terrain.tsx`'s own comment: "Its ground sits at y=0... and the field is flat... so the flat-ground
+  movement/collision assumptions hold unchanged") — every player-movement, building-placement, and
+  nav-grid calculation on the home grid assumes `y=0` ground. A REAL height-field system already exists
+  in the codebase, just not wired to the home grid: `NavGrid`'s `heights`/`rasterizeHeights`/`heightAt`
+  (`navgrid.ts`, iteration 2.5) rasterizes real per-cell ground height from a mounted template's own
+  geometry — but only for `mode: 'window'` (destination-world) grids; the home grid is `mode: 'fixed'`
+  with no height field ever built (`this.heights` stays `null`, `ensureHeights()` no-ops for it). Making
+  the home world non-flat is a large, cross-cutting change — collision/step-height logic
+  (`PlayerController.tsx`'s `WALK_LOW`/`WALK_HIGH`/`STEP_UP`), every ground-position assumption in
+  `gameStore.ts`'s node scatter and building placement, `navgrid.ts`'s own `maxStep` climb-check (already
+  built for window grids, would need enabling for home), and NPC movement's own `y=0` assumptions
+  (`Villagers.tsx`/`Defenders.tsx`/`Enemies.tsx` all `g.position.set(x, 0, z)` or a small fixed offset)
+  would all need auditing — not a small follow-up, a real terrain overhaul. Worth prototyping on one
+  quadrant before committing to all four, given the blast radius.
+- [TODO] **Buildings/walls should stop enemies from spawning inside the kingdom, not just block their
+  movement afterward.** Requested 2026-07-31 ("some sort of building placement that prohibits enemies
+  from spawning... wouldn't have enemy npcs spawning in the heart of our kingdom, if we had walls").
+  Checked how the two enemy sources actually pick a spawn point, and they are NOT consistent: dusk raids
+  (bandits/Gilbert/Cedric/royal knights) already spawn correctly, at the map's own road entry point via
+  `roadEntry()` (`Enemies.tsx` ~L671, the N79 fix from 2026-07-28) and walk in — genuinely never inside
+  the walls. Night skeletons do not share that fix: they spawn at a random angle/radius (26-38m) from
+  the PLAYER's own live position (`Enemies.tsx` ~L616-620), with **zero collision or wall awareness at
+  all** — no call to `navBlocked()` (`navgrid.ts`, which already exists and already answers "is this
+  point inside a building's collision box") and no check for "is this point enclosed by a ring of walls"
+  (a materially different, harder question `navBlocked` does not answer either — it only catches a point
+  landing directly ON a wall tile, not one landing in the walled COURTYARD between tiles). If the player
+  is standing anywhere near the middle of a walled homestead at night, a skeleton can and will spawn
+  inside the walls with today's code. Two real fixes, not mutually exclusive: (1) the cheap one — give
+  skeletons the same "spawn at the map edge, walk in" treatment raids already have (reuse `roadEntry()`
+  and the existing `approaching` walk-in state machine, `EnemyMob.approaching`), sidestepping the
+  enclosure question entirely; (2) the more literal one the request actually describes — a real "is this
+  point inside the current wall+gate perimeter" test (flood-fill or point-in-polygon over the placed
+  wall/gate layout) consulted by every spawn site, which is the actual "meta-abstract data layer" the
+  request asks for and does not exist in any form today.
