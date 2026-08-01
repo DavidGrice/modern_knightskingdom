@@ -55,6 +55,7 @@ export default function GameScreen() {
   const fov = useAppStore((s) => s.settings.fov);
   const graphicsQuality = useAppStore((s) => s.settings.graphicsQuality);
   const profile = GRAPHICS_PROFILES[graphicsQuality];
+  const aaMode = useAppStore((s) => s.settings.aaMode);
   const paused = useGameStore((s) => s.paused);
   const buildMode = useGameStore((s) => s.buildMode);
   const character = useGameStore((s) => s.character);
@@ -226,7 +227,14 @@ export default function GameScreen() {
       <Canvas
         shadows={shadows}
         dpr={profile.dpr}
-        gl={{ antialias: profile.gl.antialias, powerPreference: profile.gl.powerPreference }}
+        // Requested 2026-07-31: once any PostProcessing AA mode is active,
+        // hardware MSAA on the (now offscreen, non-multisampled-target)
+        // default framebuffer is inert overhead regardless — this just
+        // avoids paying for it. `antialias` is a context-creation attribute
+        // (can't change on an already-created WebGL context), so this only
+        // takes effect on the next full Canvas mount, same category of
+        // limitation as the quality tier's own antialias/powerPreference.
+        gl={{ antialias: profile.gl.antialias && aaMode === 'off', powerPreference: profile.gl.powerPreference }}
         camera={{ fov, near: 0.1, far: 500, position: [0, 1.6, 26] }}
         style={{ position: 'absolute', inset: 0 }}
       >

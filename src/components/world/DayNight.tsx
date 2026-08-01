@@ -15,6 +15,10 @@ import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
 export default function DayNight() {
   const shadows = useAppStore((s) => s.settings.shadows);
   const profile = GRAPHICS_PROFILES[useAppStore((s) => s.settings.graphicsQuality)];
+  // Requested 2026-07-31: a real "view distance" setting — a multiplier over
+  // the fog base constants and the shadow camera's far plane, both
+  // previously fixed literals. 1 = today's exact values.
+  const viewDistance = useAppStore((s) => s.settings.viewDistance);
   const scene = useThree((s) => s.scene);
   const sun = useRef<THREE.DirectionalLight>(null);
   const sunTarget = useRef<THREE.Group>(null);
@@ -51,13 +55,13 @@ export default function DayNight() {
     light.shadow.camera.right = profile.shadowFrustumHalf;
     light.shadow.camera.top = profile.shadowFrustumHalf;
     light.shadow.camera.bottom = -profile.shadowFrustumHalf;
-    light.shadow.camera.far = 440;
+    light.shadow.camera.far = 440 * viewDistance;
     light.shadow.camera.updateProjectionMatrix();
     if (light.shadow.map) {
       light.shadow.map.dispose();
       light.shadow.map = null;
     }
-  }, [profile.shadowMapSize, profile.shadowFrustumHalf]);
+  }, [profile.shadowMapSize, profile.shadowFrustumHalf, viewDistance]);
 
   useFrame((_, dt) => {
     const st = useGameStore.getState();
@@ -106,8 +110,8 @@ export default function DayNight() {
       fog.color.setRGB(env.fog[0] * rainDim + flash * 0.4, env.fog[1] * rainDim + flash * 0.4, env.fog[2] * rainDim + flash * 0.4);
       // a mist spell pulls visibility in much closer than rain does — a
       // proper low-visibility weather state, not just rain's light haze
-      fog.near = 150 - worldEnv.rain * 90 - worldEnv.mist * 110;
-      fog.far = 460 - worldEnv.rain * 220 - worldEnv.mist * 340;
+      fog.near = (150 - worldEnv.rain * 90 - worldEnv.mist * 110) * viewDistance;
+      fog.far = (460 - worldEnv.rain * 220 - worldEnv.mist * 340) * viewDistance;
     }
 
     audio.nightMode = worldEnv.night > 0.6;

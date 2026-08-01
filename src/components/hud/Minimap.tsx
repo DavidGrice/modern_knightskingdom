@@ -20,7 +20,11 @@ import { villagerMobs } from '@/game/villagerMobs';
 
 export default function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [large, setLarge] = useState(false);
+  // Requested 2026-07-31: a real Options setting for which size the map
+  // STARTS at each session — a plain imperative read (not a subscribed hook
+  // value), since this only ever seeds the initial state; the M-key toggle
+  // below stays a live, session-only quick-toggle, unchanged.
+  const [large, setLarge] = useState(() => useAppStore.getState().settings.minimapDefaultSize === 'large');
   const colorblind = useAppStore((s) => s.settings.colorblindMode);
   const colorblindRef = useRef(colorblind);
   colorblindRef.current = colorblind;

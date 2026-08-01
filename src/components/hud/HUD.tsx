@@ -18,6 +18,7 @@ import type { ItemId } from '@/game/types';
 import Minimap from './Minimap';
 import Vitals from './Vitals';
 import Compass from './Compass';
+import FpsReadout from './FpsReadout';
 import FishingMeter from './FishingMeter';
 import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
@@ -333,6 +334,7 @@ export default function HUD() {
       <div className="kk-topright">
         {!buildMode && <Compass />}
         <WorldClock />
+        <FpsReadout />
       </div>
 
       {!buildMode && <ObjectiveCard />}

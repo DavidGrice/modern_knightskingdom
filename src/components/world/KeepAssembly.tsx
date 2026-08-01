@@ -10,7 +10,9 @@
 import { Suspense, useMemo } from 'react';
 import * as THREE from 'three';
 import { useTexture } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
+import { useAppStore } from '@/game/store/appStore';
 import { KEEP_PART_BY_ID, KEEP_SIZE, KEEP_SOCKETS } from '@/game/data/keep';
 import PropModel from './PropModel';
 import ConstructionSiteModel from './ConstructionSite';
@@ -20,12 +22,17 @@ const PLATE_TEX = '/assets/textures/ground/spr177_128x128.png';
 
 function Foundation() {
   const tex = useTexture(PLATE_TEX);
+  const { gl } = useThree();
+  // Requested 2026-07-31: a real Options setting (Settings.anisotropy,
+  // default 8) instead of a bare literal — see Terrain.tsx for the same
+  // change against its own hardcoded sites.
+  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
   useMemo(() => {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(KEEP_SIZE / 4, KEEP_SIZE / 4);
-    tex.anisotropy = 4;
-  }, [tex]);
+    tex.anisotropy = anisotropy;
+  }, [tex, anisotropy]);
   return (
     <mesh rotation-x={-Math.PI / 2} position-y={0.05} receiveShadow>
       <planeGeometry args={[KEEP_SIZE, KEEP_SIZE]} />
