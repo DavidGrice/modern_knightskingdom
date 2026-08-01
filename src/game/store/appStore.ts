@@ -2,13 +2,17 @@
 import { create } from 'zustand';
 import type { ScreenName } from '../types';
 import { DEFAULT_KEYBINDS } from '../data/keybinds';
+import { suggestGraphicsQuality } from '../deviceProfile';
 
 export interface SessionUser {
   id: string;
   username: string;
 }
 
-export type GraphicsQuality = 'low' | 'medium' | 'high';
+// Requested 2026-07-31: a real Performance <-> Ultra spectrum (see
+// graphicsProfiles.ts for what each tier actually controls), replacing the
+// old low/medium/high tiers that only ever scaled Canvas `dpr`.
+export type GraphicsQuality = 'performance' | 'balanced' | 'ultra';
 
 /** The four approved surface treatments from the UI handoff pack ("lanes").
  *  Same metrics throughout — only the surface changes — so swapping one never
@@ -50,25 +54,62 @@ const DEFAULT_SETTINGS: Settings = {
   shadows: true,
   showFps: false,
   dayLengthMin: 12,
-  graphicsQuality: 'high',
+  // 'balanced' is deliberately calibrated to match the game's live behavior
+  // before the 2026-07-31 quality-tier pass (see graphicsProfiles.ts) — a
+  // safe, no-regression anchor for the vast majority of returning players,
+  // who are about to be migrated onto it from the old default (see
+  // loadSettings()'s legacy remap below).
+  graphicsQuality: 'balanced',
   colorblindMode: false,
   uiTheme: 'glass',
   keybinds: DEFAULT_KEYBINDS,
 };
 
+// Requested 2026-07-31: the old low/medium/high tiers are gone (see
+// GraphicsQuality above) — an existing save's `graphicsQuality` string needs
+// remapping onto the new names rather than surfacing as an invalid value.
+// `high -> 'balanced'`, deliberately NOT 'ultra': 'high' was also the OLD
+// default, so nearly every returning player's save carries it whether or not
+// they ever touched the setting — auto-upgrading everyone into a strictly
+// heavier tier on their next launch would be exactly the kind of silent
+// override a returning player didn't ask for, and 'balanced' is calibrated
+// to match their actual live behavior before this pass anyway, so the remap
+// is a real no-op for the common case.
+const LEGACY_QUALITY_MAP: Record<string, GraphicsQuality> = {
+  low: 'performance',
+  medium: 'balanced',
+  high: 'balanced',
+};
+function migrateGraphicsQuality(v: unknown): GraphicsQuality | undefined {
+  if (typeof v !== 'string') return undefined;
+  if (v === 'performance' || v === 'balanced' || v === 'ultra') return undefined;
+  return LEGACY_QUALITY_MAP[v];
+}
+
 function loadSettings(): Settings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+  const raw = localStorage.getItem('kk_settings');
+  // genuinely no save at all yet — the ONLY time a device-capability
+  // suggestion is allowed to pick the default; never re-suggested on a later
+  // load, never overrides anything a returning player already has saved
+  const freshInstall = raw === null;
   try {
-    const saved = JSON.parse(localStorage.getItem('kk_settings') || '{}');
+    const saved = JSON.parse(raw || '{}');
+    const migrated = migrateGraphicsQuality(saved.graphicsQuality);
     // merge keybinds by action so a save from before a new action existed
     // (or before rebinding shipped at all) still has every key bound
     return {
       ...DEFAULT_SETTINGS,
+      ...(freshInstall ? { graphicsQuality: suggestGraphicsQuality() } : {}),
       ...saved,
+      ...(migrated ? { graphicsQuality: migrated } : {}),
       keybinds: { ...DEFAULT_KEYBINDS, ...(saved.keybinds ?? {}) },
     };
   } catch {
-    return DEFAULT_SETTINGS;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...(freshInstall ? { graphicsQuality: suggestGraphicsQuality() } : {}),
+    };
   }
 }
 
@@ -121,3 +162,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 
 export const currentScreen = (s: AppState) => s.screens[s.screens.length - 1];
+
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__kkapp = useAppStore;
+}
