@@ -20,11 +20,21 @@ const ENEMY_DONORS = [
 
 let warmed = false;
 
-export function preloadCommonAssets() {
+/** Requested 2026-07-31: the enemy-donor + dragon-rig half of this warm-up is
+ *  a real upfront memory/VRAM spend a player may never need (skeletons/the
+ *  dragon are not guaranteed to appear soon, if ever, in a given session) —
+ *  skipped at the Performance quality tier, falling back to the pre-existing
+ *  LAZY path this warm-up was only ever an optimization layer over
+ *  (`loadDonor`/`loadDragonRig` are already called by the live spawn code
+ *  regardless, so skipping here is zero-risk, not new logic). Buildable
+ *  GLTFs stay unconditionally eager at every tier — cheap, and a build-menu
+ *  hitch would be a more visible regression than today's one-time cost. */
+export function preloadCommonAssets(preloadEnemyDonors: boolean) {
   if (warmed) return;
   warmed = true;
   const urls = new Set(BUILDABLES.map((b) => b.model).filter((u): u is string => !!u));
   for (const url of urls) useGLTF.preload(url);
+  if (!preloadEnemyDonors) return;
   for (const id of ENEMY_DONORS) loadDonor(id).catch(() => {});
   loadDragonRig().catch(() => {});
 }

@@ -5,8 +5,9 @@
 // and Quality Preset as a segmented control that also drives
 // `data-kk-quality` (which the token sheet uses to drop panel blur).
 import { useEffect, useState } from 'react';
-import { useAppStore, UI_THEMES, type GraphicsQuality } from '@/game/store/appStore';
+import { useAppStore, UI_THEMES } from '@/game/store/appStore';
 import { KEYBIND_GROUPS, codeLabel, rebindState } from '@/game/data/keybinds';
+import { GRAPHICS_PROFILES, GRAPHICS_QUALITY_LIST } from '@/game/graphicsProfiles';
 
 function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
   const code = useAppStore((s) => s.settings.keybinds[actionId]);
@@ -155,13 +156,13 @@ export default function OptionsStack() {
                 <div className="kk-opt-row">
                   <span className="name">Quality preset</span>
                   <span className="kk-seg">
-                    {(['low', 'medium', 'high'] as GraphicsQuality[]).map((q) => (
+                    {GRAPHICS_QUALITY_LIST.map((p) => (
                       <button
-                        key={q}
-                        className={settings.graphicsQuality === q ? 'on' : ''}
-                        onClick={() => update({ graphicsQuality: q, shadows: q !== 'low' })}
+                        key={p.id}
+                        className={settings.graphicsQuality === p.id ? 'on' : ''}
+                        onClick={() => update({ graphicsQuality: p.id, shadows: p.shadowsDefault })}
                       >
-                        {q}
+                        {p.label}
                       </button>
                     ))}
                   </span>
@@ -172,7 +173,7 @@ export default function OptionsStack() {
                   onChange={(v) => update({ colorblindMode: v })}
                 />
                 <div className="kk-opt-note">
-                  Low turns off panel blur as well as shadows — worth it on integrated graphics.
+                  {GRAPHICS_PROFILES[settings.graphicsQuality].blurb}
                 </div>
               </div>
             </div>

@@ -23,7 +23,7 @@ export default function UiTheme() {
   }, [uiTheme]);
 
   useEffect(() => {
-    document.documentElement.dataset.kkQuality = graphicsQuality === 'low' ? 'low' : 'high';
+    document.documentElement.dataset.kkQuality = graphicsQuality === 'performance' ? 'low' : 'high';
   }, [graphicsQuality]);
 
   return null;

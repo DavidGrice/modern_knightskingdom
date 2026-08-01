@@ -11,6 +11,7 @@ import { combatState } from '@/game/combat';
 import { isRebindListening } from '@/game/data/keybinds';
 import { statsAccum } from '@/game/statsAccum';
 import { preloadCommonAssets } from '@/game/preload';
+import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
 import GameWorld from '../world/GameWorld';
 import HUD from '../hud/HUD';
 import TouchControls from '../hud/TouchControls';
@@ -53,10 +54,7 @@ export default function GameScreen() {
   const shadows = useAppStore((s) => s.settings.shadows);
   const fov = useAppStore((s) => s.settings.fov);
   const graphicsQuality = useAppStore((s) => s.settings.graphicsQuality);
-  const dpr: [number, number] =
-    graphicsQuality === 'low' ? [0.65, 0.65]
-      : graphicsQuality === 'medium' ? [0.85, 1.25]
-        : [1, 2];
+  const profile = GRAPHICS_PROFILES[graphicsQuality];
   const paused = useGameStore((s) => s.paused);
   const buildMode = useGameStore((s) => s.buildMode);
   const character = useGameStore((s) => s.character);
@@ -181,7 +179,7 @@ export default function GameScreen() {
   // ambience + autosave
   useEffect(() => {
     audio.preload().then(() => audio.startAmbience());
-    preloadCommonAssets();
+    preloadCommonAssets(profile.preloadEnemyDonors);
     const deedTimer = setInterval(() => {
       const st = useGameStore.getState();
       if (!st.paused && st.character) st.checkDeeds();
@@ -227,7 +225,8 @@ export default function GameScreen() {
     <div style={{ position: 'absolute', inset: 0 }} onContextMenu={(e) => e.preventDefault()}>
       <Canvas
         shadows={shadows}
-        dpr={dpr}
+        dpr={profile.dpr}
+        gl={{ antialias: profile.gl.antialias, powerPreference: profile.gl.powerPreference }}
         camera={{ fov, near: 0.1, far: 500, position: [0, 1.6, 26] }}
         style={{ position: 'absolute', inset: 0 }}
       >

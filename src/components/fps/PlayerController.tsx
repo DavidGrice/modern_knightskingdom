@@ -54,6 +54,28 @@ interface Target {
 /** scratch for projecting the aim target's head to screen space */
 const plateV = new THREE.Vector3();
 
+// Requested 2026-07-31: real per-frame GC pressure — `findTarget()`'s
+// `consider()` closure ran once per interact candidate (every resource node/
+// NPC/horse in range) and allocated a fresh Vector3 each call; the
+// third-person camera-follow math allocated several more every frame,
+// unthrottled. Reused scratch objects instead, same convention `plateV`
+// above already established. None of these are ever stored past the
+// statement that reads them — safe given PlayerController is a singleton,
+// the same precondition `plateV` already relies on.
+const _forwardV = new THREE.Vector3();
+const _considerV = new THREE.Vector3();
+const _camDirV = new THREE.Vector3();
+const _rightV = new THREE.Vector3();
+const _moveV = new THREE.Vector3();
+const _dirV = new THREE.Vector3();
+const _upV = new THREE.Vector3(0, 1, 0);
+const _aimFwdV = new THREE.Vector3();
+const _eyeV = new THREE.Vector3();
+const _camLookDirV = new THREE.Vector3();
+const _camPosV = new THREE.Vector3();
+const _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _lookAtV = new THREE.Vector3();
+
 /** J49 · the most hammer swings any one piece can ask for. At the hold
  *  duration below that is a bit over half a minute for the Grand Keep, and
  *  five or six seconds for a barrel. */
@@ -454,17 +476,16 @@ export default function PlayerController() {
     if (cartState.hitchedId) {
       return { id: cartState.hitchedId, kind: 'hitch_cart', duration: 0, actionable: true, label: 'Unhitch the Cart' };
     }
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
+    camera.getWorldDirection(_forwardV);
     const p = pos.current;
     let best: { t: Target; score: number } | null = null;
 
     const consider = (x: number, z: number, y: number, t: Target, range = INTERACT_RANGE) => {
-      const to = new THREE.Vector3(x - p.x, y - p.y, z - p.z);
-      const dist = Math.hypot(to.x, to.z);
+      _considerV.set(x - p.x, y - p.y, z - p.z);
+      const dist = Math.hypot(_considerV.x, _considerV.z);
       if (dist > range) return;
-      to.normalize();
-      const dot = to.dot(forward);
+      _considerV.normalize();
+      const dot = _considerV.dot(_forwardV);
       if (dot < 0.45) return;
       const score = dot - dist * 0.05;
       if (!best || score > best.score) best = { t, score };
@@ -966,17 +987,16 @@ export default function PlayerController() {
         // free-fly: no collision, no gravity, moves along the view
         // direction (including vertically) rather than the ground plane
         const flySpeed = isDown(kb.sprint) ? 16 : 8;
-        const camDir = new THREE.Vector3();
-        camera.getWorldDirection(camDir);
-        const right = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
-        const move = new THREE.Vector3();
-        if (isDown(kb.moveForward)) move.add(camDir);
-        if (isDown(kb.moveBack)) move.sub(camDir);
-        if (isDown(kb.moveRight)) move.add(right);
-        if (isDown(kb.moveLeft)) move.sub(right);
-        if (isDown(kb.jump)) move.y += 1;
-        if (keys.current['ControlLeft']) move.y -= 1;
-        if (move.lengthSq() > 0) pos.current.addScaledVector(move.normalize(), flySpeed * dt);
+        camera.getWorldDirection(_camDirV);
+        _rightV.crossVectors(_camDirV, _upV).normalize();
+        _moveV.set(0, 0, 0);
+        if (isDown(kb.moveForward)) _moveV.add(_camDirV);
+        if (isDown(kb.moveBack)) _moveV.sub(_camDirV);
+        if (isDown(kb.moveRight)) _moveV.add(_rightV);
+        if (isDown(kb.moveLeft)) _moveV.sub(_rightV);
+        if (isDown(kb.jump)) _moveV.y += 1;
+        if (keys.current['ControlLeft']) _moveV.y -= 1;
+        if (_moveV.lengthSq() > 0) pos.current.addScaledVector(_moveV.normalize(), flySpeed * dt);
       } else if (crewState.engineId) {
         // Crewing an engine (rig lab: `traits.vehicle.canOccupy`). You're
         // planted in the crew position — no walking — and your look drives
@@ -1007,14 +1027,14 @@ export default function PlayerController() {
           }
         }
       } else {
-      const dir = new THREE.Vector3(
+      _dirV.set(
         (isDown(kb.moveRight) ? 1 : 0) - (isDown(kb.moveLeft) ? 1 : 0),
         0,
         (isDown(kb.moveBack) ? 1 : 0) - (isDown(kb.moveForward) ? 1 : 0),
       );
-      const isMoving = dir.lengthSq() > 0;
+      const isMoving = _dirV.lengthSq() > 0;
       if (isMoving) {
-        dir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current);
+        _dirV.normalize().applyAxisAngle(_upV, yaw.current);
       }
       // movement (mounted: faster, with a stamina-limited gallop; on foot:
       // sprinting spends stamina too, the same way a sword swing does,
@@ -1036,8 +1056,8 @@ export default function PlayerController() {
       const speed = (riding ? (galloping ? 11 : 6) : sprint ? 7 : 4) * (onRoadNow ? ROAD_SPEED_MULT : 1);
       if (isMoving) statsAccum.distanceMeters += speed * dt;
       const p = pos.current;
-      let nx = p.x + dir.x * speed * dt;
-      let nz = p.z + dir.z * speed * dt;
+      let nx = p.x + _dirV.x * speed * dt;
+      let nz = p.z + _dirV.z * speed * dt;
 
       // collisions: buildings (AABB, unless we can step onto or walk under
       // them), trees & rocks (circles), pond, world bounds — or, inside a
@@ -1262,10 +1282,10 @@ export default function PlayerController() {
 
       // footsteps / hoofbeats
       if (riding) {
-        audio.setLoop('canter', dir.lengthSq() > 0 ? (galloping ? 0.5 : 0.22) : 0);
+        audio.setLoop('canter', _dirV.lengthSq() > 0 ? (galloping ? 0.5 : 0.22) : 0);
       } else {
         audio.setLoop('canter', 0);
-        if (dir.lengthSq() > 0 && grounded.current) {
+        if (_dirV.lengthSq() > 0 && grounded.current) {
           stepTimer.current -= dt;
           if (stepTimer.current <= 0) {
             audio.play('step', 0.25);
@@ -1389,11 +1409,10 @@ export default function PlayerController() {
       if (frozen) {
         aimState.target = null;
       } else {
-        const fwd = new THREE.Vector3();
-        camera.getWorldDirection(fwd);
+        camera.getWorldDirection(_aimFwdV);
         aimState.target = resolveAim(
           camera.position.x, camera.position.y, camera.position.z,
-          fwd.x, fwd.y, fwd.z,
+          _aimFwdV.x, _aimFwdV.y, _aimFwdV.z,
           useEnemyStore.getState().enemies,
           (k) => KIND_LABEL[k as EnemyKind] ?? k,
           (k) => maxHpOf(k as EnemyKind),
@@ -1421,12 +1440,15 @@ export default function PlayerController() {
 
     // camera: first person at the eyes, third person orbiting behind
     if (st.cameraMode === 'third') {
-      const eye = new THREE.Vector3(pos.current.x, pos.current.y - 0.2, pos.current.z);
-      const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch.current, yaw.current, 0, 'YXZ'));
-      const camPos = eye.clone().addScaledVector(dir, -4.6).add(new THREE.Vector3(0, 0.9, 0));
-      if (camPos.y < 0.35) camPos.y = 0.35;
-      camera.position.copy(camPos);
-      camera.lookAt(eye.clone().addScaledVector(dir, 2.5));
+      _eyeV.set(pos.current.x, pos.current.y - 0.2, pos.current.z);
+      _camEuler.set(pitch.current, yaw.current, 0, 'YXZ');
+      _camLookDirV.set(0, 0, -1).applyEuler(_camEuler);
+      _camPosV.copy(_eyeV).addScaledVector(_camLookDirV, -4.6);
+      _camPosV.y += 0.9;
+      if (_camPosV.y < 0.35) _camPosV.y = 0.35;
+      camera.position.copy(_camPosV);
+      _lookAtV.copy(_eyeV).addScaledVector(_camLookDirV, 2.5);
+      camera.lookAt(_lookAtV);
     } else {
       camera.position.copy(pos.current);
     }
