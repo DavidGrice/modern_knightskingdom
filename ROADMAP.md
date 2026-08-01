@@ -4421,3 +4421,99 @@ isolation.
   point inside the current wall+gate perimeter" test (flood-fill or point-in-polygon over the placed
   wall/gate layout) consulted by every spawn site, which is the actual "meta-abstract data layer" the
   request asks for and does not exist in any form today.
+
+## Performance and mobile-friendliness follow-ups logged 2026-07-31, not yet fixed
+
+Requested 2026-07-31: "are there further optimizations we can make... 1-2 GB is a lot of memory for a
+web game... research how we can optimize our game and code so it can be used across multiple devices...
+add to our ROADMAP mobile friendly (especially for gamepads, iphones, ipads, androids)." The Next.js
+dev-server side of the memory question was already fixed the same day (`webpackMemoryOptimizations`,
+`next.config.mjs` — see the merged PR). Everything below is the CLIENT-SIDE (browser tab) half: real,
+grounded findings from reading the actual rendering/asset/input code, not guessed at — logged per the
+user's own instruction, no code changed this pass.
+
+- [TODO] **Every buildable/enemy asset is preloaded upfront, regardless of unlock state.**
+  `src/game/preload.ts`'s `preloadCommonAssets()` — guarded by a `warmed` flag so it only runs once per
+  session, not per mount, but that one run still `useGLTF.preload()`s the model for every entry in
+  `BUILDABLES` (`data/buildables.ts`, ~39 distinct GLBs) plus all 6 enemy OBJ+MTL donors
+  (`ENEMY_DONORS`) and the dragon rig, unconditionally — including buildables gated behind land tiers or
+  quests the player may not reach for a long time, or a full playthrough without. Its own comment
+  explains why it exists (moves first-use parse cost off the moment a just-finished building should pop
+  in, or the first skeleton/dragon), which is a real problem worth keeping solved — but "warm everything
+  unconditionally" and "warm only what's actually reachable soon" are different scopes, and today's code
+  does the former. A tier/unlock-aware warm list (or staggering the unconditional set behind idle time)
+  would cut first-load payload without reintroducing the original hitch.
+- [TODO] **No visual/geometry LOD — only AI think-rate LOD exists.** `src/ai/config/lod.json` +
+  `AgentManager.ts` throttle how often a distant villager/enemy's AI *thinks* (tier A-D by
+  frustum/distance, e.g. tier D: `thinkHz:0.5, perceiveHz:0, steering:"teleport"`), confirmed genuinely
+  AI-only — nothing swaps mesh detail, drops shadow-casting, or otherwise reduces RENDER cost for a
+  distant, fully-rigged villager/enemy/prop. Every character always draws its full per-part cloned rig
+  geometry (`assembleRiggedMinifig`, `lib/minifigRig.ts`) regardless of screen size or distance.
+- [TODO] **No texture compression anywhere.** Confirmed zero KTX2/Basis/DRACOLoader usage in the codebase
+  (grep across `src/` and the loader setup in `lib/minifig.ts`/`PropModel.tsx`). Every texture (GLB-
+  embedded or standalone, `public/assets/textures`) is raw PNG — cheap on disk, but a decoded PNG costs
+  its full uncompressed size in VRAM regardless of file size, which lands harder on mobile GPUs (far less
+  VRAM/bandwidth than a desktop card) than the modest ~35MB `public/assets` total on-disk footprint
+  suggests.
+- [TODO] **Shadow map has a fixed, uncapped scope regardless of what's on screen.** `DayNight.tsx`'s sun
+  light (~L80-94): one 2048×2048 shadow map over a static orthographic frustum spanning -140..140 world
+  units (280×280 total, far plane 440) — always rasterizes that whole box every shadowed frame, with no
+  cascading and no tightening to the camera's actual view. `sun.current.castShadow` already correctly
+  disables at night (adaptive behavior that exists today, worth keeping) and shadows fully toggle off via
+  `settings.shadows`; the frustum SIZE itself doesn't adapt to anything.
+- [TODO] **Per-frame allocation hot spots in the main player loop.** `PlayerController.tsx`'s
+  `findTarget()` runs unthrottled every frame (called from the main `useFrame`), and its `consider()`
+  closure allocates a fresh `new THREE.Vector3()` per candidate it evaluates — every resource node, NPC,
+  and horse within range, every frame, at 60fps — real GC pressure that scales with world-object count.
+  The third-person camera-follow math in the same file (separate from the aim-ray calc, which IS already
+  throttled to 10Hz) allocates `Vector3`/`Euler` objects every frame too, unthrottled. Contrast: most of
+  the rest of the codebase already reuses module-level/ref'd scratch vectors correctly (e.g. `plateV` in
+  `PlayerController.tsx`, the raycaster in `TemplateWorld.tsx`) — this is a real, isolated gap against an
+  otherwise-followed convention, not a systemic problem.
+- [TODO] **No automatic device-capability detection or adaptive graphics quality.** `graphicsQuality`
+  (`game/store/appStore.ts`) defaults unconditionally to `'high'` regardless of device — there is exactly
+  one capability check anywhere in the codebase, `detectTouch()` (`game/touchInput.ts`,
+  `'ontouchstart' in window || navigator.maxTouchPoints > 0`), and it exists solely to decide whether the
+  on-screen touch controls render, never to inform graphics settings. The existing quality tiers (low/
+  medium/high, `GameScreen.tsx`) only scale `dpr` today (`[0.65,0.65]` / `[0.85,1.25]` / `[1,2]`) — the
+  `<Canvas gl={{...}}>` prop sets nothing else, so `antialias` and `powerPreference` stay at WebGL
+  defaults at every tier, meaning a low-end/mobile device selecting "low" still pays default antialiasing
+  cost and doesn't get a `powerPreference: 'low-power'` hint.
+- [TODO] **Touch input can move/look/interact but cannot fight.** There's a real, working touch-control
+  pass already in the codebase (not absent, as might be assumed) — `TouchControls.tsx` (a virtual
+  joystick, a full-screen look-drag surface, Sprint/Jump/Interact buttons) feeding `touchState`
+  (`game/touchInput.ts`), consumed by `PlayerController.tsx`'s `pollTouch()`. But
+  `CombatController.tsx`'s attack/block/ranged-draw is strictly mouse-only (`mousedown`/`mouseup` on
+  `gl.domElement`, checking `document.pointerLockElement`) with zero touch equivalent — a phone/tablet
+  player today can walk around and interact with the world but cannot swing a sword, block, or draw a
+  bow/crossbow at all. For a "mobile-friendly" push this is probably the single highest-priority gap:
+  everything else is polish, this is a player who literally cannot fight.
+- [TODO] **Gamepad support is partial and lives outside the rebindable keybind system.** `pollGamepad()`
+  (`PlayerController.tsx`) covers move (stick/d-pad), look (right stick, analog), jump, interact (held),
+  and sprint — confirmed nothing maps attack, block, ranged aim/draw, weapon-swap, or ANY menu/panel
+  navigation (Inventory, Crafting, Quests, Build, Roster, etc. all stay keyboard-only per
+  `game/data/keybinds.ts`, which has no gamepad-button concept at all — this is a second, hardcoded input
+  path, not part of the same rebindable table keyboard uses). No `gamepadconnected`/`gamepaddisconnected`
+  handling anywhere either.
+- [TODO] **No input-mode-aware UI — every prompt assumes a keyboard.** Confirmed every on-screen prompt
+  is hardcoded keyboard text unconditionally: `PlayerController.tsx`'s interact prompt builds literal
+  strings like `"Hold E — {label}"`/`"Hold Click — {label}"`; `hud/Panels.tsx` hardcodes a
+  `WASD move · Shift sprint · Space jump · E interact …` cheat-sheet. Nothing tracks which input device
+  the player is actually using right now (no `inputMode`/`activeDevice` field anywhere in
+  `appStore.ts`'s `Settings`), so there is no gamepad button-glyph prompt and no touch-appropriate prompt
+  text — a controller or touch player sees keyboard instructions regardless.
+- [TODO] **No PWA / installability support.** Confirmed no `manifest.json`/`manifest.webmanifest`
+  anywhere in the repo, no service worker, no `apple-mobile-web-app-capable` meta tag — the game cannot
+  be "added to home screen" on iOS/Android for a full-screen, app-like launch, which matters directly for
+  the "iPhones, iPads, Androids" half of the request (a bookmarked browser tab reads very differently
+  from an installed icon on a phone's home screen).
+- [TODO] **Responsive layout is real but incomplete.** A genuine "mobile-friendly pass (2026-07-20)"
+  already exists — confirmed, not absent: a viewport meta with `viewportFit: 'cover'`/`userScalable:
+  false` (`app/layout.tsx`, explicitly to stop pinch-zoom fighting touch controls), one
+  `@media (max-width: 720px)` breakpoint (`globals.css`) that rescales panels to `94vw`, reflows grids,
+  and hides the keyboard cheat-sheet, and several panels already fluid outside that breakpoint
+  (`.game-panel.menu-family { width: min(760px, 92vw) }`, the shell `VillagersPanel`/most big panels
+  use). What's still missing: the touch joystick/button sizes are fixed px (`globals.css`, e.g. a 120px
+  joystick base, 76px interact button) rather than viewport-scaled, so they eat a much bigger fraction of
+  a small phone screen than a tablet; a couple of panels (`.panel`, base `.game-panel`) still carry a
+  fixed `min-width` that's only overridden inside the one 720px breakpoint, not fluid by default.
