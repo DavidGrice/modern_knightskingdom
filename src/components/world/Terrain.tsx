@@ -6,6 +6,7 @@ import { useGLTF } from '@react-three/drei';
 import { WORLD_HALF, POND } from '@/game/data/world';
 import { BUILD_REGION, landHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
+import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, sampleEnv, seasonOf } from '@/game/env';
 import { normalizeTemplateBake } from './TemplateWorld';
 
@@ -132,8 +133,16 @@ export function GameSky() {
 // way the old procedural plane did.
 function HomeMeadow() {
   const { scene } = useGLTF('/assets/worlds/template-09.glb');
+  const { gl } = useThree();
   const { group, tintables } = useMemo(() => {
     const g = normalizeTemplateBake(scene);
+    // Requested 2026-07-31: a real Options setting (Settings.anisotropy,
+    // default 8 — this file's own original hardcoded value, so a Balanced-
+    // equivalent player sees no change) instead of a bare literal. A plain
+    // imperative read, not a subscribed hook value — like AA mode and the
+    // quality tiers' own antialias/powerPreference, this takes effect on
+    // already-loaded textures only at next load, not live mid-session.
+    const anisotropy = Math.min(useAppStore.getState().settings.anisotropy, gl.capabilities.getMaxAnisotropy());
     // clone materials so seasonal tinting never mutates drei's shared GLTF
     // cache (a destination visit to another bake must not inherit our tint)
     const tintables: { mat: THREE.MeshStandardMaterial; orig: THREE.Color }[] = [];
@@ -144,7 +153,7 @@ function HomeMeadow() {
           const clone = (m as THREE.Material).clone() as THREE.MeshStandardMaterial;
           // the baked stud-plate texture bands badly at the grazing angles a
           // ground plane is always seen from — anisotropy keeps it legible
-          if (clone.map) clone.map.anisotropy = 8;
+          if (clone.map) clone.map.anisotropy = anisotropy;
           if (clone.color) tintables.push({ mat: clone, orig: clone.color.clone() });
           return clone;
         });
@@ -152,7 +161,7 @@ function HomeMeadow() {
       }
     });
     return { group: g, tintables };
-  }, [scene]);
+  }, [scene, gl]);
 
   useFrame((_, dt) => {
     const s = seasonOf(worldEnv.dayCount);
@@ -178,21 +187,25 @@ function HomeMeadow() {
 // (140, 68), clear of the Keep's footprint, the fishing dock (southwest
 // bank) and the build region.
 function Stream() {
+  const { gl } = useThree();
+  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
   const brookTexture = useMemo(() => {
     const t = new THREE.TextureLoader().load('/assets/textures/water/spr199_256x256.png');
     t.wrapS = THREE.RepeatWrapping;
     t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
+    t.anisotropy = anisotropy;
     return t;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const fallTexture = useMemo(() => {
     const t = new THREE.TextureLoader().load('/assets/textures/water/spr203_64x128.png');
     t.wrapS = THREE.RepeatWrapping;
     t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
+    t.anisotropy = anisotropy;
     return t;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // from the pond's northeast edge out to the spring mound
   const ax = POND.x + 6.5, az = POND.z + 3;   // pond-edge end
@@ -243,6 +256,8 @@ export default function Terrain() {
   const buildMode = useGameStore((s) => s.buildMode);
   const landTier = useGameStore((s) => s.landTier);
   const grassMat = useRef<THREE.MeshStandardMaterial>(null);
+  const { gl } = useThree();
+  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
 
   // the fence you have actually bought, not the maximum it could ever reach
   // (F19/F20) — and every tier is an 8N+8 size, so the grid always closes on
@@ -264,9 +279,10 @@ export default function Terrain() {
     t.wrapS = THREE.RepeatWrapping;
     t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
+    t.anisotropy = anisotropy;
     t.repeat.set(3, 3);
     return t;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useFrame((_, dt) => {

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { ScreenName } from '../types';
 import { DEFAULT_KEYBINDS } from '../data/keybinds';
 import { suggestGraphicsQuality } from '../deviceProfile';
+import type { AaMode } from '../aaModes';
 
 export interface SessionUser {
   id: string;
@@ -39,7 +40,20 @@ export interface Settings {
   showFps: boolean;
   dayLengthMin: number;
   graphicsQuality: GraphicsQuality;
+  /** Requested 2026-07-31: real anti-aliasing, orthogonal to the quality
+   *  preset — see aaModes.ts and PostProcessing.tsx. */
+  aaMode: AaMode;
+  /** 1/2/4/8/16 — capped against the real device's own max at the point it's
+   *  applied (Terrain.tsx/KeepAssembly.tsx), so a value beyond hardware
+   *  support harmlessly clamps rather than erroring. */
+  anisotropy: number;
+  /** fog/shadow-reach multiplier read by DayNight.tsx, 1 = today's exact
+   *  values (base fog 150/460, shadow far 440) */
+  viewDistance: number;
   colorblindMode: boolean;
+  /** which size the minimap STARTS at each session — the in-game M-key
+   *  toggle (Minimap.tsx) still switches live within a session, unchanged */
+  minimapDefaultSize: 'small' | 'large';
   uiTheme: UiTheme;
   keybinds: Record<string, string>;
 }
@@ -60,7 +74,15 @@ const DEFAULT_SETTINGS: Settings = {
   // who are about to be migrated onto it from the old default (see
   // loadSettings()'s legacy remap below).
   graphicsQuality: 'balanced',
+  // 'off' — a genuinely optional upgrade. Must not change any existing
+  // player's rendering or frame rate the moment this ships.
+  aaMode: 'off',
+  // matches the most common hardcoded value already in use (Terrain.tsx) —
+  // no visible change for anyone until they actually open this setting
+  anisotropy: 8,
+  viewDistance: 1,
   colorblindMode: false,
+  minimapDefaultSize: 'small',
   uiTheme: 'glass',
   keybinds: DEFAULT_KEYBINDS,
 };

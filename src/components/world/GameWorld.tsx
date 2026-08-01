@@ -3,6 +3,8 @@ import { Suspense } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import Terrain, { GameSky } from './Terrain';
 import DayNight from './DayNight';
+import PostProcessing from './PostProcessing';
+import FpsMeter from './FpsMeter';
 import Weather from './Weather';
 import Wildlife from './Wildlife';
 import ResourceNodes from './ResourceNodes';
@@ -44,6 +46,8 @@ export default function GameWorld() {
 
   return (
     <>
+      <PostProcessing />
+      <FpsMeter />
       <DayNight />
       <Weather />
       <Wildlife />

@@ -506,25 +506,35 @@
 }
 .kk-screen-leather .kk-sec-label { color: rgba(240, 220, 176, .6); letter-spacing: .18em; }
 
-/* ---------- 3d · OPTIONS (two columns, sliders read their value) ---------- */
-.kk-opt-grid {
+/* ---------- 3d · OPTIONS (tabbed, sliders read their value) ---------- */
+/* Requested 2026-07-31: replaced the old fixed two-column grid — the
+   Graphics tab grew real AA/anisotropy/view-distance controls on top of
+   what was already there, and a two-column scroll ran out of room. */
+.kk-opt-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.kk-opt-tabs button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  background: transparent;
+  font: 700 10.5px/1 var(--kk-font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--kk-n-600);
+  box-shadow: inset 0 0 0 1px var(--kk-n-800);
+}
+.kk-opt-tabs button.on { background: var(--kk-a-900); color: var(--kk-a-400); box-shadow: inset 0 0 0 1px var(--kk-a-400); }
+.kk-opt-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 26px;
   min-height: 0;
   overflow-y: auto;
-  align-content: start;
-  /* the scrollbar used to sit flush against the right column's own content
-     (quality-preset buttons, keybind key-caps) with no gutter of its own —
-     reserved space keeps it from overlapping either column, and padding
-     gives it real breathing room on browsers that don't support the
-     property yet */
+  max-width: 480px;
+  /* the scrollbar used to sit flush against the content with no gutter of
+     its own — reserved space keeps it from overlapping, and padding gives
+     it real breathing room on browsers that don't support the property yet */
   scrollbar-gutter: stable;
   padding-right: 14px;
 }
-@media (max-width: 900px) { .kk-opt-grid { grid-template-columns: 1fr; } }
-.kk-opt-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .kk-opt-rows { display: flex; flex-direction: column; gap: 13px; }
 .kk-opt-row { display: flex; align-items: center; gap: 12px; min-height: 24px; }
 .kk-opt-row > .name {
@@ -925,6 +935,13 @@
   height: 32px;
   border-radius: 99px;
   overflow: hidden;
+}
+/* Requested 2026-07-31: Options' "Show FPS counter" switch */
+.kk-fps-readout {
+  font: 700 10px/1 var(--kk-font-num);
+  letter-spacing: .08em;
+  color: rgba(255, 255, 255, .55);
+  padding: 3px 8px;
 }
 .kk-compass-ticks {
   position: absolute;
