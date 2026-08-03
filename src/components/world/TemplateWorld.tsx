@@ -109,8 +109,13 @@ export const TEMPLATE_WORLD_SCALE = 0.32;
 /** normalize a whole-map template bake: fixed scale, centered on X/Z, ground
  *  at y=0, shadows + normals + double-sided materials. Shared by destination
  *  rendering below and the home world's own Far Meadow terrain (Phase 20 —
- *  template-09 IS the homestead now, mounted at the world origin). */
-export function normalizeTemplateBake(scene: THREE.Object3D): THREE.Group {
+ *  template-09 IS the homestead now, mounted at the world origin). Returns
+ *  the applied recentring offset alongside the group (requested 2026-08-03,
+ *  TemplatePopulation.tsx) — the grok map-layout data's own positions are
+ *  expressed relative to the bake's un-recentred local origin, so anything
+ *  placing content against that data needs the SAME real offset this
+ *  function computed, not a second guess at what centered the bake. */
+export function normalizeTemplateBake(scene: THREE.Object3D): { group: THREE.Group; offset: THREE.Vector3 } {
   const inner = scene.clone(true);
   const holder = new THREE.Group();
   holder.add(inner);
@@ -118,7 +123,8 @@ export function normalizeTemplateBake(scene: THREE.Object3D): THREE.Group {
   holder.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(holder);
   const center = box.getCenter(new THREE.Vector3());
-  holder.position.set(-center.x, -box.min.y, -center.z);
+  const offset = new THREE.Vector3(-center.x, -box.min.y, -center.z);
+  holder.position.copy(offset);
   const wrapper = new THREE.Group();
   wrapper.add(holder);
   wrapper.traverse((c) => {
@@ -131,12 +137,24 @@ export function normalizeTemplateBake(scene: THREE.Object3D): THREE.Group {
       for (const m of mats) (m as THREE.Material).side = THREE.DoubleSide;
     }
   });
-  return wrapper;
+  return { group: wrapper, offset };
+}
+
+/** the currently-mounted bake's own recentring offset (see normalizeTemplateBake's
+ *  doc comment) — same one-at-a-time module-ref convention as mountedRoot/
+ *  mountedRegion above, since only one destination bake is ever mounted. */
+const bakeOffset = new THREE.Vector3();
+export function getBakeOffset(): THREE.Vector3 {
+  return bakeOffset;
 }
 
 function NormalizedTemplateScene({ url }: { url: string }) {
   const { scene } = useGLTF(url);
-  const group = useMemo(() => normalizeTemplateBake(scene), [scene]);
+  const { group, offset } = useMemo(() => normalizeTemplateBake(scene), [scene]);
+  useEffect(() => {
+    bakeOffset.copy(offset);
+    return () => { bakeOffset.set(0, 0, 0); };
+  }, [offset]);
   return <primitive object={group} />;
 }
 
@@ -213,7 +231,7 @@ if (typeof window !== 'undefined') {
   // rasterized heightAt() against this module's already-trusted raycast
   // sampler (iteration 2.5's own verification).
   (window as unknown as Record<string, unknown>).__kkworld = {
-    sampleTemplateGroundY, destinationGroundY, getMountedRegion,
+    sampleTemplateGroundY, destinationGroundY, getMountedRegion, getBakeOffset,
   };
 }
 

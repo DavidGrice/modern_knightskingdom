@@ -135,7 +135,7 @@ function HomeMeadow() {
   const { scene } = useGLTF('/assets/worlds/template-09.glb');
   const { gl } = useThree();
   const { group, tintables } = useMemo(() => {
-    const g = normalizeTemplateBake(scene);
+    const { group: g } = normalizeTemplateBake(scene);
     // Requested 2026-07-31: a real Options setting (Settings.anisotropy,
     // default 8 — this file's own original hardcoded value, so a Balanced-
     // equivalent player sees no change) instead of a bare literal. A plain
