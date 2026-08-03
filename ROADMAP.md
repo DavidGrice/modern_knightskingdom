@@ -3640,12 +3640,35 @@ was forgotten.
   ~5-15 real catalog hits per map; the rest of a layout's groups describe
   meshes already baked into the diorama, not new importable content), plus
   a verified coordinate transform from the lab's map-local space into the
-  game's own bake-normalized space. Orientation ground-truth wiring
-  (`PAK_ORIENTATION_CATALOG.json`, 264 verified/candidate/todo eulers) is
-  drafted but deliberately left unwired pending a calibration spot-check —
-  the lab's own import path isn't yet confirmed to share an axis convention
-  with the game's `obj2gltfHelper.mjs` OBJ→GLB export. See the (session-local)
-  plan file for the full 5-wave sequencing; this entry covers wave 1 only.
+  game's own bake-normalized space (in progress next).
+
+  **Orientation ground-truth wiring investigated 2026-08-03, deliberately
+  NOT wired in — a real, deeper risk than "convert degrees to radians"
+  found along the way.** `PAK_ORIENTATION_CATALOG.json`'s per-model
+  `status` field is actually `lab_fixed` (207) or `verified` (57) for
+  every one of the 264 real catalog entries (0 genuinely `todo` — the
+  file's own top-level `stats.by_status` rollup claiming 92 todo is stale
+  and should not be trusted, confirmed by reading the real per-model
+  values directly) — so the *data itself* isn't the blocker. The blocker:
+  the lab's correction is entirely **rotation-based** (Blender's own OBJ
+  importer + a per-model corrective `final_root_euler_deg`), computed
+  independent of this game's own toolchain. But this repo's real OBJ→GLB
+  conversion (`resources/model_pipeline/obj2gltfHelper.mjs`, confirmed by
+  reading it directly) already applies its OWN correction for the same
+  "source coordinates are Y-down" problem — a **Y-axis mirror** (negative
+  scale), not a rotation, done via `gltf-transform` post-processing
+  DURING conversion, before `PropModel.tsx`'s runtime `rotation.x =
+  Math.PI` ever runs. Composing a mirror-based correction with a
+  rotation-based one is a real coordinate-geometry problem (a mirror
+  doesn't commute with rotation the way two rotations would), not a
+  constant-offset lookup — reconciling the two needs either a careful
+  matrix-level derivation verified against real rendered output, or
+  genuine per-asset empirical calibration (render candidate vs. the
+  lab's own `qa_still` reference, iterate), not a one-shot trust-the-
+  degrees-field wiring pass. Deferred rather than guessed at — no code
+  changed for this part. See the (session-local) plan file for the full
+  5-wave sequencing; waves 1 (catalog widening) and this investigation
+  are the only ones touched so far.
 - [TODO] **Option B of the workshop** (instruction-accurate builds): still needs
   LDraw models, Rebrickable inventories, and the manual PDFs. `ldraw/` holds
   only its README. Send one `.mpd` and the seam can be proved against it.
