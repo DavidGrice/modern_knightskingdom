@@ -115,11 +115,11 @@ export const TEMPLATE_WORLD_SCALE = 0.32;
  *  expressed relative to the bake's un-recentred local origin, so anything
  *  placing content against that data needs the SAME real offset this
  *  function computed, not a second guess at what centered the bake. */
-export function normalizeTemplateBake(scene: THREE.Object3D): { group: THREE.Group; offset: THREE.Vector3 } {
+export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE): { group: THREE.Group; offset: THREE.Vector3 } {
   const inner = scene.clone(true);
   const holder = new THREE.Group();
   holder.add(inner);
-  holder.scale.setScalar(TEMPLATE_WORLD_SCALE);
+  holder.scale.setScalar(scale);
   holder.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(holder);
   const center = box.getCenter(new THREE.Vector3());
@@ -148,9 +148,9 @@ export function getBakeOffset(): THREE.Vector3 {
   return bakeOffset;
 }
 
-function NormalizedTemplateScene({ url }: { url: string }) {
+function NormalizedTemplateScene({ url, scale }: { url: string; scale?: number }) {
   const { scene } = useGLTF(url);
-  const { group, offset } = useMemo(() => normalizeTemplateBake(scene), [scene]);
+  const { group, offset } = useMemo(() => normalizeTemplateBake(scene, scale), [scene, scale]);
   useEffect(() => {
     bakeOffset.copy(offset);
     return () => { bakeOffset.set(0, 0, 0); };
@@ -220,7 +220,7 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
         <circleGeometry args={[dest.radius + 4, 24]} />
         <meshStandardMaterial color="#4c7a3a" roughness={1} />
       </mesh>
-      <NormalizedTemplateScene key={dest.id} url={dest.model} />
+      <NormalizedTemplateScene key={dest.id} url={dest.model} scale={dest.worldScale} />
       {claim && <ClaimFlag x={claim.x - dest.origin.x} z={claim.z - dest.origin.z} groundY={claim.groundY} />}
     </group>
   );
