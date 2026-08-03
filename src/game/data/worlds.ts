@@ -110,5 +110,22 @@ export const DUNGEON_DESTINATION: WorldDestination = {
   origin: DUNGEON_ORIGIN, radius: REACH_LIMIT + 30,
 };
 
+// The endless mob arena (requested 2026-08-03) piggybacks on this same
+// destination system exactly like the dungeon above — a real place to
+// travel/collide/sample-ground-height against, but with its own renderer
+// (ArenaScene.tsx) instead of a baked model, and no thumb since it's never
+// shown in TravelPanel's normal grid (it gets its own dedicated section).
+// origin is a fresh quadrant, clear of every template (1000-3400, z:1000)
+// and the dungeon (4200, 4200).
+export const ARENA_ORIGIN = { x: -4200, z: 4200 };
+export const ARENA_RADIUS = 40;
+
+export const ARENA_DESTINATION: WorldDestination = {
+  id: 'arena', name: 'The Endless Arena',
+  blurb: 'A sealed pit. They keep coming until you leave, or you don’t.',
+  thumb: '', model: '',
+  origin: ARENA_ORIGIN, radius: ARENA_RADIUS,
+};
+
 export const WORLD_DESTINATION_BY_ID: Record<string, WorldDestination> =
-  Object.fromEntries([...WORLD_DESTINATIONS, DUNGEON_DESTINATION].map((d) => [d.id, d]));
+  Object.fromEntries([...WORLD_DESTINATIONS, DUNGEON_DESTINATION, ARENA_DESTINATION].map((d) => [d.id, d]));

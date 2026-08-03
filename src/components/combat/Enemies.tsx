@@ -16,6 +16,7 @@ import RiggedFigure from '../character/RiggedFigure';
 import { measureHitBoxes } from '@/lib/minifigRig';
 import { registerHitbox, unregisterHitbox } from '@/game/hitbox';
 import { findPath, rebuildNav } from '@/game/navgrid';
+import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import HealthBillboard from './HealthBillboard';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { isHomeBuilding } from '@/game/types';
@@ -112,7 +113,7 @@ function Enemy({ data }: { data: EnemyData }) {
   // drop this mob's hit volumes when it leaves the field, or a dead id keeps
   // soaking bolts fired through the empty space where it used to stand
   useEffect(() => () => unregisterHitbox(String(data.id)), [data.id]);
-  const speed =
+  const baseSpeed =
     data.kind === 'skeleton' ? 2.1
       : data.kind === 'cedric' ? 2.3
       // armored and disciplined — a shade slower than a scrambling bandit
@@ -121,6 +122,10 @@ function Enemy({ data }: { data: EnemyData }) {
       // are about how hard she is to out-time, not extra hit points.
       : data.kind === 'storm' ? 2.6 + Math.min(1.2, (useGameStore.getState().reputation['storm'] ?? 0) * 0.01)
       : 2.7;
+  // requested 2026-08-03: the active arena environment's own enemySpeedMult
+  // (game/arena.ts) — read once at mount like baseSpeed itself, since the
+  // environment is fixed for a whole arena run
+  const speed = data.arena ? baseSpeed * ARENA_ENV_BY_ID[arenaState.env ?? 'earth'].enemySpeedMult : baseSpeed;
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
@@ -429,11 +434,24 @@ function Enemy({ data }: { data: EnemyData }) {
           }
         }
       }
-      // keep out of the pond and the world edge
-      const pd = Math.hypot(m.x - POND.x, m.z - POND.z);
-      if (pd < POND.radius + 1) {
-        m.x = POND.x + ((m.x - POND.x) / pd) * (POND.radius + 1);
-        m.z = POND.z + ((m.z - POND.z) / pd) * (POND.radius + 1);
+      // Keep out of the pond and the world edge — home-only geography, same
+      // !st.destination guard the keepTarget/defTarget checks above already
+      // use. Found and fixed while building the arena (requested 2026-08-03):
+      // both this pond check and the WORLD_HALF clamp below were previously
+      // unconditional, so an enemy spawned thousands of units away at a real
+      // destination's own origin got yanked back inside the home world's
+      // tiny ±200 bound every single frame. A genuine pre-existing latent
+      // bug for the Sealed Crypt too (DUNGEON_ORIGIN is (4200,4200)) — it
+      // just never surfaced there, since a room fight is short and its own
+      // walls mask a mob's position snapping around.
+      if (!st.destination) {
+        const pd = Math.hypot(m.x - POND.x, m.z - POND.z);
+        if (pd < POND.radius + 1) {
+          m.x = POND.x + ((m.x - POND.x) / pd) * (POND.radius + 1);
+          m.z = POND.z + ((m.z - POND.z) / pd) * (POND.radius + 1);
+        }
+        m.x = THREE.MathUtils.clamp(m.x, -WORLD_HALF + 2, WORLD_HALF - 2);
+        m.z = THREE.MathUtils.clamp(m.z, -WORLD_HALF + 2, WORLD_HALF - 2);
       }
       // a shut gate blocks raiders like a wall (the one building type enemies collide with)
       for (const b of st.buildings) {
@@ -450,8 +468,6 @@ function Enemy({ data }: { data: EnemyData }) {
           else m.z = b.z + Math.sign(dz || 1) * hz;
         }
       }
-      m.x = THREE.MathUtils.clamp(m.x, -WORLD_HALF + 2, WORLD_HALF - 2);
-      m.z = THREE.MathUtils.clamp(m.z, -WORLD_HALF + 2, WORLD_HALF - 2);
     }
 
     // Phase 20: away from the flat homestead, enemies stand on the bake's

@@ -5,6 +5,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATIONS } from '@/game/data/worlds';
 import { NPCS, isNpcRevealed } from '@/game/data/npcs';
 import { DUNGEON_UNLOCK_QUEST } from '@/game/dungeon';
+import { ARENA_ENVS } from '@/game/arena';
 
 export default function TravelPanel() {
   const setPanel = useGameStore((s) => s.setPanel);
@@ -12,6 +13,7 @@ export default function TravelPanel() {
   const visitedWorlds = useGameStore((s) => s.visitedWorlds);
   const travelTo = useGameStore((s) => s.travelTo);
   const enterDungeon = useGameStore((s) => s.enterDungeon);
+  const enterArena = useGameStore((s) => s.enterArena);
   const completedQuests = useGameStore((s) => s.completedQuests);
   const dungeonUnlocked = completedQuests.includes(DUNGEON_UNLOCK_QUEST);
 
@@ -91,6 +93,45 @@ export default function TravelPanel() {
         >
           {destination === 'dungeon' ? 'You are here' : dungeonUnlocked ? 'Descend' : 'Locked'}
         </button>
+      </div>
+
+      {/* requested 2026-08-03: same unlock gate as the Crypt above (a first
+          cut, no dedicated arena quest yet) — reusing dungeonUnlocked keeps
+          this section correctly locked/unlocked in step with it */}
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--chrome-2)' }}>
+        <div style={{ fontWeight: 'bold', color: 'var(--gold)', fontSize: 14, marginBottom: 8 }}>
+          ⚔️ The Endless Arena {destination === 'arena' ? ' ✓' : ''}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--parchment-dark)', marginBottom: 10 }}>
+          {dungeonUnlocked
+            ? 'A sealed pit. They keep coming until you leave, or you don’t. Pick a ring.'
+            : 'Sealed until you have proven yourself a Knight.'}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          {ARENA_ENVS.map((env) => (
+            <div
+              key={env.id}
+              style={{
+                border: '1px solid var(--chrome-2)', borderRadius: 6, padding: 8,
+                background: 'rgba(0,0,0,0.25)',
+              }}
+            >
+              <div style={{ fontWeight: 'bold', color: 'var(--gold)', fontSize: 13, marginBottom: 4 }}>
+                {env.name}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--parchment-dark)', marginBottom: 8, minHeight: 44 }}>
+                {env.blurb}
+              </div>
+              <button
+                disabled={!dungeonUnlocked || !!destination}
+                onClick={() => enterArena(env.id)}
+                style={{ width: '100%' }}
+              >
+                {dungeonUnlocked ? 'Enter' : 'Locked'}
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

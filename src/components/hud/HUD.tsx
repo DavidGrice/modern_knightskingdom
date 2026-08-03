@@ -22,6 +22,7 @@ import FpsReadout from './FpsReadout';
 import FishingMeter from './FishingMeter';
 import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
+import ArenaHud from './ArenaHud';
 import OrderRadial from './OrderRadial';
 import KkIcon from '../ui/KkIcon';
 import { ICON_FOR_EMOJI } from '../ui/KkIcon';
@@ -330,6 +331,7 @@ export default function HUD() {
 
       {!buildMode && <Vitals />}
       <DungeonStatus />
+      <ArenaHud />
 
       <div className="kk-topright">
         {!buildMode && <Compass />}
