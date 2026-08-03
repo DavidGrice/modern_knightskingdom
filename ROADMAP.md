@@ -3625,6 +3625,27 @@ was forgotten.
   bricks and the template maps are not fully mapped yet. Every empire feature
   that needs to know what is standing in a place — which buildings a village
   comes with, where its NPCs live, what its interiors are — waits on this.
+  **Update 2026-08-03: the data-side blocker is gone.** The Grok lab finished
+  per-mesh `kk.map_layout.v1` classification for all 9 templates + 6 bonus
+  "challenge" maps on 2026-08-01 (`reports/maps/*_layout.json`), and the PAK
+  capability/orientation catalog grew from 86 hand-verified assets to the
+  full 264 (`reports/PAK_ASSET_CAPABILITIES.json`). `scripts/prepare-assets.mjs`
+  now merges both layers (264 base + 86 human-verified overrides, overrides
+  always winning) — `public/assets/rigs/capabilities.json` is 264 entries
+  and `part_roles.json` is 221 (up from 86/179), plus the 9 template + 6
+  challenge world bakes are now copied by that same script instead of an
+  undocumented manual step. **What's still actually open** is turning the
+  per-map classification into rendered content — a data-driven successor to
+  `CourtDressing.tsx` that spawns each map's real `asset_ref` groups (only
+  ~5-15 real catalog hits per map; the rest of a layout's groups describe
+  meshes already baked into the diorama, not new importable content), plus
+  a verified coordinate transform from the lab's map-local space into the
+  game's own bake-normalized space. Orientation ground-truth wiring
+  (`PAK_ORIENTATION_CATALOG.json`, 264 verified/candidate/todo eulers) is
+  drafted but deliberately left unwired pending a calibration spot-check —
+  the lab's own import path isn't yet confirmed to share an axis convention
+  with the game's `obj2gltfHelper.mjs` OBJ→GLB export. See the (session-local)
+  plan file for the full 5-wave sequencing; this entry covers wave 1 only.
 - [TODO] **Option B of the workshop** (instruction-accurate builds): still needs
   LDraw models, Rebrickable inventories, and the manual PDFs. `ldraw/` holds
   only its README. Send one `.mpd` and the seam can be proved against it.

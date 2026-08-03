@@ -1,8 +1,11 @@
 'use client';
-// The rig lab's hand-curated, human-VERIFIED answer sheet for what each
-// extracted asset actually is (86 assets), loaded from
-// public/assets/rigs/capabilities.json — built by scripts/prepare-assets.mjs
-// out of the lab's PAK_CAPABILITY_OVERRIDES.json.
+// The rig lab's classification of what each extracted asset actually is,
+// loaded from public/assets/rigs/capabilities.json — built by
+// scripts/prepare-assets.mjs out of the lab's PAK_ASSET_CAPABILITIES.json
+// (all 264 PAK warehouse assets, base layer) overlaid with
+// PAK_CAPABILITY_OVERRIDES.json (86 hand-curated, human-VERIFIED entries,
+// always winning — see `seedSource` below to tell which is which for a
+// given id).
 //
 // Before this, every one of these facts was hardcoded per-buildable in
 // data/buildables.ts (or simply guessed): whether you can stand on a piece,
@@ -116,6 +119,12 @@ export interface LabCapability {
   interaction: LabInteraction;
   /** named attach points; values are mesh names, `bone:<name>` or `empty:<name>` */
   sockets: Record<string, string>;
+  /** requested 2026-08-03: 'verified' for the 86 hand-curated overrides,
+   *  'auto' for the wider auto-seeded pool from PAK_ASSET_CAPABILITIES.json
+   *  — absent on data written before this field existed. Not read by any
+   *  predicate below; a hint for UI/tooling that wants to flag unverified
+   *  data rather than trust it at the same confidence as a reviewed entry. */
+  seedSource?: 'auto' | 'verified';
 }
 
 let warm: Record<string, LabCapability> = {};
