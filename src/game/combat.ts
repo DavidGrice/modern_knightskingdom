@@ -17,6 +17,7 @@ import { ITEMS } from './data/items';
 import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
+import { arenaState } from './arena';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -216,6 +217,11 @@ export interface EnemyData {
   hp: number;
   raid: boolean;
   dungeonRoom?: number; // index of the dungeon room this enemy belongs to, if any
+  /** spawned by ArenaSpawner.tsx — lets the central kill-resolution paths
+   *  below credit game/arena.ts's run-local counter without a second
+   *  registry (mirrors dungeonRoom's "which special context spawned this"
+   *  role) */
+  arena?: boolean;
   /** what this individual is carrying, rolled from its kind's LOOT_TABLE at
    *  spawn — this is what drops when it dies (session-only, never persisted:
    *  enemies don't survive a reload) */
@@ -259,7 +265,7 @@ interface EnemyStore {
   enemies: EnemyData[];
   spawn: (
     kind: EnemyKind, x: number, z: number, raid?: boolean, dungeonRoom?: number,
-    approaching?: boolean, finalStand?: boolean,
+    approaching?: boolean, finalStand?: boolean, extraScale?: number, arena?: boolean,
   ) => void;
   remove: (id: number) => void;
   clear: () => void;
@@ -267,8 +273,12 @@ interface EnemyStore {
 
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
   enemies: [],
-  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false, finalStand = false) => {
-    const scale = (kind === 'cedric' || kind === 'storm') ? 1 : raidStrength();
+  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false, finalStand = false, extraScale = 1, arena = false) => {
+    // requested 2026-08-03: ArenaSpawner.tsx's own run-local escalation
+    // (game/arena.ts's arenaSpawnScale()) layers on top of the existing
+    // game-progress curve rather than replacing it — extraScale defaults to
+    // 1 so every pre-existing call site is unaffected
+    const scale = ((kind === 'cedric' || kind === 'storm') ? 1 : raidStrength()) * extraScale;
     const maxHp = Math.round(KIND_HP[kind] * scale);
     const e: EnemyData = {
       id: enemySeq++,
@@ -278,6 +288,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       scale,
       raid,
       dungeonRoom,
+      arena,
       finalStand,
       // rolled once here rather than threaded through every one of spawn()'s
       // many bandit call sites (the dusk raid, Cedric's war party, camp
@@ -326,6 +337,17 @@ export function damagePlayer(amount: number) {
   if (combatState.hp <= 0) {
     combatState.hp = combatState.maxHp;
     combatState.stamina = combatState.maxStamina;
+    // requested 2026-08-03: the arena's own "respawn just outside, redo"
+    // rule, checked and returned BEFORE the general path below — per this
+    // function's own long-standing comment (just below) anticipating
+    // exactly this. Reuses gameStore's leaveArena() (teleport + notify)
+    // rather than duplicating it; deliberately no worldEnv.time jump — "a
+    // redo, not a punishment" (ROADMAP), unlike the general knockout below.
+    if (st.destination === 'arena') {
+      st.leaveArena();
+      audio.play('horn', 0.5);
+      return;
+    }
     combatState.teleportTo = [0, 26]; // back to the spawn meadow
     // a knockout away from home (the Sealed Crypt is the first destination
     // with real killable-by-the-player-taking-damage enemies) must also
@@ -346,9 +368,6 @@ export function damagePlayer(amount: number) {
     // called off, and any dungeon-room fight is abandoned along with the
     // layout reset above (an orphaned dungeon-room enemy surviving a
     // discarded layout was already a latent gap this incidentally closes).
-    // A future arena's own "respawn just outside, redo" rule (ROADMAP) must
-    // check for that case and return before reaching this general path,
-    // not stack with it.
     useEnemyStore.getState().clear();
     worldEnv.time = 0.27; // just before sunrise
     st.notify('You were knocked out and carried back to camp… you wake at dawn.', true);
@@ -457,6 +476,7 @@ export function playerAttack(): boolean {
     best.mob.state = 'dying';
     best.mob.dieT = 0;
     st.recordKill(best.kind);
+    if (best.arena) arenaState.kills++;
     st.addXp('combat', KIND_XP[best.kind]);
     // hand over what this individual was actually carrying (rolled at spawn)
     const drop = lootFor(best);
@@ -477,6 +497,7 @@ export function playerAttack(): boolean {
 }
 
 if (w) w.__kkAttack = playerAttack;
+if (w) w.__kkDamagePlayer = damagePlayer;
 
 // ---- crossbow bolts ----
 
@@ -669,6 +690,7 @@ export function stepBolt(b: Bolt, dt: number): boolean {
         e.mob.state = 'dying';
         e.mob.dieT = 0;
         st.recordKill(e.kind);
+        if (e.arena) arenaState.kills++;
         st.addXp('combat', KIND_XP_RANGED[e.kind]);
         // a ranged kill dropped NOTHING before 2026-07-20 — only the melee
         // path ever granted loot, so bow/crossbow play quietly paid less

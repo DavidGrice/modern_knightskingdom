@@ -18,8 +18,11 @@ export default function ClaimBanner() {
   const panel = useGameStore((s) => s.panel);
   const claimWorld = useGameStore((s) => s.claimWorld);
 
-  // the Sealed Crypt (Phase 17) regenerates every visit — not a claimable plot
-  if (!destination || destination === 'dungeon' || claimedWorlds[destination] || paused || buildMode || panel !== 'none') return null;
+  // the Sealed Crypt (Phase 17) regenerates every visit, and the Endless
+  // Arena (requested 2026-08-03) is a fixed procedural shell, not somewhere
+  // to build — neither is a claimable plot
+  if (!destination || destination === 'dungeon' || destination === 'arena'
+    || claimedWorlds[destination] || paused || buildMode || panel !== 'none') return null;
   const dest = WORLD_DESTINATION_BY_ID[destination];
 
   return (

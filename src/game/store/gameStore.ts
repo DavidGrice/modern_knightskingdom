@@ -48,10 +48,11 @@ import { playerState, resetPlayerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
 import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR } from '../data/world';
-import { WORLD_DESTINATION_BY_ID } from '../data/worlds';
+import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN } from '../data/worlds';
 import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
 import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST } from '../dungeon';
+import { resetArenaRun, endArenaRun, type ArenaEnvId } from '../arena';
 
 const ZERO_XP: Record<SkillId, number> = {
   woodcutting: 0, mining: 0, smithing: 0, fishing: 0, building: 0, combat: 0, farming: 0,
@@ -246,6 +247,8 @@ interface GameState {
   travelTo: (id: string) => void;
   returnHome: () => void;
   enterDungeon: () => void;
+  enterArena: (envId: ArenaEnvId) => void;
+  leaveArena: () => void;
   markLoreSeen: (npcId: string) => void;
   markCedricDefeated: () => void;
   pledgeAlliance: (side: Alliance) => void;
@@ -1588,6 +1591,40 @@ function createGameStore() {
       playerState.pendingTeleport = { x: layout.entryPos.x, z: layout.entryPos.z, yaw: 0 };
       audio.play('canter', 0.8);
       st.notify('You descend into the Sealed Crypt…', true);
+    },
+
+    // requested 2026-08-03: the endless mob arena, entered from the Travel
+    // Map exactly like the Sealed Crypt above — same unlock gate for a
+    // first cut (no new quest content needed), same pendingTeleport
+    // mechanism. See game/arena.ts for the run-local kill counter/scaling
+    // this resets.
+    enterArena: (envId) => {
+      const st = get();
+      if (st.destination) return;
+      if (!st.completedQuests.includes(DUNGEON_UNLOCK_QUEST)) {
+        st.notify('The Arena only opens to a proven Knight.');
+        return;
+      }
+      resetArenaRun(envId);
+      set({ destination: 'arena', panel: 'none', dirty: true });
+      playerState.pendingTeleport = { x: ARENA_ORIGIN.x, z: ARENA_ORIGIN.z, yaw: 0 };
+      audio.play('canter', 0.8);
+      st.notify('You enter the arena…', true);
+    },
+
+    // the voluntary-exit path — banks whatever milestone rewards were
+    // already granted mid-run (those were handed out the moment each
+    // threshold was crossed, not held back for a "complete" state that
+    // this open-ended mode never reaches). damagePlayer()'s own arena
+    // branch (combat.ts) is the other, involuntary way out.
+    leaveArena: () => {
+      const st = get();
+      if (st.destination !== 'arena') return;
+      endArenaRun();
+      set({ destination: null, dirty: true });
+      playerState.pendingTeleport = { x: SIGNPOST.x, z: SIGNPOST.z + 3, yaw: 0 };
+      audio.play('horn', 0.7);
+      st.notify('You leave the arena.');
     },
 
     tickPlots: (dt) => {

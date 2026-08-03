@@ -15,7 +15,9 @@ import { useGLTF } from '@react-three/drei';
 import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { BATTLE_DOME } from '@/game/data/world';
+import { arenaState } from '@/game/arena';
 import DungeonScene from './DungeonScene';
+import ArenaScene from './ArenaScene';
 
 // The mounted template scene's root, for PlayerController to raycast against
 // (terrain height varies a lot across these bakes — a hillside castle spans
@@ -174,6 +176,16 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
     return (
       <group ref={groupRef} position={[dest.origin.x, 0, dest.origin.z]}>
         <DungeonScene />
+      </group>
+    );
+  }
+  if (dest.id === 'arena') {
+    // requested 2026-08-03: same non-baked treatment as the Crypt above —
+    // ArenaScene supplies its own lighting/fog per the active environment
+    // (game/arena.ts), reskinned rather than regenerated
+    return (
+      <group ref={groupRef} position={[dest.origin.x, 0, dest.origin.z]}>
+        <ArenaScene envId={arenaState.env} />
       </group>
     );
   }

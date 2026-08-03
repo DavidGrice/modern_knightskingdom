@@ -20,7 +20,8 @@ import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
 import { touchState } from '@/game/touchInput';
-import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS } from '@/game/combat';
+import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer } from '@/game/combat';
+import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { fishingState, startFishing, tickFishing } from '@/game/fishing';
 import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
 import { detonate, fireCannon, quintainHit, ramCheck } from '@/game/siege';
@@ -216,6 +217,11 @@ export default function PlayerController() {
   const keys = useRef<Record<string, boolean>>({});
   const pad = useRef<Record<string, boolean>>({});
   const grounded = useRef(true);
+  // requested 2026-08-03: the lava arena's own ambient chip damage — a
+  // once-per-second tick through the normal damagePlayer() path (so armor/
+  // block still apply), not a per-frame call, which would spam the hit
+  // sound/screen-flash 60x/sec
+  const arenaDamageTimer = useRef(1);
   const locked = useRef(false);
   const holdTime = useRef(0);
   const crewCooldown = useRef(0);
@@ -1039,21 +1045,35 @@ export default function PlayerController() {
       // movement (mounted: faster, with a stamina-limited gallop; on foot:
       // sprinting spends stamina too, the same way a sword swing does,
       // rather than being a free speed boost)
+      // requested 2026-08-03: the active arena environment's own
+      // playerSpeedMult/playerStaminaDrainMult/ambientDamagePerSec
+      // (game/arena.ts) — null outside the arena, so every multiplier below
+      // defaults to 1 (no behavior change anywhere else in the game)
+      const arenaEnv = st.destination === 'arena' && arenaState.env ? ARENA_ENV_BY_ID[arenaState.env] : null;
       const riding = ridingState.active;
       const sprintKey = isDown(kb.sprint);
       const galloping = riding && sprintKey && combatState.stamina > 5;
       combatState.galloping = galloping;
-      if (galloping) combatState.stamina = Math.max(0, combatState.stamina - 11 * dt);
+      if (galloping) combatState.stamina = Math.max(0, combatState.stamina - 11 * dt * (arenaEnv?.playerStaminaDrainMult ?? 1));
       const running = !riding && sprintKey && isMoving && combatState.stamina > 5;
       combatState.sprinting = running;
-      if (running) combatState.stamina = Math.max(0, combatState.stamina - 8 * dt);
+      if (running) combatState.stamina = Math.max(0, combatState.stamina - 8 * dt * (arenaEnv?.playerStaminaDrainMult ?? 1));
       const sprint = riding ? galloping : running;
       // Requested 2026-07-30, "part of our advanced building mechanics":
       // the road is home-only (road.ts's route is anchored off the
       // homestead's own SIGNPOST) and only real out in the open, not inside
       // a building's interior pocket.
       const onRoadNow = !st.destination && !st.interior && onRoad(pos.current.x, pos.current.z);
-      const speed = (riding ? (galloping ? 11 : 6) : sprint ? 7 : 4) * (onRoadNow ? ROAD_SPEED_MULT : 1);
+      const speed = (riding ? (galloping ? 11 : 6) : sprint ? 7 : 4) * (onRoadNow ? ROAD_SPEED_MULT : 1) * (arenaEnv?.playerSpeedMult ?? 1);
+      if (arenaEnv && arenaEnv.ambientDamagePerSec > 0) {
+        arenaDamageTimer.current -= dt;
+        if (arenaDamageTimer.current <= 0) {
+          arenaDamageTimer.current = 1;
+          damagePlayer(arenaEnv.ambientDamagePerSec);
+        }
+      } else {
+        arenaDamageTimer.current = 1;
+      }
       if (isMoving) statsAccum.distanceMeters += speed * dt;
       const p = pos.current;
       let nx = p.x + _dirV.x * speed * dt;
