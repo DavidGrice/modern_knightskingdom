@@ -528,7 +528,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  max-width: 480px;
+  max-width: 640px;
   /* the scrollbar used to sit flush against the content with no gutter of
      its own — reserved space keeps it from overlapping, and padding gives
      it real breathing room on browsers that don't support the property yet */
