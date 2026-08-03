@@ -3668,9 +3668,9 @@ was forgotten.
   degrees-field wiring pass. Deferred rather than guessed at — no code
   changed for this part.
 
-  **Wave 3 (template population) coordinate transform FIXED and visually
-  VERIFIED 2026-08-03 — still inert by design, real content spawning is the
-  next increment.** `scripts/prepare-assets.mjs` distills each template's
+  **Wave 3 (template population) coordinate transform FIXED, and real
+  content spawning SHIPPED — 2026-08-03, no longer inert.**
+  `scripts/prepare-assets.mjs` distills each template's
   real `asset_ref` groups (only ~5-15 per map genuinely resolve to a catalog
   id; the rest of a layout's groups describe meshes already baked into the
   diorama) into `src/game/data/mapPopulation.generated.json`.
@@ -3700,12 +3700,40 @@ was forgotten.
   `kind: 'actor'` + a name match is safe to use for *correcting* an
   existing `NpcDef`'s position is now known to be wrong, at least for this
   case — doing that blindly would strand the quest-bearing King unreachably
-  far from spawn. `DEBUG_MARKERS` is back to `false` (real players see
-  nothing); real content spawning (the `PropModel`/`RiggedFigure`
-  instantiation `TemplatePopulation.tsx` still stubs out) needs to resolve
-  this decorative-vs-interactive ambiguity per group (e.g. gate on
-  proximity to an existing hand-placed NPC) before matching by asset id
-  alone, not just trust the transform is now correct and spawn blindly.
+  far from spawn.
+
+  **Real content spawning, same day.** `TemplatePopulation.tsx` no longer
+  stubs out — resolved the decorative-vs-interactive question above by NOT
+  trying to resolve it per group at all: spawn everything the lab
+  classified regardless of distance from origin (the destination's own
+  blurb already describes a "marching procession," meant to be seen as
+  backdrop even where it's unreachable on foot), and simply never let any
+  of it stand in for or auto-correct an existing hand-placed `NpcDef` — no
+  current map's data actually collides the two, so no proximity-dedup guard
+  was needed yet. `kind: 'set'` rows resolve to a real GLB via a
+  `resolvedUrl` `prepare-assets.mjs` now computes by indexing whatever this
+  repo's own extraction already copied into `public/assets/` (there's no
+  single "id -> folder" rule to hand-derive one). `kind: 'actor'`/`'cast'`
+  rows are minifig characters — these ship as raw OBJ+MTL like every other
+  minifig in the game, not GLB, so they render through `RiggedFigure`
+  instead (the same component the player/NPCs/villagers use), with a fuzzy
+  family-prefix match against this game's own hand-tuned `NpcDef` colors
+  (npcs.ts) since the lab data has no color info, falling back to a plain
+  villager scheme for factions with no NpcDef yet (Cedric, Weezil, Gilbert).
+  Also fixed along the way: `worlds.ts`'s templates 01-08 got a 2x
+  `worldScale` bump the same day (see below) — the stored population
+  positions assumed the base scale, so spawning now applies a live
+  `scaleCompensation` ratio per destination rather than drifting off the
+  now-bigger bakes. Verified live: renderer geometry/draw-call counts
+  measurably increased on arrival at both template-01 (+21 geometries) and
+  template-06 (+36, the richer 13-row map), zero console/page errors, and
+  a resolved GLB fetch confirmed a real, correctly-sized file (not a 404 or
+  an empty stub — an earlier version of the URL-builder was missing the
+  `/assets` prefix entirely, caught by this same live check).
+  **Known rough edge, not yet tuned:** every `kind: 'set'` prop renders at
+  one flat default height (0.8m) — no per-asset target height exists yet,
+  so large props may read undersized until someone hand-tunes real values
+  the way `CourtDressing.tsx`'s own props were tuned by eye.
 
   **Wave 4 (challenge maps as new destinations) shipped 2026-08-03.** The 6
   bonus "challenge" maps the lab classified alongside the 9 templates

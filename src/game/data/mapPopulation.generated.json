@@ -4,6 +4,7 @@
    "groupId": "minifigqueenleonora01",
    "kind": "actor",
    "assetRef": "minifigqueenleonora01",
+   "resolvedUrl": null,
    "position": [
     1428.4896,
     -75.312,
@@ -15,6 +16,7 @@
    "groupId": "minifigkingleo00",
    "kind": "actor",
    "assetRef": "minifigkingleo00",
+   "resolvedUrl": null,
    "position": [
     1453.0207999999998,
     -73.9616,
@@ -26,6 +28,7 @@
    "groupId": "minifigjohnmayne02",
    "kind": "actor",
    "assetRef": "minifigjohnmayne02",
+   "resolvedUrl": null,
    "position": [
     1452.3584,
     -75.0272,
@@ -37,6 +40,7 @@
    "groupId": "minifiggenericgood00",
    "kind": "actor",
    "assetRef": "minifiggenericgood00",
+   "resolvedUrl": null,
    "position": [
     1426.608,
     -79.09440000000001,
@@ -48,6 +52,7 @@
    "groupId": "oc6095b3",
    "kind": "set",
    "assetRef": "oc6095b3",
+   "resolvedUrl": "/assets/props/oc6095b3.glb",
    "position": [
     1454.7551999999998,
     -76.2816,
@@ -61,6 +66,7 @@
    "groupId": "minifigrichardstrong01",
    "kind": "actor",
    "assetRef": "minifigrichardstrong01",
+   "resolvedUrl": null,
    "position": [
     1740.9856,
     -16.608,
@@ -72,6 +78,7 @@
    "groupId": "minifigcedricbull02",
    "kind": "actor",
    "assetRef": "minifigcedricbull02",
+   "resolvedUrl": null,
    "position": [
     1899.6191999999999,
     -16.9472,
@@ -83,6 +90,7 @@
    "groupId": "oc6095-2",
    "kind": "set",
    "assetRef": "oc6095-2",
+   "resolvedUrl": "/assets/props/oc6095-2.glb",
    "position": [
     1817.84,
     -13.5872,
@@ -94,6 +102,7 @@
    "groupId": "oc6095-1",
    "kind": "set",
    "assetRef": "oc6095-1",
+   "resolvedUrl": "/assets/props/buildings/oc6095-1.glb",
    "position": [
     1818.3776,
     -27.2832,
@@ -107,6 +116,7 @@
    "groupId": "minifigprincessstorm01",
    "kind": "actor",
    "assetRef": "minifigprincessstorm01",
+   "resolvedUrl": null,
    "position": [
     1785.76,
     -70.4,
@@ -118,6 +128,7 @@
    "groupId": "minifigcedricbull04",
    "kind": "actor",
    "assetRef": "minifigcedricbull04",
+   "resolvedUrl": null,
    "position": [
     1680.3999999999999,
     -71.9392,
@@ -129,6 +140,7 @@
    "groupId": "oc6096b5",
    "kind": "set",
    "assetRef": "oc6096b5",
+   "resolvedUrl": "/assets/props/buildings/oc6096b5.glb",
    "position": [
     1740.2464,
     -75.8656,
@@ -142,6 +154,7 @@
    "groupId": "minifigweezil01",
    "kind": "actor",
    "assetRef": "minifigweezil01",
+   "resolvedUrl": null,
    "position": [
     2221.2799999999997,
     -119.03359999999999,
@@ -153,6 +166,7 @@
    "groupId": "minifiggilbertbad02",
    "kind": "actor",
    "assetRef": "minifiggilbertbad02",
+   "resolvedUrl": null,
    "position": [
     2066.688,
     -121.6096,
@@ -164,6 +178,7 @@
    "groupId": "minifigcedricbull03",
    "kind": "actor",
    "assetRef": "minifigcedricbull03",
+   "resolvedUrl": null,
    "position": [
     2160.0096,
     -121.6096,
@@ -175,6 +190,7 @@
    "groupId": "oc6096-2",
    "kind": "set",
    "assetRef": "oc6096-2",
+   "resolvedUrl": "/assets/props/lab/oc6096-2.glb",
    "position": [
     2288.7424,
     -118.6464,
@@ -186,6 +202,7 @@
    "groupId": "oc6032",
    "kind": "set",
    "assetRef": "oc6032",
+   "resolvedUrl": "/assets/props/lab/oc6032.glb",
    "position": [
     2063.0752,
     -123.2192,
@@ -197,6 +214,7 @@
    "groupId": "l7517401",
    "kind": "set",
    "assetRef": "l7517401",
+   "resolvedUrl": "/assets/props/creatures/l7517401.glb",
    "position": [
     2311.7792,
     -123.4784,
@@ -208,6 +226,7 @@
    "groupId": "oc6096b3",
    "kind": "set",
    "assetRef": "oc6096b3",
+   "resolvedUrl": "/assets/props/lab/oc6096b3.glb",
    "position": [
     2144.864,
     -145.12959999999998,
@@ -219,6 +238,7 @@
    "groupId": "oc6096-4",
    "kind": "set",
    "assetRef": "oc6096-4",
+   "resolvedUrl": "/assets/props/lab/oc6096-4.glb",
    "position": [
     2015.2448000000002,
     -124.00639999999999,
@@ -230,6 +250,7 @@
    "groupId": "oc6032b1",
    "kind": "set",
    "assetRef": "oc6032b1",
+   "resolvedUrl": "/assets/props/buildings/oc6032b1.glb",
    "position": [
     2148.6464,
     -128.4416,
@@ -243,6 +264,7 @@
    "groupId": "l4105278",
    "kind": "set",
    "assetRef": "l4105278",
+   "resolvedUrl": "/assets/props/lab/l4105278.glb",
    "position": [
     1920.4672,
     -32.227199999999996,
@@ -254,6 +276,7 @@
    "groupId": "l394101",
    "kind": "set",
    "assetRef": "l394101",
+   "resolvedUrl": "/assets/props/lab/l394101.glb",
    "position": [
     1813.5904,
     -33.2544,
@@ -265,6 +288,7 @@
    "groupId": "l248901",
    "kind": "set",
    "assetRef": "l248901",
+   "resolvedUrl": "/assets/props/lab/l248901.glb",
    "position": [
     1591.8175999999999,
     -34.7872,
@@ -276,6 +300,7 @@
    "groupId": "oc6098-3",
    "kind": "set",
    "assetRef": "oc6098-3",
+   "resolvedUrl": "/assets/props/buildings/oc6098-3.glb",
    "position": [
     1617.5456,
     -73.44319999999999,
@@ -287,6 +312,7 @@
    "groupId": "oc6098-5",
    "kind": "set",
    "assetRef": "oc6098-5",
+   "resolvedUrl": "/assets/props/buildings/oc6098-5.glb",
    "position": [
     1617.5488,
     -58.0704,
@@ -298,6 +324,7 @@
    "groupId": "oc6098-6",
    "kind": "set",
    "assetRef": "oc6098-6",
+   "resolvedUrl": "/assets/props/buildings/oc6098-6.glb",
    "position": [
     1699.4656,
     -85.2192,
@@ -309,6 +336,7 @@
    "groupId": "oc6098-4",
    "kind": "set",
    "assetRef": "oc6098-4",
+   "resolvedUrl": "/assets/props/buildings/oc6098-4.glb",
    "position": [
     1699.4656,
     -63.974399999999996,
@@ -320,6 +348,7 @@
    "groupId": "mc008",
    "kind": "set",
    "assetRef": "mc008",
+   "resolvedUrl": "/assets/props/buildings/mc008.glb",
    "position": [
     1867.1904,
     -48.6144,
@@ -331,6 +360,7 @@
    "groupId": "mc007",
    "kind": "set",
    "assetRef": "mc007",
+   "resolvedUrl": "/assets/props/buildings/mc007.glb",
    "position": [
     1829.2768,
     -48.6144,
@@ -342,6 +372,7 @@
    "groupId": "mc005",
    "kind": "set",
    "assetRef": "mc005",
+   "resolvedUrl": "/assets/props/buildings/mc005.glb",
    "position": [
     1905.5904,
     -44.0032,
@@ -353,6 +384,7 @@
    "groupId": "mc004",
    "kind": "set",
    "assetRef": "mc004",
+   "resolvedUrl": "/assets/props/buildings/mc004.glb",
    "position": [
     1831.3984,
     -70.6272,
@@ -364,6 +396,7 @@
    "groupId": "mc003",
    "kind": "set",
    "assetRef": "mc003",
+   "resolvedUrl": "/assets/props/buildings/mc003.glb",
    "position": [
     1903.2256000000002,
     -82.9152,
@@ -375,6 +408,7 @@
    "groupId": "mc002",
    "kind": "set",
    "assetRef": "mc002",
+   "resolvedUrl": "/assets/props/buildings/mc002.glb",
    "position": [
     1903.0304,
     -44.0032,
@@ -386,6 +420,7 @@
    "groupId": "mc001",
    "kind": "set",
    "assetRef": "mc001",
+   "resolvedUrl": "/assets/props/buildings/mc001.glb",
    "position": [
     1831.3504,
     -44.0032,
@@ -397,6 +432,7 @@
    "groupId": "l473801",
    "kind": "set",
    "assetRef": "l473801",
+   "resolvedUrl": "/assets/props/lab/l473801.glb",
    "position": [
     1725.3888000000002,
     -34.7904,
@@ -410,6 +446,7 @@
    "groupId": "oc6032",
    "kind": "set",
    "assetRef": "oc6032",
+   "resolvedUrl": "/assets/props/lab/oc6032.glb",
    "position": [
     1886.34656,
     -78.84288,
@@ -421,6 +458,7 @@
    "groupId": "minifigweezil01",
    "kind": "cast",
    "assetRef": "minifigweezil01",
+   "resolvedUrl": null,
    "position": [
     1695.08064,
     -74.65376,
@@ -432,6 +470,7 @@
    "groupId": "minifigrichardstrong03",
    "kind": "cast",
    "assetRef": "minifigrichardstrong03",
+   "resolvedUrl": null,
    "position": [
     1698.08544,
     -75.17248000000001,
@@ -443,6 +482,7 @@
    "groupId": "minifigqueenleonora01",
    "kind": "cast",
    "assetRef": "minifigqueenleonora01",
+   "resolvedUrl": null,
    "position": [
     1623.056,
     -75.46016,
@@ -454,6 +494,7 @@
    "groupId": "minifigkingleo00",
    "kind": "cast",
    "assetRef": "minifigkingleo00",
+   "resolvedUrl": null,
    "position": [
     1627.9491200000002,
     -74.10752,
@@ -465,6 +506,7 @@
    "groupId": "minifigjohnmayne01",
    "kind": "cast",
    "assetRef": "minifigjohnmayne01",
+   "resolvedUrl": null,
    "position": [
     1590.03776,
     -75.23104000000001,
@@ -476,6 +518,7 @@
    "groupId": "minifiggilbertbad01",
    "kind": "cast",
    "assetRef": "minifiggilbertbad01",
+   "resolvedUrl": null,
    "position": [
     1623.2848000000001,
     -76.71392,
@@ -487,6 +530,7 @@
    "groupId": "minifiggenericgood00",
    "kind": "cast",
    "assetRef": "minifiggenericgood00",
+   "resolvedUrl": null,
    "position": [
     1731.4879999999998,
     -79.23936,
@@ -498,6 +542,7 @@
    "groupId": "minifiggenericbad00",
    "kind": "cast",
    "assetRef": "minifiggenericbad00",
+   "resolvedUrl": null,
    "position": [
     1615.2611200000001,
     -74.65376,
@@ -509,6 +554,7 @@
    "groupId": "minifigcedricbull01",
    "kind": "cast",
    "assetRef": "minifigcedricbull01",
+   "resolvedUrl": null,
    "position": [
     1614.44704,
     -76.27328,
@@ -520,6 +566,7 @@
    "groupId": "oc6098-7",
    "kind": "set",
    "assetRef": "oc6098-7",
+   "resolvedUrl": "/assets/props/lab/oc6098-7.glb",
    "position": [
     1833.3715200000001,
     -76.97056,
@@ -531,6 +578,7 @@
    "groupId": "oc6096b4",
    "kind": "set",
    "assetRef": "oc6096b4",
+   "resolvedUrl": "/assets/props/lab/oc6096b4.glb",
    "position": [
     1569.84608,
     -79.24352,
@@ -542,6 +590,7 @@
    "groupId": "oc6096b3",
    "kind": "set",
    "assetRef": "oc6096b3",
+   "resolvedUrl": "/assets/props/lab/oc6096b3.glb",
    "position": [
     1652.39264,
     -100.7488,
@@ -555,6 +604,7 @@
    "groupId": "minifigrichardstrong03",
    "kind": "cast",
    "assetRef": "minifigrichardstrong03",
+   "resolvedUrl": null,
    "position": [
     1856.23424,
     -71.44192000000001,
@@ -566,6 +616,7 @@
    "groupId": "minifiggilbertbad00",
    "kind": "cast",
    "assetRef": "minifiggilbertbad00",
+   "resolvedUrl": null,
    "position": [
     1882.75648,
     -71.11104,
@@ -577,6 +628,7 @@
    "groupId": "oc6094b5",
    "kind": "set",
    "assetRef": "oc6094b5",
+   "resolvedUrl": "/assets/props/buildings/oc6094b5.glb",
    "position": [
     1909.11616,
     -103.67295999999999,
@@ -588,6 +640,7 @@
    "groupId": "oc6094-2",
    "kind": "set",
    "assetRef": "oc6094-2",
+   "resolvedUrl": "/assets/props/buildings/oc6094-2.glb",
    "position": [
     1860.70688,
     -83.70496,
@@ -599,6 +652,7 @@
    "groupId": "oc6094-1",
    "kind": "set",
    "assetRef": "oc6094-1",
+   "resolvedUrl": "/assets/props/buildings/oc6094-1.glb",
    "position": [
     1830.91552,
     -91.38592,

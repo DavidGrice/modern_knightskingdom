@@ -9,40 +9,53 @@
 // active while actually visiting the destination) — this is meant to grow
 // into that file's data-driven successor, not compete with it.
 //
-// DEBUG MARKER MODE, DELIBERATELY DISABLED BY DEFAULT: the coordinate
-// transform itself is now VERIFIED (2026-08-03) — prepare-assets.mjs's
-// map-population step negates the up-axis term (see that file's own
-// comment for the proof: the old unnegated formula placed King Leo's
-// marker above the live bake's own bounding-box max, a geometric
-// impossibility). Live confirmation: `DEBUG_MARKERS=true` + a photo-mode
-// fly-out to King Leo's marker (script deleted after use) showed the
-// marker sitting right on a rocky hillside surface with real terrain
-// behind it — not floating in a void, not embedded past the mesh bounds.
+// The coordinate transform is VERIFIED (2026-08-03, see prepare-assets.mjs's
+// own comment for the proof) and content now actually spawns (real content
+// spawning was blocked earlier the same day on a DIFFERENT question — see
+// below — now resolved).
 //
-// NOT yet safe to wire into real content spawning, for a DIFFERENT reason
-// found during that same fly-out: the marker sits ~1740 world units from
-// this destination's origin — deep inside the diorama's distant hillside,
-// far outside `dest.radius` (224, PlayerController's own wander clamp) and
-// nowhere near `NPC_KING`'s hand-placed position (game/data/world.ts,
-// (1000, 962), a few dozen units from spawn). Despite sharing the exact
-// asset id `minifigkingleo00`, this classified group is almost certainly a
-// DISTANT BACKGROUND PROCESSION FIGURE baked into the scenic hillside —
-// not the same entity as the interactive quest NPC. The original plan's
-// assumption that `kind: 'actor'` + a name match is always safe to use for
-// *correcting* an existing NpcDef's position (see the plan's Wave 3
-// section) is now known to be WRONG at least for this case — doing that
-// blindly would strand the quest-bearing King unreachably far from spawn.
-// Any future real-content-spawning pass must resolve this ambiguity
-// per-group (e.g. proximity to the existing hand-placed NPC as a gate)
-// before matching by asset id alone. `DEBUG_MARKERS` stays `false` so this
-// component is fully inert for real players; flip it locally to keep
-// investigating. See ROADMAP.md's "Blocked on the Grok mapping" entry.
+// Two kinds of content, resolved differently:
+// - `kind: 'set'` (props/scenery — resolves to a real GLB via `resolvedUrl`,
+//   built at prepare time by scanning whatever this repo's own extraction
+//   already copied into public/assets/, since there's no single "id ->
+//   folder" rule to hand-derive) — a plain PropModel instance.
+// - `kind: 'actor'` / `'cast'` (minifig characters — these ship as raw
+//   OBJ+MTL like every other minifig in this game, not GLB, so they have no
+//   `resolvedUrl` at all; that's expected, not a resolution failure) — a
+//   RiggedFigure, same component the player/NPCs/villagers all render
+//   through, playing a plain idle pose. Colors aren't in the lab data (only
+//   the geometry id is), so a fuzzy family match against this game's own
+//   hand-tuned NpcDefs (npcs.ts) supplies them — "minifigkingleo01" isn't
+//   in npcs.ts, but stripping its trailing digits matches King Leo's own
+//   "minifigkingleo00" donor family, and costume/pose variants of the same
+//   character don't change its brick colors. Falls back to a plain
+//   villager scheme if no family matches at all (villains like Cedric/
+//   Weezil/Gilbert have no NpcDef to match against yet).
+//
+// DISTANT CONTENT IS SPAWNED TOO, DELIBERATELY — this was the real blocker,
+// not the transform. A live photo-mode fly-out (2026-08-03) found King
+// Leo's own procession-figure marker sitting ~1740 world units from
+// template-01's origin — deep in the diorama's distant hillside, far
+// outside `dest.radius`, nowhere near `NPC_KING`'s hand-placed spawn-
+// adjacent position (game/data/world.ts) despite sharing the exact asset
+// id `minifigkingleo00`. That is NOT the same entity as the interactive
+// quest NPC — it's the "marching procession" the destination's own blurb
+// already describes ("a road still lined with a marching procession"),
+// meant to be seen as backdrop even though it's unreachable on foot. So:
+// spawn everything the lab classified, regardless of distance from origin,
+// but never let it stand in for or auto-correct an existing hand-placed
+// NpcDef. (No destination in the current data actually collides the two —
+// checked directly — so no proximity-dedup guard was added; if a future
+// map's data does collide, add one then rather than guess at the shape now.)
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
-import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
-import { getBakeOffset } from './TemplateWorld';
+import { WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
+import { getBakeOffset, sampleTemplateGroundY, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
+import PropModel from './PropModel';
+import RiggedFigure from '../character/RiggedFigure';
+import type { CharacterConfig } from '@/game/types';
 import mapPopulation from '@/game/data/mapPopulation.generated.json';
 
 const DEBUG_MARKERS = false;
@@ -51,6 +64,7 @@ interface PopulationRow {
   groupId: string;
   kind: string;
   assetRef: string;
+  resolvedUrl: string | null;
   position: number[];
   rotationY: number;
 }
@@ -81,6 +95,81 @@ function Marker({ localX, localY, localZ, label }: { localX: number; localY: num
   );
 }
 
+/** brick colors for named-character donor families (npcs.ts) — costume/pose
+ *  variants of the same character (00 vs 01 vs 02) share the same colors,
+ *  so matching on the id with its trailing digits stripped is safe. Not
+ *  imported from npcs.ts directly: those NpcDefs carry quest/dialogue
+ *  wiring this file has no business depending on for a handful of color
+ *  ints — hand-copied, matches npcs.ts exactly as of 2026-08-03. */
+const FAMILY_COLORS: Record<string, { name: string; armColor: number; handColor: number; legColor: number; hipColor: number }> = {
+  minifigkingleo: { name: 'King Leo', armColor: 26, handColor: 18, legColor: 38, hipColor: 38 },
+  minifigqueenleonora: { name: 'Queen Leonora', armColor: 24, handColor: 18, legColor: 150, hipColor: 24 },
+  minifigrichardstrong: { name: 'Richard', armColor: 34, handColor: 18, legColor: 38, hipColor: 34 },
+  minifigjohnmayne: { name: 'John', armColor: 30, handColor: 18, legColor: 38, hipColor: 38 },
+  minifigprincessstorm: { name: 'Princess Storm', armColor: 24, handColor: 18, legColor: 150, hipColor: 24 },
+  minifiggenericgood: { name: 'Villager', armColor: 22, handColor: 18, legColor: 34, hipColor: 34 },
+};
+/** plain villager scheme — used whenever an assetRef's family (Cedric,
+ *  Weezil, Gilbert, generic "bad" figures, …) has no NpcDef to match
+ *  colors against yet; a background figure existing at all reads better
+ *  than one silently skipped for lack of a hand-picked palette. */
+const DEFAULT_FAMILY = FAMILY_COLORS.minifiggenericgood;
+
+function characterConfigFor(assetRef: string): CharacterConfig {
+  const family = assetRef.replace(/\d+$/, '');
+  const c = FAMILY_COLORS[family] ?? DEFAULT_FAMILY;
+  return {
+    name: c.name, headDonor: assetRef, bodyDonor: assetRef,
+    armColor: c.armColor, handColor: c.handColor, legColor: c.legColor, hipColor: c.hipColor,
+  };
+}
+
+/** approximate — no per-asset target height exists yet for this new
+ *  content (the lab's own bbox.size is in a scale that doesn't obviously
+ *  translate to a sane world height without further calibration; see this
+ *  file's own header). Good enough for small/medium set dressing; large
+ *  props may read undersized until someone hand-tunes real values the way
+ *  CourtDressing.tsx's own props were tuned. */
+const DEFAULT_PROP_HEIGHT = 0.8;
+
+/** positions a spawned instance every frame from the bake's live recentring
+ *  offset (X/Z) and a live ground raycast (Y) — never a one-shot read, for
+ *  the same async-load race Marker above already guards against, and
+ *  because it's more robust than trusting this data's own approximate
+ *  vertical placement (verified close, not exact, during the transform
+ *  fix — see prepare-assets.mjs). */
+function Grounded({ x, z, rotationY, children }: { x: number; z: number; rotationY: number; children: React.ReactNode }) {
+  const group = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const g = group.current;
+    if (!g) return;
+    const off = getBakeOffset();
+    const wx = x + off.x;
+    const wz = z + off.z;
+    g.position.set(wx, sampleTemplateGroundY(wx, wz), wz);
+  });
+  return <group ref={group} rotation-y={rotationY}>{children}</group>;
+}
+
+function PopulationInstance({ row, dest, scaleCompensation }: { row: PopulationRow; dest: WorldDestination; scaleCompensation: number }) {
+  const x = dest.origin.x + row.position[0] * scaleCompensation;
+  const z = dest.origin.z + row.position[2] * scaleCompensation;
+  const isActor = row.kind === 'actor' || row.kind === 'cast';
+  if (isActor) {
+    return (
+      <Grounded x={x} z={z} rotationY={row.rotationY}>
+        <RiggedFigure config={characterConfigFor(row.assetRef)} height={1.75} clip="anim_r_restpose" />
+      </Grounded>
+    );
+  }
+  if (!row.resolvedUrl) return null; // logged at build time (prepare-assets.mjs) — not silently dropped
+  return (
+    <Grounded x={x} z={z} rotationY={row.rotationY}>
+      <PropModel url={row.resolvedUrl} height={DEFAULT_PROP_HEIGHT} />
+    </Grounded>
+  );
+}
+
 export default function TemplatePopulation() {
   const destination = useGameStore((s) => s.destination);
   const dest = destination ? WORLD_DESTINATION_BY_ID[destination] : null;
@@ -104,8 +193,22 @@ export default function TemplatePopulation() {
     );
   }
 
-  // real content spawning lands here once DEBUG_MARKERS' visual check passes
-  return null;
+  // the stored position assumes TEMPLATE_WORLD_SCALE (prepare-assets.mjs
+  // hardcodes it — that script has no access to worlds.ts's per-destination
+  // `worldScale` override); a destination rendered bigger/smaller than that
+  // base needs its stored X/Z scaled by the same ratio the bake itself was,
+  // or content lands as if the bake were still base-sized. Y doesn't need
+  // this: Grounded above gets it from a live raycast against whatever the
+  // bake actually rendered at, not from stored data.
+  const scaleCompensation = (dest.worldScale ?? TEMPLATE_WORLD_SCALE) / TEMPLATE_WORLD_SCALE;
+
+  return (
+    <>
+      {rows.map((r) => (
+        <PopulationInstance key={r.groupId} row={r} dest={dest} scaleCompensation={scaleCompensation} />
+      ))}
+    </>
+  );
 }
 
 if (typeof window !== 'undefined') {
