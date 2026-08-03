@@ -23,6 +23,7 @@ import Emplacements from './Emplacements';
 import CedricCamp from './CedricCamp';
 import BattleDome from './BattleDome';
 import CourtDressing from './CourtDressing';
+import TemplatePopulation from './TemplatePopulation';
 import GuildHalls from './GuildHalls';
 import DragonOmen from './DragonOmen';
 import DragonSiege from './DragonSiege';
@@ -80,6 +81,7 @@ export default function GameWorld() {
         <CedricCamp />
         <BattleDome />
         <CourtDressing />
+        <TemplatePopulation />
         <GuildHalls />
         <DragonOmen />
         <DragonSiege />

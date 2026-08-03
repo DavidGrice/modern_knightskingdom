@@ -1,0 +1,610 @@
+{
+ "template-01": [
+  {
+   "groupId": "minifigqueenleonora01",
+   "kind": "actor",
+   "assetRef": "minifigqueenleonora01",
+   "position": [
+    1428.4896,
+    75.312,
+    1839.3152
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigkingleo00",
+   "kind": "actor",
+   "assetRef": "minifigkingleo00",
+   "position": [
+    1453.0207999999998,
+    73.9616,
+    1837.568
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigjohnmayne02",
+   "kind": "actor",
+   "assetRef": "minifigjohnmayne02",
+   "position": [
+    1452.3584,
+    75.0272,
+    1883.1136000000001
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifiggenericgood00",
+   "kind": "actor",
+   "assetRef": "minifiggenericgood00",
+   "position": [
+    1426.608,
+    79.09440000000001,
+    1755.8496
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6095b3",
+   "kind": "set",
+   "assetRef": "oc6095b3",
+   "position": [
+    1454.7551999999998,
+    76.2816,
+    1803.1872
+   ],
+   "rotationY": 0
+  }
+ ],
+ "template-02": [
+  {
+   "groupId": "minifigrichardstrong01",
+   "kind": "actor",
+   "assetRef": "minifigrichardstrong01",
+   "position": [
+    1740.9856,
+    16.608,
+    2193.3248
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigcedricbull02",
+   "kind": "actor",
+   "assetRef": "minifigcedricbull02",
+   "position": [
+    1899.6191999999999,
+    16.9472,
+    2140.6048
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6095-2",
+   "kind": "set",
+   "assetRef": "oc6095-2",
+   "position": [
+    1817.84,
+    13.5872,
+    2158.4608
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6095-1",
+   "kind": "set",
+   "assetRef": "oc6095-1",
+   "position": [
+    1818.3776,
+    27.2832,
+    2225.9296
+   ],
+   "rotationY": 0
+  }
+ ],
+ "template-03": [
+  {
+   "groupId": "minifigprincessstorm01",
+   "kind": "actor",
+   "assetRef": "minifigprincessstorm01",
+   "position": [
+    1785.76,
+    70.4,
+    1568.976
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigcedricbull04",
+   "kind": "actor",
+   "assetRef": "minifigcedricbull04",
+   "position": [
+    1680.3999999999999,
+    71.9392,
+    1571.2832
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6096b5",
+   "kind": "set",
+   "assetRef": "oc6096b5",
+   "position": [
+    1740.2464,
+    75.8656,
+    1565.9328
+   ],
+   "rotationY": 0
+  }
+ ],
+ "template-04": [
+  {
+   "groupId": "minifigweezil01",
+   "kind": "actor",
+   "assetRef": "minifigweezil01",
+   "position": [
+    2221.2799999999997,
+    119.03359999999999,
+    3317.8496
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifiggilbertbad02",
+   "kind": "actor",
+   "assetRef": "minifiggilbertbad02",
+   "position": [
+    2066.688,
+    121.6096,
+    3243.2767999999996
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigcedricbull03",
+   "kind": "actor",
+   "assetRef": "minifigcedricbull03",
+   "position": [
+    2160.0096,
+    121.6096,
+    3298.352
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6096-2",
+   "kind": "set",
+   "assetRef": "oc6096-2",
+   "position": [
+    2288.7424,
+    118.6464,
+    3227.4336
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6032",
+   "kind": "set",
+   "assetRef": "oc6032",
+   "position": [
+    2063.0752,
+    123.2192,
+    3439.9488
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "l7517401",
+   "kind": "set",
+   "assetRef": "l7517401",
+   "position": [
+    2311.7792,
+    123.4784,
+    3490.2144
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6096b3",
+   "kind": "set",
+   "assetRef": "oc6096b3",
+   "position": [
+    2144.864,
+    145.12959999999998,
+    3461.1616
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6096-4",
+   "kind": "set",
+   "assetRef": "oc6096-4",
+   "position": [
+    2015.2448000000002,
+    124.00639999999999,
+    3456.2592
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6032b1",
+   "kind": "set",
+   "assetRef": "oc6032b1",
+   "position": [
+    2148.6464,
+    128.4416,
+    3613.2479999999996
+   ],
+   "rotationY": 0
+  }
+ ],
+ "template-05": [
+  {
+   "groupId": "l4105278",
+   "kind": "set",
+   "assetRef": "l4105278",
+   "position": [
+    1920.4672,
+    32.227199999999996,
+    2616.4447999999998
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "l394101",
+   "kind": "set",
+   "assetRef": "l394101",
+   "position": [
+    1813.5904,
+    33.2544,
+    2610.3487999999998
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "l248901",
+   "kind": "set",
+   "assetRef": "l248901",
+   "position": [
+    1591.8175999999999,
+    34.7872,
+    2578.5312
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6098-3",
+   "kind": "set",
+   "assetRef": "oc6098-3",
+   "position": [
+    1617.5456,
+    73.44319999999999,
+    2593.5232
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6098-5",
+   "kind": "set",
+   "assetRef": "oc6098-5",
+   "position": [
+    1617.5488,
+    58.0704,
+    2551.2960000000003
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6098-6",
+   "kind": "set",
+   "assetRef": "oc6098-6",
+   "position": [
+    1699.4656,
+    85.2192,
+    2552.7936
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6098-4",
+   "kind": "set",
+   "assetRef": "oc6098-4",
+   "position": [
+    1699.4656,
+    63.974399999999996,
+    2591.2799999999997
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc008",
+   "kind": "set",
+   "assetRef": "mc008",
+   "position": [
+    1867.1904,
+    48.6144,
+    2589.3056
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc007",
+   "kind": "set",
+   "assetRef": "mc007",
+   "position": [
+    1829.2768,
+    48.6144,
+    2629.5488
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc005",
+   "kind": "set",
+   "assetRef": "mc005",
+   "position": [
+    1905.5904,
+    44.0032,
+    2628.6144000000004
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc004",
+   "kind": "set",
+   "assetRef": "mc004",
+   "position": [
+    1831.3984,
+    70.6272,
+    2591.5424000000003
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc003",
+   "kind": "set",
+   "assetRef": "mc003",
+   "position": [
+    1903.2256000000002,
+    82.9152,
+    2594.4256
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc002",
+   "kind": "set",
+   "assetRef": "mc002",
+   "position": [
+    1903.0304,
+    44.0032,
+    2592.7744000000002
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "mc001",
+   "kind": "set",
+   "assetRef": "mc001",
+   "position": [
+    1831.3504,
+    44.0032,
+    2593.7088
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "l473801",
+   "kind": "set",
+   "assetRef": "l473801",
+   "position": [
+    1725.3888000000002,
+    34.7904,
+    2593.1135999999997
+   ],
+   "rotationY": 0
+  }
+ ],
+ "template-06": [
+  {
+   "groupId": "oc6032",
+   "kind": "set",
+   "assetRef": "oc6032",
+   "position": [
+    1886.34656,
+    78.84288,
+    2102.1312
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigweezil01",
+   "kind": "cast",
+   "assetRef": "minifigweezil01",
+   "position": [
+    1695.08064,
+    74.65376,
+    2067.90976
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigrichardstrong03",
+   "kind": "cast",
+   "assetRef": "minifigrichardstrong03",
+   "position": [
+    1698.08544,
+    75.17248000000001,
+    2107.66944
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigqueenleonora01",
+   "kind": "cast",
+   "assetRef": "minifigqueenleonora01",
+   "position": [
+    1623.056,
+    75.46016,
+    2152.4860799999997
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigkingleo00",
+   "kind": "cast",
+   "assetRef": "minifigkingleo00",
+   "position": [
+    1627.9491200000002,
+    74.10752,
+    2130.84512
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigjohnmayne01",
+   "kind": "cast",
+   "assetRef": "minifigjohnmayne01",
+   "position": [
+    1590.03776,
+    75.23104000000001,
+    2145.53632
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifiggilbertbad01",
+   "kind": "cast",
+   "assetRef": "minifiggilbertbad01",
+   "position": [
+    1623.2848000000001,
+    76.71392,
+    2054.62112
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifiggenericgood00",
+   "kind": "cast",
+   "assetRef": "minifiggenericgood00",
+   "position": [
+    1731.4879999999998,
+    79.23936,
+    2104.56608
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifiggenericbad00",
+   "kind": "cast",
+   "assetRef": "minifiggenericbad00",
+   "position": [
+    1615.2611200000001,
+    74.65376,
+    1984.07552
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifigcedricbull01",
+   "kind": "cast",
+   "assetRef": "minifigcedricbull01",
+   "position": [
+    1614.44704,
+    76.27328,
+    2032.08352
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6098-7",
+   "kind": "set",
+   "assetRef": "oc6098-7",
+   "position": [
+    1833.3715200000001,
+    76.97056,
+    2187.77952
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6096b4",
+   "kind": "set",
+   "assetRef": "oc6096b4",
+   "position": [
+    1569.84608,
+    79.24352,
+    2187.89152
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6096b3",
+   "kind": "set",
+   "assetRef": "oc6096b3",
+   "position": [
+    1652.39264,
+    100.7488,
+    1958.96864
+   ],
+   "rotationY": 0
+  }
+ ],
+ "template-07": [
+  {
+   "groupId": "minifigrichardstrong03",
+   "kind": "cast",
+   "assetRef": "minifigrichardstrong03",
+   "position": [
+    1856.23424,
+    71.44192000000001,
+    2270.45888
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "minifiggilbertbad00",
+   "kind": "cast",
+   "assetRef": "minifiggilbertbad00",
+   "position": [
+    1882.75648,
+    71.11104,
+    2307.22912
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6094b5",
+   "kind": "set",
+   "assetRef": "oc6094b5",
+   "position": [
+    1909.11616,
+    103.67295999999999,
+    2297.5888
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6094-2",
+   "kind": "set",
+   "assetRef": "oc6094-2",
+   "position": [
+    1860.70688,
+    83.70496,
+    2308.9577600000002
+   ],
+   "rotationY": 0
+  },
+  {
+   "groupId": "oc6094-1",
+   "kind": "set",
+   "assetRef": "oc6094-1",
+   "position": [
+    1830.91552,
+    91.38592,
+    2304.1712
+   ],
+   "rotationY": 0
+  }
+ ]
+}

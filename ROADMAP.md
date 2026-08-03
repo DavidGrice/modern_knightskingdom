@@ -3666,9 +3666,32 @@ was forgotten.
   genuine per-asset empirical calibration (render candidate vs. the
   lab's own `qa_still` reference, iterate), not a one-shot trust-the-
   degrees-field wiring pass. Deferred rather than guessed at — no code
-  changed for this part. See the (session-local) plan file for the full
-  5-wave sequencing; waves 1 (catalog widening) and this investigation
-  are the only ones touched so far.
+  changed for this part.
+
+  **Wave 3 (template population) infrastructure landed 2026-08-03, position
+  data still unverified — inert by design, not shipped as real content.**
+  `scripts/prepare-assets.mjs` now also distills each template's real
+  `asset_ref` groups (only ~5-15 per map genuinely resolve to a catalog id;
+  the rest of a layout's groups describe meshes already baked into the
+  diorama) into `src/game/data/mapPopulation.generated.json`.
+  `TemplateWorld.tsx`'s `normalizeTemplateBake` now exposes its real
+  recentring offset (`getBakeOffset()`) so anything placing content against
+  this data shares the exact same origin as the visible mesh, not a second
+  guess. New `TemplatePopulation.tsx` (mounted, generalizing
+  `CourtDressing.tsx`'s pattern) reads both — but its `DEBUG_MARKERS` flag
+  is **deliberately `false`**, because the coordinate transform itself is
+  NOT verified: a live calibration pass found the lab applies a real
+  -90°-about-X rotation to reach its own SW-corner/Z-up frame (confirmed via
+  `PAK_ORIENTATION_CATALOG.json`'s `final_root_euler_deg` for the template
+  entries), and a hand-derived inverse for the vertical axis produced an
+  even WORSE result (a computed marker ~1200 world units up on a diorama
+  only ~680 units tall) than the simpler direct-mapping fallback currently
+  shipped. Neither is trusted — flip `DEBUG_MARKERS` to `true` locally and
+  eyeball the rendered spheres against a known-correct reference (King
+  Leo's own hand-placed `NPC_KING`, `game/data/world.ts`) before doing
+  anything further here. This needs a real, patient empirical
+  calibration pass (render, screenshot, measure, adjust, repeat), not
+  another one-shot derivation.
 - [TODO] **Option B of the workshop** (instruction-accurate builds): still needs
   LDraw models, Rebrickable inventories, and the manual PDFs. `ldraw/` holds
   only its README. Send one `.mpd` and the seam can be proved against it.
