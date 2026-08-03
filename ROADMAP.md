@@ -556,19 +556,29 @@ through the actual DOM, not simulated — upgrading into the final stand with it
 reinforcement; a genuine kill through the unmodified `combat.ts` path granting the full capstone (gold,
 Armory gear, allegiance, both new Deeds, `cedric_jailed`, and the crest unlock in `localStorage`) with
 zero console errors throughout.
-- [TODO] **Underground fight arena — endless mobs, an ongoing kill-count quest, escalating modifiers**
-  (requested 2026-07-28): a sealed arena (new location, not the existing Sealed Crypt — that has fixed
-  rooms and a clear-and-done objective, this wants continuous spawns) where mobs keep coming until the
-  player leaves or dies. Loot drops here should be re-tuned toward ammo (arrows/bolts) and gold/goodies
-  specifically, not the normal overworld table — a separate drop table, not a modifier on the existing
-  one, so it doesn't leak into regular raid loot. The quest itself is a running counter (kills so far,
-  always visible, never "complete" in the normal sense) rather than a fixed `need: N` — `SideQuestDef`'s
-  shape (`game/data/npcs.ts`) assumes a target count today and would need a genuinely open-ended variant.
-  Enemy stats should scale as the count climbs via random modifiers (increased armor/attack/HP), likely
-  reusing the raid/siege difficulty math as a starting point rather than a third, separate scaling curve.
-  On player death IN THIS ARENA SPECIFICALLY: no game-over, no day-skip — respawn just outside the
-  arena entrance and the run resets (a "redo," not a punishment), distinct from the general 0-HP
-  behavior below.
+- [COMPLETE] ✅ **Underground fight arena — endless mobs, an ongoing kill-count quest, escalating modifiers**
+  (requested 2026-07-28, design finalized and built 2026-08-03): a new "Endless Arena" destination
+  (`game/data/worlds.ts`'s `ARENA_DESTINATION`, sibling to the Sealed Crypt's own non-baked destination),
+  reached from the Travel Map's own hub — the "general safe zone" the design called for, reusing the
+  existing homestead rather than new geography. Four reskinned environments (earth/water/snow/lava,
+  `game/arena.ts`'s `ARENA_ENVS`), each with real player speed/stamina-drain/ambient-damage modifiers and
+  an enemy speed modifier, plus a loot multiplier offsetting the harsher ones. Kills counted in a
+  dedicated run-local leaf module (`arenaState`, deliberately NOT folded into `SideQuestDef` — its
+  `need: N` shape doesn't fit an open-ended counter) with real rewards at 50/100/200/500, a separate
+  ammo/gold-skewed loot table (`rollArenaMilestoneLoot`) that never touches the normal drop tables.
+  Enemy stats escalate via `arenaSpawnScale()` — a run-local multiplier layered on top of the existing
+  `raidStrength()` progress curve via a new optional `spawn()` param, so both HP and attack damage scale
+  together exactly like a raid does. On death inside the arena: `damagePlayer()`'s own long-reserved hook
+  fires first — reset to the safe zone, run reset, explicitly no day-skip. Voluntary exit banks whatever
+  milestones were already claimed. **Two real pre-existing bugs found and fixed getting this working:**
+  `Enemies.tsx` unconditionally clamped every enemy's position to the home world's own ±200 bound every
+  frame — invisible for the Sealed Crypt (short fights, walls mask it) but immediately obvious here
+  (enemies snapping thousands of units back toward the home region); and the "Claim for your Kingdom"
+  plot banner had no exclusion for non-buildable procedural destinations beyond the Crypt. Verified live:
+  all four environments render with distinct floor/wall/fog colors and correct HUD labels; spawned
+  enemies stay near their real spawn point instead of teleporting; all four milestones grant exactly once
+  with real loot; death inside the arena clears `destination`/`arenaState.active`, restores HP, and
+  leaves `dayCount` unchanged; voluntary leave and re-entry both work cleanly.
 - [TODO] **A real ladder — climb the walls, look out over the world** (requested 2026-07-29): checked
   the rig lab's own JSON rather than assuming — `public/assets/rigs/capabilities.json` really does
   carry a dedicated ladder mold, `oc6096-5` (from the Bull's Attack set, alongside Cedric's own
