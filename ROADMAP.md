@@ -677,8 +677,30 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
 - [TODO] Freeform placement mode (unsnapped position/rotation/scale — existing catalog pieces only).
 
 **Cast & AI**
-- [TODO] **Comprehensive AI/animation rig**: locomotion blending, idle variety, reactive behaviors — make the
-  court and villagers read as alive rather than position-lerping props.
+- [COMPLETE] ✅ **Comprehensive AI/animation rig** (requested 2026-07-28, scoped and built 2026-08-03):
+  investigated against the real code first, not the aspiration's own wording — `lib/minifigRig.ts`'s
+  `MinifigAnimator` already crossfades between clips (0.18s), so locomotion blending was never actually
+  missing. The two real gaps: idle characters play the bare `anim_r_restpose` forever (no dedicated ambient
+  loop exists in the 15-clip extraction, but 9 one-shot reaction clips sat unused outside the player's own
+  Emotes wheel), and nothing reacted to the player's mere presence (the existing greet wave only fires on
+  dialogue). Fixed with two new Reasoner actions — `idle_fidget` (`ai/actions/ambient.ts`, category
+  `ambient`, a slot `Reasoner.ts` had reserved since phase 5 but never used) and `notice_player`
+  (`ai/actions/notice.ts`, category `social`, a plain distance check against `playerState`, deliberately
+  not the full §6 Perception vision-cone system this project never adopted) — both reusing the render
+  side's existing `PLAY_ANIM`/`FACE` intent plumbing with zero changes to `Villagers.tsx`/`Npc.tsx`. The
+  real blocker turned out to be that the court had NO Agent at all under today's content
+  (`scheduledCourtNpcs()` is always empty — confirmed via `PHASE_STATUS.md`'s own 3.4 finding): King Leo,
+  the Queen, Richard, John, Storm, and the starter farmers got zero AI. New `ai/courtAmbientSync.ts`
+  spawns a deliberately narrow `court` archetype (`idle_fidget`/`notice_player` only, nothing movement-
+  capable) for the rest of `Npc.tsx`'s own rendered population, so the court can read as alive with no
+  risk of a King wandering off his throne or fleeing a raid three regions away. Real pathfound day/night
+  court schedules (today's `Npc.tsx` drift is a plain position lerp) and full §6/§7 Perception/Combat-
+  companion remain explicitly out of scope — bigger, separately-sized future phases, not silently dropped.
+  Verified live: `farmer_alric` (always-present, no `revealAfterQuest`) and King Leo (world-gated, visited
+  after unlocking) both get real `court`-archetype Agents that previously had none; an idle agent plays a
+  varied fidget clip within seconds of having nothing else to do; approaching a court NPC triggers a real
+  `FACE` + reaction clip; King Leo's position is provably stable over real time, including nothing that
+  could move him.
 - [TODO] Validate the user's forthcoming Grok-built item-catalog JSON against `BRICK_CATALOG.md` when it arrives.
 
 **Styling**
@@ -3237,9 +3259,11 @@ rider's own hand is unchanged and already correct; nothing singles halberd
 out for worse treatment than sword or bow get. What's actually missing is
 bigger than any one weapon: there is no real seated-rider animation at all
 for ANY loadout, so a mounted defender's legs still play their standing/walk
-clip while floating above the saddle rather than sitting in it. That belongs
-with the still-open "Comprehensive AI/animation rig improvements" item below,
-not as a halberd-specific fix.
+clip while floating above the saddle rather than sitting in it. That's a real
+seated-rider animation gap of its own — not a halberd-specific fix, and not
+part of what the "Comprehensive AI/animation rig" item above ended up
+covering (idle variety, reactive behaviors, giving the court real Agents) —
+logged here as still open.
 
 ## Future · build from the real instruction sets [TODO]
 
