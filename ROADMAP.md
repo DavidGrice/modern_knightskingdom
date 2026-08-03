@@ -3668,30 +3668,44 @@ was forgotten.
   degrees-field wiring pass. Deferred rather than guessed at — no code
   changed for this part.
 
-  **Wave 3 (template population) infrastructure landed 2026-08-03, position
-  data still unverified — inert by design, not shipped as real content.**
-  `scripts/prepare-assets.mjs` now also distills each template's real
-  `asset_ref` groups (only ~5-15 per map genuinely resolve to a catalog id;
-  the rest of a layout's groups describe meshes already baked into the
+  **Wave 3 (template population) coordinate transform FIXED and visually
+  VERIFIED 2026-08-03 — still inert by design, real content spawning is the
+  next increment.** `scripts/prepare-assets.mjs` distills each template's
+  real `asset_ref` groups (only ~5-15 per map genuinely resolve to a catalog
+  id; the rest of a layout's groups describe meshes already baked into the
   diorama) into `src/game/data/mapPopulation.generated.json`.
-  `TemplateWorld.tsx`'s `normalizeTemplateBake` now exposes its real
-  recentring offset (`getBakeOffset()`) so anything placing content against
-  this data shares the exact same origin as the visible mesh, not a second
-  guess. New `TemplatePopulation.tsx` (mounted, generalizing
-  `CourtDressing.tsx`'s pattern) reads both — but its `DEBUG_MARKERS` flag
-  is **deliberately `false`**, because the coordinate transform itself is
-  NOT verified: a live calibration pass found the lab applies a real
-  -90°-about-X rotation to reach its own SW-corner/Z-up frame (confirmed via
-  `PAK_ORIENTATION_CATALOG.json`'s `final_root_euler_deg` for the template
-  entries), and a hand-derived inverse for the vertical axis produced an
-  even WORSE result (a computed marker ~1200 world units up on a diorama
-  only ~680 units tall) than the simpler direct-mapping fallback currently
-  shipped. Neither is trusted — flip `DEBUG_MARKERS` to `true` locally and
-  eyeball the rendered spheres against a known-correct reference (King
-  Leo's own hand-placed `NPC_KING`, `game/data/world.ts`) before doing
-  anything further here. This needs a real, patient empirical
-  calibration pass (render, screenshot, measure, adjust, repeat), not
-  another one-shot derivation.
+  `TemplateWorld.tsx`'s `normalizeTemplateBake` exposes its real recentring
+  offset (`getBakeOffset()`) so placed content shares the exact same origin
+  as the visible mesh. A background research pass (5-agent workflow) traced
+  the lab's Blender pipeline (`rig_lib.py::apply_catalog_euler`) and proved
+  it applies a real `Rx(-90°)` about the local origin; inverting that
+  rotation matrix properly showed only the **up axis** needs a sign flip —
+  X and the depth axis need none (matches the structural fact that rotation
+  about X can't change X). Proof this was the real bug, not a guess: under
+  the old unnegated formula, King Leo's `template-01` marker computed to a
+  world Y sitting *above* the live bake's own measured bounding-box max — a
+  geometric impossibility. Negating just that term (`prepare-assets.mjs`'s
+  map-population section) puts every template-01 actor at a physically
+  valid height. Live-verified beyond the numbers too: `DEBUG_MARKERS=true`
+  + a photo-mode fly-out (no collision/radius clamp) to King Leo's marker
+  showed it sitting right on a rocky hillside surface with real terrain
+  behind it, not floating in a void.
+  **New finding from that same fly-out, orthogonal to the transform bug:**
+  the marker lands ~1740 world units from `dest.origin` — deep in the
+  diorama's distant hillside, far outside `dest.radius` (224) and nowhere
+  near `NPC_KING`'s hand-placed spawn-adjacent position. Despite sharing the
+  exact asset id `minifigkingleo00`, this is almost certainly a **distant
+  background procession figure** baked into the scenery, not the same
+  entity as the interactive quest NPC. The original plan's assumption that
+  `kind: 'actor'` + a name match is safe to use for *correcting* an
+  existing `NpcDef`'s position is now known to be wrong, at least for this
+  case — doing that blindly would strand the quest-bearing King unreachably
+  far from spawn. `DEBUG_MARKERS` is back to `false` (real players see
+  nothing); real content spawning (the `PropModel`/`RiggedFigure`
+  instantiation `TemplatePopulation.tsx` still stubs out) needs to resolve
+  this decorative-vs-interactive ambiguity per group (e.g. gate on
+  proximity to an existing hand-placed NPC) before matching by asset id
+  alone, not just trust the transform is now correct and spawn blindly.
 
   **Wave 4 (challenge maps as new destinations) shipped 2026-08-03.** The 6
   bonus "challenge" maps the lab classified alongside the 9 templates
