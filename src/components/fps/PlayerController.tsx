@@ -1458,8 +1458,13 @@ export default function PlayerController() {
       aimState.screen.vis = false;
     }
 
-    // camera: first person at the eyes, third person orbiting behind
-    if (st.cameraMode === 'third') {
+    // camera: first person at the eyes, third person orbiting behind.
+    // Mounted always forces first person regardless of the general on-foot
+    // preference — MountedHorse.tsx positions the horse's body/neck
+    // BODY_FORWARD units ahead of the camera specifically so a first-person
+    // view looks out over its mane; a third-person chase cam here would
+    // just show the rider from behind, defeating that entirely.
+    if (st.cameraMode === 'third' && !ridingState.active) {
       _eyeV.set(pos.current.x, pos.current.y - 0.2, pos.current.z);
       _camEuler.set(pitch.current, yaw.current, 0, 'YXZ');
       _camLookDirV.set(0, 0, -1).applyEuler(_camEuler);

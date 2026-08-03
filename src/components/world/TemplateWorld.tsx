@@ -114,8 +114,25 @@ export const TEMPLATE_WORLD_SCALE = 0.32;
  *  TemplatePopulation.tsx) — the grok map-layout data's own positions are
  *  expressed relative to the bake's un-recentred local origin, so anything
  *  placing content against that data needs the SAME real offset this
- *  function computed, not a second guess at what centered the bake. */
-export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE): { group: THREE.Group; offset: THREE.Vector3 } {
+ *  function computed, not a second guess at what centered the bake.
+ *
+ *  `groundAnchor` (default `'bboxMin'`, unchanged behavior for every
+ *  existing caller): the vertical recentring reference. Added 2026-08-03
+ *  for `HomeMeadow` alone, after a live regression — template-09 spans
+ *  6400×6400 world units (a genuinely huge "Far Meadow"), but the home
+ *  world's own playable core (`WORLD_HALF`=200, everything in `road.ts`/
+ *  `world.ts`) occupies only a small patch near its origin. Measured live:
+ *  the mesh's real local height AT that origin is 0.320 — its near-MAXIMUM
+ *  — while `box.min.y` (-0.288) comes from some distant low point ~3200
+ *  units away. Anchoring to the global min floated the whole playable field
+ *  ~0.6 units above every fixed-height decoration (`Road.tsx`'s tiles at a
+ *  hardcoded y=0.02), burying the roads entirely. `'origin'` anchors to a
+ *  real raycast at world-space (0,0) instead — the mesh's OWN lowest point
+ *  elsewhere on a 6400-unit field is irrelevant to what sits at y=0 for a
+ *  ±200-unit playable core. Every other destination raycasts the live mesh
+ *  for player/prop height (`sampleTemplateGroundY`) regardless of where
+ *  bbox-min recentring puts it, so they were never at risk from this. */
+export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE, groundAnchor: 'bboxMin' | 'origin' = 'bboxMin'): { group: THREE.Group; offset: THREE.Vector3 } {
   const inner = scene.clone(true);
   const holder = new THREE.Group();
   holder.add(inner);
@@ -123,7 +140,15 @@ export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEM
   holder.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(holder);
   const center = box.getCenter(new THREE.Vector3());
-  const offset = new THREE.Vector3(-center.x, -box.min.y, -center.z);
+  let groundY = box.min.y;
+  if (groundAnchor === 'origin') {
+    const rc = new THREE.Raycaster();
+    rc.set(new THREE.Vector3(center.x, box.max.y + 50, center.z), new THREE.Vector3(0, -1, 0));
+    rc.far = box.max.y - box.min.y + 100;
+    const hit = rc.intersectObject(holder, true)[0];
+    if (hit) groundY = hit.point.y;
+  }
+  const offset = new THREE.Vector3(-center.x, -groundY, -center.z);
   holder.position.copy(offset);
   const wrapper = new THREE.Group();
   wrapper.add(holder);

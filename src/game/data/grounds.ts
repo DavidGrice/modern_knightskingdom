@@ -44,12 +44,16 @@ export interface Ground {
 // the fix is a real redistribution, not just "flip the sign," and every new
 // position below is checked against that whole cluster, not eyeballed.
 // The Home Grove keeps its pond-side spot (its own flavour text is written
-// around that walk); Northwood Stand and the Herb Meadow move to fill the
-// two directions that had nothing at all (south-west and due south); Old
-// Quarry/Iron Seam/Deepwood keep their own compass character (E/NE/N) with
-// only enough of a nudge to clear the ground-vs-ground spacing check below
-// at their new neighbours' sizes. Net: N, NE, E, SE, S, SW — six distinct
-// directions instead of four crowded onto one side and two empty.
+// around that walk); Northwood Stand and the Herb Meadow fill south-west
+// and due south.
+//
+// Superseded 2026-08-03: Old Quarry/Iron Seam/Deepwood's own north-leaning
+// spots (E/NE/N) got pulled south too — the whole north side is now
+// reserved on purpose for the kingdom's own future expansion, not parceled
+// out to resource grounds. Every "rock" ground (Old Quarry, Iron Seam) now
+// sits south-east; every "tree" ground (Home Grove, Northwood Stand,
+// Deepwood) sits south, from SE through SW. Net: every ground south of the
+// equator, north completely clear.
 export const GROUNDS: Ground[] = [
   {
     // east of the road and north of the pond (52, 42, r8) — the first wood
@@ -78,26 +82,37 @@ export const GROUNDS: Ground[] = [
     lockedHint: 'Yours from the first day',
   },
   {
-    // due east, nudged off the equator just enough to clear the Home
-    // Grove/pond cluster to its south-east and Iron Seam's own spacing to
-    // its north — same direction as before, no longer crowding the north
-    // side against Iron Seam and Deepwood.
+    // Requested 2026-08-03: moved from due east (75, 5) into the south-east
+    // quadrant proper, along with Iron Seam below — the whole north side is
+    // now kept clear on purpose, reserved for the kingdom's own future
+    // expansion rather than parceled out to resource grounds. Checked clear
+    // of the Home Grove (dx 55 vs their halfX sum 30) and of Iron Seam's own
+    // new box (dz 45 vs their halfZ sum 28, clears on Z even with X close)
+    // and of the pond (nowhere near either box).
     id: 'quarry', name: 'The Old Quarry', kind: 'rock',
-    x: 75, z: 5, halfX: 14, halfZ: 16, tier: 1, count: 8,
+    x: 85, z: 45, halfX: 14, halfZ: 16, tier: 1, count: 8,
     lockedHint: 'Quarried under the Freehold deed',
   },
   {
-    // kept north-east — already a distinct direction from Deepwood's due
-    // north — nudged for spacing against the Old Quarry's own new box.
+    // Requested 2026-08-03: moved from north-east (62, -55) — the north
+    // side is reserved for the kingdom's own future expansion now, so
+    // every "rock" ground moves south-east together with the Old Quarry.
+    // Checked clear of the Old Quarry's new box (dz 45 vs halfZ sum 28) and
+    // of the homestead (x 100 - halfX 14 = 86, well past the 40 line).
     id: 'ironseam', name: 'The Iron Seam', kind: 'rock', variant: 'iron',
-    x: 62, z: -55, halfX: 14, halfZ: 12, tier: 2, count: 5,
+    x: 100, z: 90, halfX: 14, halfZ: 12, tier: 2, count: 5,
     lockedHint: 'Dug under the Manor deed',
   },
   {
-    // kept due north — already the one ground with no east/west lean at
-    // all — nudged out slightly for spacing against Iron Seam's own box.
+    // Requested 2026-08-03: moved from due north (0, -70) into the
+    // south-west, further out past Northwood Stand — every "tree" ground
+    // now sits south of the equator (Home Grove SE, Northwood Stand SW,
+    // Deepwood further SW still), and the north side is kept completely
+    // free for the kingdom's own future expansion rather than fenced off
+    // by a resource ground. Checked clear of Northwood Stand (dx 40 vs
+    // halfX sum 38) and of the homestead (x 110 - halfX 20 = 90).
     id: 'deepwood', name: 'The Deepwood', kind: 'tree',
-    x: 0, z: -70, halfX: 20, halfZ: 12, tier: 3, count: 14,
+    x: -110, z: 100, halfX: 20, halfZ: 12, tier: 3, count: 14,
     lockedHint: 'Felled under the Barony deed',
   },
 ];

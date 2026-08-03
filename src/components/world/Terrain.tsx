@@ -8,7 +8,7 @@ import { BUILD_REGION, landHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, sampleEnv, seasonOf } from '@/game/env';
-import { normalizeTemplateBake } from './TemplateWorld';
+import { normalizeTemplateBake, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
 
 /** Spring/Summer/Autumn/Winter grass tints — winter reads pale/frost-dusted
  *  rather than switching to a wholly separate snow-covered ground state. */
@@ -135,7 +135,9 @@ function HomeMeadow() {
   const { scene } = useGLTF('/assets/worlds/template-09.glb');
   const { gl } = useThree();
   const { group, tintables } = useMemo(() => {
-    const { group: g } = normalizeTemplateBake(scene);
+    // 'origin' anchor, not the shared default — see normalizeTemplateBake's
+    // own doc comment for why the home meadow specifically needs this
+    const { group: g } = normalizeTemplateBake(scene, TEMPLATE_WORLD_SCALE, 'origin');
     // Requested 2026-07-31: a real Options setting (Settings.anisotropy,
     // default 8 — this file's own original hardcoded value, so a Balanced-
     // equivalent player sees no change) instead of a bare literal. A plain
