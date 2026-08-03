@@ -17,6 +17,7 @@ import { stabledHorses } from '../riding';
 import { agentManager } from '@/ai/core/AgentManager';
 import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { resetNpcAgentSync } from '@/ai/npcSync';
+import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
@@ -623,6 +624,7 @@ function createGameStore() {
       agentManager.clear();
       resetVillagerAgentSync();
       resetNpcAgentSync();
+      resetCourtAmbientAgentSync();
       targetRegistry.clear();
       clearAllWorkSignals();
       set({
@@ -660,6 +662,7 @@ function createGameStore() {
       agentManager.clear();
       resetVillagerAgentSync();
       resetNpcAgentSync();
+      resetCourtAmbientAgentSync();
       targetRegistry.clear();
       clearAllWorkSignals();
       // the mounted-patrol AI reads these every frame from the leaf module
