@@ -9,20 +9,34 @@
 // active while actually visiting the destination) — this is meant to grow
 // into that file's data-driven successor, not compete with it.
 //
-// DEBUG MARKER MODE, DELIBERATELY DISABLED BY DEFAULT (2026-08-03): the
-// coordinate transform (scripts/prepare-assets.mjs's map-population step)
-// is NOT yet verified — a live calibration pass found the lab applies a
-// real -90°-about-X rotation to reach its own SW-corner/Z-up frame
-// (confirmed via PAK_ORIENTATION_CATALOG.json's final_root_euler_deg), and
-// a hand-derived inverse for the vertical axis produced an even WORSE
-// result (computed marker ~1200 world units up on a diorama only ~680
-// units tall) than the simpler direct-mapping fallback currently shipped.
-// Neither is trusted. `DEBUG_MARKERS` stays `false` so this component is
-// fully inert for real players — set it `true` locally to keep iterating:
-// every asset_ref group renders as a bright sphere, cheap to eyeball
-// against a known-correct reference (King Leo's own hand-placed NPC
-// position, `NPC_KING`, game/data/world.ts) before trusting this for real
-// spawns. See ROADMAP.md's "Blocked on the Grok mapping" entry.
+// DEBUG MARKER MODE, DELIBERATELY DISABLED BY DEFAULT: the coordinate
+// transform itself is now VERIFIED (2026-08-03) — prepare-assets.mjs's
+// map-population step negates the up-axis term (see that file's own
+// comment for the proof: the old unnegated formula placed King Leo's
+// marker above the live bake's own bounding-box max, a geometric
+// impossibility). Live confirmation: `DEBUG_MARKERS=true` + a photo-mode
+// fly-out to King Leo's marker (script deleted after use) showed the
+// marker sitting right on a rocky hillside surface with real terrain
+// behind it — not floating in a void, not embedded past the mesh bounds.
+//
+// NOT yet safe to wire into real content spawning, for a DIFFERENT reason
+// found during that same fly-out: the marker sits ~1740 world units from
+// this destination's origin — deep inside the diorama's distant hillside,
+// far outside `dest.radius` (224, PlayerController's own wander clamp) and
+// nowhere near `NPC_KING`'s hand-placed position (game/data/world.ts,
+// (1000, 962), a few dozen units from spawn). Despite sharing the exact
+// asset id `minifigkingleo00`, this classified group is almost certainly a
+// DISTANT BACKGROUND PROCESSION FIGURE baked into the scenic hillside —
+// not the same entity as the interactive quest NPC. The original plan's
+// assumption that `kind: 'actor'` + a name match is always safe to use for
+// *correcting* an existing NpcDef's position (see the plan's Wave 3
+// section) is now known to be WRONG at least for this case — doing that
+// blindly would strand the quest-bearing King unreachably far from spawn.
+// Any future real-content-spawning pass must resolve this ambiguity
+// per-group (e.g. proximity to the existing hand-placed NPC as a gate)
+// before matching by asset id alone. `DEBUG_MARKERS` stays `false` so this
+// component is fully inert for real players; flip it locally to keep
+// investigating. See ROADMAP.md's "Blocked on the Grok mapping" entry.
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
