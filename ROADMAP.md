@@ -3692,6 +3692,27 @@ was forgotten.
   anything further here. This needs a real, patient empirical
   calibration pass (render, screenshot, measure, adjust, repeat), not
   another one-shot derivation.
+
+  **Wave 4 (challenge maps as new destinations) shipped 2026-08-03.** The 6
+  bonus "challenge" maps the lab classified alongside the 9 templates
+  (`reports/maps/challenge_N_layout.json`) are now real `WORLD_DESTINATIONS`
+  entries (`challenge-1`..`challenge-6`, `game/data/worlds.ts`), reachable
+  from the Travel Map's new "Challenge Grounds" section — no unlock gate,
+  data-only for now (no resident cast/quests, matching how the 9 templates
+  themselves shipped before Phase 20 added residents). `TemplateWorld.tsx`'s
+  `TEMPLATE_WORLD_SCALE` is now overridable per destination
+  (`WorldDestination.worldScale`) in case a future map needs its own
+  calibration, but it turned out **not to be needed here** — a live
+  measurement (loading challenge-1.glb and reading `normalizeTemplateBake`'s
+  real computed bounding box) confirmed challenge maps use the exact same
+  net scale convention as templates (`export_textured.py`'s own
+  `prefer_template` flag applies identically to both, confirmed by reading
+  that script), contradicting an earlier assumption in this same effort that
+  a separate `CHALLENGE_WORLD_SCALE` constant would be needed. Radii were
+  computed per-map from each layout's own `space.bbox_size`, not guessed.
+  Verified live: all 6 destinations travel cleanly with no console/asset
+  errors and real ground-height sampling; two screenshots (smallest and
+  largest) confirm human-scaled, correctly-proportioned dioramas.
 - [TODO] **Option B of the workshop** (instruction-accurate builds): still needs
   LDraw models, Rebrickable inventories, and the manual PDFs. `ldraw/` holds
   only its README. Send one `.mpd` and the seam can be proved against it.

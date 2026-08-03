@@ -25,6 +25,10 @@ export interface WorldDestination {
   radius: number;
   loot?: Partial<Record<ItemId, number>>;
   lootText?: string;
+  /** requested 2026-08-03 (challenge maps) — overrides TEMPLATE_WORLD_SCALE
+   *  (TemplateWorld.tsx) for this one destination's bake. Absent = the
+   *  shared template scale, unchanged behavior for all 9 existing templates. */
+  worldScale?: number;
 }
 
 export const WORLD_DESTINATIONS: WorldDestination[] = [
@@ -127,5 +131,70 @@ export const ARENA_DESTINATION: WorldDestination = {
   origin: ARENA_ORIGIN, radius: ARENA_RADIUS,
 };
 
+// The six bonus "challenge" maps (requested 2026-08-03) — smaller warehouse
+// play dioramas the Grok lab classified alongside the 9 templates
+// (reports/maps/challenge_N_layout.json, same kk.map_layout.v1 schema,
+// verified 2026-08-01) but that never had a WORLD_DESTINATIONS entry. Their
+// .glb/.mtl/.obj already existed in the extraction (no new Blender export —
+// scripts/prepare-assets.mjs's own worlds-copy step now pulls them into
+// public/assets/worlds/ alongside the 9 templates, normalizing the source's
+// literal-space filename "challenge N.glb" to "challenge-N.glb"). A fresh
+// quadrant, clear of the templates (x:1000-3400, z:1000), the dungeon
+// ({x:4200,z:4200}), and the arena ({x:-4200,z:4200}).
+//
+// worldScale: NOT overridden, confirmed correct by direct live measurement
+// (2026-08-03) — loaded challenge-1.glb live and read normalizeTemplateBake's
+// real computed THREE.Box3: size [122.88, 129.48, 284.24] world units,
+// matching bbox_size×320 exactly (0.384×320=122.9, 0.40464×320=129.5,
+// 0.88826×320=284.2) — the same net scale convention as the 9 templates
+// (export_textured.py's own "prefer_template" flag applies identically to
+// challenge and template category='User' assets, confirmed by reading that
+// script directly). No separate calibration constant needed after all.
+//
+// radius: computed per-map from each layout's own space.bbox_size
+// (half-diagonal in the ground plane, ×320, +~15% margin), not guessed —
+// same derivation the live challenge-1 measurement above validated.
+export const CHALLENGE_ORIGIN = { x: -4200, z: -4200 };
+const CHALLENGE_SPACING = 650; // clear of every radius below, no wander-circle overlap
+
+export const CHALLENGE_DESTINATIONS: WorldDestination[] = [
+  {
+    id: 'challenge-1', name: 'Challenge Ground I',
+    blurb: 'A small warehouse play diorama — the first of six practice grounds.',
+    thumb: '', model: '/assets/worlds/challenge-1.glb',
+    origin: { x: CHALLENGE_ORIGIN.x, z: CHALLENGE_ORIGIN.z }, radius: 175,
+  },
+  {
+    id: 'challenge-2', name: 'Challenge Ground II',
+    blurb: 'A small warehouse play diorama.',
+    thumb: '', model: '/assets/worlds/challenge-2.glb',
+    origin: { x: CHALLENGE_ORIGIN.x + CHALLENGE_SPACING, z: CHALLENGE_ORIGIN.z }, radius: 190,
+  },
+  {
+    id: 'challenge-3', name: 'Challenge Ground III',
+    blurb: 'A small warehouse play diorama.',
+    thumb: '', model: '/assets/worlds/challenge-3.glb',
+    origin: { x: CHALLENGE_ORIGIN.x + CHALLENGE_SPACING * 2, z: CHALLENGE_ORIGIN.z }, radius: 185,
+  },
+  {
+    id: 'challenge-4', name: 'Challenge Ground IV',
+    blurb: 'A small warehouse play diorama.',
+    thumb: '', model: '/assets/worlds/challenge-4.glb',
+    origin: { x: CHALLENGE_ORIGIN.x + CHALLENGE_SPACING * 3, z: CHALLENGE_ORIGIN.z }, radius: 235,
+  },
+  {
+    id: 'challenge-5', name: 'Challenge Ground V',
+    blurb: 'A small warehouse play diorama.',
+    thumb: '', model: '/assets/worlds/challenge-5.glb',
+    origin: { x: CHALLENGE_ORIGIN.x + CHALLENGE_SPACING * 4, z: CHALLENGE_ORIGIN.z }, radius: 260,
+  },
+  {
+    id: 'challenge-6', name: 'Challenge Ground VI',
+    blurb: 'A small warehouse play diorama — the last of six practice grounds.',
+    thumb: '', model: '/assets/worlds/challenge-6.glb',
+    origin: { x: CHALLENGE_ORIGIN.x + CHALLENGE_SPACING * 5, z: CHALLENGE_ORIGIN.z }, radius: 235,
+  },
+];
+
 export const WORLD_DESTINATION_BY_ID: Record<string, WorldDestination> =
-  Object.fromEntries([...WORLD_DESTINATIONS, DUNGEON_DESTINATION, ARENA_DESTINATION].map((d) => [d.id, d]));
+  Object.fromEntries([...WORLD_DESTINATIONS, DUNGEON_DESTINATION, ARENA_DESTINATION, ...CHALLENGE_DESTINATIONS].map((d) => [d.id, d]));

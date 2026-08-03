@@ -6,6 +6,7 @@ import { WORLD_DESTINATIONS } from '@/game/data/worlds';
 import { NPCS, isNpcRevealed } from '@/game/data/npcs';
 import { DUNGEON_UNLOCK_QUEST } from '@/game/dungeon';
 import { ARENA_ENVS } from '@/game/arena';
+import { CHALLENGE_DESTINATIONS } from '@/game/data/worlds';
 
 export default function TravelPanel() {
   const setPanel = useGameStore((s) => s.setPanel);
@@ -131,6 +132,45 @@ export default function TravelPanel() {
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* requested 2026-08-03: the 6 bonus challenge maps — data-only travel
+          destinations for now (no quest content/resident cast yet, same
+          "ship the place before the story" order the 9 templates themselves
+          originally shipped in, before Phase 20 added residents). No unlock
+          gate: these are extra warehouse dioramas, not a Knight-rank reward
+          like the Crypt/Arena. No thumbnail art exists for these yet either
+          (unlike the 9 templates), so this is a plain text grid, not image
+          cards. */}
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--chrome-2)' }}>
+        <div style={{ fontWeight: 'bold', color: 'var(--gold)', fontSize: 14, marginBottom: 8 }}>
+          🗺️ Challenge Grounds
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {CHALLENGE_DESTINATIONS.map((d) => {
+            const here = destination === d.id;
+            const visited = visitedWorlds.includes(d.id);
+            return (
+              <div
+                key={d.id}
+                style={{
+                  border: `1px solid ${here ? 'var(--gold)' : 'var(--chrome-2)'}`,
+                  borderRadius: 6, padding: 8, background: 'rgba(0,0,0,0.25)',
+                }}
+              >
+                <div style={{ fontWeight: 'bold', color: 'var(--gold)', fontSize: 13, marginBottom: 4 }}>
+                  {d.name}{visited ? ' ✓' : ''}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--parchment-dark)', marginBottom: 8, minHeight: 30 }}>
+                  {d.blurb}
+                </div>
+                <button disabled={here} onClick={() => travelTo(d.id)} style={{ width: '100%' }}>
+                  {here ? 'You are here' : 'Travel'}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
