@@ -17,12 +17,29 @@
     "(isWatchHours, data/villagers.ts) and are driven separately by",
     "Defenders.tsx, not by this reasoner yet — whether/how a guard rests is",
     "an open question for whenever defender AI actually gets built, not",
-    "something to silently assume works the same way as a villager's night."
+    "something to silently assume works the same way as a villager's night.",
+    "Updated 2026-08-03: villager gained idle_fidget/notice_player (ambient.ts/",
+    "notice.ts) — real ambient-category/social-category content, both scored",
+    "so low they only ever win during genuine downtime (see those files' own",
+    "headers). New 'court' archetype: ONLY those same two actions, nothing",
+    "movement/schedule-related — deliberately narrower than villager so a",
+    "court NPC (King Leo, Richard, Storm, the starter farmers — anyone",
+    "courtAmbientSync.ts spawns an Agent for) can never wander off post or",
+    "flee a raid three regions away, while still reading as alive via the",
+    "same fidget/notice content a working villager gets."
   ],
   "villager": {
     "label": "Villager",
     "needProfile": "villager",
-    "intrinsic": ["wander", "socialize", "idle", "flee_to_safety", "sleep", "gather_resource", "haul_to_deposit"]
+    "intrinsic": [
+      "wander", "socialize", "idle", "flee_to_safety", "sleep", "gather_resource", "haul_to_deposit",
+      "idle_fidget", "notice_player"
+    ]
+  },
+  "court": {
+    "label": "Court",
+    "needProfile": "villager",
+    "intrinsic": ["idle_fidget", "notice_player"]
   },
   "guard": {
     "label": "Guard",

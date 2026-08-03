@@ -15,6 +15,7 @@ import { getNavGrid } from '@/game/navgrid';
 import { agentManager, type WindowBounds } from './core/AgentManager';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
+import { mirrorCourtAmbientPositions, syncCourtAmbientAgents } from './courtAmbientSync';
 // iteration 2.9 — side-effect import only: nothing here calls resolveAnchor
 // yet (phase 5's gather/haul actions are the first real caller), but it
 // needs to be in the client bundle for its own window.__kkanchor debug
@@ -59,6 +60,13 @@ export default function AiRuntime() {
     // this iteration's own Locomotion splice into Npc.tsx).
     syncNpcAgents(st.completedQuests, st.destination ?? null, st.villagers);
     mirrorNpcPositions();
+    // requested 2026-08-03 — the rest of Npc.tsx's own rendered population
+    // (King Leo, the Queen, Richard, John, Storm, the starter farmers): a
+    // narrow 'court' archetype Agent (idle_fidget/notice_player only, see
+    // archetypes.json) so they read as alive too, without any movement/
+    // schedule risk
+    syncCourtAmbientAgents(st.completedQuests, st.destination ?? null, st.villagers);
+    mirrorCourtAmbientPositions();
     // Phase 2, iteration 2.4 — a window-mode destination grid follows the
     // player, not any individual agent (nothing spawns agents in a
     // destination yet; this keeps the grid correctly centred for whenever

@@ -16,12 +16,16 @@ import { FLEE_TO_SAFETY } from './flee';
 import { SLEEP } from './sleep';
 import { GATHER_RESOURCE } from './gather';
 import { HAUL_TO_DEPOSIT } from './haul';
+import { IDLE_FIDGET } from './ambient';
+import { NOTICE_PLAYER } from './notice';
 
-export const ACTIONS: Action[] = [FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT];
+export const ACTIONS: Action[] = [
+  FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, IDLE_FIDGET, NOTICE_PLAYER,
+];
 registerActions(ACTIONS);
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkactions = {
-    FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT,
+    FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, IDLE_FIDGET, NOTICE_PLAYER,
   };
 }
