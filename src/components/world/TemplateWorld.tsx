@@ -3,12 +3,34 @@
 // nine original 2000-game diorama scenes (see game/data/worlds.ts), lazily
 // mounted only while the player is actually there. Unlike individual catalog
 // parts (see PropModel's doc comment), these whole-map bakes come out of a
-// different exporter (export_textured.py, not the per-part pipeline) and are
-// already right-side-up — no upright flip here. Scale uses a single fixed
-// constant for the whole set rather than a per-instance target height, since
-// these are baked multi-object scenes and height-matching would badly
-// distort a naturally flat one (template-09's open field has almost no
-// vertical extent at all).
+// different exporter (export_textured.py, not the per-part pipeline). Scale
+// uses a single fixed constant for the whole set rather than a per-instance
+// target height, since these are baked multi-object scenes and
+// height-matching would badly distort a naturally flat one (template-09's
+// open field has almost no vertical extent at all).
+//
+// FLIPPED-BAKE FIX (2026-08-04): despite this file's earlier assumption that
+// these bakes were "already right-side-up," a live user report ("green
+// textures are underneath where we spawn") plus direct inspection of the
+// shipped .glb files proved every away-destination bake (templates 01-08 AND
+// all 6 challenge maps — checked 8 of the 14 directly) is Y-inverted at the
+// source: each one's raw vertex bounding box hangs overwhelmingly BELOW y=0
+// (e.g. template-01: y ∈ [-1913, +206] raw units — the opposite of a hill a
+// castle "crowns," which should rise mostly ABOVE a y≈0 ground reference).
+// Confirmed via `node -e` bbox dumps directly on the shipped GLBs, not
+// guessed. Wherever this inversion enters the external export/convert
+// pipeline (outside this repo, not traced further — see the project's own
+// "scripts/ is gitignored local-only tooling" convention for why that
+// pipeline isn't part of this codebase), the fix here is a targeted runtime
+// correction: `normalizeTemplateBake`'s new `flipY` mirrors the bake across
+// its own Y axis before recentring. Safe for prop/actor placement
+// (TemplatePopulation.tsx's `Grounded` reads height from a LIVE raycast
+// against whatever bake actually rendered, never the stored population Y) —
+// only X/Z placement matters there, and a pure Y-mirror never touches those.
+// template-09 (HomeMeadow, Terrain.tsx) is NOT flipped: it's a separate,
+// already-verified call site, and its own bbox is near-flat (~±1 raw unit)
+// where a flip would be visually meaningless anyway — left alone rather
+// than risk its already-tuned 'origin' groundAnchor logic for zero benefit.
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
@@ -131,12 +153,21 @@ export const TEMPLATE_WORLD_SCALE = 0.32;
  *  elsewhere on a 6400-unit field is irrelevant to what sits at y=0 for a
  *  ±200-unit playable core. Every other destination raycasts the live mesh
  *  for player/prop height (`sampleTemplateGroundY`) regardless of where
- *  bbox-min recentring puts it, so they were never at risk from this. */
-export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE, groundAnchor: 'bboxMin' | 'origin' = 'bboxMin'): { group: THREE.Group; offset: THREE.Vector3 } {
+ *  bbox-min recentring puts it, so they were never at risk from this.
+ *
+ *  `flipY` (default `false`, unchanged behavior for every existing caller
+ *  except the away-destination path below): mirrors the bake across its own
+ *  Y axis before recentring — see this file's header comment for the direct
+ *  bbox evidence that every away-destination .glb ships Y-inverted at the
+ *  source. A pure mirror, X/Z untouched; three.js's normal matrix corrects
+ *  lighting automatically under the resulting negative-determinant
+ *  transform, and `mesh.material.side = DoubleSide` (below) already masks
+ *  any backface/winding artifact regardless. */
+export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE, groundAnchor: 'bboxMin' | 'origin' = 'bboxMin', flipY: boolean = false): { group: THREE.Group; offset: THREE.Vector3 } {
   const inner = scene.clone(true);
   const holder = new THREE.Group();
   holder.add(inner);
-  holder.scale.setScalar(scale);
+  holder.scale.set(scale, flipY ? -scale : scale, scale);
   holder.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(holder);
   const center = box.getCenter(new THREE.Vector3());
@@ -173,9 +204,9 @@ export function getBakeOffset(): THREE.Vector3 {
   return bakeOffset;
 }
 
-function NormalizedTemplateScene({ url, scale }: { url: string; scale?: number }) {
+function NormalizedTemplateScene({ url, scale, flipY }: { url: string; scale?: number; flipY?: boolean }) {
   const { scene } = useGLTF(url);
-  const { group, offset } = useMemo(() => normalizeTemplateBake(scene, scale), [scene, scale]);
+  const { group, offset } = useMemo(() => normalizeTemplateBake(scene, scale, 'bboxMin', flipY), [scene, scale, flipY]);
   useEffect(() => {
     bakeOffset.copy(offset);
     return () => { bakeOffset.set(0, 0, 0); };
@@ -245,7 +276,7 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
         <circleGeometry args={[dest.radius + 4, 24]} />
         <meshStandardMaterial color="#4c7a3a" roughness={1} />
       </mesh>
-      <NormalizedTemplateScene key={dest.id} url={dest.model} scale={dest.worldScale} />
+      <NormalizedTemplateScene key={dest.id} url={dest.model} scale={dest.worldScale} flipY />
       {claim && <ClaimFlag x={claim.x - dest.origin.x} z={claim.z - dest.origin.z} groundY={claim.groundY} />}
     </group>
   );
