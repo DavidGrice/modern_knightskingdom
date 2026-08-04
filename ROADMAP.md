@@ -3545,13 +3545,55 @@ fence, and the village's residents are villagers whose `world` is that place.
    standing, and what you do there is repair, garrison and extend. That also
    keeps the two loops distinct rather than nine identical build grids.
 
-[TODO] **Suggested first slice**, if this is wanted: take ONE destination — the Far
-Meadow is the emptiest and least entangled with existing quests — and make it
-ownable end to end: a quest chain to earn it, a deed to close it, its own two
-or three residents, its own labour, and a travel-board entry that shows it as
-YOURS. That proves every seam (per-world villagers, per-world labour, per-world
-quests, ownership in the save) against one place, and the other eight are then
-data rather than architecture.
+[COMPLETE] ✅ **Suggested first slice — SHIPPED 2026-08-04 as Wave 4 of the full-ROADMAP wave
+plan**, with one real correction to this section's own suggestion: **not the Far Meadow** —
+that's template-09, already consumed as the literal homestead by Phase 20, eight days before this
+section was even written (a design-history inconsistency this section itself carried, caught before
+building anything on it). Of the 8 real away-destinations, **The Old Ruins (template-08)** is the
+one with no resident named NPC or guild-hall figure already living there — the least entangled
+pick that actually exists. Every seam this slice was meant to prove is now real, not just per-world
+villagers/labour (Wave 3) — the ownership/quest/residents/collection layer on top:
+- **A quest chain to earn it**: a new NPC, Fenwick ("Ruins Scavenger" — reuses the same generic
+  villager donor + `greetSound`/`portrait` Alric/Beda already use, zero new asset dependency),
+  offers two real errands (`settlementQuests.ts`) through the ordinary talk-to-an-NPC flow: 20 stone
+  to shore up the foundations, then 6 kills to clear the ruins.
+- **A deed to close it**: once both errands are done, Fenwick's own dialogue offers "File the Deed"
+  (60 gold) — a new `foundSettlement(destId, x, z, groundY)` action that calls the EXISTING
+  `claimWorld()` unchanged (a harmless no-op if the player already claimed the plot via the ordinary
+  `ClaimBanner`), then records the settlement.
+- **2-3 residents**: Bram (farmer), Ida (merchant), Tolan (builder) — `lumberjack`/`miner` deliberately
+  excluded, a real code-forced cut: template-08 has zero `ResourceNodeState` entries and
+  `villagerAtWork`'s tree/rock branch has no per-world node awareness yet, so either job would just
+  stall forever with nothing to report.
+- **Its own labour**: proven live — pinned Bram's position at the settlement's own claimed-plot
+  anchor and called `tickVillagers` directly; wheat delivered correctly (the farmer's real `perTrip`
+  yield), Wave 3's per-world re-keying working exactly as designed against a REAL non-null world for
+  the first time.
+- **A travel-board "YOURS" marker**: `TravelPanel.tsx` now shows 🏰 YOURS for any destination with a
+  founded settlement.
+- **Wall-clock collection, mirroring `collectTaxes` exactly**: `collectSettlementYield(destId)` —
+  same cooldown-then-flat-amount shape (`TAX_COOLDOWN_MS`, `6 + residentCount × 5` gold), triggered
+  from Fenwick's own dialogue once founded, verified to correctly withhold on cooldown and pay out
+  the right amount once it clears (21 gold with all 3 residents — the arithmetic checked exactly).
+
+**A real, separate gap found along the way, not fixed here**: `DialoguePanel.tsx`'s own offer/accept
+logic reads `npc.sideQuests` directly, never `sideQuestsOf(npc.id)` — confirmed by reading it, not
+assumed. This means `allegianceQuests.ts`'s `EXTRA_SIDE_QUESTS` pool (Alric's/Beda's own village
+errands, keyed by their npc ids) can never actually be OFFERED through the ordinary "talk to them"
+flow — those errands are dead code today, unreachable via the UI despite being real, complete data.
+Fenwick's own quests deliberately avoid this trap by being spread directly into his `sideQuests`
+field rather than merged in the same way, which is why they work. Left open: either fix
+`DialoguePanel.tsx` to consult `sideQuestsOf()`, or fold `EXTRA_SIDE_QUESTS` content directly into
+each NPC's own `sideQuests` array the way this wave did.
+
+Verified live end-to-end through the real UI (not just direct store calls): the full errand chain
+accepted/turned-in via dialogue buttons, "File the Deed" clicked through `getByRole` (a locator-text
+ambiguity in one earlier test attempt was the test's own bug, not the feature's — a direct
+`foundSettlement()` call and the real button both produced identical, correct state), residents
+spawned with exactly the right jobs, gold deducted exactly 60, `claimedWorlds` populated with a real
+sampled ground height (26.56 world units — sane, not a placeholder), TravelPanel's YOURS marker
+confirmed, and the yield collection's cooldown gate and payout amount both confirmed exact.
+`npm run verify` clean, zero console/page errors throughout.
 
 ## Pointer lock stopped letting go, 2026-07-26 [COMPLETE]
 

@@ -3,6 +3,7 @@ import { EXISTING_QUEST_ALLEGIANCE, EXTRA_SIDE_QUESTS } from './allegianceQuests
 import { allegianceGateHint, meetsAllegiance } from './allegiance';
 import type { SoundName } from '@/lib/audio';
 import { BATTLE_DOME } from './world';
+import { SETTLEMENT_QUESTS } from './settlementQuests';
 
 // The royal court, stationed around the realm. Each NPC greets with their
 // original voice line and offers repeatable side quests from a themed pool.
@@ -381,6 +382,36 @@ export const NPCS: NpcDef[] = [
       "Prove yourself and word travels — even to the castle, they say.",
     ],
     sideQuests: [],
+  },
+  // Empire arc, Wave 4: the settlement prototype's own quest-giver, living
+  // among The Old Ruins (template-08) — the one real away-destination with
+  // no resident NPC or guild-hall figure already there (see
+  // settlementQuests.ts's own header for why this one was picked). Reuses
+  // the same generic villager donor + greetSound + portrait Alric/Beda
+  // already use — zero new asset dependency, same "village folk, not
+  // court" visual register.
+  {
+    id: 'fenwick',
+    name: 'Fenwick',
+    title: 'Ruins Scavenger',
+    config: {
+      name: 'Fenwick', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
+      armColor: 90, handColor: 18, legColor: 38, hipColor: 90,
+    },
+    // near the template-08 travel landing (origin {x:3100,z:1000}) — ground
+    // height is sampled live by Npc.tsx for any world-resident NPC
+    // (destinationGroundY), same as every other court/village resident.
+    x: 3100, z: 970, yaw: Math.PI,
+    keepProps: false,
+    greetSound: 'villager',
+    portrait: '/assets/minifigs/minifiggenericgood00.png',
+    lines: [
+      "Been picking through these old foundations for years now. Nobody else wants them.",
+      "You look like you could actually DO something with this place.",
+      "Bring me stone enough to shore the walls, and clear out whatever's nesting in the cellars — the deed's yours after that.",
+    ],
+    sideQuests: SETTLEMENT_QUESTS.fenwick,
+    world: 'template-08',
   },
 ];
 

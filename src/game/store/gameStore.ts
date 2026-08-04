@@ -161,6 +161,10 @@ interface GameState {
   claimedWorlds: Record<string, ClaimedPlot>; // template-world id -> claimed building plot, absent = unclaimed
   customBlueprints: Blueprint[]; // player-saved structures (see data/blueprints.ts for starter ones)
   lastTaxAt: number;              // epoch ms of last keep tax collection, 0 = never
+  /** Empire arc, Wave 4: destination id -> founded settlement, absent = not
+   *  yet earned. See SaveGame.settlements' own doc comment for how this
+   *  differs from claimedWorlds. */
+  settlements: Record<string, { since: number; lastCollectedAt: number }>;
   villagers: Villager[];
   villagerProgress: Record<string, number>; // villagerId -> seconds until next delivery
   /** the homestead Armory: spare gear held for the garrison, separate from
@@ -203,6 +207,16 @@ interface GameState {
   setBuildSelection: (id: string | null) => void;
   setBlueprintSelection: (id: string | null) => void;
   claimWorld: (destId: string, x: number, z: number, groundY: number) => void;
+  /** Empire arc, Wave 4: closes the settlement deed at a destination —
+   *  claims the plot (a no-op if already claimed via the ordinary
+   *  claimWorld/ClaimBanner path), records the settlement, and grants its
+   *  first residents. x/z/groundY are the player's own position/sampled
+   *  ground when they close the deed, same convention claimWorld already
+   *  uses (see ClaimBanner.tsx). */
+  foundSettlement: (destId: string, x: number, z: number, groundY: number) => void;
+  /** Empire arc, Wave 4: wall-clock settlement income, mirroring
+   *  collectTaxes' own cooldown-then-flat-amount shape exactly. */
+  collectSettlementYield: (destId: string) => void;
   captureBlueprint: (name: string, x: number, z: number) => boolean;
   deleteBlueprint: (id: string) => void;
   placeBlueprintAt: (blueprintId: string, x: number, z: number, rot: 0 | 1 | 2 | 3) => boolean;
@@ -600,6 +614,7 @@ function createGameStore() {
     perks: [],
     stats: { ...ZERO_STATS },
     claimedWorlds: {},
+    settlements: {},
     customBlueprints: [],
     lastTaxAt: 0,
     villagers: [],
@@ -650,7 +665,7 @@ function createGameStore() {
         gateOpen: {}, buildingHp: {}, reputation: {},
         destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, guild: null, skillTree: [], attrSpent: {},
         durability: {}, perks: [], stats: { ...ZERO_STATS },
-        claimedWorlds: {}, customBlueprints: [], lastTaxAt: 0,
+        claimedWorlds: {}, settlements: {}, customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
         interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
         cedricSieges: 0, cedricRouted: false,
@@ -709,7 +724,7 @@ function createGameStore() {
         attrSpent: s.attrSpent ?? {},
         durability: s.durability ?? {}, perks: s.perks ?? [],
         stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
-        claimedWorlds: s.claimedWorlds ?? {}, customBlueprints: s.customBlueprints ?? [],
+        claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, customBlueprints: s.customBlueprints ?? [],
         lastTaxAt: s.lastTaxAt ?? 0,
         villagers: s.villagers ?? [],
         villagerProgress: {},
@@ -767,7 +782,7 @@ function createGameStore() {
         attrSpent: s.attrSpent,
         durability: s.durability, perks: s.perks,
         stats: s.stats,
-        claimedWorlds: s.claimedWorlds, customBlueprints: s.customBlueprints,
+        claimedWorlds: s.claimedWorlds, settlements: s.settlements, customBlueprints: s.customBlueprints,
         lastTaxAt: s.lastTaxAt,
         villagers: s.villagers,
         armory: s.armory,
@@ -999,6 +1014,65 @@ function createGameStore() {
       if (st.claimedWorlds[destId]) return;
       set({ claimedWorlds: { ...st.claimedWorlds, [destId]: { x, z, groundY } }, dirty: true });
       st.notify('Land claimed! The aerial build menu (B) now works here too.', true);
+    },
+
+    // Empire arc, Wave 4 — see this action's own interface doc comment.
+    foundSettlement: (destId, x, z, groundY) => {
+      const st = get();
+      if (st.settlements[destId]) return;
+      // re-validated here, not just in the UI's disabled state — same
+      // "a stale panel can never hand out work you have not earned"
+      // discipline acceptSideQuest already applies to its own blockers
+      if (!st.completedSideQuests.includes('settle_clear')) return;
+      const cost = { gold: 60 };
+      if (!st.canAfford(cost)) {
+        st.notify('Not enough gold to file the deed — 60 gold needed.');
+        return;
+      }
+      // claims the plot too if the player never used the ordinary
+      // ClaimBanner for this destination — a harmless no-op if they did
+      // (claimWorld's own guard short-circuits on an existing claim)
+      st.claimWorld(destId, x, z, groundY);
+      const inv = { ...st.inventory };
+      inv.gold = (inv.gold ?? 0) - cost.gold;
+      const now = Date.now();
+      // farmer/merchant/builder only — lumberjack/miner are excluded on
+      // purpose: this destination has no ResourceNodeState entries yet
+      // (Wave 3's own scoping note) and villagerAtWork's tree/rock branch
+      // has no per-world node awareness, so a lumberjack/miner resident
+      // here would just stall forever with nothing to report
+      const settlerDefs: Villager[] = [
+        { id: 'settler_bram', name: 'Bram', job: 'farmer', world: destId },
+        { id: 'settler_ida', name: 'Ida', job: 'merchant', world: destId },
+        { id: 'settler_tolan', name: 'Tolan', job: 'builder', world: destId },
+      ];
+      const residents = settlerDefs.filter((r) => !st.villagers.some((v) => v.id === r.id));
+      set({
+        inventory: inv,
+        settlements: { ...st.settlements, [destId]: { since: now, lastCollectedAt: now } },
+        villagers: [...st.villagers, ...residents],
+        dirty: true,
+      });
+      audio.play('treasure', 0.9);
+      st.notify('The deed is filed — Bram, Ida and Tolan take up residence!', true);
+    },
+
+    collectSettlementYield: (destId) => {
+      const st = get();
+      const settlement = st.settlements[destId];
+      if (!settlement) return;
+      const now = Date.now();
+      if (now - settlement.lastCollectedAt < TAX_COOLDOWN_MS) {
+        const remainMin = Math.ceil((TAX_COOLDOWN_MS - (now - settlement.lastCollectedAt)) / 60000);
+        st.notify(`Nothing new to collect yet — check back in ${remainMin}m.`);
+        return;
+      }
+      const residentCount = st.villagers.filter((v) => v.world === destId).length;
+      const amount = 6 + residentCount * 5;
+      set({ settlements: { ...st.settlements, [destId]: { ...settlement, lastCollectedAt: now } }, dirty: true });
+      st.addItems({ gold: amount }, 'grant');
+      audio.play('treasure', 0.7);
+      st.notify(`Collected ${amount} gold from the settlement!`, true);
     },
 
     captureBlueprint: (name, x, z) => {
