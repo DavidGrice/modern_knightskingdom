@@ -279,6 +279,7 @@ interface GameState {
   setDefenderLoadout: (villagerId: string, loadout: DefenderLoadout) => void;
   unequipDefenderLoadout: (villagerId: string) => void;
   stationDefender: (villagerId: string, buildingId: string | null) => void;
+  setDefenderShift: (villagerId: string, shift: 'day' | 'night') => void;
   gainDefenderXp: (villagerId: string, amount: number) => void;
   enterInterior: (buildingId: string) => void;
   exitInterior: () => void;
@@ -1945,6 +1946,16 @@ function createGameStore() {
       set({ villagers, dirty: true });
       const name = st.villagers.find((v) => v.id === villagerId)?.name ?? 'Villager';
       st.notify(buildingId ? `${name} takes up their post.` : `${name} patrols near the homestead.`);
+    },
+
+    // N80 · a per-defender day/night watch — see Villager.shift's own doc
+    // comment for why absent means 'night' (the original blanket shift).
+    setDefenderShift: (villagerId, shift) => {
+      const st = get();
+      const villagers = st.villagers.map((v) => (v.id === villagerId ? { ...v, shift } : v));
+      set({ villagers, dirty: true });
+      const name = st.villagers.find((v) => v.id === villagerId)?.name ?? 'Villager';
+      st.notify(`${name} now stands the ${shift === 'day' ? 'day' : 'night'} watch.`);
     },
 
     gainDefenderXp: (villagerId, amount) => {

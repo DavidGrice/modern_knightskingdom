@@ -48,6 +48,7 @@ export default function VillagersPanel() {
   const unequipDefenderLoadout = useGameStore((s) => s.unequipDefenderLoadout);
   const armory = useGameStore((s) => s.armory);
   const stationDefender = useGameStore((s) => s.stationDefender);
+  const setDefenderShift = useGameStore((s) => s.setDefenderShift);
   const chooseTrait = useGameStore((s) => s.chooseTrait);
   const openVillagerEquip = useGameStore((s) => s.openVillagerEquip);
   // homestead-only counts: a remote claimed-plot structure shouldn't count
@@ -329,6 +330,37 @@ export default function VillagersPanel() {
                         Build a Watch Tower, or raise a walled Keep piece, to station a defender atop it.
                       </span>
                     )}
+                  </div>
+                  {/* N80 · a per-defender watch so raids that come by day
+                      don't find the whole garrison asleep */}
+                  <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
+                    Shift
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                    <button
+                      className="menu-btn small"
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: (v.shift ?? 'night') === 'night' ? 1 : 0.65,
+                        borderColor: (v.shift ?? 'night') === 'night' ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={() => setDefenderShift(v.id, 'night')}
+                      title="Stands watch after dusk, rests by day — when raiders and skeletons come"
+                    >
+                      🌙 Night Watch
+                    </button>
+                    <button
+                      className="menu-btn small"
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: v.shift === 'day' ? 1 : 0.65,
+                        borderColor: v.shift === 'day' ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={() => setDefenderShift(v.id, 'day')}
+                      title="Stands watch by day, rests after dusk"
+                    >
+                      ☀️ Day Watch
+                    </button>
                   </div>
                 </>
               )}

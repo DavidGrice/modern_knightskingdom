@@ -27,7 +27,7 @@ export const RECIPES: Recipe[] = [
     requiresUnlock: 'smithing',
   },
   {
-    id: 'bolt', name: 'Bolts ×4', icon: '➶', output: 'bolt', outputCount: 4,
+    id: 'bolt', name: 'Bolts', icon: '➶', output: 'bolt', outputCount: 4,
     cost: { wood: 1, stone: 1 }, station: 'workbench', skill: 'building', skillXp: 6,
     requiresUnlock: 'smithing',
   },
@@ -37,7 +37,7 @@ export const RECIPES: Recipe[] = [
     requiresUnlock: 'smithing',
   },
   {
-    id: 'arrow', name: 'Arrows ×4', icon: '➶', output: 'arrow', outputCount: 4,
+    id: 'arrow', name: 'Arrows', icon: '➶', output: 'arrow', outputCount: 4,
     cost: { wood: 2 }, station: 'workbench', skill: 'building', skillXp: 6,
     requiresUnlock: 'smithing',
   },

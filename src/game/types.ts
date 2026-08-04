@@ -306,6 +306,12 @@ export interface Villager {
   loadout?: DefenderLoadout;
   /** a placed building's id to guard (ideally a tower), null/absent = patrol near home */
   stationId?: string | null;
+  /** N80 (requested, "if raids can come by day the watch cannot all sleep by
+   *  day"): which half of the clock this defender stands watch for — absent
+   *  means 'night', the original single blanket shift every defender used
+   *  to keep (Defenders.tsx's isWatchHours()), so existing saves/defenders
+   *  are unaffected by this field's addition. */
+  shift?: 'day' | 'night';
   /** worn armor, drawn from the homestead Armory (any job can wear these —
    *  defenders additionally get a small combat bonus per piece, see
    *  Defenders.tsx). Absent/false = bare-headed/chested. `carrier` raises

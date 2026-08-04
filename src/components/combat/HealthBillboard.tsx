@@ -16,6 +16,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { EnemyData } from '@/game/combat';
+import { aimState } from '@/game/targeting';
 
 /** how high above the figure's feet the bar floats */
 const LIFT = 2.15;
@@ -52,7 +53,16 @@ export default function HealthBillboard({ data }: { data: EnemyData }) {
     // per-kind reference maxHpOf gives the Bestiary — see combat.ts's
     // EnemyData.maxHp
     const hurt = data.hp < data.maxHp;
-    g.visible = fade > 0.02 && hurt;
+    // N82 (one readout for a target, not two): HUD.tsx's AimReadout — the
+    // head-card that hangs over whatever the crosshair is on — already
+    // shows this exact HP as its own bar once you're actually aiming at
+    // this enemy (K61). Showing both there was the literal duplicate the
+    // report described; suppress the world-space bar specifically for the
+    // one enemy currently under the crosshair, so every OTHER hurt enemy
+    // still gets its normal ambient bar (e.g. one fighting a defender
+    // elsewhere in view) — only the aimed-at target becomes single-source.
+    const isAimTarget = aimState.target?.key === `enemy:${data.id}`;
+    g.visible = fade > 0.02 && hurt && !isAimTarget;
     if (!g.visible) return;
 
     // hold a constant on-screen size rather than shrinking with distance,
