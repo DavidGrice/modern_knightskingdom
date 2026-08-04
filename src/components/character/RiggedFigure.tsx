@@ -50,12 +50,24 @@ export default function RiggedFigure({
   const { camera } = useThree();
   const lodTimer = useRef(0);
   const culled = useRef(false);
+  // Beda investigation (Wave 2) — see the useFrame comment below for why
+  // this exists. Fails OPEN on a play() rejection (a failed clip fetch):
+  // showing an unposed rig beats hiding one forever, which is worse than
+  // the glitch this is meant to fix.
+  const posed = useRef(false);
 
   useEffect(() => {
     let alive = true;
     assembleRiggedMinifig(config, height, keepProps)
       .then((r) => {
         if (!alive) return;
+        // reset here, not in the "play clip" effect below — that effect
+        // also re-runs on a plain clip/loop/timeScale change for an
+        // ALREADY-POSED rig (e.g. idle -> walk), which should keep showing
+        // whatever it's currently doing while the new clip loads (same as
+        // before this fix), not hide. Only a genuinely fresh rig (this
+        // callback) should start unposed.
+        posed.current = false;
         setRig(r);
         onReady?.(r);
       })
@@ -66,7 +78,11 @@ export default function RiggedFigure({
 
   useEffect(() => {
     if (!rig) return;
-    rig.animator.play(clip, { loop, timeScale, onEnd: () => endRef.current?.() });
+    rig.animator.play(clip, { loop, timeScale, onEnd: () => endRef.current?.() })
+      .catch((e) => {
+        console.error('clip load failed — showing the rig unposed rather than hiding it forever', e);
+        posed.current = true;
+      });
   }, [rig, clip, loop, timeScale]);
 
   useFrame((_, dt) => {
@@ -79,14 +95,26 @@ export default function RiggedFigure({
         lodTimer.current = 0.2;
         rig.group.getWorldPosition(_worldPos);
         culled.current = _worldPos.distanceTo(camera.position) > lodDistance;
-        rig.group.visible = !culled.current;
       }
-    } else if (!rig.group.visible) {
-      // tier switched away from Performance mid-session — un-hide
+    } else {
+      // tier switched away from Performance mid-session — un-cull
       // immediately rather than waiting for the next throttled tick
       culled.current = false;
-      rig.group.visible = true;
     }
+    // Beda investigation (Wave 2): a fresh rig's joints all sit at the
+    // construction-time neutral stance (rotation identity) until the FIRST
+    // MinifigAnimator.update() with a resolved clip actually runs —
+    // `animator.play()` above awaits `loadClip()`, and this component
+    // starts rendering the instant `rig` state resolves, regardless of
+    // whether that await has finished. `animator.current` (the playing
+    // clip's name) becomes non-empty once it has. Computed into the SAME
+    // final `.visible` assignment as the LOD cull below, rather than a
+    // separate write, so the two conditions can't stomp on each other (an
+    // earlier version wrote `.visible` in three different places and the
+    // LOD branch's own "un-cull immediately" case silently undid the
+    // pose-readiness hide on every tier except Performance).
+    if (rig.animator.current !== '') posed.current = true;
+    rig.group.visible = posed.current && !culled.current;
     // a hard visibility toggle, not a fade and not a reduced-poly swap —
     // skips both the draw call (three.js doesn't recurse into invisible
     // subtrees, so portaled equipment on rig.joints.* is correctly skipped

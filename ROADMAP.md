@@ -3765,26 +3765,40 @@ was forgotten.
   exists on top of the flip fix — not re-audited destination-by-destination,
   since the flip alone resolved every case checked live.
 
-  **[TODO] Reported 2026-08-04, not reproduced live: an NPC (Beda) shows a
-  visibly wrong model — described as a red claw-like shape near the head —
-  when first seen, which resolves to her correct model on walking closer.**
-  Two screenshots (2m and 1m from her) show the mismatch, not a large
-  distance difference, so this reads as a brief render glitch on first
-  mount rather than a genuine LOD/distance system (checked: `RiggedFigure`'s
-  own LOD cutoff, `characterLodDistance`, is a hard visibility toggle
-  — fully invisible beyond the cutoff — and only active at the Performance
-  graphics tier; it cannot produce a wrong-looking shape, only nothing at
-  all). `npcs.ts`'s own K57 comment already documents a PAST version of
-  this exact class of bug for Beda specifically (mismatched head/body
-  donors) that was supposedly fixed by pointing both at the same donor —
-  worth double-checking that fix is actually intact and the new report
-  isn't the same root cause resurfacing. Tried to reproduce via a live
-  teleport-and-screenshot at matching distances/timing; did not catch the
-  glitch (Beda rendered correctly in every attempt). Needs either a tighter
-  repro (exact steps/timing from whoever saw it) or a closer read of
-  `assembleRiggedMinifig`/`minifigRig.ts` for an async-assembly race that
-  could show a stale/mid-swap frame — not guessed at further without
-  reproducing it first.
+  [COMPLETE] ✅ **Investigated 2026-08-04 (Wave 2 of the ROADMAP clear-out): an NPC
+  (Beda) shows a visibly wrong model — described as a red claw-like shape
+  near the head — when first seen, which resolves to her correct model on
+  walking closer.** Original report, kept for the record: two screenshots
+  (2m and 1m from her) showed the mismatch; `RiggedFigure`'s LOD cutoff was
+  ruled out (a hard visibility toggle, can't produce a wrong shape); K57's
+  donor-mismatch fix was re-checked and confirmed still intact
+  (`npcs.ts`: `headDonor`/`bodyDonor` both `minifiggenericgood00`); a live
+  teleport-and-screenshot repro attempt did not catch the glitch.
+  **This pass went the second route the earlier investigation left open — a
+  close read of `assembleRiggedMinifig`/`minifigRig.ts` — and found a real,
+  independent gap, though not provably the exact "red claw" shape
+  described:** `RiggedFigure.tsx` renders `rig.group` the instant its
+  assembly resolves, but `MinifigAnimator`'s `clip` stays `null` (and
+  `update()` a no-op) until `animator.play()`'s own `await loadClip(name)`
+  resolves — a SEPARATE async hop after the rig itself is already visible.
+  In that narrow window every joint sits at its construction-time neutral
+  rotation (identity), not the character's real pose. Fixed regardless,
+  since it's a genuine robustness gap either way: `RiggedFigure.tsx` now
+  keeps the group hidden until `animator.current` (the resolved clip name)
+  is actually non-empty, computed into one unified `.visible` assignment
+  alongside the existing LOD-cull logic (an earlier draft of this fix wrote
+  `.visible` from three different places and the LOD branch's own "tier
+  switched away from Performance, un-cull immediately" case silently undid
+  the pose-readiness hide on every tier except Performance — caught before
+  shipping). Fails OPEN on a `play()` rejection (a failed clip fetch shows
+  the rig unposed rather than hiding it forever, since that would be a worse
+  regression than the glitch being fixed). Verified live: zero console/page
+  errors across normal play and rapid job-switch stress testing (see the
+  next entry below); `npm run verify` clean. **Honest limit:** still never
+  reproduced the specific "red claw" visual live, so this is shipped as a
+  well-reasoned, real robustness fix for a confirmed timing gap, not a
+  confirmed silver bullet for that exact report — worth closing only if it
+  stops recurring.
 
   [COMPLETE] ✅ **Away-destination bakes were Y-inverted at the source — SHIPPED
   2026-08-04, root cause of "the worlds are flipped upside down" (live report,
@@ -4635,20 +4649,34 @@ isolation.
   against the existing `consider()` pattern instead (same signature, verified geometry math via a
   standalone calculation) — the change is additive only (a second `consider()` call) and cannot regress
   the pre-existing dock interaction. Worth a real live check next time the game is played by hand.
-- [TODO] **A named defender ("Beda") appears to change appearance/configuration discontinuously between
-  standing at their guard post and "spawning."** Requested 2026-07-30 — repro/exact meaning still needs
-  pinning down, logging what's already ruled out rather than a diagnosis. Checked the one obvious
-  suspect first: both `Defenders.tsx` and `Villagers.tsx` derive a figure's look through the SAME shared
-  `villagerConfig(villager)` (`villagerLooks.ts`) — so this is not a look-derivation mismatch between the
-  two rendering paths (head/body donor, colors are consistent). Most likely candidates left, given
-  `Villagers.tsx`/`Defenders.tsx` are two entirely separate component trees (confirmed elsewhere in this
-  batch, re: the stale-nametag bug) with their OWN `RiggedFigure` mounts: (a) a loadout/equipment swap
-  when a villager's station assignment changes (bare-handed vs armed reads very differently at a
-  glance), or (b) a remount flash — switching which tree renders a given villager id can force a fresh
-  `RiggedFigure` load from a default pose before its real config settles, reading as "changes complete
-  configuration" for a frame or two. Needs a live repro (ideally a screenshot or a description of exactly
-  when it happens — job change, day/night watch-shift handoff, recovering from downed) before it can be
-  scoped as a real fix rather than a guess.
+[COMPLETE] ✅ **A named defender ("Beda") appears to change appearance/configuration discontinuously between
+  standing at their guard post and "spawning."** Requested 2026-07-30; diagnosed and fixed 2026-08-04
+  (Wave 2 of the ROADMAP clear-out). The earlier pass here had already ruled out a look-derivation
+  mismatch (both trees share `villagerConfig()`) and narrowed it to two candidates: a loadout swap, or a
+  remount flash from `Villagers.tsx`/`Defenders.tsx` being separate component trees. **Confirmed the
+  remount-flash candidate structurally, not just plausibly:** `Villagers.tsx` filters
+  `st.villagers` on `v.job !== 'defender'`, `Defenders.tsx` on `v.job === 'defender'` — perfectly
+  complementary, so a villager is ALWAYS in exactly one tree, never both, never neither. But that also
+  means a job change is unconditionally a full React unmount-in-one-tree + fresh-mount-in-the-other for
+  that villager's `RiggedFigure` — and `assembleRiggedMinifig` had ZERO caching, so every remount reran
+  the full async donor/palette fetch AND the expensive synchronous geometry pipeline (`classifySided`,
+  `rehangArm`'s PCA analysis, `alignLimb`, building the joint hierarchy) from scratch, even though the
+  donor/colors hadn't changed at all. That's the "discontinuous change" — a real disappear-and-rebuild,
+  not a config mismatch. **Fix:** `minifigRig.ts` now caches the pre-animator assembled hierarchy
+  (baked meshes + joint groups), keyed by the exact same fields `RiggedFigure.tsx`'s own effect
+  dependency list already tracks (`headDonor`/`bodyDonor`/`armColor`/`handColor`/`legColor`/`hipColor`/
+  `height`/`keepProps`). A cache hit clones the cached hierarchy (`THREE.Object3D.clone(true)` — shares
+  geometry/material by default, safe here since colors are baked in per the same key and nothing else in
+  this codebase mutates a rig mesh's material post-assembly, confirmed by search) and builds a fresh
+  `MinifigAnimator` around the clone, skipping both the async fetches and the CPU-bound geometry work
+  entirely. The cache stores a PRISTINE clone made once at first assembly — not the live `root` itself,
+  which gets its joint rotations mutated in place every frame by that instance's own animator once it
+  starts playing, which would otherwise have leaked whatever pose the FIRST character using a given look
+  happens to be mid-animation in into every future cache hit. Combines with the hide-until-posed fix in
+  the entry above to close the remaining visible gap. Verified live: recruited Beda, then rapidly
+  cycled her job defender → miner → defender three times with only a 150ms settle between switches
+  (deliberately short, trying to catch the transition) — zero console/page errors, the aim/targeting
+  head-card correctly re-resolved her as "Beda · FRIENDLY" after every switch, `npm run verify` clean.
 [COMPLETE] **The player's own standing figure doesn't hide in third-person while riding.** Found
   2026-07-30 while fixing the horse-riding sine-bob (above), not something that regressed from that fix
   — `PlayerAvatar.tsx`'s own `g.visible = !playerState.riding` line is untouched, original code. Live
