@@ -3806,6 +3806,43 @@ was forgotten.
   own auth gate beyond just an obscure URL. Not designed or built yet —
   logged per the user's own explicit "just add it to the roadmap" ask.
 
+  **[TODO] Scoped 2026-08-04, not designed in detail or built: cultivatable
+  resource nodes ("build your own quarry/mining pit, forest, or flower
+  garden") — ties directly into the world editor above.** The player's
+  request: instead of only ever working the 6 fixed `GROUNDS` sections,
+  let them CLAIM a plot (within their own expanding build region, or a new
+  adjacent "cultivation" zone) and plant a new resource cluster there —
+  rock, tree, or flower — that starts sparse/empty and grows over real
+  playtime, sped up by carrying water from the pond/stream and tending it.
+  Rough shape, not a spec:
+  - A cultivated plot is the SAME underlying shape `GROUNDS` already uses
+    (kind, position, half-extents, count) plus new per-plot state: a
+    growth stage (0 = just cleared, through however many stages a
+    tree/flower/rock-vein needs) and a "last watered" timestamp feeding a
+    growth-rate multiplier. `seedNodes()` (gameStore.ts) already knows how
+    to scatter a kind of node inside a rectangle without overlapping the
+    homestead/pond/starter-village/other grounds — the same placement
+    logic a player-claimed plot needs, just triggered by a build action
+    instead of once at new-game setup.
+  - Watering: a new "carry water" interaction at the pond/stream (a
+    bucket/skin item?), spent on a nearby cultivated plot to advance its
+    growth timer faster than passive time alone would.
+  - This is exactly where the world editor stops being "just for grounds.ts
+    and buildables.ts" and becomes load-bearing for a real player-facing
+    system: the editor is the natural place to author/preview a cultivated
+    plot's growth-stage models and tune growth/watering rates LIVE against
+    a real rendered preview, instead of hand-guessing constants and
+    discovering the same class of silent-rejection bug this session hit
+    twice in `seedNodes()`'s own hardcoded gates. Whatever data shape the
+    editor ends up reading/writing for the 6 fixed grounds should be the
+    SAME shape a claimed cultivation plot uses, not a second parallel
+    system.
+  - Explicitly not scoped here: exact growth-stage counts/timings, the
+    watering item/interaction's own mechanics, UI for claiming a plot, or
+    how (if at all) this interacts with the land-tier deed system the
+    fixed 6 grounds already use. Real design work, not implementation,
+    is the next step whenever this gets picked up.
+
   **Wave 4 (challenge maps as new destinations) shipped 2026-08-03.** The 6
   bonus "challenge" maps the lab classified alongside the 9 templates
   (`reports/maps/challenge_N_layout.json`) are now real `WORLD_DESTINATIONS`
