@@ -28,6 +28,7 @@
 // via an oversized composer buffer instead costs a single, predictable,
 // bounded ~4x pixel-shading pass — no extra scene traversal, no jitter.
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import type * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -38,10 +39,41 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { useAppStore } from '@/game/store/appStore';
 
+// Requested 2026-08-03: a real WebGL context loss (a GPU driver reset, the
+// tab losing GPU priority, sustained memory pressure — anything the browser
+// itself decides warrants tearing the context down) is a hard freeze with
+// nothing on screen ever moving again: rendering stops silently the instant
+// it happens, and per the WebGL spec a lost context stays lost forever
+// UNLESS something calls `preventDefault()` on the `webglcontextlost` event
+// specifically — no code anywhere in this codebase did, confirmed by
+// searching. A full reload is the recovery, not an attempt to hand-rebuild
+// this file's own composer/passes/every mounted mesh's GPU resources in
+// place — for a game this size that's a large surface to get exactly right,
+// where a working reload already exists for free and a partial, subtly
+// wrong recovery would be worse than the black screen it replaces.
+function useContextLossRecovery(gl: THREE.WebGLRenderer) {
+  useEffect(() => {
+    const el = gl.domElement;
+    const onLost = (e: Event) => {
+      e.preventDefault();
+      // eslint-disable-next-line no-console
+      console.error('[webgl] context lost — reloading to recover');
+    };
+    const onRestored = () => window.location.reload();
+    el.addEventListener('webglcontextlost', onLost);
+    el.addEventListener('webglcontextrestored', onRestored);
+    return () => {
+      el.removeEventListener('webglcontextlost', onLost);
+      el.removeEventListener('webglcontextrestored', onRestored);
+    };
+  }, [gl]);
+}
+
 export default function PostProcessing() {
   const aaMode = useAppStore((s) => s.settings.aaMode);
   const { gl, scene, camera, size } = useThree();
   if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkgl = gl;
+  useContextLossRecovery(gl);
   const composerRef = useRef<EffectComposer | null>(null);
   // every pass instance added this mode, tracked for disposal — including
   // RenderPass/OutputPass, which are recreated fresh per mode rather than

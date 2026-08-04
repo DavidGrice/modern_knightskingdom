@@ -86,10 +86,18 @@ export default function MountedHorse() {
           standing rest-pose height so the hips land at saddle height instead
           of the whole figure standing above it (no dedicated seated clip
           exists in the extraction to pose the legs bent around the barrel).
-          Local offset, so it rides correctly regardless of BODY_FORWARD. */}
+          Local offset, so it rides correctly regardless of BODY_FORWARD.
+          Invisible, not removed (2026-08-03): riding always renders
+          first-person now (PlayerController.tsx forces it regardless of the
+          stored camera-mode preference, same reasoning PlayerAvatar.tsx's
+          own on-foot avatar already uses for hiding while riding) — left
+          visible, this sits only 0.15 units in front of and 0.55 up from
+          the camera's own position, rendering essentially from inside its
+          own head and clashing with the FPS viewmodel's hands. Kept in the
+          tree (not deleted) in case third-person riding ever comes back. */}
       {character && (
         <Suspense fallback={null}>
-          <group position={[0, 0.55, -0.15]} scale={0.96}>
+          <group position={[0, 0.55, -0.15]} scale={0.96} visible={false}>
             <RiggedFigure config={character} height={1.75} clip="anim_r_restpose" />
           </group>
         </Suspense>
