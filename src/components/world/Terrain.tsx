@@ -56,19 +56,44 @@ function Stars() {
   );
 }
 
-/** Where the land/sky boundary sits in the sky bake, as a fraction up from the
- *  bottom of each side texture. Measured off the four faces themselves — the
- *  lowest hills meet sky at 0.221–0.246, and the tallest peaks reach 0.33. */
-const HORIZON_V = 0.235;
+/** Sky bake variants (`public/assets/sky/<id>/{right,left,top,front,back}.png`,
+ *  copied by prepare-assets.mjs from the extraction's own
+ *  `warehouse/worlds/skyboxes/<id>/`). `horizonV` is each variant's own
+ *  land/sky boundary, as a fraction up from the bottom of its side textures.
+ *
+ *  `grass`: measured off the four faces themselves — the lowest hills meet
+ *  sky at 0.221–0.246, and the tallest peaks reach 0.33; 0.235 sits near the
+ *  low end so the common case reads correctly at eye level.
+ *
+ *  `mountains`: requested 2026-08-04 ("skybox images we've not even used for
+ *  the snowy maps") — this variant shipped in the extraction but had no
+ *  copy step, no destination ever referenced it, and `GameSky` had no way to
+ *  select a variant at all (one hardcoded `grass` path, used everywhere,
+ *  including an icy mountain-pass destination). Measured the same way via a
+ *  `sharp` row-scan of the four raw PNGs (not guessed): its peaks are much
+ *  taller and far more uneven across faces than grass's (back face's peak
+ *  reaches roughly halfway up the frame vs. front's ~1/5) — 0.20 is picked
+ *  near the shorter faces' own horizon so the common view reads correctly at
+ *  eye level, same reasoning as grass's own low-end pick, accepting that the
+ *  tallest peaks tower dramatically overhead rather than sitting at the
+ *  world's edge (a reasonable look for "the exposed rock" of a mountain
+ *  pass, not obviously wrong the way the grass mismatch was). */
+const SKY_VARIANTS: Record<string, { horizonV: number }> = {
+  grass: { horizonV: 0.235 },
+  mountains: { horizonV: 0.20 },
+};
 
-/** Skybox built from the original game's extracted sky sprites, tinted by time of day. */
-export function GameSky() {
+/** Skybox built from the original game's extracted sky sprites, tinted by
+ *  time of day. `variant` picks which of `SKY_VARIANTS` to load — callers
+ *  that don't care (the homestead) get the original `grass` default. */
+export function GameSky({ variant = 'grass' }: { variant?: string }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const { camera } = useThree();
+  const { horizonV } = SKY_VARIANTS[variant] ?? SKY_VARIANTS.grass;
   const textures = useMemo(() => {
     const loader = new THREE.TextureLoader();
     const load = (n: string) => {
-      const t = loader.load(`/assets/sky/grass/${n}.png`);
+      const t = loader.load(`/assets/sky/${variant}/${n}.png`);
       t.colorSpace = THREE.SRGBColorSpace;
       return t;
     };
@@ -77,7 +102,7 @@ export function GameSky() {
       px: load('right'), nx: load('left'), py: load('top'),
       pz: load('front'), nz: load('back'),
     };
-  }, []);
+  }, [variant]);
   const size = WORLD_HALF * 2.6;
 
   useFrame(() => {
@@ -92,7 +117,7 @@ export function GameSky() {
     // on the viewer's eye. The box used to sit at a fixed y = size/2 - 40,
     // which put that line ~80m above the player: the bake's mountains reared
     // up over the whole sky instead of standing off at the world's edge.
-    mesh.position.y = camera.position.y + size * (0.5 - HORIZON_V);
+    mesh.position.y = camera.position.y + size * (0.5 - horizonV);
     const env = sampleEnv(worldEnv.time);
     const dim = 1 - worldEnv.rain * 0.55;
     const f = worldEnv.flash * 0.5;
@@ -107,7 +132,7 @@ export function GameSky() {
 
   return (
     <>
-      <mesh ref={meshRef} position={[0, size * (0.5 - HORIZON_V), 0]}>
+      <mesh ref={meshRef} position={[0, size * (0.5 - horizonV), 0]}>
         <boxGeometry args={[size, size, size]} />
         <meshBasicMaterial attach="material-0" map={textures.px} side={THREE.BackSide} fog={false} />
         <meshBasicMaterial attach="material-1" map={textures.nx} side={THREE.BackSide} fog={false} />

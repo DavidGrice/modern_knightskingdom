@@ -3735,36 +3735,29 @@ was forgotten.
   so large props may read undersized until someone hand-tunes real values
   the way `CourtDressing.tsx`'s own props were tuned by eye.
 
-  **[TODO] CRITICAL, found 2026-08-04 via a live player report ("I don't see
-  any castle or rocks or terrain or anything else"): a destination's real,
-  interesting content is not visible from where the player actually spawns
-  or can walk.** Confirmed directly, not assumed — traveled to template-01,
-  looked in all 4 cardinal directions from spawn (screenshots), and walked
-  forward for 8 real seconds: nothing resembling a castle in any direction,
-  just grass and small background hills, with one tiny few-pixel structure
-  barely visible at the horizon in one direction. This traces back through
-  the whole Wave 3 investigation: `dest.origin`/`dest.radius` for each of
-  the 9 templates were never derived from where the lab-classified content
-  (the castle, the procession, King Leo) actually sits — they're old,
-  pre-Grok-import values (probably hand-eyeballed by whoever built the
-  original destination system), and the REAL content sits ~1740-3480 world
-  units away (measured directly earlier this same day, via the King's-
-  procession marker), utterly outside any reasonable walk or render
-  distance from `dest.origin`. The 2026-08-04 `worldScale` 2x bump (above)
-  made this worse, not better — it doubled the distance to that content
-  without moving origin any closer to it. **Not a rendering bug** (sky,
-  terrain, fog, lighting all confirmed working correctly in the same
-  screenshots) — a calibration problem: nobody has ever checked whether
-  `dest.origin` for any of these 9 templates is actually near anything
-  worth seeing. Real fix needs, per template: locate the actual
-  castle/keep/main-structure content's real position (the same live
-  bounding-box + raycast technique used throughout this project), and
-  either move `dest.origin` to sit near it, or move the content near
-  `dest.origin`, or both — not a single global constant, since each
-  template's own layout differs. Left undone this session: this is
-  destination-by-destination recalibration work, not a quick patch, and
-  guessing at it live would risk making a currently-working (if boring)
-  spawn point worse rather than better.
+  [COMPLETE] ✅ **CRITICAL, found 2026-08-04 via a live player report ("I don't see
+  any castle or rocks or terrain or anything else"), and the diagnosis below
+  turned out to be WRONG — corrected and fixed same day, see the
+  "away-destination bakes were Y-inverted" entry further down.** Original
+  finding, kept verbatim for the record: traveled to template-01, looked in
+  all 4 cardinal directions from spawn, walked forward for 8 real seconds —
+  nothing resembling a castle in any direction, one tiny few-pixel structure
+  barely visible at the horizon. Concluded at the time: "not a rendering
+  bug... a calibration problem" with `dest.origin` sitting ~1740-3480 units
+  from the real content. **That conclusion does not survive the actual root
+  cause found later the same day:** the bake .glb itself was Y-inverted at
+  the source (confirmed via direct `node -e` bbox dumps — e.g. template-01's
+  raw vertex Y ranged `[-1913, +206]`, the geometry overwhelmingly hanging
+  BELOW y=0 instead of a hill rising above it), which is exactly consistent
+  with "no castle visible from a normal spawn height" — an inverted castle
+  is mostly buried underground, not merely far away. Once
+  `normalizeTemplateBake`'s new `flipY` corrected this, a live re-check at
+  template-01/template-06/template-07 (4-direction screenshots each) showed
+  castle walls/towers clearly visible within normal view distance of spawn,
+  properly upright. `dest.origin` was never touched. Left as an open
+  question: whether any *residual* per-template origin mis-centering still
+  exists on top of the flip fix — not re-audited destination-by-destination,
+  since the flip alone resolved every case checked live.
 
   **[TODO] Reported 2026-08-04, not reproduced live: an NPC (Beda) shows a
   visibly wrong model — described as a red claw-like shape near the head —
@@ -3786,6 +3779,72 @@ was forgotten.
   `assembleRiggedMinifig`/`minifigRig.ts` for an async-assembly race that
   could show a stale/mid-swap frame — not guessed at further without
   reproducing it first.
+
+  [COMPLETE] ✅ **Away-destination bakes were Y-inverted at the source — SHIPPED
+  2026-08-04, root cause of "the worlds are flipped upside down" (live report,
+  "green textures are underneath where we spawn").** Direct proof, not
+  guessed: dumped every template/challenge `.glb`'s raw POSITION accessor
+  bbox via a `node -e` script — all 8 templates checked (01/02/03/04/05/06/
+  07/08) plus 2 challenge maps showed the same signature, geometry hanging
+  overwhelmingly BELOW y=0 (template-01: `y ∈ [-1913, +206]`; template-05:
+  `[-2475, +99]`). A right-side-up "castle crowns a hill" diorama should do
+  the opposite — rise mostly above a y≈0 ground reference, not hang below
+  it. This is also, in hindsight, the real explanation for the "no castle
+  visible" finding directly above: an inverted castle is mostly buried, not
+  merely far away. Fix: `normalizeTemplateBake` (`TemplateWorld.tsx`) gained
+  a `flipY` parameter — mirrors the bake across its own Y axis before
+  recentring (X/Z untouched); applied only to the away-destination render
+  path (`TemplateWorldRoot`, covers templates 01-08 AND all 6 challenge maps
+  through the same shared code path — template-09/HomeMeadow's own separate
+  `Terrain.tsx` call site is untouched, already verified working, and its
+  bbox is near-flat anyway where a flip would be meaningless). Safe for
+  `TemplatePopulation.tsx`'s spawned actors/props: confirmed by reading that
+  file that `Grounded` places every instance's height from a LIVE raycast
+  against whatever bake actually rendered (`sampleTemplateGroundY`), never
+  from the stored population Y — only X/Z matter there, and a pure Y-mirror
+  never touches those. Verified live: template-01/template-06/template-07,
+  4-direction screenshots each (`--use-angle=d3d11`, not SwiftShader, for a
+  real look-and-feel check) — castle walls, towers and a proper mountain
+  skybox (see below) all read right-side-up, sitting above the grass line;
+  a 13x13 ground-height probe grid around spawn showed a smooth, sensible
+  slope (81.8 to 96.0 across 60 units) with zero discontinuities; zero
+  console/page errors throughout.
+
+  **Same session, same root finding: destination scale walked back from 2x
+  to 1.25x.** The 2026-08-03 2x bump (worlds.ts) overshot — live user
+  feedback was that 2x read as too large, not "far too small" anymore.
+  `DEST_WORLD_SCALE` is now `0.32 * 1.25`; every template 01-08's `radius`
+  scaled down by the matching 1.25/2 = 0.625 ratio to preserve the same
+  walkable fraction of each diorama the original 2x bump established.
+
+  **Same session: the skybox was one hardcoded "grass" bake behind every
+  destination, including an icy mountain pass — now per-destination.**
+  Confirmed directly: `Terrain.tsx`'s `GameSky` loaded a single fixed
+  `/assets/sky/grass/*.png` set unconditionally, and `prepare-assets.mjs`
+  only ever copied that one variant — even though the extraction ships a
+  second `skyboxes/mountains/` set (the "snowy" skybox the user pointed at)
+  that had never been copied or referenced anywhere. `GameSky` now takes a
+  `variant` prop (`SKY_VARIANTS` table, each with its own measured horizon
+  fraction — `mountains`' own measured via a `sharp` row-scan of its 4 raw
+  PNGs, since its peaks are far taller/more uneven across faces than
+  grass's own); `WorldDestination` gained an optional `sky` field
+  (`worlds.ts`); `GameWorld.tsx` reads the current destination's `sky` and
+  passes it down, defaulting to `'grass'` everywhere unset. template-07
+  ("The Frozen Pass") is tagged `sky: 'mountains'`. `prepare-assets.mjs`
+  now copies both variants. Verified live: The Frozen Pass renders a
+  dramatic gray/white jagged mountain range distinct from every other
+  destination's rolling green hills; home and untagged destinations
+  unchanged; zero 404s on the new asset path.
+
+  **Not chased further this pass, flagged for a follow-up look:** one
+  live screenshot at template-06 showed what may be an oddly-oriented prop
+  or billboard near the camera (a pale rounded shape over a boxy grey
+  structure) — inconclusive at screenshot resolution, not clearly a bug,
+  and not what the user's report was about (that was specifically the
+  ground/terrain). `export_textured.py`'s own comment flags tree billboards
+  as a known special-case in its UV handling ("their textures are stored
+  pre-flipped") — worth keeping in mind if a future report specifically
+  calls out a tree, banner, or other flat billboard prop looking wrong.
 
   **[TODO] Requested 2026-08-04, planned but not started: a hidden
   homestead/world editor for hand-tuning map generation.** A dedicated,
@@ -4872,3 +4931,62 @@ here.
   has no count baked in (the row suffix is the only source), so this only bites the two recipes whose
   authors pre-wrote the count into `name`. Fix is one of: drop " ×4" from those two `name` strings, or
   make the row check `r.name.includes('×')` before appending its own suffix.
+
+## Travel & world-map overhaul — requested 2026-08-04, scoped only, not started [TODO]
+Three related but separable asks from the same message, logged per the user's own "just add it to
+the roadmap" pattern for major-overhaul-scale work. None of these are designed in detail yet — each
+needs its own pass before implementation.
+
+- [TODO] **A waypoint/fast-travel system, plus Points of Interest and undiscovered/fog-of-war
+  locations.** Today's entire travel system is `TravelPanel.tsx` (`src/components/hud/`): a flat grid
+  of cards, one per `WorldDestination` (`worlds.ts`), each an instant teleport via `travelTo(id)` —
+  there is no concept of a POI smaller than a whole destination, no "discovered vs. undiscovered"
+  state at all (`visitedWorlds` only tracks whole destinations, checked once on first arrival for the
+  loot reward), and no waypoint you place or unlock independent of the fixed 9 templates + 6
+  challenges + dungeon + arena list. Real design questions, not yet answered: what counts as a POI —
+  something inside a destination's own bake (a specific building/landmark, using the same
+  `TemplatePopulation.tsx`/lab-classification data Wave 3 already spawns), or a new lightweight
+  marker layer independent of it? Does "undiscovered" gate travel entirely, or just hide detail on
+  the map (blurb/thumbnail/resident list) until visited? Does a waypoint let you skip stright to a
+  POI inside a destination (needs a per-POI spawn point, not just `dest.origin`) or only to the
+  destination's existing single entry point?
+
+- [TODO] **The Travel Map's look — replace the current dark HUD-panel grid with an illustrated,
+  parchment-style map (worn brown paper, hand-drawn "knights-era" feel).** Confirmed current state:
+  `TravelPanel.tsx` renders through the same `.game-panel` dark-chrome styling every other HUD panel
+  uses (Inventory, Crafting, Quests, …) — image thumbnail + name + blurb + button, in a CSS grid, no
+  illustrated map surface, no drawn roads connecting locations, nothing parchment-like at all despite
+  `var(--parchment-dark)` already existing as a text-color token elsewhere in this same file (used for
+  blurb text color only, not any actual parchment surface treatment). A real redesign needs: a
+  parchment background treatment (texture/gradient, consistent with `--gold`/`--chrome-2`'s existing
+  medieval-HUD palette rather than clashing with it), destination markers positioned on an actual
+  illustrated map surface instead of a card grid (needs real or approximate relative positions between
+  the 9 templates + 6 challenges — none of the current `origin.x/z` values are meant to represent
+  real-world relative geography, they're just non-overlapping render-space slots), and probably ties
+  directly into the waypoint/POI system above rather than being a pure visual reskin of the same flat
+  list.
+
+- [TODO] **Each travel destination rendered in its own scene instead of every destination's bake
+  sitting inside one shared Canvas/scene graph, plus some kind of CMS to pass data between scenes.**
+  Confirmed current architecture: `GameWorld.tsx` mounts exactly one `<TemplateWorld />` (and one
+  `<TemplatePopulation />`, one `<GameSky />`, etc.) for the player's whole session — every
+  destination is the SAME React Three Fiber `<Canvas>`/scene graph, just offset into its own
+  non-overlapping quadrant via `dest.origin` (templates at x:1000-3400 z:1000, the dungeon at
+  {4200,4200}, the arena at {-4200,4200}, challenges at {-4200,-4200}+spacing) — literally "all
+  stacked in a single scene," matching the report exactly. This is a real, large architecture change,
+  not a small one: React Three Fiber supports multiple `<Canvas>` roots, but switching to one
+  per-destination would touch how the player/camera/HUD/combat/AI systems all currently assume a
+  single continuous world-space coordinate system (`playerState.x/y/z`, every `dest.origin`-relative
+  offset throughout `TemplateWorld.tsx`/`TemplatePopulation.tsx`/`CourtDressing.tsx`, `navgrid.ts`'s
+  height rasterization, `AgentManager`'s AI tiering) — a scene-swap model needs its own designed
+  transition (unload/load, not just camera-hide) and, per the request, "some sort of CMS to help pass
+  data along between the scenes rendered" — i.e. a real cross-scene state layer for whatever needs to
+  survive a swap (quest flags, claimed-plot state, spawned-content persistence) that doesn't already
+  live in `gameStore`'s own global state. Worth naming plainly: the CURRENT single-scene approach is
+  also *why* things like `sampleTemplateGroundY`/`getBakeOffset`/`mountedRoot` all work as simple
+  module-level singletons ("only one destination bake is ever mounted at a time") — a real per-scene
+  architecture needs a different answer to "what does live raycasting/ground-height sampling mean"
+  for whichever scenes are and aren't currently active. Real performance/engineering tradeoffs to
+  weigh before committing (memory for N loaded scenes vs. load-in latency on every travel, whether it
+  actually solves a real problem the single-scene approach has today or is a change for its own sake)
+  — needs its own design pass, not a "just do it" implementation.
