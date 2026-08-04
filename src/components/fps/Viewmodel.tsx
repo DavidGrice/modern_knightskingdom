@@ -284,6 +284,12 @@ const ARM_SCALE = 0.62;
  *  the frame and the hand arrives at the tool mount. */
 const ARM_DIR = new THREE.Vector3(-0.39, 0.65, -0.65).normalize();
 const UP = new THREE.Vector3(0, 1, 0);
+// N81's bare-fist pivot compensation (see the useFrame comment below) reuses
+// these every frame rather than allocating — same "no per-frame allocation"
+// convention the rest of this codebase's hot paths already follow.
+const _fistQuat = new THREE.Quaternion();
+const _fistPivot = new THREE.Vector3();
+const _fistPivotRotated = new THREE.Vector3();
 
 /**
  * The player's real minifig arm.
@@ -444,6 +450,25 @@ export default function Viewmodel() {
     i.position.set(0.36, HAND_Y + bobY, -0.74);
     // the swing rides on top of whatever the attack/gather pose set
     i.rotation.x += swing * 0.55;
+
+    // N81 (bare-handed chopping "moves the arms while the hands stay
+    // still" — should be the other way round): the gather swing above
+    // rotates `inner` around its OWN origin, which RigArm deliberately pins
+    // to the WRIST (so a held weapon's grip lands exactly where it should —
+    // see RigArm's own doc comment) — correct for a held tool, but for a
+    // bare fist it means the forearm (far from that pivot) sweeps a wide
+    // arc while the hand (sitting AT the pivot) barely appears to move.
+    // Scoped to tool === 'fist' only, so the tuned held-tool/weapon
+    // alignment is completely untouched. Standard "rotate about an offset
+    // pivot" compensation (pivot − R·pivot) shifts the effective pivot back
+    // toward the elbow along the arm's own hang direction (−ARM_DIR),
+    // without needing a real wrist joint this viewmodel doesn't have.
+    if (tool === 'fist' && playerState.acting) {
+      const q = _fistQuat.setFromEuler(i.rotation);
+      const comp = _fistPivot.copy(ARM_DIR).multiplyScalar(-0.16);
+      comp.sub(_fistPivotRotated.copy(comp).applyQuaternion(q));
+      i.position.add(comp);
+    }
 
     const off = offhand.current;
     if (off) {

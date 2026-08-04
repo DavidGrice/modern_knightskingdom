@@ -16,7 +16,7 @@ import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
 import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate } from '../character/Equipment';
 import { villagerConfig } from '@/game/data/villagerLooks';
-import { isWatchHours } from '@/game/data/villagers';
+import { isWatchHours, isWorkingHours } from '@/game/data/villagers';
 import { worldEnv } from '@/game/env';
 import { dragonAir } from './DragonOmen';
 import { horses, mountOf } from '@/game/riding';
@@ -193,7 +193,13 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       // in broad daylight for the rest of the day. `follow` is the one
       // exception: escorting the player is a thing the player can see and
       // called for directly.
-      if (!isWatchHours(worldEnv.time) && order !== 'follow') {
+      // N80 · a day-shift defender keeps the OPPOSITE clock to the default
+      // night watch — on duty during working hours, resting at night —
+      // so the garrison can cover the whole day once the player assigns at
+      // least one defender to days. `villager.shift` absent means 'night',
+      // the original single blanket shift (see its own doc comment).
+      const onWatch = villager.shift === 'day' ? isWorkingHours(worldEnv.time) : isWatchHours(worldEnv.time);
+      if (!onWatch && order !== 'follow') {
         const st = useGameStore.getState();
         const hasClaimableBed = st.buildings.some((b) => b.type === 'bed' && isBuilt(b) && isHomeBuilding(b)
           && (b.owner === villager.id || !b.owner));
@@ -308,7 +314,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
     const dT = Math.hypot(dxT, dzT) || 1;
     const inRange = dT <= range;
 
-    if (!inRange && loadout !== 'bow') {
+    if (!inRange) {
       // G27 · a defender with a stabled horse assigned rides it, which is
       // what makes catching one worth the trouble: mounted patrols cover the
       // ground far faster and reach a raid before it reaches the walls

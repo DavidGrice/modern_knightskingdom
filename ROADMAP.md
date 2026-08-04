@@ -279,8 +279,12 @@ consumable here:
   event is still future). [TODO] `DEFAULT_MINIFIG_HORSE_MOUNT.json` carries exact seat/rider matrices for
   proper mounted alignment, but nothing in the codebase reads them yet (confirmed: no reference to
   `HORSE_MOUNT` anywhere in `src/`) — riding stays hand-tuned.
-- [TODO] **`ORIENTATION_REGISTRY.json` / `PAK_ORIENTATION_CATALOG.json`** — per-asset correct eulers; use as
-  ground truth whenever a new prop imports facing the wrong way.
+- [COMPLETE] **`ORIENTATION_REGISTRY.json` / `PAK_ORIENTATION_CATALOG.json`** — investigated, not left
+  undone: read and found genuinely inapplicable as per-asset ground truth (its eulers are Blender-space
+  Z-up, not transferable to this game's convention — applying them would break currently-correct models).
+  What it DID carry (a `material_followups` section) was a real, separate bug and got fixed — see the full
+  writeup where this was actually resolved, "`ORIENTATION_REGISTRY.json` — read, and deliberately not
+  applied" (search this file for that heading).
 - [TODO] **`LEARNED_PART_LEXICON.json`** — family defaults (mc_wall → standable/connectable/destructible);
   feeds future wall-connection + destruction-phase systems (dragonfire wants `mc009/mc010` as damage
   states of `mc006` — they're literally labeled as its destruction phases).
@@ -942,8 +946,9 @@ villagers reacting (fleeing, defenders rallying) to the siege specifically rathe
    snapping via `wallRole`/`canConnectAsWall`. [COMPLETE] Road pavement shipped (see L297/L71).
 3. [TODO] **Phase 24 follow-ups** — per-defender orders, HUD order chip, deposit floaties, stall UI.
 4. [TODO] **Instance-separation audit list** (Phase 23 doctrine) whenever a listed system is touched.
-5. [TODO] Backlog alongside: trade-off perks, halberd/spear player weapons, armor tiers, dungeon follow-ups,
-   delivery quests, attribute respec, dragonfire follow-ups above.
+5. [TODO] Backlog alongside: halberd/spear player weapons, armor tiers, dungeon follow-ups,
+   delivery quests, attribute respec, dragonfire follow-ups above. (Trade-off perks shipped —
+   see "Perks with trade-offs" above; this line is stale about that one item specifically.)
 
 *(Phases 20–25 + AI waves 1-2 + the Dragonfire Siege all shipped: Kingdom of Instances, dark-ages
 theming, guilds, talent tree, challenges, location quests, articulated dragon omen AND siege, crests,
@@ -1419,8 +1424,8 @@ role is already named per donor. Replacing the spatial classifier with a lookup 
 
 [COMPLETE] `traits.wall.destructionPhase`/`destructionPhaseCount` — shipped: `damageBuilding` (`gameStore.ts`)
 calls `labDamagedForm`, a real ordered damage chain per wall piece, replacing the old hardcoded
-mc006→mc009→mc010 ladder. [TODO] `traits.minifig.isMountable` + `DEFAULT_MINIFIG_HORSE_MOUNT.json` seat
-matrices for riding — still unread anywhere in the codebase.
+mc006→mc009→mc010 ladder. `traits.minifig.isMountable` + `DEFAULT_MINIFIG_HORSE_MOUNT.json` seat matrices
+for riding — still open, tracked once at L279 above (this was a duplicate restatement, not separate work).
 
 ### ✅ Rig-lab part maps integrated (allied + enemy NPC rigging) [COMPLETE]
 
@@ -1581,16 +1586,17 @@ these shipped later under other sections and had been mistagged:
   2026-07-25 header comment records checking all 15 donors against the lab's data (every one is
   `swordHand: hand_R`, `shieldHand: hand_L`, no variation to drive) and deliberately keeping the fixed
   side rather than adding a no-op data dependency.
-- [TODO] Mount seat matrices (`DEFAULT_MINIFIG_HORSE_MOUNT.json` /
-  `..._DRAGON_MOUNT.json`) and the four extra horse variants now copied in — confirmed still unread
-  anywhere in the codebase.
+- Mount seat matrices (`DEFAULT_MINIFIG_HORSE_MOUNT.json` / `..._DRAGON_MOUNT.json`) and the four extra
+  horse variants now copied in — still open, tracked once at L279 (third restatement of the same gap,
+  consolidated here rather than left as a separate line).
 - [COMPLETE] Non-minifig prop rigs, catapult arm — shipped: `lib/propRig.ts` + `ANIMATED_ROLES` loads the
   OBJ-preserved per-part rig and drives real catapult-arm/counterweight/flag/wheel rotation, wired into
   `Buildings.tsx` via `RiggedProp`/`hasAnimatedRig`. [TODO] Drawbridge, jail cell, ladder, and springboard
   are NOT in `ANIMATED_ROLES` and don't even exist as buildable catalog pieces yet — still render static
   (in effect: still to come, since they're not built at all).
-- [TODO] `ORIENTATION_REGISTRY.json` per-asset eulers — real, available data, but still just a backstop
-  nothing currently calls (nothing looks wrong enough yet to need it).
+- [COMPLETE] `ORIENTATION_REGISTRY.json` per-asset eulers — resolved, not left open; see "read, and
+  deliberately not applied" further down this file for the actual finding (Blender-space eulers don't
+  transfer; its one real bug got fixed separately).
 - [COMPLETE] `traits.vehicle.canSeat` / `canDrive` / `canPush` — correctly false for every siege piece
   (they're emplacements, not vehicles) and stay that way, but the capability the data was pointing at
   shipped anyway via a different trait: `game/crew.ts` implements real crewing (`canOccupy`/`occupyMode`)
@@ -4021,10 +4027,12 @@ than the merchant sharing Alric's and Beda's own corner — which is where he
 stands now (L68, resolved: the "south guard posts" turned out to be their
 `mc001` huts). Optional polish, not a blocker on anything.
 
-[TODO] **N79 · Enemies should come UP THE ROAD.** Bandits and raiders spawning in
-their own places and travelling the road to the homestead — day or night, not
-just after dark. The dragon stays as it is. This makes the road matter and
-gives raids a direction to come from.
+**N79 · Enemies should come UP THE ROAD.** Split into two halves on a 2026-08-04 re-check:
+[COMPLETE] the road-arrival half — shipped 2026-07-28, see the full writeup above ("N79 · Raiders
+should arrive by the road, not pop into existence"): raiders spawn at `roadEntry()` and walk in via
+the nav-grid, tagged `approaching`. [TODO] the "day or night, not just after dark" half — confirmed
+still genuinely open (`Enemies.tsx`'s raid trigger is gated to `worldEnv.time > 0.7 && < 0.78`, dusk
+only); this is what N80's guard-shift item below is actually waiting on.
 
 [TODO] **N80 · Guard shifts.** If raids can come by day, the watch cannot all sleep
 by day. A per-defender shift setting — day watch, night watch — so the
@@ -4216,10 +4224,18 @@ The dragon now needs `tier >= 3` **and** `rangedReady()` — a bow or crossbow
 still a spectator. Tier, its inputs, and what the next tier is waiting on are
 all in the `` ` `` debug overlay, so this is tunable rather than guessed at.
 
-[TODO] **Not done in this pass:** only the dragon is migrated. `raidStrength()` is
+[COMPLETE] **Not done in this pass:** only the dragon is migrated. `raidStrength()` is
 exported and ready, but `Enemies.tsx`'s raider spawning still uses its own
 gate. Migrating it is the next step and must happen before two gating schemes
 settle in — that is the failure this system exists to end.
+— **Migrated 2026-07-28** (re-confirmed live in code 2026-08-04, this was already shipped, not a
+remaining bug): `useEnemyStore.spawn()` (`game/combat.ts:274-288`) now computes
+`scale = (kind === 'cedric' || kind === 'storm' ? 1 : raidStrength()) * extraScale` and applies it to
+`maxHp` at spawn — every raid-filler enemy (bandits, royal knights, etc.) scales off the same tier curve
+the dragon uses; Cedric/Storm stay excluded as tuned set-piece encounters, exactly as originally
+intended. `Enemies.tsx` itself needs no direct `raidStrength()` reference since the scaling lives in the
+spawn action it calls, not the component — that's why an earlier grep of `Enemies.tsx` alone looked like
+this was still unmigrated.
 
 [COMPLETE] **O6 · fixed, and it was never a data bug.** Read `ResourceNodes.tsx`,
 `InstancedProps.tsx` and every store path touching `nodes` (`seedNodes`,
@@ -4466,6 +4482,14 @@ isolation.
   the genuine first-ever parse of a URL `preloadCommonAssets` didn't warm (a piece not in the common
   list, or a cold cache after a fresh deploy) — worth a live trace to confirm rather than assuming the
   old normalization cost is back, since the code shows it shouldn't be.
+  **Re-checked live 2026-08-04** (`requestAnimationFrame` gap tracing across a real `placeBuilding()`
+  call, dev server, fresh session): a `woodpile` — first-ever placement of that type this session — shows
+  a max frame gap of 17.7ms and zero frames over the 50ms jank threshold; a second placement of the same
+  type measures within noise of the first (18.4ms). No stutter reproduced for this building type under
+  these conditions. Left genuinely open rather than closed: this only tests one common buildable already
+  covered by `preloadCommonAssets()`'s warm list and a warm dev-server cache — the theory above (a piece
+  NOT in that list, or a cold cache right after a fresh production deploy) is exactly the case this test
+  doesn't rule out, since neither condition was reproduced here.
 [COMPLETE] **AI villagers harvested resource nodes on grounds the player hadn't unlocked yet.**
   Requested and fixed 2026-07-30. `TargetRegistry.ts`'s `Target` interface gained an optional `ground`
   field, threaded through from `ResourceNodeState.ground` in `nodeTarget()`. `gather.ts`'s
@@ -4625,18 +4649,24 @@ isolation.
   configuration" for a frame or two. Needs a live repro (ideally a screenshot or a description of exactly
   when it happens — job change, day/night watch-shift handoff, recovering from downed) before it can be
   scoped as a real fix rather than a guess.
-- [TODO] **The player's own standing figure doesn't hide in third-person while riding.** Found
+[COMPLETE] **The player's own standing figure doesn't hide in third-person while riding.** Found
   2026-07-30 while fixing the horse-riding sine-bob (above), not something that regressed from that fix
   — `PlayerAvatar.tsx`'s own `g.visible = !playerState.riding` line is untouched, original code. Live
   testing with `ridingState.active`/`playerState.riding` both confirmed `true` still showed the normal
   standing figure in a third-person screenshot, with the mounted horse mesh not visibly rendering in
-  that same shot either. Not chased further this pass (out of scope, and the console-only test rig used
-  to force riding state may not fully match what a real in-game mount does) — worth a real repro by
-  hand, riding a real wild horse and swapping to third person, before diagnosing further.
+  that same shot either. **Resolved as a side effect of the 2026-08-04 riding-camera fix** (this same
+  file, "Fix upside-down destination worlds..." session): `PlayerController.tsx`'s camera branch now
+  reads `st.cameraMode === 'third' && !ridingState.active`, so third-person while actually riding is no
+  longer reachable through real play at all — the camera forces first-person the moment riding starts,
+  regardless of the player's chosen mode. Re-checked live 2026-08-04: forcing `cameraMode: 'third'` +
+  `playerState.riding: true` directly via the store (the same console-only technique the original repro
+  used) confirms the store accepts the setting but the camera itself never honors third-person while
+  riding — there is no remaining player-reachable state where the standing figure would need to hide
+  (`PlayerAvatar.tsx`'s own visibility line was already correct regardless). No code change needed.
 
 ## Bugs logged 2026-07-31, not yet fixed
 
-- [TODO] **Bow-armed defenders snipe enemies from any distance, through walls — including from their
+[COMPLETE] **Bow-armed defenders snipe enemies from any distance, through walls — including from their
   own bed.** Requested 2026-07-31 ("shooting through walls/objects... they should need to go and hunt
   down enemies not stand and insta kill them from a bed in the center of the map"). Confirmed a real
   logic-inversion bug, not just a tuning issue (`Defenders.tsx`, the range-gate around L311):
@@ -4647,25 +4677,33 @@ isolation.
   ```
   For `loadout === 'bow'`, the guard `!inRange && loadout !== 'bow'` is FALSE regardless of `inRange` —
   a bow defender always falls into the attack branch and always deals damage on cooldown (1.6s), with
-  `inRange`/`BOW_RANGE` computed but never actually consulted. There is no line-of-sight/raycast check
-  anywhere in this branch either, so a wall between the defender and the target has never mattered. The
-  outer bound isn't small: for the default `patrol`/off-duty order, `target` is picked from any enemy
-  within `ENGAGE_RADIUS` (22m) of the DEFENDER'S OWN position (L147, L150) — easily most of the
-  homestead interior — and for an explicit `attack` order, target selection is completely unbounded
-  distance from the PLAYER (`bestD = Infinity`, L138-142), so an attacking bow defender can snipe
-  anything anywhere near the player regardless of the defender's own location. Likely origin: `BOW_RANGE`
-  reads like it was meant to replace `MELEE_RANGE` in the range check for bow-wielders (so they hold at
-  a real distance instead of closing to melee), and the `&& loadout !== 'bow'` clause accidentally
-  short-circuited the whole gate instead. A real fix needs the attack branch to re-check `inRange`
-  (using `BOW_RANGE` for bow, `MELEE_RANGE` for melee) before dealing damage — currently the `else`
-  branch fires unconditionally — plus a real line-of-sight check (a raycast against the same collision
-  data `navgrid.ts`'s `collisionBoxesFor` already builds obstacle boxes from) before a ranged hit lands,
-  which does not exist for defenders at all today (`Enemies.tsx`'s own ranged bandits, shipped
-  2026-07-30, have the identical gap — `RANGED_RANGE`/hit-scan with no wall check either, worth fixing
-  together).
-- [TODO] **World layout: clear the whole north for kingdom expansion — forests to the south-west, the
-  Herb Meadow to mid-west, rocks/iron further south-east/east, the pond further east.** Requested
-  2026-07-31, directly superseding the six-way compass spread just shipped 2026-07-30 (`grounds.ts`,
+  `inRange`/`BOW_RANGE` computed but never actually consulted. Likely origin: `BOW_RANGE` reads like it
+  was meant to replace `MELEE_RANGE` in the range check for bow-wielders (so they hold at a real distance
+  instead of closing to melee), and the `&& loadout !== 'bow'` clause accidentally short-circuited the
+  whole gate instead. **Fixed 2026-08-04**: dropped the `&& loadout !== 'bow'` clause entirely, so every
+  loadout now correctly closes distance when `!inRange` and only attacks once actually in range — bows
+  included. The outer bound this fix closes isn't small: for the default `patrol`/off-duty order, `target`
+  is picked from any enemy within `ENGAGE_RADIUS` (22m) of the DEFENDER'S OWN position (L147, L150) —
+  easily most of the homestead interior — and for an explicit `attack` order, target selection is
+  completely unbounded distance from the PLAYER (`bestD = Infinity`, L138-142). **Not fixed by this, kept
+  open below**: line-of-sight. A wall between the defender and an in-range target still doesn't matter —
+  see the next entry.
+- [TODO] **No line-of-sight/raycast check for any ranged attack — defender or enemy.** Split off
+  2026-08-04 from the entry above once its own distance-gate bug was fixed: even correctly range-gated,
+  a bow defender (or `Enemies.tsx`'s own ranged bandits, shipped 2026-07-30 — identical gap,
+  `RANGED_RANGE`/hit-scan with no wall check either) can still hit a target through a wall as long as
+  it's within range, since nothing ever raycasts between attacker and target. Needs a real LOS check (a
+  raycast against the same collision data `navgrid.ts`'s `collisionBoxesFor` already builds obstacle
+  boxes from) before a ranged hit lands in either file — worth fixing both together, they'd share the
+  same helper. Not attempted in the same pass as the distance-gate fix: a real raycast-vs-obstacle-boxes
+  helper is a genuinely separate, more involved piece of work, not a one-line companion to that fix.
+[COMPLETE] **World layout: clear the whole north for kingdom expansion — forests to the south-west, the
+  Herb Meadow to mid-west, rocks/iron further south-east/east, the pond further east.** Shipped
+  2026-08-03 — confirmed directly in `grounds.ts`'s own header comment: "the whole north side is now
+  reserved on purpose for the kingdom's own future expansion... every ground south of the equator, north
+  completely clear." The road-network half (making the road actually reach these new positions) is
+  separate, still-open work — see the next entry below ("road network extension"). Original ask, kept for
+  the record: Requested 2026-07-31, directly superseding the six-way compass spread just shipped 2026-07-30 (`grounds.ts`,
   "spread named grounds around the compass" — PR #111): that pass deliberately put one tree ground at
   true north (Deepwood, `(0,-70)`) and one rock ground at north-east (Iron Seam, `(62,-55)`) specifically
   to fill the previously-empty north/north-east; the new ask wants north empty again, for a different
@@ -4881,44 +4919,10 @@ here.
   joystick base, 76px interact button) rather than viewport-scaled, so they eat a much bigger fraction of
   a small phone screen than a tablet; a couple of panels (`.panel`, base `.game-panel`) still carry a
   fixed `min-width` that's only overridden inside the one 720px breakpoint, not fluid by default.
-- [TODO] **Touch input can move/look/interact but cannot fight.** There's a real, working touch-control
-  pass already in the codebase (not absent, as might be assumed) — `TouchControls.tsx` (a virtual
-  joystick, a full-screen look-drag surface, Sprint/Jump/Interact buttons) feeding `touchState`
-  (`game/touchInput.ts`), consumed by `PlayerController.tsx`'s `pollTouch()`. But
-  `CombatController.tsx`'s attack/block/ranged-draw is strictly mouse-only (`mousedown`/`mouseup` on
-  `gl.domElement`, checking `document.pointerLockElement`) with zero touch equivalent — a phone/tablet
-  player today can walk around and interact with the world but cannot swing a sword, block, or draw a
-  bow/crossbow at all. For a "mobile-friendly" push this is probably the single highest-priority gap:
-  everything else is polish, this is a player who literally cannot fight.
-- [TODO] **Gamepad support is partial and lives outside the rebindable keybind system.** `pollGamepad()`
-  (`PlayerController.tsx`) covers move (stick/d-pad), look (right stick, analog), jump, interact (held),
-  and sprint — confirmed nothing maps attack, block, ranged aim/draw, weapon-swap, or ANY menu/panel
-  navigation (Inventory, Crafting, Quests, Build, Roster, etc. all stay keyboard-only per
-  `game/data/keybinds.ts`, which has no gamepad-button concept at all — this is a second, hardcoded input
-  path, not part of the same rebindable table keyboard uses). No `gamepadconnected`/`gamepaddisconnected`
-  handling anywhere either.
-- [TODO] **No input-mode-aware UI — every prompt assumes a keyboard.** Confirmed every on-screen prompt
-  is hardcoded keyboard text unconditionally: `PlayerController.tsx`'s interact prompt builds literal
-  strings like `"Hold E — {label}"`/`"Hold Click — {label}"`; `hud/Panels.tsx` hardcodes a
-  `WASD move · Shift sprint · Space jump · E interact …` cheat-sheet. Nothing tracks which input device
-  the player is actually using right now (no `inputMode`/`activeDevice` field anywhere in
-  `appStore.ts`'s `Settings`), so there is no gamepad button-glyph prompt and no touch-appropriate prompt
-  text — a controller or touch player sees keyboard instructions regardless.
-- [TODO] **No PWA / installability support.** Confirmed no `manifest.json`/`manifest.webmanifest`
-  anywhere in the repo, no service worker, no `apple-mobile-web-app-capable` meta tag — the game cannot
-  be "added to home screen" on iOS/Android for a full-screen, app-like launch, which matters directly for
-  the "iPhones, iPads, Androids" half of the request (a bookmarked browser tab reads very differently
-  from an installed icon on a phone's home screen).
-- [TODO] **Responsive layout is real but incomplete.** A genuine "mobile-friendly pass (2026-07-20)"
-  already exists — confirmed, not absent: a viewport meta with `viewportFit: 'cover'`/`userScalable:
-  false` (`app/layout.tsx`, explicitly to stop pinch-zoom fighting touch controls), one
-  `@media (max-width: 720px)` breakpoint (`globals.css`) that rescales panels to `94vw`, reflows grids,
-  and hides the keyboard cheat-sheet, and several panels already fluid outside that breakpoint
-  (`.game-panel.menu-family { width: min(760px, 92vw) }`, the shell `VillagersPanel`/most big panels
-  use). What's still missing: the touch joystick/button sizes are fixed px (`globals.css`, e.g. a 120px
-  joystick base, 76px interact button) rather than viewport-scaled, so they eat a much bigger fraction of
-  a small phone screen than a tablet; a couple of panels (`.panel`, base `.game-panel`) still carry a
-  fixed `min-width` that's only overridden inside the one 720px breakpoint, not fluid by default.
+
+*(The four items above — touch combat, gamepad, input-mode-aware UI, PWA/installability, responsive
+layout — were accidentally duplicated verbatim in an earlier edit; the duplicate copy was removed
+2026-08-04, this is the only copy now.)*
 
 ## 📋 Found while capturing How-To-Play screenshots (2026-08-04)
 
