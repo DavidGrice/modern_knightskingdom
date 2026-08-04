@@ -344,6 +344,32 @@ function bakeMesh(src: THREE.Mesh, matrix: THREE.Matrix4, recolor?: THREE.Color)
   return mesh;
 }
 
+/** Requested 2026-08-04 (Beda investigation, Wave 2): the pre-animator
+ *  assembled hierarchy (baked meshes + joint groups), keyed by the exact
+ *  same config fields `RiggedFigure.tsx`'s own effect dependency list
+ *  already re-assembles on — so two callers with an identical look (most
+ *  concretely: the SAME villager id remounting fresh when their job flips
+ *  to/from 'defender', since `Villagers.tsx`/`Defenders.tsx` use mutually
+ *  exclusive `job` filters over two entirely separate component trees, so a
+ *  job change is always a full unmount+remount, never a shared instance)
+ *  skip both the async donor/palette fetches AND the expensive synchronous
+ *  geometry work (classifySided, rehangArm's PCA analysis, alignLimb, the
+ *  joint-hierarchy build) on every repeat. `THREE.Object3D.clone(true)`
+ *  deep-clones the hierarchy/transforms but shares geometry/material
+ *  references by default — safe here since colors are already baked into
+ *  those materials per the SAME cache key, and nothing elsewhere in this
+ *  codebase mutates a rig mesh's material after assembly (confirmed by
+ *  search — no per-instance hit-flash/tint exists on rigged characters). */
+interface AssembledRigBase {
+  root: THREE.Group;
+  unitScale: number;
+}
+const rigBaseCache = new Map<string, AssembledRigBase>();
+function rigCacheKey(config: CharacterConfig, targetHeight: number, keepProps: boolean): string {
+  return `${config.headDonor}|${config.bodyDonor}|${config.armColor}|${config.handColor}`
+    + `|${config.legColor}|${config.hipColor}|${targetHeight}|${keepProps}`;
+}
+
 export async function assembleRiggedMinifig(
   config: CharacterConfig,
   targetHeight = 1.75,
@@ -353,6 +379,16 @@ export async function assembleRiggedMinifig(
    *  molded weapon IS the character's weapon. */
   keepProps = false,
 ): Promise<RiggedMinifig> {
+  const cacheKey = rigCacheKey(config, targetHeight, keepProps);
+  const cachedBase = rigBaseCache.get(cacheKey);
+  if (cachedBase) {
+    const clonedRoot = cachedBase.root.clone(true);
+    const joints = {} as Record<RigJoint, THREE.Group>;
+    for (const j of JOINTS) joints[j] = clonedRoot.getObjectByName(`joint_${j}`) as THREE.Group;
+    const animator = new MinifigAnimator(joints, cachedBase.unitScale, await loadRest());
+    return { group: clonedRoot, joints, animator, height: targetHeight, unitScale: cachedBase.unitScale };
+  }
+
   const [headDonor, bodyDonor, colors] = await Promise.all([
     loadDonor(config.headDonor), loadDonor(config.bodyDonor), loadPalette(),
   ]);
@@ -501,6 +537,12 @@ export async function assembleRiggedMinifig(
   }
 
   const unitScale = (scale) / 100; // 100 anim units = 1 OBJ unit
+  // cache a PRISTINE clone, never the live `root` itself — `root`'s own
+  // joint groups get mutated in place every frame by this character's own
+  // MinifigAnimator.update() once it starts playing a clip, so caching the
+  // live reference would leak whatever pose THIS character is mid-animation
+  // in in to every future cache hit instead of a clean rest state.
+  rigBaseCache.set(cacheKey, { root: root.clone(true), unitScale });
   const animator = new MinifigAnimator(joints, unitScale, await loadRest());
   return { group: root, joints, animator, height: targetHeight, unitScale };
 }
