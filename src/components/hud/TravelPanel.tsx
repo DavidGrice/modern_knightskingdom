@@ -19,13 +19,13 @@ export default function TravelPanel() {
   const dungeonUnlocked = completedQuests.includes(DUNGEON_UNLOCK_QUEST);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 720 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(720px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>Travel Map</h2>
       <div style={{ fontSize: 13, color: 'var(--parchment-dark)', marginBottom: 12 }}>
         Eight roads lead out from the Far Meadow, each to one of the realm&apos;s original places.
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div className="travel-dest-grid" style={{ display: 'grid', gap: 12 }}>
         {/* template-09 IS the homestead now (Phase 20) — you can't travel to
             the place you're standing on, so it's filtered from the grid */}
         {WORLD_DESTINATIONS.filter((d) => d.id !== 'template-09').map((d) => {
@@ -108,7 +108,7 @@ export default function TravelPanel() {
             ? 'A sealed pit. They keep coming until you leave, or you don’t. Pick a ring.'
             : 'Sealed until you have proven yourself a Knight.'}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div className="travel-arena-grid" style={{ display: 'grid', gap: 10 }}>
           {ARENA_ENVS.map((env) => (
             <div
               key={env.id}
@@ -147,7 +147,7 @@ export default function TravelPanel() {
         <div style={{ fontWeight: 'bold', color: 'var(--gold)', fontSize: 14, marginBottom: 8 }}>
           🗺️ Challenge Grounds
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div className="travel-challenge-grid" style={{ display: 'grid', gap: 10 }}>
           {CHALLENGE_DESTINATIONS.map((d) => {
             const here = destination === d.id;
             const visited = visitedWorlds.includes(d.id);

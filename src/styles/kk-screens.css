@@ -110,6 +110,7 @@
    front-door screen's own cards below */
 .kk-plaque {
   position: relative;
+  max-width: 100%;
   padding: 18px 42px;
   border-radius: 20px;
   background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
@@ -155,7 +156,7 @@
 /* the sign-in card */
 .kk-signin {
   position: relative;
-  width: 382px;
+  width: min(382px, 100%);
   padding: 20px;
   border-radius: 18px;
   background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
@@ -452,6 +453,53 @@
   color: var(--kk-text-faint);
 }
 
+/* ---------- responsive: 3a title/sign-in + 3b main menu ----------
+   Audit 2026-08-03: this shell had zero breakpoints below 900px. The
+   fixed 330px .kk-menu-rail left almost nothing for .kk-menu-saves on a
+   phone — the entire save card (incl. the Resume button) clipped off
+   the right edge, unreachable since pinch-zoom is disabled app-wide.
+   The plaque's fixed 40px nowrap wordmark clipped both edges below
+   ~480px, and several controls sat under the project's own 44px touch
+   target minimum (--kk-hit-min, kk-tokens.css). Two breakpoints, same
+   convention as the .kk-callings / .kk-step-row queries above/below. */
+@media (max-width: 820px) {
+  .kk-menu-rail { width: 280px; padding: 34px 24px; }
+  .kk-menu-saves { padding: 34px 24px 34px 0; }
+  .kk-save-thumb { width: 90px; height: 62px; }
+}
+@media (max-width: 480px) {
+  .kk-title-screen { padding: 0 16px; gap: 18px; }
+  .kk-plaque { padding: 14px 24px; }
+  .kk-plaque-word { font-size: 28px; white-space: normal; text-align: center; }
+  .kk-signin-tabs button { padding: 16px 0; }
+  .kk-field input { height: 44px; }
+  .kk-secondary { height: 44px; }
+
+  .kk-menu-body { flex-direction: column; height: auto; }
+  .kk-menu-rail { width: 100%; padding: 24px 20px 14px; }
+  .kk-menu-signout { min-height: 44px; padding: 12px 0; }
+  .kk-menu-saves { padding: 10px 20px 24px; }
+  .kk-save { flex-wrap: wrap; }
+  .kk-save-thumb { width: 72px; height: 50px; }
+  .kk-save-cta { width: 100%; margin-top: 8px; }
+
+  /* Verified live 2026-08-04: a RETURNING player's MainMenu (rail + a real
+     save card) stacks to ~773px tall here, taller than a real phone
+     viewport (667px) — and .kk-screen-metal/-leather/-glass/-chrome's
+     shared `align-items: center` (this file, ~line 259) traps that
+     overflow: a centered flex item only grows scrollable range on its
+     TRAILING edge, never its leading one, so the page loads with the
+     wordmark's own top already clipped above the viewport and there is no
+     way to scroll up to it — confirmed directly (scrollTop clamped to
+     [0, 53] of the real 106px overflow). flex-start avoids the trap
+     entirely: content simply starts at the top and .kk-screen-scroll's
+     overflow-y:auto can reach all of it. Scoped to this one breakpoint
+     only, since desktop/tablet never overflow this way. */
+  .kk-screen-metal, .kk-screen-leather, .kk-screen-glass, .kk-screen-chrome {
+    align-items: flex-start;
+  }
+}
+
 /* ---------- shared screen chrome (title bar + section labels) ---------- */
 .kk-screen-pad {
   position: relative;
@@ -465,6 +513,17 @@
   flex-direction: column;
   padding: 32px 34px;
   min-height: 0;
+}
+/* Audit 2026-08-03: .kk-screen-pad's 32px/34px padding never reduced at any
+   breakpoint, unlike the older .game-panel/.panel system it sits alongside
+   (globals.css, @media max-width:720px -> padding:16px 14px). Not an
+   overflow bug on its own — every kk-screen-pad-based screen (Help,
+   Options, CharacterCreator, Credits) still fits its content inside it —
+   but at 375px the flat padding alone eats 17.6% of viewport width before
+   any content starts. Same shrink shape as globals.css's own phone
+   reduction, scaled to this shell's own numbers. */
+@media (max-width: 480px) {
+  .kk-screen-pad { padding: 20px 16px; }
 }
 .kk-screen-head {
   display: flex;
@@ -646,6 +705,51 @@
 }
 .kk-link-btn:hover { color: var(--kk-a-400); }
 
+/* ---------- responsive: 3d options ----------
+   Audit 2026-08-03: no @media rule anywhere touched .kk-opt-*, .kk-key-row,
+   .kk-seg, or .kk-switch — Options had zero responsive handling. At 375px
+   the fixed 132px .name column (plus the 44px .readout column on Slider
+   rows) left segmented controls only ~149px total — too little for
+   "Quality preset"/"Anti-aliasing" to avoid getting hard-clipped by
+   .kk-seg's own overflow:hidden — and squeezed every slider track down to
+   a ~93px sliver. Stacking name-above-control below 480px fixes both:
+   plain .name rows (Slider, Segmented) get a full-width second line for
+   their control, while Switch rows are untouched because .name.wide's
+   higher-specificity width:auto still wins over the new width:100%. The
+   keybind capture button also sat well under the project's 44px touch
+   target minimum (--kk-hit-min, kk-tokens.css). Same fix shape as
+   .kk-menu-rail/.kk-save and .kk-forge-body above. */
+@media (max-width: 820px) {
+  /* .kk-opt-body's 640px cap has no companion centering rule, so once the
+     screen-pad's content box drops under ~1120px it sits flush-left with a
+     bare gap on the right. Verified live 2026-08-04: `margin: 0 auto` alone
+     is NOT width/layout-neutral the way the comment above originally
+     claimed — .kk-opt-body is a flex item inside .kk-screen-pad's column
+     flex, and cross-axis auto margins disable that axis's default stretch
+     per the flexbox spec, forcing shrink-to-fit instead. Measured: Sound/
+     Controls/Keybinds tabs (whose content has no wide intrinsic minimum)
+     collapsed to ~355-384px at 768px width instead of the intended 640px
+     cap, with the whole panel visibly jumping width when switching to a
+     tab like Graphics whose .kk-seg controls happen to force it wider.
+     `width: 100%` restores the stretch so the max-width cap (not content
+     size) decides the width, with margin:auto still centering it below
+     that cap. */
+  .kk-opt-body { width: 100%; margin: 0 auto; }
+}
+@media (max-width: 480px) {
+  .kk-opt-row { flex-wrap: wrap; }
+  .kk-opt-row > .name { width: 100%; }
+  .kk-seg button { min-width: 0; }
+  .kk-cap {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+  }
+}
+
 /* screen footer actions */
 .kk-screen-actions {
   display: flex;
@@ -819,6 +923,37 @@
 .kk-face.on { box-shadow: inset 0 0 0 1px var(--kk-card-input-border), 0 0 0 2px var(--kk-card-accent-border); }
 .kk-face:disabled { cursor: not-allowed; color: var(--kk-card-text-dim); }
 .kk-face:disabled svg { display: block; margin: auto; }
+
+/* ---------- responsive: 3c forge your hero ----------
+   Audit 2026-08-03: .kk-forge-body was a plain row with no flex-wrap and no
+   breakpoint at all, paired with a hard .kk-forge-doll { width: 248px }. On
+   a phone-width viewport the doll ate most of the row before the form got
+   anything, squeezing name/gender/callings/face-crest/swatches down to a
+   sliver that was only reachable via nested horizontal scroll (.kk-forge-
+   form's overflow-y:auto forces its x-axis to auto too, per spec). Same
+   fix shape as .kk-menu-rail above and .equip-layout in globals.css.
+   Verified live 2026-08-04 by a follow-up pass: that first fix stacked the
+   doll above the form but left `.kk-forge-body`'s `min-height: 0` and
+   `.kk-forge-form`'s `overflow-y: auto` in place — both designed for the
+   OLD side-by-side layout, where the form was meant to scroll WITHIN a
+   fixed-height row. Stacked, the doll's own `aspect-ratio: 3/4` stage
+   (≈320px wide → ≈427px tall) plus its pose toggle/hint text needs ~491px
+   on its own; on a real phone viewport that's most or all of the space
+   `.kk-forge-body`'s flex math had to give both children combined, so
+   `min-height:0` let the form get shrunk to a sliver (tablet) or exactly
+   zero (phone) — the character-creation form was completely unreachable,
+   worse than the original squeeze this was meant to fix. Fixed by letting
+   the whole screen scroll instead of trying to fit doll+form into one
+   fixed-height box: `.kk-screen-scroll` added to this screen's root
+   (CharacterCreator.tsx) so overflow lands on the outer viewport, and
+   `.kk-forge-body`/`.kk-forge-form` release their min-height:0/internal-
+   scroll so both take their real natural height and just push the page
+   taller — the same pattern AuthStack/MainMenu/CreditsStack already use. */
+@media (max-width: 820px) {
+  .kk-forge-body { flex-direction: column; min-height: auto; }
+  .kk-forge-doll { width: 100%; max-width: 320px; align-self: center; }
+  .kk-forge-form { flex: none; overflow-y: visible; }
+}
 
 /* ============================================================
    FIELD HUD — nine clusters, each anchored to a viewport edge.
@@ -1007,6 +1142,30 @@
   width: 262px;
   border-radius: 16px;
   overflow: hidden;
+}
+
+/* ---------- responsive: vitals vs. compass/clock ----------
+   Audit 2026-08-03: .kk-vitals (left, ~339px) and .kk-topright (right, its
+   .kk-compass alone is 250px) both sit at top: var(--kk-hud-inset) with no
+   responsive rule — below ~633px viewport they overlap outright (250px of
+   overlap at 375px). Fine at 768px (135px clear gap per the same audit), so
+   this only needs the phone tier. .kk-topright drops below .kk-vitals'
+   tallest state (crest + a wrapped flags row) instead of shrinking either
+   cluster's content, and .kk-objective — which already stacks under
+   .kk-topright at top: 100px on desktop — moves down to keep stacking under
+   its new position rather than colliding with it.
+   Verified live 2026-08-04: this block originally sat BEFORE the
+   unconditional `.kk-objective { top: 100px; ... }` rule above — same
+   selector, same specificity, so per the cascade the later unconditional
+   rule always won regardless of the media query's own condition, and the
+   objective card never actually moved on phone. It fully overlapped and
+   hid the compass/clock underneath (both same top-right corner, same
+   opaque card background) rather than stacking below it as intended.
+   Moved below the base rule it needs to override — plain CSS source-order,
+   not a specificity trick — so the phone-width value actually wins. */
+@media (max-width: 480px) {
+  .kk-topright { top: 126px; }
+  .kk-objective { top: 226px; }
 }
 .kk-objective-in { position: relative; padding: 13px 16px 15px; }
 .kk-objective-kicker {

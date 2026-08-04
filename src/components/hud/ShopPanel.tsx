@@ -23,11 +23,11 @@ export default function ShopPanel() {
   const sellables = (Object.keys(SELL_PRICES) as ItemId[]).filter((id) => (inventory[id] ?? 0) > 0);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 640 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(640px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>Merchant</h2>
       <div style={{ fontSize: 15, color: 'var(--gold)', marginBottom: 12 }}>🪙 Your purse: {gold} gold</div>
-      <div style={{ display: 'flex', gap: 22 }}>
+      <div className="shop-columns" style={{ display: 'flex', gap: 22 }}>
         <div style={{ flex: 1 }}>
           <div className="creator-section">Sell</div>
           {sellables.length === 0 && (

@@ -25,7 +25,7 @@ export default function KeepSocketPanel() {
   const built = keep.built[socket.id] ?? 0;
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 460 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(460px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>{socket.name}</h2>
       {standing ? (

@@ -472,7 +472,7 @@ function ParleyPanel() {
     const mine = sideQuest?.npcId === 'cedric' ? sideQuest : null;
     const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
     return (
-      <div className="game-panel clickable" style={{ minWidth: 520 }}>
+      <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
         <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
         <h2>War Council</h2>
         <div style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 14 }}>
@@ -519,7 +519,7 @@ function ParleyPanel() {
     );
   }
   return (
-    <div className="game-panel clickable" style={{ minWidth: 520 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>Cedric the Bull</h2>
       <div style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 14 }}>
@@ -571,7 +571,7 @@ function GuildPanel() {
   const { value } = challengeProgress(track, stats);
   const isMine = myGuild === g.id;
   return (
-    <div className="game-panel clickable" style={{ minWidth: 520 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2><Ico e={g.icon} /> {g.name}</h2>
       <div style={{ fontSize: 15, lineHeight: 1.6, marginBottom: 14, fontStyle: 'italic', color: 'var(--parchment-dark)' }}>
@@ -626,7 +626,7 @@ function TalentTree() {
       <div className="creator-section" style={{ marginTop: 16 }}>
         Talent Tree — {unspent} unspent point{unspent === 1 ? '' : 's'} ({earned} earned, 1 per total level)
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginTop: 8 }}>
+      <div className="talent-grid" style={{ display: 'grid', gap: 6, marginTop: 8 }}>
         {SKILLS.map((s) => (
           <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ textAlign: 'center', fontSize: 15 }} title={s.name}><Ico e={s.icon} /></div>

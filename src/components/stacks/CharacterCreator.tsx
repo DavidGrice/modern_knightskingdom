@@ -139,7 +139,7 @@ export default function CharacterCreator() {
   }
 
   return (
-    <div className={`kk-screen kk-screen-${uiTheme}`}>
+    <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
         <div className="kk-screen-head">
           <h2>FORGE YOUR HERO</h2>
@@ -177,7 +177,7 @@ export default function CharacterCreator() {
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
-              <div style={{ flex: 'none', width: 170 }}>
+              <div style={{ flex: 'none', width: 'clamp(120px, 40%, 170px)' }}>
                 <div className="kk-forge-label">Gender</div>
                 <div className="kk-toggle">
                   <button className={gender === 'male' ? 'on' : ''} onClick={() => pickGender('male')}>Male</button>

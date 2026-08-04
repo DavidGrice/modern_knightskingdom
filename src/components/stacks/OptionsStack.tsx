@@ -58,7 +58,7 @@ function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
       <button
         className={`kk-cap ${listening ? 'listening' : ''}`}
         style={{ border: 0, cursor: 'pointer' }}
-        onClick={() => setListening(true)}
+        onClick={() => setListening((l) => !l)}
       >
         {listening ? 'PRESS A KEY' : codeLabel(code)}
       </button>

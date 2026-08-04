@@ -106,7 +106,7 @@ export default function DialoguePanel() {
   };
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 520 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 12 }}>
         <img

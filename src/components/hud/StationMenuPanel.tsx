@@ -31,7 +31,7 @@ export default function StationMenuPanel() {
 
   if (!activeStation) {
     return (
-      <div className="game-panel clickable" style={{ minWidth: 420 }}>
+      <div className="game-panel clickable" style={{ minWidth: 'min(420px, 94vw)' }}>
         <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
         <h2>Station</h2>
         <div className="loading-note">You've stepped away from it.</div>
@@ -46,7 +46,7 @@ export default function StationMenuPanel() {
     : [];
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 460 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(460px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2><Ico e={STATION_ICON[activeStation]} size={22} /> {STATION_LABELS[activeStation]}</h2>
       {!atStation && <div className="loading-note">You've stepped away — browsing only for now.</div>}

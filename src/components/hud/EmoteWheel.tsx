@@ -8,15 +8,15 @@ export default function EmoteWheel() {
   const setPanel = useGameStore((s) => s.setPanel);
   const playEmote = useGameStore((s) => s.playEmote);
   return (
-    <div className="game-panel clickable" style={{ minWidth: 380 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(380px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>Emotes</h2>
-      <div className="inv-grid" style={{ gridTemplateColumns: 'repeat(3, 110px)' }}>
+      <div className="inv-grid emote-grid">
         {EMOTES.map((e) => (
           <div
             key={e.id}
             className="inv-slot"
-            style={{ width: 110, cursor: 'pointer' }}
+            style={{ cursor: 'pointer' }}
             onClick={() => playEmote(e.clip)}
             title={e.label}
           >

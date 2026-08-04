@@ -647,8 +647,15 @@ input:focus { border-color: var(--gold); }
 .touch-look-surface {
   position: absolute; inset: 0; touch-action: none;
 }
+/* Audit 2026-08-03: the joystick/buttons used to sit at the same bottom
+   corners as the Ledger/Hotbar/Minimap row (kk-bottom, kk-screens.css) and
+   painted over it — same z-index, mounted later in GameScreen.tsx. That
+   collision reproduces at any viewport width (it's two corner-anchored
+   fixed-px layouts, not an overflow), so the fix is a fixed offset rather
+   than a breakpoint: raised clear of the minimap, the tallest thing in that
+   row (148px + the 22px inset it sits at, kk-tokens.css --kk-hud-inset). */
 .touch-joystick-base {
-  position: absolute; left: 26px; bottom: 26px; width: 120px; height: 120px;
+  position: absolute; left: 26px; bottom: 196px; width: 120px; height: 120px;
   border-radius: 50%; background: rgba(0,0,0,0.35); border: 2px solid var(--chrome-2);
   touch-action: none;
 }
@@ -658,7 +665,7 @@ input:focus { border-color: var(--gold); }
   pointer-events: none; will-change: transform;
 }
 .touch-buttons {
-  position: absolute; right: 22px; bottom: 22px; display: flex; align-items: flex-end; gap: 14px;
+  position: absolute; right: 22px; bottom: 192px; display: flex; align-items: flex-end; gap: 14px;
 }
 .touch-btn {
   border-radius: 50%; background: rgba(0,0,0,0.4); border: 2px solid var(--gold-dim);
@@ -712,6 +719,23 @@ input:focus { border-color: var(--gold); }
 .ai-debug-score .c { color: #7f9a8b; margin-right: 4px; }
 .ai-debug-score .g { color: #ffb060; }
 
+/* ---------- mobile-only class hooks (audit 2026-08-03, in-game HUD panels) ----------
+   A dozen game-panel call-sites set `style={{ minWidth: N }}` inline, which
+   always outranks the `.game-panel { min-width: 0 }` rule in the breakpoint
+   below — inline style beats a class selector regardless of the media
+   query, so the breakpoint never reached them. Those call sites now clamp
+   their own inline minWidth (`min(Npx, 94vw)`) instead, which needs no CSS
+   here. But a few also had a genuinely fixed-column inline grid that a
+   plain minWidth clamp can't reflow on its own — those get a real
+   className instead, so the breakpoint below can reach them the same way
+   it already reaches .inv-grid/.build-grid. Base rules here reproduce
+   exactly what used to be inline, so desktop is unchanged. */
+.travel-dest-grid { grid-template-columns: repeat(3, 1fr); }
+.travel-arena-grid { grid-template-columns: repeat(4, 1fr); }
+.travel-challenge-grid { grid-template-columns: repeat(3, 1fr); }
+.talent-grid { grid-template-columns: repeat(7, 1fr); }
+.inv-grid.emote-grid { grid-template-columns: repeat(3, 110px); }
+
 /* ---------- responsive layout (mobile-friendly pass, 2026-07-20) ----------
    Below this breakpoint, every panel/HUD element sized in fixed px would
    overflow a phone-width viewport — switch to viewport-relative sizing and
@@ -734,4 +758,12 @@ input:focus { border-color: var(--gold); }
   .hud-topright { transform-origin: top right; }
   .controls-ref, .controls-toggle { display: none; } /* keyboard reference is meaningless on touch */
   .quest-journal { padding: 12px 10px; }
+  /* audit 2026-08-03: TravelPanel's three inline grids and the Talent Tree's
+     7-column grid had no mobile reflow at all; the Emote wheel's inline grid
+     bypassed the .inv-grid reflow above outright. ShopPanel's Sell/Buy pair
+     had no wrap, so both columns would squeeze to near-zero. */
+  .travel-dest-grid, .travel-challenge-grid, .travel-arena-grid { grid-template-columns: repeat(2, 1fr); }
+  .talent-grid { grid-template-columns: repeat(4, 1fr); }
+  .inv-grid.emote-grid { grid-template-columns: repeat(3, 1fr); }
+  .shop-columns { flex-direction: column; }
 }

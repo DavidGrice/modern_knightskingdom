@@ -4752,3 +4752,15 @@ here.
   joystick base, 76px interact button) rather than viewport-scaled, so they eat a much bigger fraction of
   a small phone screen than a tablet; a couple of panels (`.panel`, base `.game-panel`) still carry a
   fixed `min-width` that's only overridden inside the one 720px breakpoint, not fluid by default.
+
+## 📋 Found while capturing How-To-Play screenshots (2026-08-04)
+
+- [TODO] **Crafting panel doubles the ×N suffix on multi-output recipes.** Confirmed live on a fresh
+  character at the Workbench tab: `RECIPES` entries whose `name` already bakes in the count (e.g.
+  `id: 'bolt', name: 'Bolts ×4'` and `id: 'arrow', name: 'Arrows ×4'` in `game/data/recipes.ts`) get the
+  count appended a second time by the row renderer — `Panels.tsx`'s `CraftingPanel`, the
+  `{r.name}{r.outputCount > 1 ? \` ×${r.outputCount}\` : ''}` line — producing "Bolts ×4 ×4" / "Arrows ×4
+  ×4" on screen instead of "Bolts ×4". Every other multi-output recipe is fine because its `name` field
+  has no count baked in (the row suffix is the only source), so this only bites the two recipes whose
+  authors pre-wrote the count into `name`. Fix is one of: drop " ×4" from those two `name` strings, or
+  make the row check `r.name.includes('×')` before appending its own suffix.

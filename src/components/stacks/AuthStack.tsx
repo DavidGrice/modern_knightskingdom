@@ -47,7 +47,7 @@ export default function AuthStack() {
   }
 
   return (
-    <div className={`kk-screen kk-title-screen kk-screen-${uiTheme}`}>
+    <div className={`kk-screen kk-screen-scroll kk-title-screen kk-screen-${uiTheme}`}>
       <div className="kk-title-sky" />
       <div className="kk-plaque">
         <div className="kk-plaque-word">KNIGHTS&apos; KINGDOM</div>
