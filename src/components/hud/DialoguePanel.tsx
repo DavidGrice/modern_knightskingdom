@@ -10,6 +10,8 @@ import { ITEMS } from '@/game/data/items';
 import { audio } from '@/lib/audio';
 import { useEnemyStore, canChallengeStorm } from '@/game/combat';
 import type { ItemId } from '@/game/types';
+import { playerState } from '@/game/playerState';
+import { sampleTemplateGroundY } from '../world/TemplateWorld';
 
 export default function DialoguePanel() {
   const npcId = useGameStore((s) => s.dialogueNpc);
@@ -28,6 +30,10 @@ export default function DialoguePanel() {
   const canAfford = useGameStore((s) => s.canAfford);
   const recruitVillageFolk = useGameStore((s) => s.recruitVillageFolk);
   const villagers = useGameStore((s) => s.villagers);
+  const completedSideQuests = useGameStore((s) => s.completedSideQuests);
+  const settlements = useGameStore((s) => s.settlements);
+  const foundSettlement = useGameStore((s) => s.foundSettlement);
+  const collectSettlementYield = useGameStore((s) => s.collectSettlementYield);
 
   const npc = npcId ? NPC_BY_ID[npcId] : null;
   const [loreStep, setLoreStep] = useState(0);
@@ -216,6 +222,52 @@ export default function DialoguePanel() {
               </div>
             );
           })()}
+
+          {/* Empire arc, Wave 4: Fenwick offers the settlement chain's two
+              ordinary errands through the ordinary flow above (they're just
+              entries in his own `sideQuests`) — this block is only the
+              special "close the deed" / "collect yield" actions once
+              earned, same shape as the Alric/Beda block above. */}
+          {npc.id === 'fenwick' && npc.world && !settlements[npc.world] && (
+            <div className="quest-item">
+              <div className="q-name">🚩 Found Your Settlement</div>
+              <div className="q-desc">
+                {completedSideQuests.includes('settle_clear')
+                  ? 'The ruins are cleared and the foundations are sound. File the deed and Bram, Ida and Tolan will settle here — 60 gold.'
+                  : "Shore up the foundations and clear the ruins first, and I'll see about the deed."}
+              </div>
+              {completedSideQuests.includes('settle_clear') && (
+                <>
+                  <div className="q-desc">Cost: 60× Gold (you have {inventory.gold ?? 0})</div>
+                  <button
+                    className="menu-btn small"
+                    style={{ margin: '8px 0 0' }}
+                    disabled={!canAfford({ gold: 60 })}
+                    onClick={() => {
+                      const groundY = sampleTemplateGroundY(playerState.x, playerState.z);
+                      foundSettlement(npc.world!, playerState.x, playerState.z, groundY);
+                      setPanel('none');
+                    }}
+                  >
+                    {canAfford({ gold: 60 }) ? 'File the Deed' : 'Not enough gold'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {npc.id === 'fenwick' && npc.world && settlements[npc.world] && (
+            <div className="quest-item">
+              <div className="q-name">🏘️ Settlement Yield</div>
+              <div className="q-desc">Bram, Ida and Tolan send word of what the settlement has produced.</div>
+              <button
+                className="menu-btn small"
+                style={{ margin: '8px 0 0' }}
+                onClick={() => collectSettlementYield(npc.world!)}
+              >
+                Collect Yield
+              </button>
+            </div>
+          )}
 
           {mySideQuest && mySideDef && (
             <div className="quest-item">

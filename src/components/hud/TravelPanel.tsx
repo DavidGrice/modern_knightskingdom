@@ -12,6 +12,7 @@ export default function TravelPanel() {
   const setPanel = useGameStore((s) => s.setPanel);
   const destination = useGameStore((s) => s.destination);
   const visitedWorlds = useGameStore((s) => s.visitedWorlds);
+  const settlements = useGameStore((s) => s.settlements);
   const travelTo = useGameStore((s) => s.travelTo);
   const enterDungeon = useGameStore((s) => s.enterDungeon);
   const enterArena = useGameStore((s) => s.enterArena);
@@ -47,6 +48,11 @@ export default function TravelPanel() {
               <div style={{ fontWeight: 'bold', color: 'var(--gold)', fontSize: 14 }}>
                 {d.name}{visited ? ' ✓' : ''}
               </div>
+              {settlements[d.id] && (
+                <div style={{ fontSize: 11.5, color: 'var(--gold)', margin: '0 0 4px', fontWeight: 'bold' }}>
+                  🏰 YOURS
+                </div>
+              )}
               <div style={{ fontSize: 12, color: 'var(--parchment-dark)', margin: '4px 0 8px' }}>
                 {d.blurb}
               </div>

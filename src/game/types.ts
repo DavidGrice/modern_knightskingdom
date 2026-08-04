@@ -229,6 +229,12 @@ export interface SaveGame {
   customBlueprints?: Blueprint[];
   /** epoch ms of the last keep tax collection (Phase 13), absent = never collected */
   lastTaxAt?: number;
+  /** Empire arc, Wave 4: a destination earned as a full settlement (quest
+   *  chain + deed), distinct from `claimedWorlds`' bare build-plot claim —
+   *  any of the 8 templates can have a claimed plot without ever becoming
+   *  one of these. `since`/`lastCollectedAt` are both epoch ms;
+   *  `lastCollectedAt` starts equal to `since` (no backlog owed on day one). */
+  settlements?: Record<string, { since: number; lastCollectedAt: number }>;
 }
 
 /** a claimed template-world building plot: centered wherever the player
