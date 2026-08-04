@@ -25,7 +25,7 @@ export default function WorkshopPanel() {
   const entries = Object.entries(SET_PLANS);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 520 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>The Workshop</h2>
       <div className="loading-note" style={{ marginBottom: 12 }}>

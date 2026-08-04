@@ -103,7 +103,7 @@ export default function MainMenu() {
   }
 
   return (
-    <div className={`kk-screen kk-screen-${settings.uiTheme}`}>
+    <div className={`kk-screen kk-screen-scroll kk-screen-${settings.uiTheme}`}>
       <div className="kk-menu-body">
         <div className="kk-menu-rail">
           <div className="kk-menu-word">KNIGHTS&apos;<br />KINGDOM</div>

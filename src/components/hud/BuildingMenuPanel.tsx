@@ -40,7 +40,7 @@ export default function BuildingMenuPanel() {
   const charges = CHARGES.map((c) => BUILDABLE_BY_ID[c]).filter(Boolean);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 420 }}>
+    <div className="game-panel clickable" style={{ minWidth: 'min(420px, 94vw)' }}>
       <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
       <h2>{isKeep ? 'The Grand Keep' : (def?.name ?? b.type)}</h2>
       {!isBuilt(b) && (

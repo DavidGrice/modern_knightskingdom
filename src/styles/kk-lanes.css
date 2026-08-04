@@ -180,6 +180,13 @@
   background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
   border: 1px solid #150d06;
 }
+/* Audit 2026-08-03: fixed 2-column grid squeezed each of the four theme
+   cards to ~140px at 375px — nothing clipped (fr columns shrink safely)
+   but .tc-blurb wrapped into many short lines, a readability regression.
+   One column below 480px gives each card its full row width back. */
+@media (max-width: 480px) {
+  .theme-grid { grid-template-columns: 1fr; }
+}
 
 /* ============================================================
    The HUD clusters (kk-screens.css) all wear `.kk-glass`, which is the
