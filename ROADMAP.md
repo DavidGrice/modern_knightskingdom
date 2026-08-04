@@ -3735,6 +3735,77 @@ was forgotten.
   so large props may read undersized until someone hand-tunes real values
   the way `CourtDressing.tsx`'s own props were tuned by eye.
 
+  **[TODO] CRITICAL, found 2026-08-04 via a live player report ("I don't see
+  any castle or rocks or terrain or anything else"): a destination's real,
+  interesting content is not visible from where the player actually spawns
+  or can walk.** Confirmed directly, not assumed — traveled to template-01,
+  looked in all 4 cardinal directions from spawn (screenshots), and walked
+  forward for 8 real seconds: nothing resembling a castle in any direction,
+  just grass and small background hills, with one tiny few-pixel structure
+  barely visible at the horizon in one direction. This traces back through
+  the whole Wave 3 investigation: `dest.origin`/`dest.radius` for each of
+  the 9 templates were never derived from where the lab-classified content
+  (the castle, the procession, King Leo) actually sits — they're old,
+  pre-Grok-import values (probably hand-eyeballed by whoever built the
+  original destination system), and the REAL content sits ~1740-3480 world
+  units away (measured directly earlier this same day, via the King's-
+  procession marker), utterly outside any reasonable walk or render
+  distance from `dest.origin`. The 2026-08-04 `worldScale` 2x bump (above)
+  made this worse, not better — it doubled the distance to that content
+  without moving origin any closer to it. **Not a rendering bug** (sky,
+  terrain, fog, lighting all confirmed working correctly in the same
+  screenshots) — a calibration problem: nobody has ever checked whether
+  `dest.origin` for any of these 9 templates is actually near anything
+  worth seeing. Real fix needs, per template: locate the actual
+  castle/keep/main-structure content's real position (the same live
+  bounding-box + raycast technique used throughout this project), and
+  either move `dest.origin` to sit near it, or move the content near
+  `dest.origin`, or both — not a single global constant, since each
+  template's own layout differs. Left undone this session: this is
+  destination-by-destination recalibration work, not a quick patch, and
+  guessing at it live would risk making a currently-working (if boring)
+  spawn point worse rather than better.
+
+  **[TODO] Reported 2026-08-04, not reproduced live: an NPC (Beda) shows a
+  visibly wrong model — described as a red claw-like shape near the head —
+  when first seen, which resolves to her correct model on walking closer.**
+  Two screenshots (2m and 1m from her) show the mismatch, not a large
+  distance difference, so this reads as a brief render glitch on first
+  mount rather than a genuine LOD/distance system (checked: `RiggedFigure`'s
+  own LOD cutoff, `characterLodDistance`, is a hard visibility toggle
+  — fully invisible beyond the cutoff — and only active at the Performance
+  graphics tier; it cannot produce a wrong-looking shape, only nothing at
+  all). `npcs.ts`'s own K57 comment already documents a PAST version of
+  this exact class of bug for Beda specifically (mismatched head/body
+  donors) that was supposedly fixed by pointing both at the same donor —
+  worth double-checking that fix is actually intact and the new report
+  isn't the same root cause resurfacing. Tried to reproduce via a live
+  teleport-and-screenshot at matching distances/timing; did not catch the
+  glitch (Beda rendered correctly in every attempt). Needs either a tighter
+  repro (exact steps/timing from whoever saw it) or a closer read of
+  `assembleRiggedMinifig`/`minifigRig.ts` for an async-assembly race that
+  could show a stale/mid-swap frame — not guessed at further without
+  reproducing it first.
+
+  **[TODO] Requested 2026-08-04, planned but not started: a hidden
+  homestead/world editor for hand-tuning map generation.** A dedicated,
+  non-public route (e.g. `/secret/worldeditor`) for customizing: the
+  resource-node spawn layer (grounds.ts's rectangular sections — kind,
+  position, half-extents, count — currently hardcoded and hand-computed
+  by hand-checking overlap math in comments, exactly the kind of thing an
+  editor with live overlap/bounds visualization would make far less
+  error-prone, see the two live-found node-seeding bugs this same day) and
+  the homestead's own min/max build-square sizing per land tier (currently
+  `LAND_TIERS` in buildables.ts, a fixed array with no visual editing at
+  all). Flagged explicitly by the user as "a major overhaul" — this is a
+  real, separate feature (an authoring tool, not a player-facing one) that
+  needs its own design pass before implementation: what state it edits live
+  vs. writes back to source, how changes get from the hidden editor into
+  the actual `grounds.ts`/`buildables.ts` data (hand-copy printed values?
+  a save/export button that generates the TS?), and whether it needs its
+  own auth gate beyond just an obscure URL. Not designed or built yet —
+  logged per the user's own explicit "just add it to the roadmap" ask.
+
   **Wave 4 (challenge maps as new destinations) shipped 2026-08-03.** The 6
   bonus "challenge" maps the lab classified alongside the 9 templates
   (`reports/maps/challenge_N_layout.json`) are now real `WORLD_DESTINATIONS`

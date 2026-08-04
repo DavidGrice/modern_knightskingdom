@@ -822,7 +822,21 @@ function createGameStore() {
           // candidate kept failing this check and the retry budget
           // (g.count*60 tries) just ran out
           if (Math.abs(x) > WORLD_HALF - 20 || Math.abs(z) > WORLD_HALF - 20) continue;
-          if (x > 30 && z > 20 && g.id !== 'grove') continue; // pond shore stays clear
+          // pond shore stays clear — a real distance check against POND's own
+          // position, not the blanket "x > 30 && z > 20" half-plane this used
+          // to be. That crude rule happened to work while every SE-quadrant
+          // ground sat near the pond, but the 2026-08-04 repositioning moved
+          // Old Quarry/Iron Seam out to (150,35)/(155,90) — 98/114 units from
+          // the pond, nowhere near its shore — and the half-plane rejected
+          // every single one of their candidates anyway (silently zeroing
+          // out node seeding again, the same class of bug as the WORLD_HALF
+          // check above, just a second hardcoded gate that check alone
+          // didn't cover, found from a real live report after that first fix
+          // shipped). grove keeps its exemption: it's deliberately pond-
+          // adjacent by design (its own flavour text — "the walk to it passes
+          // the water") and some of its own candidates genuinely do fall
+          // within this radius.
+          if (g.id !== 'grove' && Math.hypot(x - POND.x, z - POND.z) < POND.radius + 20) continue;
           if (inBuildRegion(x, z)) continue;
           if (inStarterVillage(x, z)) continue;
           if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < sep)) continue;
