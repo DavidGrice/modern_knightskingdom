@@ -1,6 +1,7 @@
-import type { DefenderLoadout, ItemId, VillagerJob } from '../types';
+import type { ClaimedPlot, DefenderLoadout, ItemId, VillagerJob } from '../types';
 import { BUILD_REGION } from './buildables';
 import { hashId } from './villagerLooks';
+import { WORLD_DESTINATION_BY_ID } from './worlds';
 
 // Villager recruitment: once your homestead has enough beds and buildings,
 // generic villagers (the extraction's unnamed good/bad minifig variants)
@@ -40,15 +41,46 @@ export function isWatchHours(time: number): boolean {
 export const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
 export const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 
+/** Empire arc, Wave 3: the anchor a villager's labour/home-seeking logic
+ *  should measure against — HOME_X/HOME_Z for the homestead (world absent/
+ *  null), or a settlement's own claimed-plot position once one exists
+ *  (Wave 4). Falls back to the destination's own bake `origin` if the
+ *  world hasn't been claimed yet (shouldn't happen for a real resident,
+ *  but a plain lookup miss is a safer failure than a crash). The single
+ *  source every per-world anchor lookup should go through — this was
+ *  previously five independent hand-copied `HOME_X`/`HOME_Z` definitions
+ *  across gameStore.ts/villagers.ts/Villagers.tsx/Defenders.tsx/
+ *  RaiderRam.tsx that could silently drift out of sync with each other or
+ *  with BUILD_REGION; the latter two stay homestead-only call sites (raids
+ *  and defense are not per-world yet) and now import HOME_X/HOME_Z here
+ *  directly instead of re-deriving the same formula. */
+export function settlementAnchor(
+  world: string | null | undefined,
+  claimedWorlds: Record<string, ClaimedPlot>,
+): { x: number; z: number } {
+  if (!world) return { x: HOME_X, z: HOME_Z };
+  const claimed = claimedWorlds[world];
+  if (claimed) return { x: claimed.x, z: claimed.z };
+  const dest = WORLD_DESTINATION_BY_ID[world];
+  return dest ? { x: dest.origin.x, z: dest.origin.z } : { x: HOME_X, z: HOME_Z };
+}
+
 /** A villager's own fixed home spot, deterministic from their id — the
  *  exact derivation Villagers.tsx's VillagerFigure already used for its
- *  own `home` (a ring around HOME_X/HOME_Z, radius/angle from hashId). */
-export function villagerHomeSpot(id: string): { x: number; z: number } {
+ *  own `home` (a ring around the villager's settlement anchor,
+ *  radius/angle from hashId — HOME_X/HOME_Z for a homestead villager,
+ *  unchanged from before Wave 3). */
+export function villagerHomeSpot(
+  id: string,
+  world: string | null | undefined,
+  claimedWorlds: Record<string, ClaimedPlot>,
+): { x: number; z: number } {
   const h = hashId(id);
   const angle = (h % 360) * (Math.PI / 180);
+  const anchor = settlementAnchor(world, claimedWorlds);
   return {
-    x: HOME_X + Math.cos(angle) * (6 + (h % 5)),
-    z: HOME_Z + Math.sin(angle) * (6 + (h % 5)),
+    x: anchor.x + Math.cos(angle) * (6 + (h % 5)),
+    z: anchor.z + Math.sin(angle) * (6 + (h % 5)),
   };
 }
 

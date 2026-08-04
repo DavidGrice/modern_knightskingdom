@@ -16,12 +16,12 @@ import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
 import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate } from '../character/Equipment';
 import { villagerConfig } from '@/game/data/villagerLooks';
-import { isWatchHours, isWorkingHours } from '@/game/data/villagers';
+import { HOME_X, HOME_Z, isWatchHours, isWorkingHours } from '@/game/data/villagers';
 import { worldEnv } from '@/game/env';
 import { dragonAir } from './DragonOmen';
 import { horses, mountOf } from '@/game/riding';
 import RiggedProp from './RiggedProp';
-import { BUILD_REGION, heightOf } from '@/game/data/buildables';
+import { heightOf } from '@/game/data/buildables';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from './Villagers';
 import { isBuilt, isHomeBuilding } from '@/game/types';
@@ -33,8 +33,6 @@ import type { CharacterConfig, Villager } from '@/game/types';
 const AIR_RANGE = 34;
 /** how high the saddle sits — the rider is lifted by this when mounted */
 const SADDLE_Y = 1.15;
-const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
-const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 const ENGAGE_RADIUS = 22; // how far from themselves a patrolling defender spots a hostile
 const SCOUT_EYES = 30;    // scout order: base sighting range (Wit adds to it)
 const MELEE_RANGE = 1.8;

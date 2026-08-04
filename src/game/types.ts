@@ -330,4 +330,24 @@ export interface Villager {
     legColor?: number;
     hipColor?: number;
   };
+  /** Empire arc, Wave 3 (per-world labour mechanism): which instance this
+   *  villager lives and works in — a settlement's own destination id, or
+   *  absent/null for the homestead. Mirrors `PlacedBuilding.world`'s own
+   *  instance-separation doctrine exactly (see that field's comment above)
+   *  — a settlement resident MUST carry this or their labour ticks against
+   *  the wrong anchor. Older saves (pre-field) implicitly mean home. As of
+   *  Wave 3 nothing yet SETS this to a non-null value — the mechanism is
+   *  generalized here so Wave 4's settlement prototype has real per-world
+   *  labour to plug residents into, not because any villager is
+   *  settlement-based yet. */
+  world?: string | null;
+}
+
+/** true for a homestead villager (world absent/null) — mirrors
+ *  `isHomeBuilding()` above exactly; every per-world labour system
+ *  (`tickVillagers`, `villagerAtWork`) should filter through this or a
+ *  settlement resident's production ticks against the homestead's own
+ *  buildings/anchor instead of their own settlement's. */
+export function isHomeVillager(v: Villager): boolean {
+  return (v.world ?? null) === null;
 }

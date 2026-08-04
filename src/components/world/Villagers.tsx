@@ -12,7 +12,7 @@ import { HeldHelmet, Chestplate, ResourceProp } from '../character/Equipment';
 import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
-import { JOB_BY_ID } from '@/game/data/villagers';
+import { HOME_X, HOME_Z, JOB_BY_ID, villagerHomeSpot } from '@/game/data/villagers';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { registerVillagerMob } from '@/game/villagerMobs';
 import { navSteer } from '@/game/navgrid';
@@ -21,8 +21,6 @@ import { stepLocomotion } from '@/ai/core/Locomotion';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId, Villager } from '@/game/types';
 
-const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
-const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 const WANDER_RADIUS = 14;
 
 // hashId now lives with the appearance data it seeds (data/villagerLooks.ts);
@@ -50,12 +48,17 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   );
 
   const homeAngle = (h % 360) * (Math.PI / 180);
+  // Empire arc, Wave 3: routes through the same per-world anchor
+  // gameStore's own villagerAtWork now uses, via villagerHomeSpot — still
+  // HOME_X/HOME_Z-centered for every villager today (none carries a
+  // `world` yet), so this is byte-identical to the old inline formula.
+  const claimedWorlds = useGameStore((s) => s.claimedWorlds);
   const home = useMemo(
-    () => [
-      HOME_X + Math.cos(homeAngle) * (6 + (h % 5)),
-      HOME_Z + Math.sin(homeAngle) * (6 + (h % 5)),
-    ] as [number, number],
-    [h, homeAngle],
+    () => {
+      const spot = villagerHomeSpot(villager.id, villager.world, claimedWorlds);
+      return [spot.x, spot.z] as [number, number];
+    },
+    [villager.id, villager.world, claimedWorlds],
   );
 
   const state = useRef({
@@ -399,7 +402,18 @@ function VillagerFigure({ villager }: { villager: Villager }) {
 export default function Villagers() {
   // defender-job villagers are rendered/driven by Defenders.tsx instead —
   // they have their own combat AI, not the generic wander/flee/bed-seek loop
-  const villagers = useGameStore((s) => s.villagers).filter((v) => v.job !== 'defender');
+  const allVillagers = useGameStore((s) => s.villagers);
+  const destination = useGameStore((s) => s.destination);
+  // Empire arc, Wave 3: same instance-separation filter Buildings.tsx
+  // already uses — a settlement resident (Wave 4) should only render while
+  // the player is actually visiting that world, not everywhere at once. A
+  // no-op today: every villager's `world` is still absent/null, matching
+  // `destination` only when the player is home, which is exactly when this
+  // component rendered before (villagerAtWork's own world-scoping means an
+  // off-screen villager's labour keeps ticking regardless of this filter,
+  // same fallback RiggedFigure's own LOD system already relies on).
+  const villagers = allVillagers.filter((v) =>
+    v.job !== 'defender' && (v.world ?? null) === (destination ?? null));
   return (
     <>
       {villagers.map((v) => <VillagerFigure key={v.id} villager={v} />)}
