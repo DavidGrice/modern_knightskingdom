@@ -47,6 +47,25 @@ export interface GraphicsProfile {
   /** whether preloadCommonAssets() eagerly warms enemy donors + the dragon
    *  rig on top of the (always-eager, every tier) buildable GLTFs */
   preloadEnemyDonors: boolean;
+  /** Requested 2026-08-04 ("streamline for all devices"): multiplies
+   *  Weather.tsx's rain/snow particle count — that system previously ran
+   *  the same fixed 900-point field at every quality tier, the one real
+   *  render-cost lever this table didn't already touch. Applied via
+   *  `THREE.BufferGeometry.setDrawRange`, not a buffer reallocation, so
+   *  switching tiers mid-session is instant. */
+  particleDensity: number;
+  /** Options' "Quality preset" button also force-sets the independent View
+   *  Distance slider to this — same click-sets-both UX `shadowsDefault`
+   *  already has, still independently adjustable afterward (0.7-1.3 range,
+   *  see OptionsStack.tsx's own Slider bounds). */
+  viewDistanceDefault: number;
+  /** Requested 2026-08-04: the screen-space "wet look" rain post-process
+   *  (PostProcessing.tsx) — one extra full-screen shader pass, active only
+   *  while it's actually raining (its own uniform reads worldEnv.rain each
+   *  frame). Cheap on hardware that can run Balanced/Ultra at all; skipped
+   *  entirely on Performance rather than made cheaper, since "skip it" is
+   *  strictly cheaper than any version of "do it more cheaply." */
+  wetPostProcess: boolean;
 }
 
 export const GRAPHICS_PROFILES: Record<GraphicsQuality, GraphicsProfile> = {
@@ -64,6 +83,9 @@ export const GRAPHICS_PROFILES: Record<GraphicsQuality, GraphicsProfile> = {
     fillLight: false,
     characterLodDistance: 60,
     preloadEnemyDonors: false,
+    particleDensity: 0.3,
+    viewDistanceDefault: 0.75,
+    wetPostProcess: false,
   },
   balanced: {
     id: 'balanced',
@@ -79,6 +101,9 @@ export const GRAPHICS_PROFILES: Record<GraphicsQuality, GraphicsProfile> = {
     fillLight: false,
     characterLodDistance: null,
     preloadEnemyDonors: true,
+    particleDensity: 1,
+    viewDistanceDefault: 1,
+    wetPostProcess: true,
   },
   ultra: {
     id: 'ultra',
@@ -94,6 +119,9 @@ export const GRAPHICS_PROFILES: Record<GraphicsQuality, GraphicsProfile> = {
     fillLight: true,
     characterLodDistance: null,
     preloadEnemyDonors: true,
+    particleDensity: 1.3,
+    viewDistanceDefault: 1.15,
+    wetPostProcess: true,
   },
 };
 

@@ -38,6 +38,53 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { useAppStore } from '@/game/store/appStore';
+import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
+import { worldEnv } from '@/game/env';
+
+// Requested 2026-08-04: a cheap screen-space "wet look" for rain — the
+// scoped-down option (see ROADMAP.md's own note on this) of the three
+// considered: no per-character material work, no per-character drip
+// particles/shaders, just one extra full-screen color-grade pass that
+// darkens, boosts saturation a touch, and fakes a specular sheen on bright
+// areas — the same trick most games use for rain ambiance. `rainAmount`
+// (0..1) is updated from `worldEnv.rain` every frame below; at 0 the shader
+// reduces to the identity transform, so leaving the pass wired in through a
+// dry spell costs a near-zero fragment-shader branchless lerp, not a real
+// per-frame cost swing. Gated on GRAPHICS_PROFILES[tier].wetPostProcess —
+// off entirely on Performance, since skipping the pass is strictly cheaper
+// than any cheaper version of doing it.
+const WetShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    rainAmount: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform float rainAmount;
+    varying vec2 vUv;
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      vec3 c = texel.rgb;
+      // darken toward a wet look
+      c *= mix(1.0, 0.82, rainAmount);
+      // a touch more saturated — wet surfaces read richer, not washed out
+      float luma = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(vec3(luma), c, mix(1.0, 1.25, rainAmount));
+      // cheap fake specular sheen: push already-bright areas brighter,
+      // approximating the glossy highlights a real wet-surface BRDF would
+      // give without actually computing one
+      c += max(c - 0.6, 0.0) * (rainAmount * 0.35);
+      gl_FragColor = vec4(c, texel.a);
+    }
+  `,
+};
 
 // Requested 2026-08-03: a real WebGL context loss (a GPU driver reset, the
 // tab losing GPU priority, sustained memory pressure — anything the browser
@@ -71,6 +118,7 @@ function useContextLossRecovery(gl: THREE.WebGLRenderer) {
 
 export default function PostProcessing() {
   const aaMode = useAppStore((s) => s.settings.aaMode);
+  const wetEligible = useAppStore((s) => GRAPHICS_PROFILES[s.settings.graphicsQuality].wetPostProcess);
   const { gl, scene, camera, size } = useThree();
   if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkgl = gl;
   useContextLossRecovery(gl);
@@ -84,6 +132,7 @@ export default function PostProcessing() {
   // handles its own internal targets/uniforms in its own setSize override),
   // so the resize effect below updates it by hand
   const fxaaPassRef = useRef<InstanceType<typeof ShaderPass> | null>(null);
+  const wetPassRef = useRef<InstanceType<typeof ShaderPass> | null>(null);
 
   // (Re)build the pipeline whenever the AA mode (or the renderer/scene/
   // camera identity, which never actually changes post-mount here) changes.
@@ -95,9 +144,15 @@ export default function PostProcessing() {
   // switching AA modes in Options repeatedly leaks GPU render targets and
   // textures.
   useEffect(() => {
-    if (aaMode === 'off') {
+    // "off" only skips the composer entirely when the wet pass isn't
+    // eligible either — Performance tier + AA off stays byte-identical to
+    // before (direct gl.render, see the useFrame below), but Balanced/Ultra
+    // players who happen to have AA off still get rain's wet look, since
+    // that's an orthogonal preference from anti-aliasing.
+    if (aaMode === 'off' && !wetEligible) {
       composerRef.current = null;
       fxaaPassRef.current = null;
+      wetPassRef.current = null;
       return;
     }
 
@@ -126,11 +181,23 @@ export default function PostProcessing() {
       passes.push(renderPass, outputPass, fxaaPass);
       fxaaPassRef.current = fxaaPass;
     } else {
-      // supersample2x: no AA shader at all — see the resize effect below for
-      // where the actual 2x resolution is applied (composer.setPixelRatio).
+      // supersample2x, or "off" with only the wet pass wanted: no AA shader
+      // at all — see the resize effect below for where 2x resolution is
+      // applied (composer.setPixelRatio), skipped for the "off" case.
       composer.addPass(renderPass);
       composer.addPass(outputPass);
       passes.push(renderPass, outputPass);
+    }
+
+    // Wet look always goes last — a final color-grade over whatever AA (or
+    // no AA) already produced, the same place a photo filter would sit.
+    if (wetEligible) {
+      const wetPass = new ShaderPass(WetShader);
+      composer.addPass(wetPass);
+      passes.push(wetPass);
+      wetPassRef.current = wetPass;
+    } else {
+      wetPassRef.current = null;
     }
 
     passesRef.current = passes;
@@ -150,9 +217,10 @@ export default function PostProcessing() {
       composer.dispose();
       composerRef.current = null;
       fxaaPassRef.current = null;
+      wetPassRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gl, scene, camera, aaMode]);
+  }, [gl, scene, camera, aaMode, wetEligible]);
 
   // Resize/pixel-ratio sync — useLayoutEffect so a mid-resize frame never
   // renders through a stale-sized composer.
@@ -171,6 +239,7 @@ export default function PostProcessing() {
   // mounted lifetime (mounted unconditionally in GameWorld.tsx) — see the
   // header comment for why priority must never flap between 0 and >0.
   useFrame((_, delta) => {
+    if (wetPassRef.current) wetPassRef.current.uniforms.rainAmount.value = worldEnv.rain;
     const composer = composerRef.current;
     if (composer) composer.render(delta);
     else gl.render(scene, camera);

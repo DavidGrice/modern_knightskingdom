@@ -177,7 +177,11 @@ export default function OptionsStack() {
                 label="Quality preset"
                 options={GRAPHICS_QUALITY_LIST.map((p) => ({ id: p.id, label: p.label }))}
                 value={settings.graphicsQuality}
-                onChange={(id) => update({ graphicsQuality: id, shadows: GRAPHICS_PROFILES[id].shadowsDefault })}
+                onChange={(id) => update({
+                  graphicsQuality: id,
+                  shadows: GRAPHICS_PROFILES[id].shadowsDefault,
+                  viewDistance: GRAPHICS_PROFILES[id].viewDistanceDefault,
+                })}
               />
               <div className="kk-opt-note">{GRAPHICS_PROFILES[settings.graphicsQuality].blurb}</div>
 
