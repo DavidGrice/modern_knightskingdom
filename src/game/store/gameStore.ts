@@ -48,7 +48,7 @@ import { worldEnv, seasonOf } from '../env';
 import { playerState, resetPlayerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
-import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR } from '../data/world';
+import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '../data/world';
 import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN } from '../data/worlds';
 import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
@@ -815,7 +815,13 @@ function createGameStore() {
           const inset = g.kind === 'rock' ? 2.2 : 1.6;
           const x = g.x + (rnd() * 2 - 1) * Math.max(0, g.halfX - inset);
           const z = g.z + (rnd() * 2 - 1) * Math.max(0, g.halfZ - inset);
-          if (Math.abs(x) > 95 || Math.abs(z) > 95) continue;
+          // stay well clear of the literal world edge (WORLD_HALF, ±200),
+          // not a fixed 95 — that bound predated the 2026-08-03 ground
+          // repositioning (Iron Seam/Deepwood moved out to ~±100-130) and
+          // silently zeroed out their node seeding, since every single
+          // candidate kept failing this check and the retry budget
+          // (g.count*60 tries) just ran out
+          if (Math.abs(x) > WORLD_HALF - 20 || Math.abs(z) > WORLD_HALF - 20) continue;
           if (x > 30 && z > 20 && g.id !== 'grove') continue; // pond shore stays clear
           if (inBuildRegion(x, z)) continue;
           if (inStarterVillage(x, z)) continue;

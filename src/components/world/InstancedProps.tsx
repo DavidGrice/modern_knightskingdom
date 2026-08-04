@@ -145,6 +145,22 @@ export function InstancedProp({
           castShadow
           receiveShadow
           limit={maxSeen.current}
+          // Requested 2026-08-03: three.js frustum-culls an InstancedMesh
+          // against its GEOMETRY's own bounding sphere — the single small
+          // prop's local size, positioned at this mesh's own origin — with
+          // no awareness that `nodes` below actually scatters instances
+          // across a whole ground section far from that origin. Herb
+          // patches (small geometry, spread across a whole meadow) hit this
+          // hardest: real, correctly-placed instances kept vanishing and
+          // reappearing as the camera turned, purely because that tiny,
+          // wrongly-positioned bounding sphere crossed in and out of the
+          // frustum, while gathering — driven by the node's real world
+          // position, not this mesh's culling check — worked the whole
+          // time. Disabling culling costs nothing extra here: the whole
+          // batch is already one draw call regardless, at counts (dozens,
+          // not thousands) far below where per-instance skipping would
+          // ever matter.
+          frustumCulled={false}
         >
           {nodes.map((n) => (
             <Instance

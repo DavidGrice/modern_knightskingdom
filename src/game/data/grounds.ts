@@ -82,25 +82,33 @@ export const GROUNDS: Ground[] = [
     lockedHint: 'Yours from the first day',
   },
   {
-    // Requested 2026-08-03: moved from due east (75, 5) into the south-east
-    // quadrant proper, along with Iron Seam below — the whole north side is
-    // now kept clear on purpose, reserved for the kingdom's own future
-    // expansion rather than parceled out to resource grounds. Checked clear
-    // of the Home Grove (dx 55 vs their halfX sum 30) and of Iron Seam's own
-    // new box (dz 45 vs their halfZ sum 28, clears on Z even with X close)
-    // and of the pond (nowhere near either box).
+    // Requested 2026-08-03, then pushed further east the same day: the
+    // first (85, 45) spot put its own box (x:[71,99], z:[29,61]) directly
+    // across the brook's line from the pond to the spring (Terrain.tsx's
+    // Stream, (58.5,45)->(140,68)) — the brook's z rises with x along that
+    // whole span, and 71-99 sat right in the middle of it, so the fence and
+    // any seeded boulders visibly crossed the water. Moved past the
+    // spring's own endpoint (x=140) entirely, so the brook (which only
+    // exists between those two x values) can't cross this box at all: at
+    // this box's one sliver of shared x-range with the brook (136-140) the
+    // brook's own z is 66.9-68, well above this box's z-max of 51. Also
+    // clear of the Home Grove (dx 120 vs halfX sum 30) and the pond
+    // (nearest point (136,42), 84 units off, nowhere close to its ~9.6
+    // radius+sand-ring).
     id: 'quarry', name: 'The Old Quarry', kind: 'rock',
-    x: 85, z: 45, halfX: 14, halfZ: 16, tier: 1, count: 8,
+    x: 150, z: 35, halfX: 14, halfZ: 16, tier: 1, count: 8,
     lockedHint: 'Quarried under the Freehold deed',
   },
   {
-    // Requested 2026-08-03: moved from north-east (62, -55) — the north
-    // side is reserved for the kingdom's own future expansion now, so
-    // every "rock" ground moves south-east together with the Old Quarry.
-    // Checked clear of the Old Quarry's new box (dz 45 vs halfZ sum 28) and
-    // of the homestead (x 100 - halfX 14 = 86, well past the 40 line).
+    // Requested 2026-08-03, pushed east alongside the Old Quarry (see its
+    // own comment) rather than left at (100, 90) — this box (x:[141,169])
+    // only just clears Old Quarry's new one (x:[136,164]) on X (dx 5 <
+    // halfX sum 28), so the real separation is on Z instead (dz 55 vs
+    // halfZ sum 28, clears easily). Checked clear of the homestead (x 141 -
+    // halfX 14 = 127, well past the 40 line) and stays inside seedNodes'
+    // own WORLD_HALF-20 node-placement bound (outer edge ~166.8).
     id: 'ironseam', name: 'The Iron Seam', kind: 'rock', variant: 'iron',
-    x: 100, z: 90, halfX: 14, halfZ: 12, tier: 2, count: 5,
+    x: 155, z: 90, halfX: 14, halfZ: 12, tier: 2, count: 5,
     lockedHint: 'Dug under the Manor deed',
   },
   {
