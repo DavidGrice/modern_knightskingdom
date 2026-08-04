@@ -3953,11 +3953,48 @@ was forgotten.
 ## Unblocked, large, and not started [TODO]
 These need no external data — they are simply big enough to want their own
 block rather than being started at the end of a session.
-- [TODO] **Per-world villager labour.** The empire's foundation: settlements have to
-  work while the player is elsewhere, which means the tick becomes per-world
-  rather than per-player-location. L66 just tied labour to proximity TO THE
-  PLAYER, so that rule needs a per-settlement meaning first. Design this
-  before anything else in the empire arc.
+[COMPLETE] ✅ **Per-world villager labour — SHIPPED 2026-08-04 (Wave 3 of the full-ROADMAP wave
+  plan).** The empire's foundation: settlements have to work while the player is elsewhere, which
+  means the tick becomes per-world rather than per-player-location. L66 just tied labour to
+  proximity TO THE PLAYER, so that rule needed a per-settlement meaning first — this is that.
+  **Mechanism only, no new content**: this wave makes the labour system CAPABLE of running against
+  more than one settlement; it does not create one (that's the settlement prototype, next). Zero
+  behavior change for the game as it ships today, since every villager's `world` is still
+  absent/null — verified live, not assumed (see below).
+  - `Villager.world?: string | null` (`types.ts`) mirrors `PlacedBuilding.world`'s existing
+    instance-separation doctrine exactly, plus a matching `isHomeVillager()` helper.
+  - Collapsed five independent hand-copied `HOME_X`/`HOME_Z` definitions (`gameStore.ts`,
+    `villagers.ts`'s own canonical exported pair, `Villagers.tsx`, `Defenders.tsx`,
+    `RaiderRam.tsx` — one more than the four originally found) into a single source. Added
+    `settlementAnchor(world, claimedWorlds)` (`villagers.ts`) — HOME_X/HOME_Z for the homestead,
+    a claimed settlement's own plot position once one exists, falling back to the destination's
+    own bake `origin` if unclaimed. `Defenders.tsx`/`RaiderRam.tsx` now import the canonical
+    `HOME_X`/`HOME_Z` directly rather than re-deriving the formula — they stay homestead-only on
+    purpose (raids and defense are not per-world scope here), so they didn't need the anchor
+    function itself, just the duplication fix.
+  - `gameStore.ts`'s `tickVillagers`/`villagerAtWork` now loop over the distinct worlds actually
+    present in the roster (`buildings`/`hasStall`/the builder pass all scoped per-world) instead
+    of one flat homestead-only pass — today that's always exactly one world (`null`), so the loop
+    runs once, byte-identical to the old code path.
+  - `Villagers.tsx`'s `VillagerFigure` now computes its `home` anchor via the shared
+    `villagerHomeSpot()` (still HOME_X/HOME_Z-centered for every villager today) and the top-level
+    `Villagers()` component adopts the same `(v.world ?? null) === (destination ?? null)` render
+    filter `Buildings.tsx` already uses — a settlement resident (next wave) will only render while
+    the player is actually visiting that world, not everywhere at once.
+  - **Deliberately left homestead-only, not re-keyed**: `checkVillagerArrival` (the generic-newcomer
+    system) and `Villagers.tsx`'s own deep worksite-walk logic (finding the nearest tree/farmplot/
+    stall/stockpile for the in-world walk animation) — a settlement's own residents come from its
+    quest chain, not the generic arrival mechanic, and the worksite-walk visual logic needs its own
+    dedicated pass once a real settlement exists to visually test against, not a blind re-key now.
+  - Verified live (not just typechecked): recruited/fabricated test villagers, pinned a lumberjack's
+    live position exactly at the homestead anchor (HOME_X/HOME_Z, confirmed algebraically to be
+    exactly `(0,0)` — `BUILD_REGION` is symmetric around the origin) and called `tickVillagers`
+    directly — wood inventory increased by the lumberjack's real `perTrip` yield and the trip timer
+    reset to a fresh value, confirming the per-world-scoped delivery path still works exactly as
+    before. Separately verified the re-keyed builder pass advances a real construction site's
+    `built` fraction when a builder stands at it, and `claimBed`'s no-bed fallback correctly routes
+    through the new `villagerHomeSpot(id, world, claimedWorlds)` signature without crashing.
+    `npm run verify` clean throughout, zero console/page errors.
 [COMPLETE] **Generalised interiors.** `KeepInteriorRoom.tsx` — a one-off, hand-placed room
 built specifically for the Grand Keep — is now `BuildingInteriorRoom.tsx`: any buildable type can
 offer an enterable, sealed room by adding one entry to a new `data/interiors.ts`, instead of a

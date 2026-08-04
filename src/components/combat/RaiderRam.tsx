@@ -18,11 +18,9 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { ramCheck } from '@/game/siege';
 import { raiderRamState } from '@/game/raiderRam';
-import { BUILD_REGION } from '@/game/data/buildables';
+import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import RiggedProp, { setPropTravel } from '../world/RiggedProp';
 
-const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
-const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 const RAM_SPEED = 1.3; // roughly a slow determined trudge, matching the player's own push pace
 /** id RiggedProp keys its per-instance animation state on */
 const RAM_ID = 'raider_ram';

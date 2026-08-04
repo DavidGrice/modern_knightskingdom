@@ -31,7 +31,7 @@ import { PLAYER_ATTRS, attrPointsEarned, attrPointsSpent } from '../data/playerA
 import { COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult } from '../data/companionTraits';
 import { GUILD_BY_ID, guildEligible, SWITCH_TITHE } from '../data/guilds';
 import { TALENT_BY_ID, talentBuyable } from '../data/skillTree';
-import { DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
+import { DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
 import { RECIPES } from '../data/recipes';
 import { capOf, labDamagedForm } from '../data/labCapabilities';
@@ -367,9 +367,6 @@ function partCost(vol: number): Partial<Record<ItemId, number>> {
 
 /** L66 · how close a worker has to be for the work to count */
 const WORK_RANGE = 6;
-/** the middle of the homestead, the far end of every worker's round trip */
-const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
-const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 
 /**
  * Is this villager actually somewhere their trade can be plied? Their walk
@@ -381,7 +378,7 @@ const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 function villagerAtWork(
   v: Villager,
   st: GameState,
-  homeBuildings: PlacedBuilding[],
+  worldBuildings: PlacedBuilding[],
 ): boolean {
   // §4 (phase 5, 5.8a): a real GatherAtNode/HaulToDeposit activity in its
   // align/perform phase is a FACT ("reserved on node:17, actively working
@@ -396,9 +393,14 @@ function villagerAtWork(
   if (!m) return true; // not spawned in the world yet — nothing to be far from
   const near = (x: number, z: number) => Math.hypot(m.x - x, m.z - z) <= WORK_RANGE;
   // the stores end of the round trip counts for every trade
-  const store = homeBuildings.find((b) => b.type === 'stockpile' && isBuilt(b));
+  const store = worldBuildings.find((b) => b.type === 'stockpile' && isBuilt(b));
   if (store && near(store.x, store.z)) return true;
-  if (near(HOME_X, HOME_Z)) return true;
+  // Empire arc, Wave 3: was a hardcoded HOME_X/HOME_Z check — now the
+  // villager's own settlement anchor (still HOME_X/HOME_Z for every
+  // villager today, since none carries a `world` yet; see settlementAnchor's
+  // own doc comment).
+  const anchor = settlementAnchor(v.world, st.claimedWorlds);
+  if (near(anchor.x, anchor.z)) return true;
   if (v.job === 'lumberjack' || v.job === 'miner') {
     const want = v.job === 'lumberjack' ? 'tree' : 'rock';
     const any = st.nodes.some((n) => n.kind === want && !n.respawnAt);
@@ -406,11 +408,11 @@ function villagerAtWork(
     return st.nodes.some((n) => n.kind === want && !n.respawnAt && near(n.x, n.z));
   }
   if (v.job === 'farmer') {
-    const plot = homeBuildings.find((b) => b.type === 'farmplot' && isBuilt(b));
+    const plot = worldBuildings.find((b) => b.type === 'farmplot' && isBuilt(b));
     return !plot || near(plot.x, plot.z);
   }
   if (v.job === 'merchant') {
-    const stall = homeBuildings.find((b) => b.type === 'market_stall' && isBuilt(b));
+    const stall = worldBuildings.find((b) => b.type === 'market_stall' && isBuilt(b));
     return !stall || near(stall.x, stall.z);
   }
   return true;
@@ -1892,7 +1894,8 @@ function createGameStore() {
         });
         return { x: free.x, z: free.z };
       }
-      return villagerHomeSpot(villagerId);
+      const v = st.villagers.find((x) => x.id === villagerId);
+      return villagerHomeSpot(villagerId, v?.world ?? null, st.claimedWorlds);
     },
 
     // weapons are drawn from the shared Armory (2026-07-20 rework), same as
@@ -1983,95 +1986,109 @@ function createGameStore() {
       // progress was left off. Defenders are unaffected (see the per-job
       // `continue` below; the night watch IS their job).
       if (!isWorkingHours(worldEnv.time)) return;
-      // recruited villagers only ever work the HOMESTEAD — a claimed
-      // template-world plot's stall/construction site is a separate place
-      // (the player builds it there in person, no passive labor reaches it)
-      const homeBuildings = st.buildings.filter(isHomeBuilding);
-      const hasStall = homeBuildings.some((b) => b.type === 'market_stall' && isBuilt(b));
-      // builder pass (Phase 19 build-then-construct): every assigned builder
-      // chips away at the oldest construction site, ~25s per piece per builder
-      // Steady Hands companion trait: that builder counts for 1.25
-      const builderWeight = st.villagers.reduce(
-        (t, v) => (v.job === 'builder' ? t + (hasTrait(v, 'bui_steady') ? 1.25 : 1) : t), 0);
-      if (builderWeight > 0) {
-        const site = homeBuildings.find((b) => !isBuilt(b));
-        // L66 · only builders STANDING AT the site do any building. The pass
-        // used to credit every assigned builder wherever they happened to be,
-        // so a villager still walking across the map — or parked at a
-        // worksite a hundred metres off — raised the walls all the same.
-        if (site) {
-          const atSite = st.villagers.reduce((t, v) => {
-            if (v.job !== 'builder') return t;
-            const m = villagerMobs[v.id];
-            if (!m || Math.hypot(m.x - site.x, m.z - site.z) > WORK_RANGE) return t;
-            return t + (hasTrait(v, 'bui_steady') ? 1.25 : 1);
-          }, 0);
-          if (atSite > 0) st.constructBuilding(site.id, dt * 0.04 * atSite);
-        }
-      }
       const progress = { ...st.villagerProgress };
       const gains: Partial<Record<ItemId, number>> = {};
       let changed = false;
       const delivered: string[] = [];
-      for (const v of st.villagers) {
-        if (v.job === 'idle') continue;
-        if (v.job === 'defender') continue; // no passive delivery — Defenders.tsx drives them instead
-        if (v.job === 'builder') continue;  // no delivery either — see the builder pass above
-        if (v.job === 'merchant' && !hasStall) continue; // no stall, nothing to sell
-        // §4/5.8b — once carrying is enabled (haul.ts's CARRYING_ENABLED),
-        // an AI-driven villager's real yield comes from HaulToDeposit's own
-        // addItems()+awardTradeXp() call instead; granting it again here on
-        // the old per-trip timer would double-count. The old timer's own
-        // progress simply freezes while workSignal is active, resuming
-        // exactly where it left off once the AI stops driving this villager
-        // (dusk, no reachable node, reassigned) — Phase 24B's own fallback
-        // then picks the same villager back up seamlessly, unaffected.
-        if (workSignals[v.id]?.active) continue;
-        const jobDef = JOB_BY_ID[v.job];
-        // Phase 24A: Diligence + trade mastery shorten the trip; Swift-family
-        // companion traits shave another 12%. Hermit trade-off perk: +25% on
-        // top — its own upside is the player's own gathering, doubled, in
-        // harvestNode() above.
-        const trip = jobDef.tripSeconds * tripSpeedMult(v) * tripTraitMult(v)
-          * (st.perks.includes('hermit') ? 1.25 : 1);
-        // L66 · the trip only runs down while they are actually somewhere
-        // that counts: at their worksite, or back at the stores hauling. A
-        // villager stuck on the far side of the map used to fill their sack
-        // on the timer alone, which is why felling went on hundreds of metres
-        // from the nearest tree.
-        if (!villagerAtWork(v, st, homeBuildings)) continue;
-        const left = (progress[v.id] ?? trip) - dt;
-        if (left > 0) {
-          progress[v.id] = left;
-          changed = true;
-          continue;
+      // Empire arc, Wave 3 (per-world labour): each distinct world present
+      // in the roster gets its own buildings/stall/builder pass, scoped to
+      // that world's own structures and residents — homestead-only in
+      // effect today (every villager's `world` is still absent/null, so
+      // this loop runs exactly once over `[null]`, byte-identical to the
+      // old single flat pass), but the mechanism no longer assumes one
+      // settlement. `checkVillagerArrival`'s generic-newcomer system stays
+      // homestead-only on purpose — a settlement's own residents come from
+      // its quest chain (Wave 4), not this arrival mechanic.
+      const worlds = new Set(st.villagers.map((v) => v.world ?? null));
+      for (const world of worlds) {
+        const worldBuildings = st.buildings.filter((b) => (b.world ?? null) === world);
+        const roster = st.villagers.filter((v) => (v.world ?? null) === world);
+        const hasStall = worldBuildings.some((b) => b.type === 'market_stall' && isBuilt(b));
+        // builder pass (Phase 19 build-then-construct): every assigned builder
+        // chips away at the oldest construction site, ~25s per piece per builder
+        // Steady Hands companion trait: that builder counts for 1.25
+        const builderWeight = roster.reduce(
+          (t, v) => (v.job === 'builder' ? t + (hasTrait(v, 'bui_steady') ? 1.25 : 1) : t), 0);
+        if (builderWeight > 0) {
+          const site = worldBuildings.find((b) => !isBuilt(b));
+          // L66 · only builders STANDING AT the site do any building. The pass
+          // used to credit every assigned builder wherever they happened to be,
+          // so a villager still walking across the map — or parked at a
+          // worksite a hundred metres off — raised the walls all the same.
+          if (site) {
+            const atSite = roster.reduce((t, v) => {
+              if (v.job !== 'builder') return t;
+              const m = villagerMobs[v.id];
+              if (!m || Math.hypot(m.x - site.x, m.z - site.z) > WORK_RANGE) return t;
+              return t + (hasTrait(v, 'bui_steady') ? 1.25 : 1);
+            }, 0);
+            if (atSite > 0) st.constructBuilding(site.id, dt * 0.04 * atSite);
+          }
         }
-        progress[v.id] = trip;
-        // Phase 24A: Might rolls a double load, Wit pads a merchant's take,
-        // Craft brings home side-goods (mirrors the player's own talents);
-        // companion traits stack on top of all of it
-        const attrs = attrsOf(v.id);
-        let haul = jobDef.perTrip;
-        if (Math.random() * 20 < attrs.might) haul *= 2;
-        if (v.job === 'merchant') haul += Math.round(attrs.wit / 3) + (hasTrait(v, 'mer_silver') ? 2 : 0);
-        const haulTrait = HAUL_TRAIT[v.job];
-        if (haulTrait && hasTrait(v, haulTrait)) haul += 1;
-        gains[jobDef.produces] = (gains[jobDef.produces] ?? 0) + haul;
-        const side = SIDE_GOODS[jobDef.produces];
-        const sideTrait = SIDE_TRAIT[v.job];
-        const sideChance = attrs.craft * (sideTrait && hasTrait(v, sideTrait) ? 2 : 1);
-        if (side && Math.random() * 25 < sideChance) gains[side] = (gains[side] ?? 0) + 1;
-        // trade mastery: +10 xp per completed trip, kept per job — via the
-        // same awardTradeXp() HaulToDeposit's own real completion calls
-        // (5.8b), not a second, separately-maintained copy of this logic
-        st.awardTradeXp(v.id, 10);
-        delivered.push(v.name);
-        changed = true;
+        for (const v of roster) {
+          if (v.job === 'idle') continue;
+          if (v.job === 'defender') continue; // no passive delivery — Defenders.tsx drives them instead
+          if (v.job === 'builder') continue;  // no delivery either — see the builder pass above
+          if (v.job === 'merchant' && !hasStall) continue; // no stall, nothing to sell
+          // §4/5.8b — once carrying is enabled (haul.ts's CARRYING_ENABLED),
+          // an AI-driven villager's real yield comes from HaulToDeposit's own
+          // addItems()+awardTradeXp() call instead; granting it again here on
+          // the old per-trip timer would double-count. The old timer's own
+          // progress simply freezes while workSignal is active, resuming
+          // exactly where it left off once the AI stops driving this villager
+          // (dusk, no reachable node, reassigned) — Phase 24B's own fallback
+          // then picks the same villager back up seamlessly, unaffected.
+          if (workSignals[v.id]?.active) continue;
+          const jobDef = JOB_BY_ID[v.job];
+          // Phase 24A: Diligence + trade mastery shorten the trip; Swift-family
+          // companion traits shave another 12%. Hermit trade-off perk: +25% on
+          // top — its own upside is the player's own gathering, doubled, in
+          // harvestNode() above.
+          const trip = jobDef.tripSeconds * tripSpeedMult(v) * tripTraitMult(v)
+            * (st.perks.includes('hermit') ? 1.25 : 1);
+          // L66 · the trip only runs down while they are actually somewhere
+          // that counts: at their worksite, or back at the stores hauling. A
+          // villager stuck on the far side of the map used to fill their sack
+          // on the timer alone, which is why felling went on hundreds of metres
+          // from the nearest tree.
+          if (!villagerAtWork(v, st, worldBuildings)) continue;
+          const left = (progress[v.id] ?? trip) - dt;
+          if (left > 0) {
+            progress[v.id] = left;
+            changed = true;
+            continue;
+          }
+          progress[v.id] = trip;
+          // Phase 24A: Might rolls a double load, Wit pads a merchant's take,
+          // Craft brings home side-goods (mirrors the player's own talents);
+          // companion traits stack on top of all of it
+          const attrs = attrsOf(v.id);
+          let haul = jobDef.perTrip;
+          if (Math.random() * 20 < attrs.might) haul *= 2;
+          if (v.job === 'merchant') haul += Math.round(attrs.wit / 3) + (hasTrait(v, 'mer_silver') ? 2 : 0);
+          const haulTrait = HAUL_TRAIT[v.job];
+          if (haulTrait && hasTrait(v, haulTrait)) haul += 1;
+          gains[jobDef.produces] = (gains[jobDef.produces] ?? 0) + haul;
+          const side = SIDE_GOODS[jobDef.produces];
+          const sideTrait = SIDE_TRAIT[v.job];
+          const sideChance = attrs.craft * (sideTrait && hasTrait(v, sideTrait) ? 2 : 1);
+          if (side && Math.random() * 25 < sideChance) gains[side] = (gains[side] ?? 0) + 1;
+          // trade mastery: +10 xp per completed trip, kept per job — via the
+          // same awardTradeXp() HaulToDeposit's own real completion calls
+          // (5.8b), not a second, separately-maintained copy of this logic
+          st.awardTradeXp(v.id, 10);
+          delivered.push(v.name);
+          changed = true;
+        }
       }
       if (changed) set({ villagerProgress: progress, dirty: true });
       if (delivered.length) {
         st.addItems(gains, 'gather');
-        const toStore = homeBuildings.some((b) => b.type === 'stockpile' && isBuilt(b));
+        // cosmetic phrasing only, still homestead-specific by design (every
+        // delivery is a home delivery today) — see this pass's own note on
+        // `checkVillagerArrival` staying homestead-only for why a mixed
+        // multi-world delivery batch isn't a real case yet
+        const toStore = st.buildings.some((b) => isHomeBuilding(b) && b.type === 'stockpile' && isBuilt(b));
         st.notify(`${delivered.join(', ')} hauled supplies to the ${toStore ? 'stockpile' : 'stores'}.`);
       }
     },
