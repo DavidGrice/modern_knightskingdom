@@ -1,0 +1,30 @@
+[
+ {
+  "id": "physic_garden",
+  "name": "The Physic Garden",
+  "kind": "herb",
+  "x": 48,
+  "z": 90,
+  "halfX": 8,
+  "halfZ": 9,
+  "count": 6,
+  "plantHint": "Break the ground and set herb cuttings",
+  "stage": 0,
+  "plantedAt": 0,
+  "lastWateredAt": null
+ },
+ {
+  "id": "orchard",
+  "name": "The Orchard Rows",
+  "kind": "tree",
+  "x": -30,
+  "z": 62,
+  "halfX": 8,
+  "halfZ": 6,
+  "count": 9,
+  "plantHint": "Break the ground and set saplings",
+  "stage": 0,
+  "plantedAt": 0,
+  "lastWateredAt": null
+ }
+]

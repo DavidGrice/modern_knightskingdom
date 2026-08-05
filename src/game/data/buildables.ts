@@ -1,5 +1,6 @@
 import type { Buildable, ClaimedPlot } from '../types';
 import GENERATED from './bricks.generated.json';
+import LAND_TIERS_DATA from './landTiers.generated.json';
 import { FIXED_WORLD_PROPS } from './world';
 import { shapeFor } from '../collisionShapes';
 
@@ -18,13 +19,11 @@ export const STUD = 0.35;
 // The tiers are also the land you buy (F20): you start on a small holding and
 // push the fence out, and each expansion brings whatever was standing on that
 // ground — trees, ore — inside the fold.
-export const LAND_TIERS: { walls: number; half: number; cost: number; name: string }[] = [
-  { walls: 3, half: 16, cost: 0, name: 'Smallholding' },
-  { walls: 4, half: 20, cost: 120, name: 'Freehold' },
-  { walls: 5, half: 24, cost: 320, name: 'Manor' },
-  { walls: 6, half: 28, cost: 700, name: 'Estate' },
-  { walls: 7, half: 32, cost: 1400, name: 'Barony' },
-];
+// Wave 6 · entries edited live at /secret/worldeditor, source in
+// landTiers.generated.json — see grounds.generated.json's own note in
+// grounds.ts for why this moved off a hand-written literal.
+export const LAND_TIERS = LAND_TIERS_DATA as unknown as
+  { walls: number; half: number; cost: number; name: string }[];
 export const MAX_LAND_TIER = LAND_TIERS.length - 1;
 
 /** half-extent of the homestead at a given tier */
