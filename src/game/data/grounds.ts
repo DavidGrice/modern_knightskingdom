@@ -11,14 +11,21 @@
 // it. Buying the Freehold hands you the quarry; the Manor, the iron seam.
 import { LAND_TIERS } from './buildables';
 
-export interface Ground {
-  id: string;
-  name: string;
+/**
+ * Empire arc, Wave 5 · the rectangle a resource cluster seeds inside, split
+ * out of `Ground` so a cultivated plot (types.ts's CultivatedPlot) is the same
+ * shape without inheriting the deed ladder — a plot is worked because you
+ * planted it, not because a tier bought it. Everything that reasons about the
+ * rectangle (the scatter in gameStore's scatterNodesInRect, the overlap
+ * assertions below, Grounds.tsx's fence run) takes one of these, so grounds
+ * and plots can never drift apart on geometry.
+ */
+export interface RectSection {
   /** what seeds here */
   kind: 'tree' | 'rock' | 'herb';
-  /** rock grounds can be plain stone or the iron variant */
+  /** rock sections can be plain stone or the iron variant */
   variant?: 'iron';
-  /** centre, and half-extents — grounds are RECTANGULAR sections on the same
+  /** centre, and half-extents — sections are RECTANGULAR pieces on the same
    *  grid the homestead builds on, not circles. A circle cannot be checked
    *  against a square build region without leaving slivers, and its edge cuts
    *  across build tiles so a node could seed on half a square. */
@@ -26,10 +33,21 @@ export interface Ground {
   z: number;
   halfX: number;
   halfZ: number;
-  /** land tier (index into LAND_TIERS) the deed must reach to work it */
-  tier: number;
   /** how many nodes seed inside it */
   count: number;
+  /** may seed inside the pond's shore ring. Only the Home Grove sets this:
+   *  it is deliberately pond-adjacent (its own flavour text is written around
+   *  that walk) and some of its candidates genuinely fall in the ring the
+   *  scatter otherwise keeps clear. Was a literal `g.id !== 'grove'` test
+   *  inside seedNodes before the scatter became section-driven. */
+  pondShore?: boolean;
+}
+
+export interface Ground extends RectSection {
+  id: string;
+  name: string;
+  /** land tier (index into LAND_TIERS) the deed must reach to work it */
+  tier: number;
   /** shown on the boundary marker while it is beyond your deed */
   lockedHint: string;
 }
@@ -61,7 +79,7 @@ export const GROUNDS: Ground[] = [
     // one of the "clustered north" grounds, and the flavour text above
     // depends on the pond-side spot specifically.
     id: 'grove', name: 'The Home Grove', kind: 'tree',
-    x: 30, z: 62, halfX: 16, halfZ: 10, tier: 0, count: 6,
+    x: 30, z: 62, halfX: 16, halfZ: 10, tier: 0, count: 6, pondShore: true,
     lockedHint: 'Yours from the first day',
   },
   {
@@ -133,16 +151,28 @@ export const GROUNDS: Ground[] = [
  * land tiers and would silently swallow a ground again.
  */
 const HOMESTEAD_CLEARANCE = 8;
-if (process.env.NODE_ENV !== 'production') {
+
+/** plain AABB test between two sections — exported so Wave 5's cultivated
+ *  plots are held to the identical check rather than a second copy of it */
+export function sectionsOverlap(a: RectSection, b: RectSection): boolean {
+  return Math.abs(a.x - b.x) < a.halfX + b.halfX && Math.abs(a.z - b.z) < a.halfZ + b.halfZ;
+}
+
+/** does a section sit clear of the homestead at its widest bought extent? */
+export function clearsHomestead(s: RectSection): boolean {
   const half = LAND_TIERS[LAND_TIERS.length - 1].half + HOMESTEAD_CLEARANCE;
+  return Math.abs(s.x) - s.halfX >= half || Math.abs(s.z) - s.halfZ >= half;
+}
+
+if (process.env.NODE_ENV !== 'production') {
   for (const g of GROUNDS) {
-    if (Math.abs(g.x) - g.halfX < half && Math.abs(g.z) - g.halfZ < half) {
+    if (!clearsHomestead(g)) {
       // eslint-disable-next-line no-console
       console.warn(`[grounds] ${g.id} overlaps the fully-bought homestead`);
     }
     for (const o of GROUNDS) {
       if (o.id === g.id) continue;
-      if (Math.abs(g.x - o.x) < g.halfX + o.halfX && Math.abs(g.z - o.z) < g.halfZ + o.halfZ) {
+      if (sectionsOverlap(g, o)) {
         // eslint-disable-next-line no-console
         console.warn(`[grounds] ${g.id} overlaps ${o.id}`);
       }

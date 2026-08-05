@@ -23,6 +23,16 @@ export const FISHING_DOCK = {
   yaw: 2.2874,                // recomputed to match the shortened endpoint's own direction
   halfWidth: 0.6,
 };
+// The brook, from the pond's northeast edge out to the spring mound. Was two
+// local consts inside Terrain.tsx's Stream() until Wave 5 needed the same line
+// outside a 'use client' component — filling a pail is an interaction, and
+// PlayerController has to know where the water actually runs. Terrain.tsx
+// draws from these exact values, so the strip and the interact can't drift.
+export const BROOK = {
+  startX: POND.x + 6.5, startZ: POND.z + 3, // pond-edge end
+  endX: 140, endZ: 68,                      // spring end
+};
+
 // Phase 20: the King holds court at his own castle (template-01, The King's
 // Approach) — must match his NpcDef in data/npcs.ts; the knighting ceremony
 // teleports the player before him here.

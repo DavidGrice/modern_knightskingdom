@@ -1,11 +1,12 @@
 'use client';
 import { create } from 'zustand';
 import type {
-  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, CharacterConfig, ClaimedPlot, DefenderLoadout, ItemId,
+  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, CharacterConfig, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
   LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
-import { GROUNDS, groundAt } from '../data/grounds';
+import { GROUNDS, groundAt, type RectSection } from '../data/grounds';
+import { MAX_PLOT_STAGE, PLOT_BY_ID, plotNodeCount } from '../data/cultivatedPlots';
 import { ROAD_HALF_WIDTH, ROAD_TILE, roadEntry, routeCells } from '../data/road';
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
 import { arriveByRoad, villagerMobs } from '../villagerMobs';
@@ -165,6 +166,9 @@ interface GameState {
    *  yet earned. See SaveGame.settlements' own doc comment for how this
    *  differs from claimedWorlds. */
   settlements: Record<string, { since: number; lastCollectedAt: number }>;
+  /** Empire arc, Wave 5: plot id -> the plot you actually broke and planted,
+   *  absent = still wild grass. See SaveGame.cultivatedPlots. */
+  cultivatedPlots: Record<string, CultivatedPlot>;
   villagers: Villager[];
   villagerProgress: Record<string, number>; // villagerId -> seconds until next delivery
   /** the homestead Armory: spare gear held for the garrison, separate from
@@ -217,6 +221,12 @@ interface GameState {
   /** Empire arc, Wave 4: wall-clock settlement income, mirroring
    *  collectTaxes' own cooldown-then-flat-amount shape exactly. */
   collectSettlementYield: (destId: string) => void;
+  /** Empire arc, Wave 5: break and plant one of the hand-authored plots
+   *  (data/cultivatedPlots.ts). Seeds a sparse stage-0 cluster. */
+  cultivatePlot: (plotId: string) => void;
+  /** Wave 5: pour a Pail of Water on a planted plot — one stage thicker, one
+   *  pail spent. */
+  waterPlot: (plotId: string) => void;
   captureBlueprint: (name: string, x: number, z: number) => boolean;
   deleteBlueprint: (id: string) => void;
   placeBlueprintAt: (blueprintId: string, x: number, z: number, rot: 0 | 1 | 2 | 3) => boolean;
@@ -455,6 +465,118 @@ function mulberry32(seed: number) {
   };
 }
 
+const TREE_MODELS = ['/assets/props/scenery/l243500.glb', '/assets/props/scenery/l347100.glb'];
+
+// NOTHING but pieces the player places may stand inside the build grid
+// (2026-07-20) — a small margin keeps trunks and foliage from overhanging the
+// edge tiles too.
+const NODE_BUILD_CLEAR = 3;
+const inBuildRegion = (x: number, z: number) =>
+  x > BUILD_REGION.minX - NODE_BUILD_CLEAR && x < BUILD_REGION.maxX + NODE_BUILD_CLEAR
+  && z > BUILD_REGION.minZ - NODE_BUILD_CLEAR && z < BUILD_REGION.maxZ + NODE_BUILD_CLEAR;
+// O3 · neither scatter pass knew Alric/Beda's home corner existed — it sits
+// outside BUILD_REGION and outside every GROUNDS section, so a tree could
+// (and did) land inside Beda's hut. Both passes reject against the same fixed
+// clear-zones a footprint-collision test would have asked for from the start.
+const inStarterVillage = (x: number, z: number) =>
+  STARTER_VILLAGE_CLEAR.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
+
+/** a section id, hashed to a stable seed — a cultivated plot has no place in
+ *  seedNodes' one shared 20260713 stream (it is scattered on demand, from
+ *  cultivatePlot, long after that stream has been consumed), but its layout
+ *  still has to come out the same every time it is re-derived */
+function sectionSeed(id: string): number {
+  let h = 20260805;
+  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0;
+  return h;
+}
+
+/**
+ * Empire arc, Wave 5 · scatter a rectangular section's nodes.
+ *
+ * Lifted verbatim out of seedNodes' per-ground loop so grounds and cultivated
+ * plots share ONE implementation — the gates below (world edge, pond shore,
+ * build region, starter village, separation) are the accumulated result of
+ * several real bugs and must not exist in two copies that can drift.
+ *
+ * `existingNodes` is everything already standing: candidates keep clear of it
+ * the same way the road's verge pass already does. A no-op for the six
+ * grounds (their boxes sit far enough apart that no two node clouds can come
+ * within 3m once the edge inset is applied) — it earns its keep for plots,
+ * which are scattered late, into a world that already has nodes in it.
+ *
+ * `rnd` is threaded IN rather than seeded here: seedNodes runs every ground
+ * off one shared 20260713 stream, and re-seeding per section would change
+ * every existing layout.
+ */
+export function scatterNodesInRect(
+  section: RectSection & { id: string },
+  world: string | null,
+  existingNodes: ResourceNodeState[],
+  rnd: () => number = mulberry32(sectionSeed(section.id)),
+): ResourceNodeState[] {
+  const out: ResourceNodeState[] = [];
+  const placed: [number, number][] = [];
+  // min separation inside a section, by kind — trees may crowd, boulders need
+  // room to walk between, herb patches must not stack
+  const sep = section.kind === 'tree' ? 3.2 : section.kind === 'rock' ? 4.5 : 7;
+  let tries = 0;
+  while (placed.length < section.count && tries < section.count * 60) {
+    tries++;
+    // sections are rectangular pieces on the build grid, so the scatter is a
+    // plain uniform roll inside the rectangle, held one node-radius clear of
+    // its own edge — a boulder half over the boundary would sit on a build
+    // square the section does not own
+    const inset = section.kind === 'rock' ? 2.2 : 1.6;
+    const x = section.x + (rnd() * 2 - 1) * Math.max(0, section.halfX - inset);
+    const z = section.z + (rnd() * 2 - 1) * Math.max(0, section.halfZ - inset);
+    // stay well clear of the literal world edge (WORLD_HALF, ±200), not a
+    // fixed 95 — that bound predated the 2026-08-03 ground repositioning
+    // (Iron Seam/Deepwood moved out to ~±100-130) and silently zeroed out
+    // their node seeding, since every single candidate kept failing this
+    // check and the retry budget just ran out
+    if (Math.abs(x) > WORLD_HALF - 20 || Math.abs(z) > WORLD_HALF - 20) continue;
+    // pond shore stays clear — a real distance check against POND's own
+    // position, not the blanket "x > 30 && z > 20" half-plane this used to
+    // be. That crude rule happened to work while every SE-quadrant ground sat
+    // near the pond, but the 2026-08-04 repositioning moved Old Quarry/Iron
+    // Seam out to (150,35)/(155,90) — nowhere near its shore — and the
+    // half-plane rejected every one of their candidates anyway (silently
+    // zeroing out node seeding again). `pondShore` sections are exempt: the
+    // Home Grove is deliberately pond-adjacent by design.
+    if (!section.pondShore && Math.hypot(x - POND.x, z - POND.z) < POND.radius + 20) continue;
+    if (inBuildRegion(x, z)) continue;
+    if (inStarterVillage(x, z)) continue;
+    if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < sep)) continue;
+    if (existingNodes.some((n) => Math.hypot(n.x - x, n.z - z) < 3)) continue;
+    placed.push([x, z]);
+    const i = placed.length - 1;
+    if (section.kind === 'tree') {
+      out.push({
+        id: `${section.id}_t${i}`, kind: 'tree', model: TREE_MODELS[i % 2], ground: section.id, world,
+        x, z, scale: 0.85 + rnd() * 0.5, yaw: rnd() * Math.PI * 2,
+        hitsLeft: 3, respawnAt: null,
+      });
+    } else if (section.kind === 'rock') {
+      out.push({
+        id: `${section.id}_r${i}`, kind: 'rock', variant: section.variant, ground: section.id, world,
+        x, z, scale: 0.8 + rnd() * 0.9, yaw: rnd() * Math.PI * 2,
+        hitsLeft: 4, respawnAt: null,
+      });
+    } else {
+      // a patch carries an RNG yield of 1-10 picks, and reads bigger the
+      // richer it is
+      const yieldN = 1 + Math.floor(rnd() * 10);
+      out.push({
+        id: `${section.id}_h${i}`, kind: 'herb', ground: section.id, world,
+        x, z, scale: 0.7 + yieldN * 0.05 + rnd() * 0.15,
+        yaw: rnd() * Math.PI * 2, hitsLeft: yieldN, respawnAt: null,
+      });
+    }
+  }
+  return out;
+}
+
 const topOf = (b: PlacedBuilding) => (b.y ?? 0) + heightOf(b.type);
 
 export function activeQuestOf(completed: string[]): Quest | null {
@@ -615,6 +737,7 @@ function createGameStore() {
     stats: { ...ZERO_STATS },
     claimedWorlds: {},
     settlements: {},
+    cultivatedPlots: {},
     customBlueprints: [],
     lastTaxAt: 0,
     villagers: [],
@@ -665,7 +788,7 @@ function createGameStore() {
         gateOpen: {}, buildingHp: {}, reputation: {},
         destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, guild: null, skillTree: [], attrSpent: {},
         durability: {}, perks: [], stats: { ...ZERO_STATS },
-        claimedWorlds: {}, settlements: {}, customBlueprints: [], lastTaxAt: 0,
+        claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
         interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
         cedricSieges: 0, cedricRouted: false,
@@ -724,7 +847,8 @@ function createGameStore() {
         attrSpent: s.attrSpent ?? {},
         durability: s.durability ?? {}, perks: s.perks ?? [],
         stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
-        claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, customBlueprints: s.customBlueprints ?? [],
+        claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
+        customBlueprints: s.customBlueprints ?? [],
         lastTaxAt: s.lastTaxAt ?? 0,
         villagers: s.villagers ?? [],
         villagerProgress: {},
@@ -782,7 +906,8 @@ function createGameStore() {
         attrSpent: s.attrSpent,
         durability: s.durability, perks: s.perks,
         stats: s.stats,
-        claimedWorlds: s.claimedWorlds, settlements: s.settlements, customBlueprints: s.customBlueprints,
+        claimedWorlds: s.claimedWorlds, settlements: s.settlements, cultivatedPlots: s.cultivatedPlots,
+        customBlueprints: s.customBlueprints,
         lastTaxAt: s.lastTaxAt,
         villagers: s.villagers,
         armory: s.armory,
@@ -798,92 +923,17 @@ function createGameStore() {
     seedNodes: () => {
       const rnd = mulberry32(20260713);
       const nodes: ResourceNodeState[] = [];
-      const treeModels = ['/assets/props/scenery/l243500.glb', '/assets/props/scenery/l347100.glb'];
-      // NOTHING but pieces the player places may stand inside the build grid
-      // (2026-07-20) — a small margin keeps trunks and foliage from
-      // overhanging the edge tiles too.
-      const CLEAR = 3;
-      const inBuildRegion = (x: number, z: number) =>
-        x > BUILD_REGION.minX - CLEAR && x < BUILD_REGION.maxX + CLEAR
-        && z > BUILD_REGION.minZ - CLEAR && z < BUILD_REGION.maxZ + CLEAR;
-      // O3 · neither scatter pass below knew Alric/Beda's home corner existed
-      // — it sits outside BUILD_REGION and outside every GROUNDS section, so
-      // a tree could (and did) land inside Beda's hut. Both passes now reject
-      // against the same fixed clear-zones a footprint-collision test would
-      // have asked for from the start.
-      const inStarterVillage = (x: number, z: number) =>
-        STARTER_VILLAGE_CLEAR.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
 
       // J46 · every node now belongs to a NAMED GROUND (game/data/grounds.ts)
       // rather than seeding wherever a scatter loop happened to drop it. The
       // ground carries the deed that opens it, so the land ladder finally
       // buys you something to work rather than a wider fence.
+      // Wave 5: the loop body itself now lives in scatterNodesInRect, shared
+      // with cultivatePlot — one scatter, two callers.
       for (const g of GROUNDS) {
-        const placed: [number, number][] = [];
-        // min separation inside a ground, by kind — trees may crowd, boulders
-        // need room to walk between, herb patches must not stack
-        const sep = g.kind === 'tree' ? 3.2 : g.kind === 'rock' ? 4.5 : 7;
-        let tries = 0;
-        while (placed.length < g.count && tries < g.count * 60) {
-          tries++;
-          // grounds are rectangular sections on the build grid, so the
-          // scatter is a plain uniform roll inside the rectangle, held one
-          // node-radius clear of its own edge — a boulder half over the
-          // boundary would sit on a build square the section does not own
-          const inset = g.kind === 'rock' ? 2.2 : 1.6;
-          const x = g.x + (rnd() * 2 - 1) * Math.max(0, g.halfX - inset);
-          const z = g.z + (rnd() * 2 - 1) * Math.max(0, g.halfZ - inset);
-          // stay well clear of the literal world edge (WORLD_HALF, ±200),
-          // not a fixed 95 — that bound predated the 2026-08-03 ground
-          // repositioning (Iron Seam/Deepwood moved out to ~±100-130) and
-          // silently zeroed out their node seeding, since every single
-          // candidate kept failing this check and the retry budget
-          // (g.count*60 tries) just ran out
-          if (Math.abs(x) > WORLD_HALF - 20 || Math.abs(z) > WORLD_HALF - 20) continue;
-          // pond shore stays clear — a real distance check against POND's own
-          // position, not the blanket "x > 30 && z > 20" half-plane this used
-          // to be. That crude rule happened to work while every SE-quadrant
-          // ground sat near the pond, but the 2026-08-04 repositioning moved
-          // Old Quarry/Iron Seam out to (150,35)/(155,90) — 98/114 units from
-          // the pond, nowhere near its shore — and the half-plane rejected
-          // every single one of their candidates anyway (silently zeroing
-          // out node seeding again, the same class of bug as the WORLD_HALF
-          // check above, just a second hardcoded gate that check alone
-          // didn't cover, found from a real live report after that first fix
-          // shipped). grove keeps its exemption: it's deliberately pond-
-          // adjacent by design (its own flavour text — "the walk to it passes
-          // the water") and some of its own candidates genuinely do fall
-          // within this radius.
-          if (g.id !== 'grove' && Math.hypot(x - POND.x, z - POND.z) < POND.radius + 20) continue;
-          if (inBuildRegion(x, z)) continue;
-          if (inStarterVillage(x, z)) continue;
-          if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < sep)) continue;
-          placed.push([x, z]);
-          const i = placed.length - 1;
-          if (g.kind === 'tree') {
-            nodes.push({
-              id: `${g.id}_t${i}`, kind: 'tree', model: treeModels[i % 2], ground: g.id,
-              x, z, scale: 0.85 + rnd() * 0.5, yaw: rnd() * Math.PI * 2,
-              hitsLeft: 3, respawnAt: null,
-            });
-          } else if (g.kind === 'rock') {
-            nodes.push({
-              id: `${g.id}_r${i}`, kind: 'rock', variant: g.variant, ground: g.id,
-              x, z, scale: 0.8 + rnd() * 0.9, yaw: rnd() * Math.PI * 2,
-              hitsLeft: 4, respawnAt: null,
-            });
-          } else {
-            // a patch carries an RNG yield of 1-10 picks, and reads bigger
-            // the richer it is
-            const yieldN = 1 + Math.floor(rnd() * 10);
-            nodes.push({
-              id: `${g.id}_h${i}`, kind: 'herb', ground: g.id,
-              x, z, scale: 0.7 + yieldN * 0.05 + rnd() * 0.15,
-              yaw: rnd() * Math.PI * 2, hitsLeft: yieldN, respawnAt: null,
-            });
-          }
-        }
+        nodes.push(...scatterNodesInRect(g, null, nodes, rnd));
       }
+
 
       // Trees along the VERGES of the road — the green margin of each plate,
       // never the printed path. A road through open grass reads as a scar;
@@ -924,7 +974,7 @@ function createGameStore() {
             }
             if (nodes.some((n) => Math.hypot(n.x - x, n.z - z) < 3)) continue;
             nodes.push({
-              id: `verge${vi++}`, kind: 'tree', model: treeModels[vi % 2],
+              id: `verge${vi++}`, kind: 'tree', model: TREE_MODELS[vi % 2],
               x, z, scale: 0.8 + rnd() * 0.45, yaw: rnd() * Math.PI * 2,
               hitsLeft: 3, respawnAt: null,
             });
@@ -936,6 +986,22 @@ function createGameStore() {
       // FISHING_DOCK / ResourceNodes.tsx's FishingSpot). Open water belongs
       // to no deed.
       nodes.push({ id: 'fishspot', kind: 'fishing', x: FISHING_DOCK.endX, z: FISHING_DOCK.endZ, scale: 1, yaw: 0, hitsLeft: 999, respawnAt: null });
+
+      // Wave 5 · a plot you planted is RE-DERIVED here, never restored:
+      // st.nodes is runtime-only and this runs on every load and every land
+      // purchase, so the persisted `stage` is the one source of truth for how
+      // thick the cluster stands. Last, so it sees the same "everything else
+      // already standing" set cultivatePlot/waterPlot pass in and the two can
+      // never place differently.
+      for (const live of Object.values(get().cultivatedPlots)) {
+        const def = PLOT_BY_ID[live.id];
+        if (!def) continue; // a plot id retired from the table
+        nodes.push(...scatterNodesInRect(
+          { ...def, count: plotNodeCount(def, live.stage) },
+          live.world ?? null,
+          nodes,
+        ));
+      }
       set({ nodes });
     },
 
@@ -1073,6 +1139,93 @@ function createGameStore() {
       st.addItems({ gold: amount }, 'grant');
       audio.play('treasure', 0.7);
       st.notify(`Collected ${amount} gold from the settlement!`, true);
+    },
+
+    // Empire arc, Wave 5 — plots. `plantedAt`/`lastWateredAt` are epoch ms,
+    // the wall-clock convention foundSettlement/collectSettlementYield use,
+    // NOT tickPlots' frame-accumulated countdown: a plot has to survive being
+    // reloaded, and the countdown only advances while you stand in the world.
+    // Nothing reads those timestamps YET — watering advances a stage
+    // immediately, with no real-time growth or cooldown. Growth-rate and
+    // cooldown timing are explicitly out of scope for this wave; the fields
+    // are here so the balance pass has real data to work from.
+    cultivatePlot: (plotId) => {
+      const st = get();
+      const def = PLOT_BY_ID[plotId];
+      if (!def || st.cultivatedPlots[plotId]) return;
+      // field by field, not a spread of `def`: the definition's own display
+      // strings have no business in a save file, and the record's geometry is
+      // only ever read back through PLOT_BY_ID anyway
+      const plot: CultivatedPlot = {
+        id: def.id, kind: def.kind, variant: def.variant,
+        x: def.x, z: def.z, halfX: def.halfX, halfZ: def.halfZ, count: def.count,
+        world: def.world ?? null,
+        stage: 0, plantedAt: Date.now(), lastWateredAt: null,
+      };
+      // stage 0 is nearly bare on purpose — the cluster is the reward for
+      // carrying water to it, not for breaking the ground once
+      const fresh = scatterNodesInRect(
+        { ...def, count: plotNodeCount(def, 0) }, def.world ?? null, st.nodes,
+      );
+      set({
+        cultivatedPlots: { ...st.cultivatedPlots, [plotId]: plot },
+        nodes: [...st.nodes, ...fresh],
+        dirty: true,
+      });
+      audio.play('graze', 0.5);
+      st.notify(`${def.name} is broken and planted — water it to bring it on.`, true);
+    },
+
+    waterPlot: (plotId) => {
+      const st = get();
+      const def = PLOT_BY_ID[plotId];
+      const plot = st.cultivatedPlots[plotId];
+      if (!def || !plot) return;
+      if (plot.stage >= MAX_PLOT_STAGE) {
+        st.notify(`${def.name} has come in full — there is nothing more to draw up.`);
+        return;
+      }
+      if ((st.inventory.water_bucket ?? 0) <= 0) {
+        st.notify('You need a Pail of Water — fill one at the brook.');
+        return;
+      }
+      const stage = plot.stage + 1;
+      // the whole cluster is re-scattered from the plot's own fixed seed
+      // rather than appended to: a fixed seed places the same candidates in
+      // the same order regardless of the target count, so a higher stage is
+      // strictly the same nodes PLUS new ones — and it is byte-identical to
+      // what seedNodes re-derives after a reload, which an append could never
+      // promise (see scatterNodesInRect's own note on the shared stream).
+      const kept = st.nodes.filter((n) => n.ground !== def.id);
+      // ...and a node that survives that re-scatter keeps the state it was
+      // already in — otherwise watering would heal every stump and half-mined
+      // boulder in the plot, i.e. a whole respawn for the price of one pail.
+      const was = new Map(st.nodes.filter((n) => n.ground === def.id).map((n) => [n.id, n]));
+      const grown = scatterNodesInRect(
+        { ...def, count: plotNodeCount(def, stage) }, plot.world ?? null, kept,
+      ).map((n) => {
+        const before = was.get(n.id);
+        return before ? { ...n, hitsLeft: before.hitsLeft, respawnAt: before.respawnAt } : n;
+      });
+      const inv = { ...st.inventory };
+      inv.water_bucket = (inv.water_bucket ?? 0) - 1;
+      set({
+        inventory: inv,
+        cultivatedPlots: {
+          ...st.cultivatedPlots,
+          [plotId]: { ...plot, stage, lastWateredAt: Date.now() },
+        },
+        nodes: [...kept, ...grown],
+        dirty: true,
+      });
+      st.addXp('farming', 10);
+      audio.play('graze', 0.6);
+      st.notify(
+        stage >= MAX_PLOT_STAGE
+          ? `${def.name} has come in full.`
+          : `You water ${def.name} — it thickens (${stage}/${MAX_PLOT_STAGE}).`,
+        stage >= MAX_PLOT_STAGE,
+      );
     },
 
     captureBlueprint: (name, x, z) => {

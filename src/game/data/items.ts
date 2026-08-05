@@ -35,6 +35,9 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   potion_heal: { id: 'potion_heal', name: 'Healing Draught', icon: '🧪' },
   potion_stamina: { id: 'potion_stamina', name: 'Stamina Draught', icon: '⚡' },
   potion_nightvision: { id: 'potion_nightvision', name: 'Night-Vision Brew', icon: '🌙' },
+  // Wave 5: carried, not crafted — a tool-like item in the spirit of the axe,
+  // filled at the brook and spent watering a cultivated plot
+  water_bucket: { id: 'water_bucket', name: 'Pail of Water', icon: '🪣' },
 };
 
 /** foods that can be eaten from the satchel, and the vigour they restore.

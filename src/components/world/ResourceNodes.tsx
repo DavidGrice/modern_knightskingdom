@@ -142,7 +142,19 @@ function FishingSpot({ node: _node }: { node: ResourceNodeState }) {
 }
 
 export default function ResourceNodes() {
-  const nodes = useGameStore((s) => s.nodes);
+  const allNodes = useGameStore((s) => s.nodes);
+  const destination = useGameStore((s) => s.destination);
+  // Wave 5 · instance-separation doctrine, the same filter Buildings.tsx
+  // already applies: a node belongs to wherever it seeded
+  // (ResourceNodeState.world, absent/null = home). Every node was being drawn
+  // and instanced no matter which world the player stood in — and away from
+  // home they were never even interactable (findTarget's destination branch
+  // returns before the node loop), so it was pure cost. Home is unchanged:
+  // nothing at the homestead sets `world`, so this stays true for all of it.
+  const nodes = useMemo(
+    () => allNodes.filter((n) => (n.world ?? null) === (destination ?? null)),
+    [allNodes, destination],
+  );
   const rocks = useMemo(() => nodes.filter((n) => n.kind === 'rock'), [nodes]);
   const fishing = useMemo(() => nodes.filter((n) => n.kind === 'fishing'), [nodes]);
   const { treesByUrl, stumps, herbs } = useMemo(() => {
