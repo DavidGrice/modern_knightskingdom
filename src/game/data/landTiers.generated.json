@@ -1,0 +1,32 @@
+[
+ {
+  "walls": 3,
+  "half": 16,
+  "cost": 0,
+  "name": "Smallholding"
+ },
+ {
+  "walls": 4,
+  "half": 20,
+  "cost": 120,
+  "name": "Freehold"
+ },
+ {
+  "walls": 5,
+  "half": 24,
+  "cost": 320,
+  "name": "Manor"
+ },
+ {
+  "walls": 6,
+  "half": 28,
+  "cost": 700,
+  "name": "Estate"
+ },
+ {
+  "walls": 7,
+  "half": 32,
+  "cost": 1400,
+  "name": "Barony"
+ }
+]

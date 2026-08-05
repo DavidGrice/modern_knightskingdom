@@ -1,0 +1,76 @@
+[
+ {
+  "id": "grove",
+  "name": "The Home Grove",
+  "kind": "tree",
+  "x": 30,
+  "z": 62,
+  "halfX": 16,
+  "halfZ": 10,
+  "tier": 0,
+  "count": 6,
+  "pondShore": true,
+  "lockedHint": "Yours from the first day"
+ },
+ {
+  "id": "northwood",
+  "name": "Northwood Stand",
+  "kind": "tree",
+  "x": -70,
+  "z": 70,
+  "halfX": 18,
+  "halfZ": 16,
+  "tier": 0,
+  "count": 12,
+  "lockedHint": "Yours from the first day"
+ },
+ {
+  "id": "herbmeadow",
+  "name": "The Herb Meadow",
+  "kind": "herb",
+  "x": -5,
+  "z": 90,
+  "halfX": 14,
+  "halfZ": 14,
+  "tier": 0,
+  "count": 7,
+  "lockedHint": "Yours from the first day"
+ },
+ {
+  "id": "quarry",
+  "name": "The Old Quarry",
+  "kind": "rock",
+  "x": 150,
+  "z": 35,
+  "halfX": 14,
+  "halfZ": 16,
+  "tier": 1,
+  "count": 8,
+  "lockedHint": "Quarried under the Freehold deed"
+ },
+ {
+  "id": "ironseam",
+  "name": "The Iron Seam",
+  "kind": "rock",
+  "variant": "iron",
+  "x": 155,
+  "z": 90,
+  "halfX": 14,
+  "halfZ": 12,
+  "tier": 2,
+  "count": 5,
+  "lockedHint": "Dug under the Manor deed"
+ },
+ {
+  "id": "deepwood",
+  "name": "The Deepwood",
+  "kind": "tree",
+  "x": -110,
+  "z": 100,
+  "halfX": 20,
+  "halfZ": 12,
+  "tier": 3,
+  "count": 14,
+  "lockedHint": "Felled under the Barony deed"
+ }
+]

@@ -10,6 +10,7 @@
 // is in it — that is the point — but you cannot work it until the deed covers
 // it. Buying the Freehold hands you the quarry; the Manor, the iron seam.
 import { LAND_TIERS } from './buildables';
+import GROUNDS_DATA from './grounds.generated.json';
 
 /**
  * Empire arc, Wave 5 · the rectangle a resource cluster seeds inside, split
@@ -72,76 +73,15 @@ export interface Ground extends RectSection {
 // sits south-east; every "tree" ground (Home Grove, Northwood Stand,
 // Deepwood) sits south, from SE through SW. Net: every ground south of the
 // equator, north completely clear.
-export const GROUNDS: Ground[] = [
-  {
-    // east of the road and north of the pond (52, 42, r8) — the first wood
-    // you meet, and the walk to it passes the water. Unchanged: this is not
-    // one of the "clustered north" grounds, and the flavour text above
-    // depends on the pond-side spot specifically.
-    id: 'grove', name: 'The Home Grove', kind: 'tree',
-    x: 30, z: 62, halfX: 16, halfZ: 10, tier: 0, count: 6, pondShore: true,
-    lockedHint: 'Yours from the first day',
-  },
-  {
-    // moved from due west to south-west — the one direction the SW cluster
-    // (signpost, starter village, road) left nothing standing in. Far enough
-    // out on both axes to clear all three: west of the road's own western
-    // end (x -38.4) and south of Beda's hut (z 44) with room either way.
-    id: 'northwood', name: 'Northwood Stand', kind: 'tree',
-    x: -70, z: 70, halfX: 18, halfZ: 16, tier: 0, count: 12,
-    lockedHint: 'Yours from the first day',
-  },
-  {
-    // moved from north-west to due south — the only direction with nothing
-    // in it at all until now; well clear of the road's own southward branch
-    // (out to z 64) and of the Home Grove's own south-east corner.
-    id: 'herbmeadow', name: 'The Herb Meadow', kind: 'herb',
-    x: -5, z: 90, halfX: 14, halfZ: 14, tier: 0, count: 7,
-    lockedHint: 'Yours from the first day',
-  },
-  {
-    // Requested 2026-08-03, then pushed further east the same day: the
-    // first (85, 45) spot put its own box (x:[71,99], z:[29,61]) directly
-    // across the brook's line from the pond to the spring (Terrain.tsx's
-    // Stream, (58.5,45)->(140,68)) — the brook's z rises with x along that
-    // whole span, and 71-99 sat right in the middle of it, so the fence and
-    // any seeded boulders visibly crossed the water. Moved past the
-    // spring's own endpoint (x=140) entirely, so the brook (which only
-    // exists between those two x values) can't cross this box at all: at
-    // this box's one sliver of shared x-range with the brook (136-140) the
-    // brook's own z is 66.9-68, well above this box's z-max of 51. Also
-    // clear of the Home Grove (dx 120 vs halfX sum 30) and the pond
-    // (nearest point (136,42), 84 units off, nowhere close to its ~9.6
-    // radius+sand-ring).
-    id: 'quarry', name: 'The Old Quarry', kind: 'rock',
-    x: 150, z: 35, halfX: 14, halfZ: 16, tier: 1, count: 8,
-    lockedHint: 'Quarried under the Freehold deed',
-  },
-  {
-    // Requested 2026-08-03, pushed east alongside the Old Quarry (see its
-    // own comment) rather than left at (100, 90) — this box (x:[141,169])
-    // only just clears Old Quarry's new one (x:[136,164]) on X (dx 5 <
-    // halfX sum 28), so the real separation is on Z instead (dz 55 vs
-    // halfZ sum 28, clears easily). Checked clear of the homestead (x 141 -
-    // halfX 14 = 127, well past the 40 line) and stays inside seedNodes'
-    // own WORLD_HALF-20 node-placement bound (outer edge ~166.8).
-    id: 'ironseam', name: 'The Iron Seam', kind: 'rock', variant: 'iron',
-    x: 155, z: 90, halfX: 14, halfZ: 12, tier: 2, count: 5,
-    lockedHint: 'Dug under the Manor deed',
-  },
-  {
-    // Requested 2026-08-03: moved from due north (0, -70) into the
-    // south-west, further out past Northwood Stand — every "tree" ground
-    // now sits south of the equator (Home Grove SE, Northwood Stand SW,
-    // Deepwood further SW still), and the north side is kept completely
-    // free for the kingdom's own future expansion rather than fenced off
-    // by a resource ground. Checked clear of Northwood Stand (dx 40 vs
-    // halfX sum 38) and of the homestead (x 110 - halfX 20 = 90).
-    id: 'deepwood', name: 'The Deepwood', kind: 'tree',
-    x: -110, z: 100, halfX: 20, halfZ: 12, tier: 3, count: 14,
-    lockedHint: 'Felled under the Barony deed',
-  },
-];
+// Wave 6 · the entries themselves (position/size/count per ground) now live
+// in grounds.generated.json, editable live at /secret/worldeditor instead of
+// by hand — every per-entry siting rationale quoted in this comment block
+// up to 2026-08-05 is preserved in git history (this file's own log) rather
+// than carried forward into JSON, which has no comment syntax. The editor's
+// own live overlap/clearance/road-crossing checks (the same sectionsOverlap/
+// clearsHomestead below, plus Grounds.tsx's road-tile check) are the
+// replacement for "read the siting comment before moving anything."
+export const GROUNDS = GROUNDS_DATA as unknown as Ground[];
 
 /**
  * L70 · Every ground must clear the homestead, and each other. The first

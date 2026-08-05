@@ -3908,24 +3908,65 @@ was forgotten.
   pre-flipped") — worth keeping in mind if a future report specifically
   calls out a tree, banner, or other flat billboard prop looking wrong.
 
-  **[TODO] Requested 2026-08-04, planned but not started: a hidden
-  homestead/world editor for hand-tuning map generation.** A dedicated,
-  non-public route (e.g. `/secret/worldeditor`) for customizing: the
-  resource-node spawn layer (grounds.ts's rectangular sections — kind,
-  position, half-extents, count — currently hardcoded and hand-computed
-  by hand-checking overlap math in comments, exactly the kind of thing an
-  editor with live overlap/bounds visualization would make far less
-  error-prone, see the two live-found node-seeding bugs this same day) and
-  the homestead's own min/max build-square sizing per land tier (currently
-  `LAND_TIERS` in buildables.ts, a fixed array with no visual editing at
-  all). Flagged explicitly by the user as "a major overhaul" — this is a
-  real, separate feature (an authoring tool, not a player-facing one) that
-  needs its own design pass before implementation: what state it edits live
-  vs. writes back to source, how changes get from the hidden editor into
-  the actual `grounds.ts`/`buildables.ts` data (hand-copy printed values?
-  a save/export button that generates the TS?), and whether it needs its
-  own auth gate beyond just an obscure URL. Not designed or built yet —
-  logged per the user's own explicit "just add it to the roadmap" ask.
+  [COMPLETE] ✅ **Hidden homestead/world editor — SHIPPED 2026-08-05 as Wave 6 of the
+  full-ROADMAP wave plan.** Answers this entry's own open design questions directly:
+  - **What state it edits, and where it's written**: `GROUNDS` (grounds.ts), `LAND_TIERS`
+    (buildables.ts), and Wave 5's `CULTIVATED_PLOTS` (cultivatedPlots.ts) all moved off
+    hand-written TS array literals onto `grounds.generated.json` / `landTiers.generated.json` /
+    `cultivatedPlots.generated.json`, imported with the SAME `import X from './y.generated.json'`
+    + `as unknown as T[]` idiom `bricks.generated.json` already used in two other files — a pure,
+    behavior-free source swap verified two ways: a standalone script confirmed the new JSON is
+    field-for-field identical to the original literals before the swap landed, and every one of
+    `grounds.ts`'s own exported helpers (`GROUND_BY_ID`, `groundAt`, `groundOpen`, `deedName`,
+    `sectionsOverlap`, `clearsHomestead`) — plus `cultivatedPlots.ts`'s (`PLOT_BY_ID`,
+    `plotNodeCount`, `plotStakeAt`) and `buildables.ts`'s (`landHalf`, `BUILD_REGION`,
+    `activeBuildRegion`) — is untouched, because none of them ever cared whether the array came
+    from a literal or an import. The hand-written siting-rationale comments each entry used to
+    carry (why THIS box, checked clear of what) don't survive the move to JSON, which has no
+    comment syntax — a real, deliberate tradeoff, preserved in this repo's git history rather than
+    silently lost, and replaced by the editor's own LIVE checks below instead of "read the comment
+    before moving anything."
+  - **The editor itself**: `/secret/worldeditor` (a real page, `src/app/secret/worldeditor/`) —
+    tabbed forms for all three tables, plus one shared live top-down SVG preview showing every
+    ground and cultivated plot (solid vs. dashed border), the homestead's nested land-tier
+    squares, the road, the pond/brook, and the starter-village clear zones. The preview runs the
+    exact three checks that used to only fire as a `console.warn` at dev-server-start —
+    `sectionsOverlap`/`clearsHomestead` (grounds.ts) and the road-crossing check (Grounds.tsx) —
+    LIVE against whatever is currently typed, before Save, plus a new world-edge-proximity check
+    (the exact class of bug `scatterNodesInRect` hit twice: a box too close to `WORLD_HALF` that
+    silently starves its own node seeding). A "Save `<table>`" button POSTs to a new API route
+    that re-validates the payload shape server-side and writes straight to the matching
+    `*.generated.json` — Next's dev server picks up the change with no restart needed.
+  - **The auth gate — a real, evidence-based deviation from what this entry originally assumed
+    it would need.** Before building, checked `src/lib/server/session.ts`/`db.ts` for what a
+    hardcoded user-id allow-list would actually be checking against, and found `package.json`'s
+    own `predev` script — `node -e "require('fs').rmSync('data',{recursive:true,force:true})"` —
+    **deletes every local account on every single `npm run dev` restart.** A hardcoded allow-list
+    would invalidate itself the next time anyone restarted the dev server — a real footgun, not a
+    hypothetical one. Gated on `process.env.NODE_ENV !== 'production'` alone instead (both the
+    page — a server component, so a client-side hide can't ship the bundle to anyone who asks —
+    and the save/data API routes independently, each re-checking rather than trusting the page's
+    own gate), the same proven dev-only idiom this codebase already uses in five other places
+    (grounds.ts, cultivatedPlots.ts, Grounds.tsx, buildables.ts, navTerrain.ts). `getSessionUserId()`
+    is still read and shown ("Editing as: …") for a human-readable audit trail, but never
+    consulted to decide whether a request is allowed.
+  - **Verified live, including the actual production gate, not just inferred from the code**: the
+    production `next build` itself statically prerenders `/secret/worldeditor` at build time
+    (`NODE_ENV` is `'production'` during a real build), which means `notFound()` fires once at
+    BUILD time and the shipped static output IS the 404 page — a stronger guarantee than a
+    per-request check. Confirmed directly by actually running `next start` against a real
+    production build: `/secret/worldeditor`, `/api/worldeditor/data`, and `/api/worldeditor/save`
+    all returned real `404`s while the homepage served `200` normally. In dev mode: loaded the
+    editor and confirmed all three tables show the real on-disk counts (6 grounds, 2 plots, 5
+    tiers); edited a ground's `x` to collide with another and watched a real warning appear
+    (`"The Home Grove overlaps Northwood Stand"`), then reverted it and watched the warning clear;
+    nudged Deepwood's `count` 14→15, saved, confirmed `grounds.generated.json` actually changed on
+    disk, then reverted and saved again, confirming the file was byte-identical to its pre-test
+    state afterward; confirmed the save route rejects a malformed payload with a real `400`; and
+    — the actual regression risk of a "move the data source" refactor — booted the game itself
+    guest-login through to the homestead post-swap and confirmed the homestead's grounds/plots
+    still render with zero console/page errors (59 runtime nodes, matching the pre-Wave-6
+    baseline exactly). `npm run verify` clean throughout.
 
   [COMPLETE] ✅ **Cultivatable resource nodes — SHIPPED 2026-08-05 as Wave 5 of the full-ROADMAP
   wave plan.** Standalone (does not depend on Waves 3/4's settlement work). Two hand-authored,

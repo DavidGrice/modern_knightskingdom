@@ -13,6 +13,7 @@
 // and the dev assertion at the foot of this file).
 import type { CultivatedPlot } from '../types';
 import { GROUNDS, clearsHomestead, sectionsOverlap } from './grounds';
+import CULTIVATED_PLOTS_DATA from './cultivatedPlots.generated.json';
 
 export interface CultivatedPlotDef extends CultivatedPlot {
   /** shown on the plot's own stake (Grounds.tsx) and in its interact prompt */
@@ -27,39 +28,14 @@ export const MAX_PLOT_STAGE = 4;
 // `stage`/`plantedAt`/`lastWateredAt` below are placeholders: a definition is
 // not a planted plot. cultivatePlot() copies the definition into
 // `st.cultivatedPlots` with the real values, and only that record is saved.
-export const CULTIVATED_PLOTS: CultivatedPlotDef[] = [
-  {
-    // South-east of the holding, in the open grass south of the Home Grove
-    // (its fence ends at z 72; this box starts at 81, nine metres clear).
-    // Clear of the fully-bought homestead on both axes (its west edge sits
-    // exactly on the 40m clearance line, its north edge 41m past it), 41m from
-    // the pond's centre — comfortably outside the scatter's own shore ring
-    // (POND.radius + 20), the gate that silently zeroed Old Quarry's seeding
-    // twice — 35m off the brook's line and 23m clear of the Keep's interior
-    // footprint at (85, 85).
-    // `count` is 6, not more: herb patches hold each other 7m apart (see
-    // scatterNodesInRect's `sep`), so a box this size physically cannot fit a
-    // richer patch — asking for 8 here just made the retry budget run out and
-    // the plot silently top out at three, the same failure class again. 6 is
-    // what it actually fills to, verified by replaying the real scatter.
-    id: 'physic_garden', name: 'The Physic Garden', kind: 'herb',
-    x: 48, z: 90, halfX: 8, halfZ: 9, count: 6,
-    plantHint: 'Break the ground and set herb cuttings',
-    stage: 0, plantedAt: 0, lastWateredAt: null,
-  },
-  {
-    // South-west, in the wedge between the road's northward branch (the
-    // carriageway runs up x -12.8; this box stops at x -22, and Grounds.tsx's
-    // own road assertion — halfX + ROAD_TILE/2 — clears it with 2.8m to
-    // spare) and Northwood Stand (dx 40 vs a halfX sum of 26). Clears the
-    // starter village by 7.5m at its nearest corner and the fully-bought
-    // homestead on Z. Deliberately the plot you pass on the way in and out.
-    id: 'orchard', name: 'The Orchard Rows', kind: 'tree',
-    x: -30, z: 62, halfX: 8, halfZ: 6, count: 9,
-    plantHint: 'Break the ground and set saplings',
-    stage: 0, plantedAt: 0, lastWateredAt: null,
-  },
-];
+//
+// Wave 6 · entries edited live at /secret/worldeditor, source in
+// cultivatedPlots.generated.json — the siting rationale each entry used to
+// carry inline (clearance off the homestead/other sections/road/pond/brook/
+// starter village, and the physic_garden `count` bug this comment used to
+// describe) is preserved in git history rather than JSON, which has no
+// comment syntax; the editor's own live checks are the replacement.
+export const CULTIVATED_PLOTS = CULTIVATED_PLOTS_DATA as unknown as CultivatedPlotDef[];
 
 export const PLOT_BY_ID: Record<string, CultivatedPlotDef> = Object.fromEntries(
   CULTIVATED_PLOTS.map((p) => [p.id, p]),
