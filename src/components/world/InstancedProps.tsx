@@ -73,6 +73,21 @@ function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boole
   }, [scene, targetHeight, selfLit]);
 }
 
+/** Smallest buffer any instanced prop reserves. Every real group in the game
+ *  (a ground's trees, a meadow's herbs) sits well under this, so ordinary play
+ *  — including planting and watering a whole cultivated plot — never crosses a
+ *  bucket boundary at all. 32 instances is ~2.4KB of matrix+color data. */
+const MIN_CAPACITY = 32;
+
+/** Round a required instance count up to a coarse power-of-two bucket. The
+ *  point is that the number changes as rarely as possible: see the capacity
+ *  comment in InstancedProp for why every change costs a remount. */
+function capacityFor(needed: number): number {
+  let cap = MIN_CAPACITY;
+  while (cap < needed) cap *= 2;
+  return cap;
+}
+
 export interface InstancedNode {
   key: string;
   x: number;
@@ -112,12 +127,36 @@ export function InstancedProp({
   // renders — reproducible on herbs specifically because they're the one
   // node kind actually cycling through harvest+respawn during normal play
   // in the areas this was checked, not because anything about them differs
-  // in code. Fixed at the source instead of guessing per-consumer: track
-  // the highest count this instance has ever needed and never shrink the
-  // limit back down, so a full grove/meadow's worth of capacity, once
-  // reserved, stays reserved.
-  const maxSeen = useRef(0);
-  maxSeen.current = Math.max(maxSeen.current, nodes.length);
+  // in code.
+  //
+  // The first fix here was a high-water mark (`maxSeen`) fed straight into
+  // `limit`. That is only half right, and the missing half became a real,
+  // user-visible bug the moment Wave 5 shipped the first code that GROWS the
+  // node list at runtime (cultivatePlot/waterPlot in gameStore.ts): drei
+  // allocates its instanceMatrix/instanceColor Float32Arrays exactly once,
+  // in a `useState` initialiser, from the `limit` it was MOUNTED with. A
+  // later `limit` prop only feeds the per-frame `count = Math.min(limit,
+  // instances.length)` it writes into the mesh and into the attribute's
+  // updateRange — so raising it past the mount-time size asks the GPU upload
+  // for more data than the buffer holds. Measured: planting the Orchard took
+  // the tree meshes to count 24 with capacity 19, every frame emitting
+  // "WebGL: INVALID_VALUE: bufferSubData: srcOffset + length too large", and
+  // the plot's nine trees simply never drew until something forced a
+  // remount. (Per the Firefox note above, expect that browser to reject the
+  // draw outright rather than tolerate it.)
+  //
+  // So capacity is now quantised into coarse buckets and carried in the
+  // <Instances> key: within a bucket the limit is constant, which is all
+  // drei's mount-once allocation actually requires; crossing one remounts
+  // the mesh so the arrays are re-allocated at the new size. Buckets are
+  // deliberately generous (see MIN_CAPACITY) so the remount is the rare
+  // escape hatch and not something normal play ever triggers — planting and
+  // watering a plot to full moves trees 19 -> 24 and herbs 7 -> 13, both
+  // inside the same first bucket, so nothing remounts. Monotonic, so the
+  // never-shrink property the Firefox fix depended on still holds.
+  const capacityRef = useRef(0);
+  if (nodes.length > capacityRef.current) capacityRef.current = capacityFor(nodes.length);
+  const capacity = capacityRef.current;
   // Reported 2026-07-30: self-lit props (herb patches) stayed at full
   // brightness through dark, rainy weather — the fixed intensity above was
   // tuned to be subtle against FULL daylight ambient, but never dims back
@@ -139,12 +178,15 @@ export function InstancedProp({
     <>
       {subMeshes.map((sm, i) => (
         <Instances
-          key={i}
+          // `capacity` is part of the key on purpose — see the capacity
+          // comment above. Growing it has to remount, because drei sizes its
+          // buffers from the mount-time `limit` and never again.
+          key={`${i}:${capacity}`}
           geometry={sm.geometry}
           material={sm.material}
           castShadow
           receiveShadow
-          limit={maxSeen.current}
+          limit={capacity}
           // Requested 2026-08-03: three.js frustum-culls an InstancedMesh
           // against its GEOMETRY's own bounding sphere — the single small
           // prop's local size, positioned at this mesh's own origin — with

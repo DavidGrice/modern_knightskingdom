@@ -9,7 +9,7 @@ import { useGameStore, TAX_COOLDOWN_MS } from '@/game/store/gameStore';
 import { LAND_TIERS, BUILDABLE_BY_ID, heightOf, labAssetId, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
-  EYE_HEIGHT, FISHING_DOCK, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
+  BROOK, EYE_HEIGHT, FISHING_DOCK, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
   POND, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
 } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
@@ -37,6 +37,7 @@ import { destinationGroundY } from '../world/TemplateWorld';
 import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labOccupyMode } from '@/game/data/labCapabilities';
 import { aimState, resolveAim } from '@/game/targeting';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
+import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { KIND_LABEL, maxHpOf, type EnemyKind } from '@/game/combat';
@@ -48,7 +49,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot';
   station?: string;
 }
 
@@ -604,6 +605,45 @@ export default function PlayerController() {
       }
     }
 
+    // Wave 5 · cultivated plots. Same static-table shape as the boundary
+    // stones above (these are hand-authored data, not PlacedBuildings), and
+    // the same homestead-facing stake position, so the prompt appears exactly
+    // where the stake you can see stands. Home-only for free: the destination
+    // branch at the top of findTarget returns long before this line.
+    for (const def of CULTIVATED_PLOTS) {
+      const stake = plotStakeAt(def);
+      const live = st.cultivatedPlots[def.id];
+      if (!live) {
+        consider(stake.x, stake.z, 1.2, {
+          id: def.id, kind: 'plant_plot', duration: 1.2, actionable: true,
+          label: `${def.name} — ${def.plantHint}`,
+        });
+        continue;
+      }
+      const full = live.stage >= MAX_PLOT_STAGE;
+      const pails = st.inventory.water_bucket ?? 0;
+      consider(stake.x, stake.z, 1.2, {
+        id: def.id, kind: 'water_plot', duration: 1, actionable: !full && pails > 0,
+        label: full ? `${def.name} — come in full`
+          : pails > 0 ? `Water ${def.name} (${live.stage}/${MAX_PLOT_STAGE})`
+          : `${def.name} is thirsty — fill a pail at the brook`,
+      });
+    }
+
+    // Wave 5 · fill a pail anywhere along the brook, not at one magic plank —
+    // the same trick the pond-edge fishing cast above uses, fed the player's
+    // own nearest point on the brook's line instead of the pond's circle.
+    {
+      const bdx = BROOK.endX - BROOK.startX;
+      const bdz = BROOK.endZ - BROOK.startZ;
+      const len2 = bdx * bdx + bdz * bdz;
+      const tt = Math.max(0, Math.min(1, ((p.x - BROOK.startX) * bdx + (p.z - BROOK.startZ) * bdz) / len2));
+      consider(BROOK.startX + tt * bdx, BROOK.startZ + tt * bdz, 0.4, {
+        id: 'brook', kind: 'draw_water', duration: 0.8, actionable: true,
+        label: 'Fill a Pail of Water',
+      });
+    }
+
     // M · the workshop. A workbench with nothing on it opens the set list;
     // one with a set laid out takes the work, a piece per hold.
     for (const b of st.buildings) {
@@ -906,6 +946,18 @@ export default function PlayerController() {
       st.placeSetPart();
     } else if (t.kind === 'buy_ground') {
       st.buyLand();
+    } else if (t.kind === 'draw_water') {
+      // no vessel to craft and nothing to spend: the walk to the water IS the
+      // cost this wave (see ROADMAP — a real bucket item/animation is later)
+      st.addItems({ water_bucket: 1 }, 'grant');
+      // no water sample in the extracted bank (see lib/audio's SOUNDS) — the
+      // soft 'graze' is what plantPlot already borrows for the same reason
+      audio.play('graze', 0.5);
+      st.notify('You fill a pail from the brook.');
+    } else if (t.kind === 'plant_plot') {
+      st.cultivatePlot(t.id);
+    } else if (t.kind === 'water_plot') {
+      st.waterPlot(t.id);
     } else if (t.kind === 'keep_socket') {
       st.openKeepSocket(t.id);
     } else if (t.kind === 'keep_work') {

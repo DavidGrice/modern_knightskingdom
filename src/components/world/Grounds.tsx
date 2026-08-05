@@ -7,7 +7,8 @@
 // and a boundary stone at the near edge carrying its name.
 import { useMemo } from 'react';
 import { Billboard, Text } from '@react-three/drei';
-import { GROUNDS, groundOpen, type Ground } from '@/game/data/grounds';
+import { GROUNDS, groundOpen, type RectSection } from '@/game/data/grounds';
+import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
 import { ROAD_TILE, routeCells } from '@/game/data/road';
 import { useGameStore } from '@/game/store/gameStore';
 import { deedName } from '@/game/data/grounds';
@@ -30,7 +31,10 @@ const LOCKED_TINT = '#7e8ba0'; // multiply-darkened, cool slate — "not yet"
 // this is checked rather than remembered.
 if (process.env.NODE_ENV !== 'production') {
   const half = ROAD_TILE / 2;
-  for (const g of GROUNDS) {
+  // Wave 5: cultivated plots are held to the same check — the Orchard Rows
+  // sit deliberately close to the road's northward branch, which is exactly
+  // the kind of position that stops being fine the moment either moves.
+  for (const g of [...GROUNDS, ...CULTIVATED_PLOTS]) {
     for (const [cx, cz] of routeCells()) {
       const rx = cx * ROAD_TILE;
       const rz = cz * ROAD_TILE;
@@ -48,7 +52,7 @@ if (process.env.NODE_ENV !== 'production') {
 // is for player-placed pieces). Local to the ground's own centre; the caller
 // adds g.x/g.z to land in world space, matching how the single shared
 // <InstancedProp> below expects its node list.
-function fencePosts(g: Ground): { x: number; z: number; yaw: number }[] {
+function fencePosts(g: RectSection): { x: number; z: number; yaw: number }[] {
   const posts: { x: number; z: number; yaw: number }[] = [];
   const addRun = (length: number, along: 'x' | 'z', offset: number, sign: 1 | -1) => {
     const count = Math.max(1, Math.round(length / FENCE_LENGTH));
@@ -71,12 +75,15 @@ function fencePosts(g: Ground): { x: number; z: number; yaw: number }[] {
 export default function Grounds() {
   const landTier = useGameStore((s) => s.landTier);
   const destination = useGameStore((s) => s.destination);
+  const cultivatedPlots = useGameStore((s) => s.cultivatedPlots);
   // grounds belong to the homestead map; a template world has its own country
   const rings = useMemo(() => GROUNDS.map((g) => ({ g, open: groundOpen(g, landTier) })), [landTier]);
 
   // one shared InstancedProp call for every ground's fence, rather than one
   // per ground — same reasoning as ResourceNodes.tsx's TreeGroup: a single
-  // draw call per sub-mesh beats N separate ones once the count grows
+  // draw call per sub-mesh beats N separate ones once the count grows.
+  // Wave 5's cultivated plots join the same run: an unplanted plot's fence is
+  // drawn in the "not yours yet" slate so it reads as ground waiting on work.
   const fenceNodes: InstancedNode[] = useMemo(() => {
     const out: InstancedNode[] = [];
     for (const { g, open } of rings) {
@@ -85,8 +92,15 @@ export default function Grounds() {
         out.push({ key: `${g.id}_f${i}`, x: g.x + p.x, z: g.z + p.z, yaw: p.yaw, scale: 1, color: tint });
       });
     }
+    for (const def of CULTIVATED_PLOTS) {
+      if ((def.world ?? null) !== null) continue; // homestead plots only
+      const tint = cultivatedPlots[def.id] ? OPEN_TINT : LOCKED_TINT;
+      fencePosts(def).forEach((p, i) => {
+        out.push({ key: `${def.id}_f${i}`, x: def.x + p.x, z: def.z + p.z, yaw: p.yaw, scale: 1, color: tint });
+      });
+    }
     return out;
-  }, [rings]);
+  }, [rings, cultivatedPlots]);
 
   if (destination) return null;
 
@@ -113,6 +127,30 @@ export default function Grounds() {
           </Billboard>
         </group>
       ))}
+      {/* Wave 5 · a plot's own stake, on the same homestead-facing edge and
+          at the same spot its plant/water interaction sits (plotStakeAt) */}
+      {CULTIVATED_PLOTS.filter((def) => (def.world ?? null) === null).map((def) => {
+        const live = cultivatedPlots[def.id];
+        const stake = plotStakeAt(def);
+        return (
+          <group key={def.id} position={[stake.x, 0, stake.z]}>
+            <mesh position-y={0.5} castShadow>
+              <cylinderGeometry args={[0.07, 0.09, 1, 6]} />
+              <meshStandardMaterial color={live ? '#8a6234' : '#6f747c'} roughness={1} />
+            </mesh>
+            <Billboard position={[0, 1.6, 0]}>
+              <Text fontSize={0.3} color={live ? '#d9f0c0' : '#b9c2d0'} anchorX="center" outlineWidth={0.02} outlineColor="#1a1a1f">
+                {def.name}
+              </Text>
+              <Text position={[0, -0.34, 0]} fontSize={0.2} color="#8f9aab" anchorX="center" outlineWidth={0.015} outlineColor="#1a1a1f">
+                {live
+                  ? (live.stage >= MAX_PLOT_STAGE ? 'come in full' : `watered ${live.stage}/${MAX_PLOT_STAGE}`)
+                  : 'unbroken ground'}
+              </Text>
+            </Billboard>
+          </group>
+        );
+      })}
     </group>
   );
 }

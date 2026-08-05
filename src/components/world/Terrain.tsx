@@ -3,7 +3,7 @@ import { Suspense, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
-import { WORLD_HALF, POND } from '@/game/data/world';
+import { WORLD_HALF, POND, BROOK } from '@/game/data/world';
 import { BUILD_REGION, landHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
@@ -234,9 +234,10 @@ function Stream() {
     return t;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // from the pond's northeast edge out to the spring mound
-  const ax = POND.x + 6.5, az = POND.z + 3;   // pond-edge end
-  const bx = 140, bz = 68;                     // spring end
+  // from the pond's northeast edge out to the spring mound (data/world.ts's
+  // BROOK — shared with the pail-filling interact since Wave 5)
+  const ax = BROOK.startX, az = BROOK.startZ;
+  const bx = BROOK.endX, bz = BROOK.endZ;
   const dx = bx - ax, dz = bz - az;
   const len = Math.hypot(dx, dz);
   // plane length runs along local -Z once laid flat; the group yaw that

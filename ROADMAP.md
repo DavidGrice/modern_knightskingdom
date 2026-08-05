@@ -3927,42 +3927,71 @@ was forgotten.
   own auth gate beyond just an obscure URL. Not designed or built yet —
   logged per the user's own explicit "just add it to the roadmap" ask.
 
-  **[TODO] Scoped 2026-08-04, not designed in detail or built: cultivatable
-  resource nodes ("build your own quarry/mining pit, forest, or flower
-  garden") — ties directly into the world editor above.** The player's
-  request: instead of only ever working the 6 fixed `GROUNDS` sections,
-  let them CLAIM a plot (within their own expanding build region, or a new
-  adjacent "cultivation" zone) and plant a new resource cluster there —
-  rock, tree, or flower — that starts sparse/empty and grows over real
-  playtime, sped up by carrying water from the pond/stream and tending it.
-  Rough shape, not a spec:
-  - A cultivated plot is the SAME underlying shape `GROUNDS` already uses
-    (kind, position, half-extents, count) plus new per-plot state: a
-    growth stage (0 = just cleared, through however many stages a
-    tree/flower/rock-vein needs) and a "last watered" timestamp feeding a
-    growth-rate multiplier. `seedNodes()` (gameStore.ts) already knows how
-    to scatter a kind of node inside a rectangle without overlapping the
-    homestead/pond/starter-village/other grounds — the same placement
-    logic a player-claimed plot needs, just triggered by a build action
-    instead of once at new-game setup.
-  - Watering: a new "carry water" interaction at the pond/stream (a
-    bucket/skin item?), spent on a nearby cultivated plot to advance its
-    growth timer faster than passive time alone would.
-  - This is exactly where the world editor stops being "just for grounds.ts
-    and buildables.ts" and becomes load-bearing for a real player-facing
-    system: the editor is the natural place to author/preview a cultivated
-    plot's growth-stage models and tune growth/watering rates LIVE against
-    a real rendered preview, instead of hand-guessing constants and
-    discovering the same class of silent-rejection bug this session hit
-    twice in `seedNodes()`'s own hardcoded gates. Whatever data shape the
-    editor ends up reading/writing for the 6 fixed grounds should be the
-    SAME shape a claimed cultivation plot uses, not a second parallel
-    system.
-  - Explicitly not scoped here: exact growth-stage counts/timings, the
-    watering item/interaction's own mechanics, UI for claiming a plot, or
-    how (if at all) this interacts with the land-tier deed system the
-    fixed 6 grounds already use. Real design work, not implementation,
-    is the next step whenever this gets picked up.
+  [COMPLETE] ✅ **Cultivatable resource nodes — SHIPPED 2026-08-05 as Wave 5 of the full-ROADMAP
+  wave plan.** Standalone (does not depend on Waves 3/4's settlement work). Two hand-authored,
+  homestead-only plots — **The Orchard Rows** (tree, 9-node cap) and **The Physic Garden** (herb,
+  6-node cap, sized down from an original 8 after a real replay showed herb's 7m separation
+  physically can't fit more in that box) — start nearly bare and thicken a stage at a time
+  (0-4, `MAX_PLOT_STAGE`) as the player fills a Pail of Water at the brook and pours it on:
+  - `Ground`'s rectangle fields (`kind/variant/x/z/halfX/halfZ/count`) were split into a shared
+    `RectSection` (`grounds.ts`); `Ground` and the new `CultivatedPlot` (`types.ts`, +`stage`/
+    `plantedAt`/`lastWateredAt`, wall-clock epoch-ms like `settlements`, not `plots`' frame-ticked
+    countdown — deliberate, since a plot has to survive a reload) both extend it.
+  - `seedNodes()`'s per-ground scatter loop was extracted into standalone `scatterNodesInRect()`
+    (`gameStore.ts`), reused by both the original 6 grounds AND the new `cultivatePlot()`/
+    `waterPlot()` actions — one scatter implementation, not two. `ResourceNodeState` gained `world`
+    and `ResourceNodes.tsx` now applies the exact `(n.world ?? null) === (destination ?? null)`
+    filter `Buildings.tsx` already established — closing a real, confirmed-by-reading standing perf
+    gap (every node rendered/instanced regardless of where the player stood).
+  - New "fill a pail" interaction anywhere along the brook (`world.ts`'s new exported `BROOK`,
+    lifted out of `Terrain.tsx`'s local consts so the drawn strip and the interact point can't
+    drift), a new `water_bucket` item, and plant/water interactions at each plot's own stake —
+    all through the ordinary `Target`/`consider()`/dispatch pattern, no new harvest code needed
+    (a grown node is an ordinary `kind`-generic `ResourceNodeState`, chopped/mined/foraged through
+    the ordinary path unchanged).
+  - `st.nodes` was confirmed (by reading `GameState`/`SaveGame`) to be fully runtime/non-persisted,
+    regenerated from scratch on every `seedNodes()` call (new game, load, `buyLand()`) — so plot
+    growth genuinely persists as `stage`/`plantedAt`/`lastWateredAt` on `SaveGame.cultivatedPlots`,
+    and the live node cluster is *re-derived* from that each time, never itself saved. Verified this
+    round-trips exactly: watering a plot live to stage 4 produces node-for-node identical output
+    (id/x/z/scale/yaw/model/world, 6 decimal places) to what `seedNodes()` re-derives from a real
+    page reload.
+
+  **A real, latent rendering bug was found and fixed along the way, not just this feature's own
+  bug.** First live verification pass found planting/watering a plot silently drew nothing: 257
+  `WebGL: INVALID_VALUE: bufferSubData: srcOffset + length too large` console warnings fired the
+  instant `cultivatePlot()` ran, and the plot's new trees/herbs never appeared on screen at all
+  (confirmed via matched-camera screenshots and raw `instanceMatrix` decode — 0/9 and 0/6 drawn).
+  Root cause, read directly out of the installed `@react-three/drei` source: `<Instances limit={…}>`
+  allocates its `instanceMatrix`/`instanceColor` buffers exactly once, in a `useState` initializer,
+  from whatever `limit` it was MOUNTED with — a later `limit` prop only feeds the per-frame
+  `updateRange`, so raising it past the mount-time size uploads more data than the buffer holds.
+  `InstancedProps.tsx`'s existing high-water-mark ref (added 2026-07-28 for a *different*, Firefox
+  shrink-then-regrow bug) fed that growing number straight into `limit` — correct for never
+  shrinking, silently wrong for ever growing past the mount size. Wave 5 is the first code in the
+  project that grows `st.nodes` at runtime, which is why this had never fired before. **Fixed at the
+  root** in `InstancedProps.tsx`: capacity is now quantized into coarse power-of-two buckets
+  (`MIN_CAPACITY = 32`) carried in the `<Instances>` React key — constant within a bucket (all
+  drei's mount-once allocation needs), and a bucket crossing forces a clean remount that
+  re-allocates at the new size (verified the shared sub-mesh geometry/material survive that remount
+  by reading R3F's own `removeChild`). Buckets are sized so ordinary play — planting and watering
+  both plots to full moves trees 19→24 and herbs 7→13 — never remounts at all. Verified with a real
+  negative control: temporarily reverting the fix reproduced the exact original failure
+  (`glErrs: [1281 INVALID_VALUE, 1282 INVALID_OPERATION]`, 0/9 and 0/6 drawn) against the identical
+  script; restoring the fix cleared it (`glErrs: []`, 9/9 and 6/6 drawn) — so the fix is causally
+  responsible, not coincidental.
+
+  Verified live end-to-end through the real interact path (real prompts, real held-E, no direct
+  action calls except for setup): brook fill → pail granted; plant → stage-0 cluster (2 orchard
+  trees) appears at the exact authored rect; four waterings → stages 1-4, node counts 2→4→5→7→9,
+  each stage a strict superset of the last (surviving nodes keep their `x/z`, never move); refused
+  cleanly with no pail and refused again cleanly at stage 4 ("come in full") without spending a pail
+  either time; a harvested node's `hitsLeft`/`respawnAt` survives a later watering (no free respawn).
+  Destination filter confirmed genuinely filtering and reversible (retagging all nodes to a fake
+  world and back dropped and restored the exact right instance/mesh counts). A real page reload
+  round-trip (not just `toSave()`/`loadFromSave()` in-memory) confirmed both plots restore at their
+  planted stage with zero overflow and zero console/page errors. `npm run verify` clean throughout
+  (typecheck + production build), zero `[grounds]`/`[plots]` dev-assertion warnings.
 
   **Wave 4 (challenge maps as new destinations) shipped 2026-08-03.** The 6
   bonus "challenge" maps the lab classified alongside the 9 templates
@@ -5101,3 +5130,20 @@ needs its own pass before implementation.
   weigh before committing (memory for N loaded scenes vs. load-in latency on every travel, whether it
   actually solves a real problem the single-scene approach has today or is a change for its own sake)
   — needs its own design pass, not a "just do it" implementation.
+
+## Found during Wave 5 verification (2026-08-05), pre-existing and out of that wave's scope
+
+- [TODO] **A duplicated `leave_engine` block is spliced into `PlayerController.tsx`'s `useFrame` cart
+  branch and can silently abort a frame's update.** `PlayerController.tsx` ~lines 1309-1317: a second
+  copy of `if (crewState.engineId) { ... return { id, kind: 'leave_engine', ... } }` sits inside the
+  `useFrame` callback's cart-position branch (between the `fz = -Math.cos(yaw.current)` line and the
+  `if (cartState.pushingId)` check) — `return`ing a `Target`-shaped object out of a `void` frame
+  callback, which just discards it and skips the rest of that frame's update. The legitimate copy of
+  this exact block lives at `findTarget()` (~line 470-471), where returning a `Target` is correct.
+  Confirmed pre-existing and unrelated to Wave 5: it is byte-identical at HEAD before that wave's
+  diff, and Wave 5's only `PlayerController.tsx` hunks are at lines 12, 40, 52, 608-644 and 949-957
+  — nowhere near it. Practical effect: any frame where the player is crewing a siege engine (a
+  cannon/ram) while also mid-push/hitch on a cart aborts that frame's remaining update early. Narrow
+  overlap (both states have to be true at once), which is likely why it's gone unnoticed. Fix is
+  probably just deleting the stray spliced copy, but that needs its own verification pass, not a
+  drive-by edit inside an unrelated wave.
