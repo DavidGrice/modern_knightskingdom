@@ -278,7 +278,12 @@ consumable here:
   `wingL`/`wingR` bone rotation from them today, not the old two-frame flap (the defend-the-keep fire
   event is still future). [TODO] `DEFAULT_MINIFIG_HORSE_MOUNT.json` carries exact seat/rider matrices for
   proper mounted alignment, but nothing in the codebase reads them yet (confirmed: no reference to
-  `HORSE_MOUNT` anywhere in `src/`) — riding stays hand-tuned.
+  `HORSE_MOUNT` anywhere in `src/`) — riding stays hand-tuned. **Re-confirmed 2026-08-05 (Wave 7):
+  the file does not exist anywhere in this repo** (`find` over the whole tree: 0 hits; `public/assets/
+  rigs/` holds only `capabilities.json` and `part_roles.json`). Its NAME appears, but only as inert
+  metadata inside `capabilities.json`'s per-horse `sockets.mount_template`, pointing at a sibling-repo
+  artifact that was never copied across. There is nothing here to wire in — importing it means
+  fetching it from the Blender lab first, which is a separate piece of work from any combat wave.
 - [COMPLETE] **`ORIENTATION_REGISTRY.json` / `PAK_ORIENTATION_CATALOG.json`** — investigated, not left
   undone: read and found genuinely inapplicable as per-asset ground truth (its eulers are Blender-space
   Z-up, not transferable to this game's convention — applying them would break currently-correct models).
@@ -495,7 +500,69 @@ granting the unlock + materials and seeing all 26 pieces appear.
   0.3s for a classic two-frame LEGO flap. Horn sting + "🐉 A vast shadow crosses the moon…" + Deed
   **The Omen** + `dragonSeen` through the full save pattern. *Still future:* the defend-the-keep event
   where dragonfire ignites wooden structures specifically (stone matters at top tier).
-- [TODO] Halberd sweep / spear thrust as *player* weapons (molds already extracted and loaded).
+- [COMPLETE] ✅ **Halberd sweep / spear thrust as *player* weapons — SHIPPED 2026-08-05 as Wave 7 of
+  the full-ROADMAP wave plan.** Both molds were indeed already extracted and loaded
+  (`weaponParts.ts`'s `halberd`/`spear`), so this was pure wiring, no art. What did NOT exist and
+  had to be designed: any notion of a melee weapon other than "the sword", and any melee mechanic
+  other than "nearest single target in a 2.5m cone" — the halberd's own NPC/defender use turned out
+  to be a **cosmetic prop swap only** (`Enemies.tsx`/`Defenders.tsx` give a halberd-carrying bandit
+  the identical 1.8m range, `anim_g_swordswish` clip and damage-by-*kind* a sword-carrier gets), so
+  there was no existing sweep behavior to port. `combatState` gained a `meleeWeapon` sub-selector
+  mirroring the long-standing `rangedWeapon` one, and `playerAttack()`'s inlined sword constants
+  became `combat.ts`'s `MELEE` table — the `sword` row is byte-for-byte what the game already did
+  (3 dmg / 1.5 worn / 2.5m / dot > 0.3 / 0.55s / 8 stamina), so nothing about the sword changed.
+  Halberd: 4.5 dmg, 3.3m, 0.95s, 14 stamina, and a real **sweep** (every foe in the 180° frontal
+  arc, resolved through one shared `landMeleeHit` so a swept kill loots/rallies/credits the arena
+  exactly like a thrust one) — its single-target DPS is deliberately *below* the sword's, so it
+  reads as a crowd weapon and not a strict upgrade. Spear: 3.5 dmg, 3.9m (longest reach in the
+  game), 0.7s, 10 stamina, narrowest cone (dot > 0.6), plus a **×2.2 couched charge that only pays
+  out mounted at a gallop** — the melee twin of the ranged weapons' existing battlement bonus.
+  Stamina costs are derived, not guessed: each weapon's cost/cd lands within a whisker of the 14/s
+  regen rate, so no polearm is quietly cheaper to spam than the sword. Both are forge recipes
+  (`requiresUnlock: 'smithing'`, priced against the sword's 3 bar/1 plank), reach the player through
+  the ordinary `addItems` path, and therefore never collide with the Armory pool a defender's
+  halberd has always come from. Registered at both switch points via one shared `WEAPON_SLOTS` list
+  (equip panel + Q cycle), and drawn in first person, third person and the equip paperdoll.
+  **Two follow-up fixes from live verification (2026-08-05):** (1) *mounting blanked the viewmodel.*
+  `PlayerController`'s horse branch still called `setCameraMode('third')` — a leftover from before
+  L62 made riding force first person — so a mounted player got the eye camera with **empty hands**,
+  hiding every mounted pose there is (the spear's couch, the halberd, the narrowed lance) behind a
+  manual `V` press, and was silently left in third person after dismounting. Mounting no longer
+  touches the stored preference, and `Viewmodel` now renders whenever `ridingState.active`
+  regardless of it, matching the camera that actually runs. (2) *the joust ignored which world you
+  were in.* `game/joust.ts` tested only reveal + x/z distance to Richard's world-absolute
+  coordinates (as did the inline check it replaced), so the prompt and the couched lance would fire
+  on those bare numbers in the homestead, the dungeon, the arena or any other template world. It now
+  also requires `(richard.world ?? null) === (destination ?? null)`, the same residency test
+  `PlayerController`'s NPC loop and `scheduledCourtNpcs` already use.
+
+  **Verified live through the real input path, not direct store calls**: headless Chrome actually
+  held pointer lock (`document.pointerLockElement` non-null), so every attack below is a real
+  trusted mousedown/mouseup reaching `CombatController`'s own listener. On foot: sword 3.0 dmg /
+  single target / whiffs past 2.5m; halberd 4.5 dmg and a single swing hit **all three** members of
+  a ±60° fan at once (sword and spear each hit only one of the same three); spear 3.5 dmg, whiffed
+  at a flanking dot of 0.5 (cone is 0.6), reached a target at 3.60m where both sword and halberd
+  whiffed. Mounted, values held identical (sword 3.0, halberd 4.5 including the 3-target sweep,
+  spear 3.5) — except the spear's charge: with `Shift` genuinely held and `combatState.galloping`
+  read `true` at the moment of the swing, a mounted spear thrust dealt **7.7 = 3.5 × 2.2**, exactly
+  the couched-charge multiplier, and is not reachable on foot. Mounted ranged confirmed the
+  pre-existing `muzzleHeight()` split is untouched and correct: a crossbow bolt spawned at
+  **y = 2.346** mounted vs. **y = 1.450** on foot from the identical shot, aimed down to pitch
+  −0.266 and landed for exactly its 7 damage; a full-draw longbow shot (1.3s draw) spawned at
+  y = 2.188 mounted and landed its full 16 damage. Real crafting: the Forge tab lists "🔱 Halberd —
+  4× Iron Bar · 3× Plank" and "🗡️ Spear — 2× Iron Bar · 3× Plank" (both gated on "Stand near a
+  Forge," matching every other weapon recipe); `craft()` on each moved `halberd`/`spear` 0→1 and
+  `iron_bar`/`plank` down by their real costs. `Q` cycles sword → halberd → spear → crossbow →
+  longbow → sword, matching `WEAPON_SLOTS`' declared order exactly. A killing sweep through 3 pinned
+  bandits credited all 3 (`stats.kills` 0→3), granted real loot for each, and posted 3 distinct
+  "defeated! Looted …" notifications — the shared `landMeleeHit()` path pays out identically to a
+  single-target kill. At the real Tourney Grounds (template-02), mounted + galloping within 16m of
+  a revealed Richard showed the tourney lance and held E through a genuine `joustRichard()` pass
+  ("A glancing blow!"); at 20m+ still galloping, or mounted+galloping anywhere else in the game
+  (homestead, arena, dungeon, template-01), the pose correctly reverted to whatever was actually
+  readied and no joust prompt appeared. Dismounting (a real held-E, not a snap) restored the on-foot
+  pose and left the camera preference exactly where mounting found it. Zero console/page errors
+  across every run. `npm run verify` clean throughout.
 - [TODO] Armor tiers (iron → forged → castle-crested via torso decal variants).
 - [TODO] Catapult/trebuchet (only the cannon exists; firing sound `snd060` is waiting).
 - [TODO] Timed build challenges recreating the original game's six challenges (their full voiced texts survive in
@@ -3255,6 +3322,27 @@ when they changed — and couches the real `spear` mold, levelled toward a
 target ahead of the horse, ahead of whatever else would otherwise be held.
 Verified live: forcing a mounted gallop renders a real couched lance angled
 toward the reticle, where nothing rendered before.
+
+**[COMPLETE] Corrected 2026-08-05 (Wave 7).** That gate was too wide, and it
+was the ONE place the player's viewmodel let mount state override weapon
+selection. `ridingState.active && combatState.galloping` is true for any
+mounted player holding Shift anywhere in the world, so a rider who had
+equipped a sword, crossbow or longbow saw a couched tourney lance while the
+click underneath still ran `playerAttack()`/`fireBolt()`/`fireArrow()` on
+their real weapon — the pose lied about what the button did. The mechanics
+were never broken (nothing in `combat.ts` or `CombatController.tsx` gates on
+riding at all, and `muzzleHeight()` already raises a mounted shot's spawn
+point) — only the model was wrong. The range/reveal test now lives in
+`game/joust.ts` and is shared by BOTH the E prompt and the pose, so the lance
+appears only while actually charging Richard (within 16m of him, a run-up's
+distance ahead of E's own `INTERACT_RANGE + 2.5`) and a mounted player keeps
+their real weapon everywhere else. This is the same *decoupling* principle
+`Defenders.tsx` already demonstrates below — weapon choice reads loadout,
+never mount state — adapted to the fact that a mounted player is rendered by
+the first-person viewmodel and nothing else (`PlayerController.tsx` forces
+first person while riding; `PlayerAvatar`/`MountedHorse`'s seated body is
+deliberately `visible={false}`), so there is no third-person mounted path to
+bring to parity.
 
 **The halberd's own "no mounted pose" turned out not to be a distinct bug**,
 on inspection of how a mounted defender actually renders (`Defenders.tsx`):

@@ -40,6 +40,18 @@ export function HeldHalberd({ side = -1 }: { side?: number }) {
   );
 }
 
+/** Wave 7 · the spear, held. Same joint-local offset family as the halberd
+ *  above (it is the same gesture — a polearm gripped mid-haft), just a
+ *  fraction more upright: the spear mold is the longer of the two, so the
+ *  butt end grounds sooner if it leans back as far. */
+export function HeldSpear({ side = -1 }: { side?: number }) {
+  return (
+    <group position={[side * 0.12, -0.48, 0.2]} rotation={[0.12, 0, side * -0.06]}>
+      <RealWeapon id="spear" />
+    </group>
+  );
+}
+
 export function HeldCrossbow({ side = -1 }: { side?: number }) {
   return (
     <group position={[side * 0.12, -0.48, 0.2]} rotation={[0.25, 0, side * -0.08]}>

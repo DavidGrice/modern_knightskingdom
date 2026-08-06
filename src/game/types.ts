@@ -12,11 +12,14 @@ export type ItemId =
   | 'sword' | 'shield' | 'crossbow' | 'bolt' | 'gold'
   | 'wheat' | 'bread' | 'longbow' | 'arrow'
   | 'helmet' | 'chestplate'
-  // the halberd is an NPC-exclusive visual mold with no crafting recipe of
-  // its own (see data/villagers.ts's DEFENDER_LOADOUTS) — it only ever enters
-  // play as Armory stock, salvaged from a Sealed Crypt clear, never into the
-  // player's own Satchel
-  | 'halberd'
+  // Wave 7 · the two polearms. Both were render-only before: the halberd was
+  // an NPC-exclusive mold that only ever entered play as Armory stock
+  // (Sealed Crypt salvage) for a defender's loadout, and the spear had no
+  // ItemId at all — it existed solely as a WeaponId for the couched-lance
+  // joust pose. Both are forge recipes now (data/recipes.ts) and real player
+  // melee weapons (combat.ts's MELEE). The Armory stays a separate pool from
+  // the Satchel, so a defender's halberd and the player's own never mix.
+  | 'halberd' | 'spear'
   | 'herb' | 'potion_heal' | 'potion_stamina' | 'potion_nightvision'
   // Wave 5: filled at the brook, poured on a cultivated plot. Not crafted —
   // the water IS the acquisition (see PlayerController's 'draw_water').

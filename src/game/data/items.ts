@@ -31,6 +31,10 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   helmet: { id: 'helmet', name: 'Iron Helm', icon: '🪖' },
   chestplate: { id: 'chestplate', name: 'Iron Chestplate', icon: '🦺' },
   halberd: { id: 'halberd', name: 'Halberd', icon: '🔱' },
+  // Wave 7 · the halberd's opposite number: less weight behind it, more haft
+  // in front of it. Deliberately NOT '🔱' too — the two sit side by side in
+  // the Satchel and the equip row, so they must be tellable apart at a glance.
+  spear: { id: 'spear', name: 'Spear', icon: '🗡️' },
   herb: { id: 'herb', name: 'Wild Herb', icon: '🌿' },
   potion_heal: { id: 'potion_heal', name: 'Healing Draught', icon: '🧪' },
   potion_stamina: { id: 'potion_stamina', name: 'Stamina Draught', icon: '⚡' },

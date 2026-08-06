@@ -117,8 +117,10 @@ export const JOBS: JobDef[] = [
 // player's own Satchel. A defender starts bare-handed (no loadout at all) and
 // only fights properly once you've spent real Armory stock arming them; the
 // weapon returns to the Armory if you unequip or switch them to another
-// loadout. "Halberd" still isn't a craftable player item (no recipe exists
-// for it) — it only enters the Armory as Sealed Crypt salvage.
+// loadout. As of Wave 7 the halberd IS craftable (a forge recipe, and a real
+// player melee weapon), but that changes nothing here: crafting fills the
+// Satchel, and arming a defender still spends Armory stock only — Sealed
+// Crypt salvage, or a deliberate donation. The two pools never mix.
 export const DEFENDER_LOADOUTS: { id: DefenderLoadout; label: string; icon: string }[] = [
   { id: 'sword_shield', label: 'Sword & Shield', icon: '🗡️' },
   { id: 'halberd', label: 'Halberd', icon: '🔱' },

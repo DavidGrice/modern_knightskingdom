@@ -24,6 +24,7 @@ import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer } fro
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { fishingState, startFishing, tickFishing } from '@/game/fishing';
 import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
+import { atJoustPass } from '@/game/joust';
 import { detonate, fireCannon, quintainHit, ramCheck } from '@/game/siege';
 import { cartState, cartLivePos } from '@/game/carts';
 import { statsAccum } from '@/game/statsAccum';
@@ -402,9 +403,12 @@ export default function PlayerController() {
     // otherwise dismounts. Checked BEFORE the destination branch (Phase 20:
     // Richard's jousting field IS a destination now — the Tourney Grounds)
     if (ridingState.active) {
-      const richard = NPC_BY_ID['richard'];
-      if (richard && isNpcRevealed(richard, st.completedQuests)
-        && Math.hypot(richard.x - pos.current.x, richard.z - pos.current.z) < INTERACT_RANGE + 2.5) {
+      // Wave 7 · the residency/reveal/range test moved to game/joust.ts so the
+      // viewmodel can couch the lance off the SAME condition this prompt offers
+      // it on. `st` carries both halves of the gate (completedQuests +
+      // destination); the live `pos.current` goes in separately because
+      // playerState is not written until the end of this frame.
+      if (atJoustPass(st, pos.current.x, pos.current.z)) {
         return {
           id: 'richard', kind: 'joust', duration: 0.8, actionable: combatState.galloping,
           label: combatState.galloping ? 'Couch your lance!' : 'Gallop (Shift) to charge Richard',
@@ -850,7 +854,16 @@ export default function PlayerController() {
     } else if (t.kind === 'horse') {
       mountHorse(t.id);
       audio.play('whinny', 0.7);
-      st.setCameraMode('third');
+      // Wave 7 fix · this used to `st.setCameraMode('third')`, a leftover from
+      // when riding really was a chase cam. Riding has forced FIRST person
+      // since L62 (see the camera block at the end of the frame, and
+      // MountedHorse.tsx's own comment), so all the flip still did was
+      // (a) blank the FPS viewmodel — a mounted player saw no weapon in hand
+      // at all, which hid every mounted pose there is — and (b) silently
+      // leave them in third person after they dismounted, whatever they had
+      // chosen before. The stored preference is the player's, so mounting
+      // no longer touches it; the viewmodel renders while mounted regardless
+      // of it (Viewmodel.tsx), matching what the camera actually does.
       st.notify('You mount the horse. Hold Shift to gallop!');
     } else if (t.kind === 'dismount') {
       const fx = -Math.sin(yaw.current);

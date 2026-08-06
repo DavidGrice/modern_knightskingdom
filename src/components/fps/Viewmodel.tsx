@@ -9,7 +9,8 @@ import { loadPalette, paletteColor } from '@/lib/minifig';
 import { loadFpsArms, type FpsArm, type FpsArms } from '@/lib/rigExtract';
 import { labHands } from '@/game/data/labCapabilities';
 import { playerState } from './PlayerController';
-import { combatState, FULL_DRAW_TIME } from '@/game/combat';
+import { combatState, FULL_DRAW_TIME, activeMelee, type MeleeWeaponId } from '@/game/combat';
+import { couchingTourneyLance } from '@/game/joust';
 import { ridingState } from '@/game/riding';
 import RealWeapon from '../character/RealWeapon';
 import RealShield from '../character/RealShield';
@@ -265,8 +266,22 @@ const MOUNT = {
   crossbow: [-Math.PI / 2, 0, 0.5] as [number, number, number],
   // L62 (rest) · couched and levelled toward a target ahead of the horse,
   // rather than the sword's more upright ready stance — measured live the
-  // same way as the crossbow's own roll, below
+  // same way as the crossbow's own roll, below. Wave 7: the player's OWN
+  // spear borrows this exact pose once mounted (see `spear` below), because
+  // couched is couched whether the point is aimed at Richard or at a raider.
   lance: [-Math.PI / 2, 0, 0] as [number, number, number],
+  // Wave 7 · the two polearms, on foot. Both are far longer molds than the
+  // sword (1.15m and 1.25m against 0.62m — lib/weaponParts), so the sword's
+  // near-upright carry would put the head somewhere above the top of the
+  // frame with the haft filling half the view. Both are pitched hard forward
+  // instead, so what you see is the BUSINESS END leading out ahead of you,
+  // which is also where the reach actually is:
+  //   halberd — angled up off the shoulder, the way a heavy chopping polearm
+  //             is carried between swings
+  //   spear   — flatter and closer to level, because a thrust is delivered
+  //             straight down the line of sight, not swung down onto it
+  halberd: [-1.0, 0.14, -0.1] as [number, number, number],
+  spear: [-1.28, 0.06, 0] as [number, number, number],
   //   tool — H34. There is no pickaxe or hammer mold anywhere in the
   //          extraction (the lab's only `pickaxe` is a trait on a defence
   //          tower, not a held part), so these four stay procedural. What
@@ -371,16 +386,29 @@ export default function Viewmodel() {
   // useMemo below actually re-renders when it flips, since ridingState and
   // combatState are plain mutable objects React has no other way to see.
   const [lanceMode, setLanceMode] = useState(false);
+  // Wave 7 · which melee weapon is readied, and whether we're in the saddle
+  // (the spear couches once mounted). Same polling reason as everything above.
+  const [meleeTool, setMeleeTool] = useState<MeleeWeaponId>('sword');
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
     const t = setInterval(() => {
-      const inv = useGameStore.getState().inventory;
+      const st = useGameStore.getState();
+      const inv = st.inventory;
       const bow = combatState.rangedWeapon === 'longbow';
       setRangedMode(
         combatState.weapon === 'ranged'
         && (bow ? (inv.longbow ?? 0) > 0 : (inv.crossbow ?? 0) > 0),
       );
       setBowMode(bow);
-      setLanceMode(ridingState.active && combatState.galloping);
+      setMeleeTool(activeMelee());
+      setMounted(ridingState.active);
+      // Wave 7 · WAS `ridingState.active && combatState.galloping`, which
+      // handed the tourney lance to every mounted player holding Shift
+      // anywhere in the world — sword, crossbow and longbow alike, while the
+      // click underneath still swung/fired the real weapon. The lance is a
+      // prop for Richard's pass and nothing else, so it is now gated on that
+      // duel's own context (game/joust.ts, shared with E's own prompt).
+      setLanceMode(couchingTourneyLance(st));
       setDrawProgress(
         combatState.drawStart > 0
           ? Math.min(1, (performance.now() - combatState.drawStart) / (FULL_DRAW_TIME * 1000))
@@ -397,19 +425,28 @@ export default function Viewmodel() {
   // showing one — 'fist' (no matching render branch below, just the bare
   // arm+hand mesh already drawn unconditionally) is the honest default.
   const tool = useMemo(() => {
-    // L62 (rest) · a charging rider couches the lance over whatever else
-    // they'd otherwise be holding — the "Couch your lance!" prompt
+    // L62 (rest) · charging Richard couches the TOURNEY lance over whatever
+    // else you'd otherwise be holding — the "Couch your lance!" prompt
     // (PlayerController's own joust interaction) implies exactly this
-    // posture, but nothing ever actually rendered one
+    // posture. Still first in the chain, and deliberately so: the pass is a
+    // scripted duel that hands you its own lance. Wave 7 only narrowed WHEN
+    // that is true (see the poll above) — outside Richard's field a mounted
+    // player now keeps their real weapon, whatever pace they ride at.
     if (lanceMode) return 'lance';
     if (rangedMode) return bowMode ? 'longbow' : 'crossbow';
     if (targetKind === 'rock' && (inventory.pickaxe ?? 0) > 0) return 'pickaxe';
     if (targetKind === 'fishing' && (inventory.fishing_rod ?? 0) > 0) return 'rod';
     if (targetKind === 'tree' && (inventory.axe ?? 0) > 0) return 'axe';
     if (targetKind === 'construct' && (inventory.hammer ?? 0) > 0) return 'hammer';
+    // Wave 7 · `activeMelee()` has already resolved ownership (it falls back
+    // to 'sword' for anything not actually carried), so these two need no
+    // second inventory check — matching how `rangedMode` above is already
+    // ownership-resolved before it gets here.
+    if (meleeTool === 'halberd') return 'halberd';
+    if (meleeTool === 'spear') return 'spear';
     if ((inventory.sword ?? 0) > 0) return 'sword';
     return 'fist';
-  }, [lanceMode, rangedMode, bowMode, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
+  }, [lanceMode, rangedMode, bowMode, meleeTool, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
   // ownership-based, same convention as `tool`'s sword branch — a crafted
   // shield should be visibly carried, not only appear once you block with it
   const hasShield = (inventory.shield ?? 0) > 0;
@@ -486,7 +523,15 @@ export default function Viewmodel() {
   // -1 = the shield rides the LEFT of the view (the lab's usual answer)
   const shieldSide = labHands(character?.bodyDonor).shield === 'left' ? -1 : 1;
 
-  if (!character || cameraMode !== 'fps' || buildMode || !colors) return null;
+  // Wave 7 fix · riding is ALWAYS first person, whatever the stored camera
+  // preference says (PlayerController forces the eye camera while
+  // `ridingState.active`, because MountedHorse.tsx puts the horse's neck
+  // ahead of that camera on purpose). Gating this on the stored mode alone
+  // meant a player who had chosen third person on foot climbed into the
+  // saddle and got a first-person view with empty hands — no sword, no
+  // couched spear, no halberd, no lance. The saddle follows the camera that
+  // is actually running, not the preference it overrode.
+  if (!character || (cameraMode !== 'fps' && !mounted) || buildMode || !colors) return null;
 
   return (
     <group ref={outer}>
@@ -535,6 +580,28 @@ export default function Viewmodel() {
               than inventing a second "lance" weapon id for one pose */}
           {tool === 'lance' && (
             <group rotation={MOUNT.lance} scale={0.85}>
+              <RealWeapon id="spear" fallback={null} />
+            </group>
+          )}
+          {/* Wave 7 · the halberd, the same verified mold Defenders.tsx has
+              always portalled onto a defender's arm. Scaled down harder than
+              the sword because the mold is nearly twice as long: at the
+              sword's own 0.78 it fills the frame rather than sitting in a
+              hand. Deliberately NOT gated on riding — the whole point of the
+              defender reference implementation is that weapon choice and
+              saddle are independent. */}
+          {tool === 'halberd' && (
+            <group rotation={MOUNT.halberd} scale={0.6}>
+              <RealWeapon id="halberd" fallback={null} />
+            </group>
+          )}
+          {/* Wave 7 · the spear. Mounted it COUCHES — same rest rotation the
+              tourney lance uses, because that is what a spear from a saddle
+              is, and it is also exactly when combat.ts's charge multiplier
+              pays out. On foot it drops to the flatter ready-to-thrust
+              carry. */}
+          {tool === 'spear' && (
+            <group rotation={mounted ? MOUNT.lance : MOUNT.spear} scale={0.62}>
               <RealWeapon id="spear" fallback={null} />
             </group>
           )}
