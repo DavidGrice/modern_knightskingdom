@@ -30,16 +30,17 @@ import { cartState, cartLivePos } from '@/game/carts';
 import { statsAccum } from '@/game/statsAccum';
 import { dungeonState } from '@/game/dungeon';
 import { npcMobs } from '@/game/npcMobs';
-import { isBuilt, isHomeBuilding } from '@/game/types';
+import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '@/game/types';
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
 import { destinationGroundY } from '../world/TemplateWorld';
-import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labOccupyMode } from '@/game/data/labCapabilities';
+import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labIsLadder, labOccupyMode } from '@/game/data/labCapabilities';
 import { aimState, resolveAim } from '@/game/targeting';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
-import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
+import { KEEP_PART_BY_ID, KEEP_SOCKETS, keepWalkwayAt } from '@/game/data/keep';
+import { refreshFort } from '@/game/fort';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { KIND_LABEL, maxHpOf, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine, manEngine } from '@/game/crew';
@@ -50,7 +51,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down';
   station?: string;
 }
 
@@ -164,6 +165,14 @@ function pollTouch(
 
 export { playerState };
 
+/** Wave 8 · a wall walk's own step allowance, deliberately larger than
+ *  STEP_UP. The keep's ring is not one level: a Corner Turret's walk sits at
+ *  4.2 and the Crenellated Wall it meets at 3.6 (data/keep.ts), a 0.6m lip
+ *  that the ordinary 0.55 ledge rule would refuse — leaving a player who
+ *  climbed onto the wall unable to walk round their own castle, which is the
+ *  entire point of being up there. */
+const WALKWAY_STEP = 0.8;
+
 /** highest structure top at (x, z) that the player can stand on given their feet height */
 function floorHeightAt(
   st: ReturnType<typeof useGameStore.getState>,
@@ -184,7 +193,94 @@ function floorHeightAt(
     const top = (b.y ?? 0) + heightOf(b.type);
     if (top <= feetY + STEP_UP && top > floor) floor = top;
   }
+  // Wave 8 · the keep's wall walk. Defenders have stood at `KeepPart.walkway`
+  // for waves (Defenders.tsx posts them there), but the raised pieces are not
+  // PlacedBuildings — they live only in `st.keep` — so the loop above cannot
+  // see them and the player fell straight through to the courtyard. This is
+  // the only reason the battlement was unreachable; with a floor up there,
+  // gravity, walking off the edge and combat.ts's own onBattlement() bonus all
+  // work with no further special-casing anywhere.
+  const walk = keepWalkwayAt(st.keep, x, z);
+  if (walk > floor && walk <= feetY + WALKWAY_STEP) floor = walk;
   return floor;
+}
+
+/** where a ladder gets you, if anywhere: the highest thing standing within
+ *  reach of its top that a person could stand on. Null when it is leaning
+ *  against nothing — a ladder in open ground is just a ladder. */
+interface ClimbTarget { x: number; z: number; y: number; what: string }
+
+/** how far above a ladder's own top you can haul yourself over a parapet */
+const PULL_UP = 1.4;
+/** where to look for a surface around a ladder's foot: eight compass points at
+ *  two ranges, plus the ladder's own cell (a ladder set INTO a wall walk's
+ *  footprint is the common case for the keep's 2.4m-deep runs) */
+const CLIMB_PROBES: [number, number][] = [[0, 0]];
+for (const r of [1.6, 3]) {
+  for (let a = 0; a < 8; a++) {
+    CLIMB_PROBES.push([Math.cos((a * Math.PI) / 4) * r, Math.sin((a * Math.PI) / 4) * r]);
+  }
+}
+
+function climbTargetFor(
+  st: ReturnType<typeof useGameStore.getState>,
+  ladder: PlacedBuilding,
+  // Wave 8 fix (2026-08-06) · live verification found the non-actionable
+  // prompt always said "lean this against a wall," even when it plainly WAS
+  // leaning and the real problem was reach — one ladder (3.2m) clears a keep
+  // walkway (3.6/4.2) but not a placed Castle Wall (5.28m), and the message
+  // sent the player back to re-placing instead of stacking a second one. An
+  // optional out-param (rather than changing the return type every call site
+  // has to handle) lets the label-only caller learn "something real was in
+  // range, just too tall" without the other two callers caring.
+  info?: { nearAnything?: boolean },
+): ClimbTarget | null {
+  const base = ladder.y ?? 0;
+  // a stacked column of ladders climbs as ONE ladder — that is what makes
+  // `stackable: true` on the piece a real answer to a wall too tall for one
+  let top = base + heightOf(ladder.type);
+  for (const b of st.buildings) {
+    if (b.id === ladder.id || !isBuilt(b)) continue;
+    if (!labIsLadder(labAssetId(b.type))) continue;
+    if (Math.hypot(b.x - ladder.x, b.z - ladder.z) > 2) continue;
+    top = Math.max(top, (b.y ?? 0) + heightOf(b.type));
+  }
+  const reach = top + PULL_UP;
+  let best: ClimbTarget | null = null;
+  const take = (t: ClimbTarget) => {
+    if (t.y <= base + 1) return; // not worth a climb regardless of reach
+    if (info) info.nearAnything = true;
+    if (t.y > reach) return; // real support, just out of this ladder's reach
+    if (!best || t.y > best.y) best = t;
+  };
+  // the keep's wall walk, sampled through the same footprint rule the floor
+  // itself uses, so a climb can never put you down where there is no floor
+  for (const [ox, oz] of CLIMB_PROBES) {
+    const wx = ladder.x + ox;
+    const wz = ladder.z + oz;
+    const y = keepWalkwayAt(st.keep, wx, wz);
+    if (y > 0) take({ x: wx, z: wz, y, what: 'wall walk' });
+  }
+  // …and the top of anything placed that a person can stand on
+  const [lsx, lsz] = sizeFor(ladder.type, ladder.rot);
+  for (const b of st.buildings) {
+    if (b.id === ladder.id || !isBuilt(b)) continue;
+    // a ladder is a way UP, never the destination — without this a stacked
+    // column would always beat the wall it is leaning on, and the climb would
+    // put you on top of your own ladder instead of the parapet beside it
+    if (labIsLadder(labAssetId(b.type))) continue;
+    if (!labCanStandOn(labAssetId(b.type), true)) continue;
+    const [sx, sz] = sizeFor(b.type, b.rot);
+    // the ladder has to actually be LEANING on it
+    const gapX = Math.max(0, Math.abs(b.x - ladder.x) - sx / 2 - lsx / 2);
+    const gapZ = Math.max(0, Math.abs(b.z - ladder.z) - sz / 2 - lsz / 2);
+    if (Math.hypot(gapX, gapZ) > 1.2) continue;
+    take({
+      x: b.x, z: b.z, y: (b.y ?? 0) + heightOf(b.type),
+      what: BUILDABLE_BY_ID[b.type]?.name ?? 'wall',
+    });
+  }
+  return best;
 }
 
 export default function PlayerController() {
@@ -753,12 +849,42 @@ export default function PlayerController() {
         });
         continue;
       }
-      if (b.type === 'gate') {
+      // Wave 8 · doors answer here too. Same target kind, same store action,
+      // same `gateOpen` record — a door IS a small gate (see isDoorLike),
+      // just a lighter mechanism: it raises faster than the Castle Gate's
+      // full drawbridge winds up.
+      if (isDoorLike(b.type)) {
         const open = st.gateOpen[b.id] ?? true;
+        const noun = b.type === 'door' ? 'Portcullis' : 'Gate';
         consider(b.x, b.z, 1.6, {
-          id: b.id, kind: 'gate', duration: 1.2, actionable: true,
-          label: open ? 'Close the Gate' : 'Open the Gate',
+          id: b.id, kind: 'gate', duration: b.type === 'door' ? 0.5 : 1.2, actionable: true,
+          label: `${open ? 'Close' : 'Open'} the ${noun}`,
         });
+        continue;
+      }
+      // Wave 8 · the ladder. Standing at its foot it offers the climb (and
+      // says so plainly when it is leaning against nothing); standing above
+      // it, it is the way back down.
+      if (labIsLadder(labAssetId(b.type))) {
+        // climbTargetFor sweeps every building and 17 probe points, so ask it
+        // only about a ladder that could actually be offered this frame
+        if (Math.hypot(b.x - p.x, b.z - p.z) > INTERACT_RANGE + 1.6) continue;
+        const feet = p.y - EYE_HEIGHT;
+        if (feet > (b.y ?? 0) + 1.2) {
+          consider(b.x, b.z, (b.y ?? 0) + heightOf(b.type), {
+            id: b.id, kind: 'climb_down', duration: 0.8, actionable: true, label: 'Climb down',
+          }, INTERACT_RANGE + 1.4);
+        } else {
+          const info: { nearAnything?: boolean } = {};
+          const climb = climbTargetFor(st, b, info);
+          const label = climb ? `Climb to the ${climb.what}`
+            // leaning on something real, just not tall enough for one ladder yet
+            : info.nearAnything ? 'Too short to reach — stack another ladder'
+            : 'Lean this ladder against a wall to climb';
+          consider(b.x, b.z, 1.2, {
+            id: b.id, kind: 'climb', duration: 1.1, actionable: !!climb, label,
+          });
+        }
         continue;
       }
       // already-engaged carts are handled as an early return above (letting
@@ -938,6 +1064,46 @@ export default function PlayerController() {
       st.collectTaxes();
     } else if (t.kind === 'gate') {
       st.toggleGate(t.id);
+    } else if (t.kind === 'climb') {
+      // Wave 8 · up onto the wall. The position is SET, not lerped: every
+      // duration-gated interaction in this game pays out at 100% of the hold
+      // (interior_enter, the chest, the keep sockets), and the hold ring is
+      // already the "you are climbing" feedback. What matters is where you
+      // land — climbTargetFor only ever answers with a spot that
+      // floorHeightAt agrees is floor, so gravity holds you there afterwards
+      // with no pinned movement mode of its own to maintain or exit.
+      const b = st.buildings.find((x) => x.id === t.id);
+      const climb = b ? climbTargetFor(st, b) : null;
+      if (climb) {
+        pos.current.set(climb.x, climb.y + EYE_HEIGHT, climb.z);
+        vel.current.y = 0;
+        grounded.current = true;
+        audio.play('step', 0.6);
+        st.notify(`You climb onto the ${climb.what}.`);
+      }
+    } else if (t.kind === 'climb_down') {
+      const b = st.buildings.find((x) => x.id === t.id);
+      if (b) {
+        // step off on the ladder's OWN side of whatever it leans against,
+        // rather than dropping through the wall you were standing on
+        const climb = climbTargetFor(st, b);
+        let fx = 0;
+        let fz = 1;
+        if (climb) {
+          const dx = b.x - climb.x;
+          const dz = b.z - climb.z;
+          const d = Math.hypot(dx, dz);
+          if (d > 0.1) { fx = dx / d; fz = dz / d; }
+        }
+        const [lsx, lsz] = sizeFor(b.type, b.rot);
+        const out = Math.max(lsx, lsz) / 2 + 0.9;
+        const dx = b.x + fx * out;
+        const dz = b.z + fz * out;
+        pos.current.set(dx, (b.y ?? 0) + EYE_HEIGHT, dz);
+        vel.current.y = 0;
+        grounded.current = true;
+        audio.play('step', 0.6);
+      }
     } else if (t.kind === 'travel_board') {
       st.setPanel('travel');
     } else if (t.kind === 'travel_return') {
@@ -1212,7 +1378,9 @@ export default function PlayerController() {
       } else {
         for (const b of st.buildings) {
           if (!isBuilt(b)) continue; // walk freely through a ghost outline
-          if (b.type === 'gate' && (st.gateOpen[b.id] ?? true)) continue; // raised — passable
+          // raised gate / opened door — passable (Wave 8: one predicate, see
+          // isDoorLike; the nav grid and the raiders read the same rule)
+          if (isDoorLike(b.type) && (st.gateOpen[b.id] ?? true)) continue;
           // the Keep's own PlacedBuilding entry exists purely for interact-
           // detection (foundKeep, gameStore.ts) — its real footprint is a
           // flat courtyard plate (KeepAssembly.tsx) with no collision of its
@@ -1459,6 +1627,10 @@ export default function PlayerController() {
           }
         }
         st.setNearStations(near.sort());
+        // Wave 8 · the wall ring. A no-op unless the buildings/gates/keep/land
+        // tier actually changed identity since the last look (game/fort.ts),
+        // so this rides the existing half-second sweep for free.
+        refreshFort();
         st.tickRespawns();
         st.tickPlots(0.5);
         st.tickVillagers(0.5);

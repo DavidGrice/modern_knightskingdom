@@ -307,11 +307,31 @@ consumable here:
    **War Banner** (`18_l7196300`) in Windows & Decor, and Phase 24B's **Stockpile** in Essentials.
 2. [TODO] **Still to come**: arches/rounded generated pieces audit; [COMPLETE] the 4 Road models as pavement
    (confirmed shipped — they're the actual road network newcomers/NPCs walk in on, `Road.tsx`, see L71
-   below); [TODO] the remaining oc-series set pieces (jail cells, drawbridge base, jewel tower — labels
-   already verified, but confirmed not yet in `buildables.ts`'s catalog); Destructor/second Cannon/Animal
-   audit; and wall-CONNECTION logic using `canConnectAsWall` + `wallRole` so prefab walls snap end-to-end
-   (confirmed: `labCanConnectAsWall` is defined in `labCapabilities.ts` but has no caller anywhere else —
-   only generic per-piece grid-snap exists today, not true wall-to-wall connection).
+   below); [COMPLETE 2026-08-06, Wave 8] the remaining oc-series set pieces — Jail Cell `oc6094-2`,
+   Jail Tower `oc6094b5`, Jewel Tower `oc6098b3` and Drawbridge Front `oc6098-1` are named Prefabs now,
+   measured at the castle family's own k=0.05 (the generic pipeline's k=0.04375 sizes ×8/7) with the
+   jewel tower scaled as a WHOLE piece to clear `MAX_STACK_HEIGHT`, which its true 15.84m would have
+   failed forever; their generic `gen_` duplicates are deliberately left in place, exactly as
+   `oc6094-1`/`oc6032b4` left theirs. **Verified live**: all four placed cleanly through the real build
+   menu (search + tile + hold-click) for their real declared costs — Jail Cell stone 12/iron_bar 2,
+   Jail Tower stone 20/wood 6/iron_bar 3, Jewel Tower stone 18/iron_bar 2/gold 40 (confirming the 12m
+   rescale really is accepted by `evalPlacement`), Drawbridge Front stone 40/plank 16/iron_bar 6 (its
+   19.2m width genuinely doesn't fit a tier-0 ±16m region — inherent to the piece, not a bug). Destructor/second Cannon/Animal audit;
+   and [COMPLETE 2026-08-06, Wave 8] wall-CONNECTION logic — `game/walls.ts` reads the lab's
+   `canConnectAsWall` (11 meshes) and the catalog's own `walls` category (the Palisade, which the lab
+   never charted) and latches a wall-family ghost onto a standing piece's open END in
+   `BuildController`'s `snapPoint`, with a gold seam drawn on the joint. The magnet reaches 1.5m,
+   deliberately shorter than the shallowest wall's side-face attach point, so stacking a second course
+   on top of a wall still works. The same module derives the connection GRAPH the trait data was
+   collected for, which is what the Wave 8 fort check reports its longest run from.
+   **Verified live, exact numbers, with a control**: a Castle Wall placed via the real build UI, then a
+   Wall Corner ghost hovered ~0.8m off the true joint — plain per-piece grid snap would have landed it
+   0.6m short of flush; it landed exactly at the wall's own attach point instead (`differsFromGrid` and
+   `snappedFlush` both true), with a real gold-colored (`#e8c141`) mesh visible at the joint's exact
+   midpoint. The same tile placed far from any wall landed on the untouched grid snap instead (the
+   magnet only fires near an open end) — confirming the snap is a real latch, not the grid coincidentally
+   agreeing. The two constructed pieces reported `longestRun = 2` from the connection graph, i.e. read as
+   one joined run.
 
 ---
 
@@ -425,8 +445,10 @@ consumable here:
    player right up against the tower's real narrower base, with its projecting overhang visible above.
    **Not yet covered**: the 12 unverified "Walls" category generated bricks (memory already flags
    these as crenellation toppers, not flat panels — needs its own geometry pass before extending this
-   treatment there) and actual walkable-parapet access (climbing onto the walkway a wall's `canStandOn`
-   label implies — no stairs mechanic exists yet).
+   treatment there). ~~and actual walkable-parapet access~~ — **closed 2026-08-06 (Wave 8)**: the keep's
+   wall walk is real floor (`keepWalkwayAt`) and the Siege Stair is the way onto it. Placed wall
+   pieces have always been standable via `floorHeightAt`'s `canStandOn` check; what was missing was
+   ever getting up there, and a ladder leaning on one now does it.
 6. [COMPLETE] **GUI overhaul** ("boxy and square") — user will supply a reference GUI to learn from; hold for
    that, then a full visual pass.
 7. [COMPLETE] ✅ **Beda & Alric now have a purpose — SHIPPED 2026-07-20.** They were pure flavor (a greeting,
@@ -564,7 +586,28 @@ granting the unlock + materials and seeing all 26 pieces appear.
   pose and left the camera preference exactly where mounting found it. Zero console/page errors
   across every run. `npm run verify` clean throughout.
 - [TODO] Armor tiers (iron → forged → castle-crested via torso decal variants).
-- [TODO] Catapult/trebuchet (only the cannon exists; firing sound `snd060` is waiting).
+- [CORRECTED 2026-08-06, Wave 8] ~~Catapult/trebuchet (only the cannon exists; firing sound `snd060`
+  is waiting).~~ **This line was already out of date and nobody had noticed.** A catapult has been in
+  the game since the 2026-07-20 rig-lab pass: `oc6096-4` "Catapult" is a registered buildable in the
+  Siege tab (`buildables.ts`'s `SIEGE`), it is manned and fired through the same generic
+  `labCanFire`/`manEngine`/`fireCannon` path the cannon uses, with real arc physics, splash damage,
+  stone consumption and a real swinging arm — plus `oc6096-3`/`oc1289`/`oc6032b2` as further throwers,
+  two of which already fire on their own cadence in Cedric's siege. And `snd060` is not "waiting": it
+  is a sample id from the ORIGINAL 1998 game's numbering, and no such file was ever carried into this
+  project — `public/assets/sounds/` holds 40 human-named WAVs and nothing maps an `sndNNN` id to any of
+  them. What was genuinely missing was that every engine played the cannon's report; Wave 8 gives them
+  distinct voices built from the real bank, keyed off the lab's own `siegeRole` (`siege.ts`'s
+  `fireSound`): torsion arms get a whoosh plus the timber THUD of the arm hitting its stop,
+  bolt-throwers get the crossbow, only powder keeps the bang. If a bespoke catapult sample is ever
+  wanted it has to be SOURCED — there is nothing in this repo to wire up.
+  **Verified live, exact numbers**: `oc6096-4` placed via the real build menu for wood 12 / plank 8 /
+  iron_bar 2; real E-hold crewed it (`crewState.engineId` set, prompt flipped to "Step down"); 5 real
+  LMB-held shots over 6017ms averaged 1.203s/shot against the 1.2s crew cooldown, 1 stone consumed each;
+  a Castle Wall target ~15.6m down-range took real damage and was destroyed by follow-up hits — arc
+  physics and splash both confirmed against a real target, not a flat "did damage happen" check. Sound
+  fix confirmed by intercepting `audio.play` directly: Catapult and both Stone Throwers played
+  `['sword_swish','thud']` (the whoosh+THUD pair), Wall Cannon kept `['cannon']`, Crossbow Station played
+  `['crossbow']` — exactly the `siegeRole` keying described above.
 - [TODO] Timed build challenges recreating the original game's six challenges (their full voiced texts survive in
   the extraction).
 - [TODO] Delivery quests — haul goods by cart between instances (perfect fit after Phase 20).
@@ -650,7 +693,47 @@ zero console errors throughout.
   enemies stay near their real spawn point instead of teleporting; all four milestones grant exactly once
   with real loot; death inside the arena clears `destination`/`arenaState.active`, restores HP, and
   leaves `dayCount` unchanged; voluntary leave and re-entry both work cleanly.
-- [TODO] **A real ladder — climb the walls, look out over the world** (requested 2026-07-29): checked
+- [COMPLETE] ✅ **A real ladder — SHIPPED 2026-08-06 as Wave 8.** `oc6096-5` is a real catalog piece
+  (Siege tab, `stackable` so two lashed together clear a 5.28m castle wall), and holding E at one
+  raises the player onto whatever it leans against. The thing that had to be built first was the
+  FLOOR: `KeepPart.walkway` was a number nothing stood on, because the keep's raised pieces are not
+  `PlacedBuilding`s and `floorHeightAt()` only ever looped `st.buildings`. `keepWalkwayAt()`
+  (`data/keep.ts`) gives the wall walk a real footprint at a real height, `floorHeightAt()` consults it
+  with its own slightly larger step allowance (the ring is not one level — a Corner Turret's walk is at
+  4.2 and the Crenellated Wall it meets at 3.6, a 0.6m lip the ordinary 0.55 ledge rule refuses), and
+  from there ordinary gravity, walking off the edge and `onBattlement()`'s +25% elevated ranged bonus all
+  work with no pinned movement mode to maintain. Getting down: a symmetric "Climb down" at the ladder
+  from above, or step off and fall like anywhere else.
+
+  **Verified live, exact numbers**: standing at the foot of a placed ladder, real hold-E climb landed
+  the player at feet-Y 4.2 exactly (the corner turret's walkway), still 4.2 after 2s idle (gravity holds
+  it, no pinned mode). A real `fireBolt()` up there dealt 8.75 damage against 7.00 on the ground — exactly
+  the `onBattlement()` +25% multiplier, so the check genuinely reads true. Walking the ring from the NW
+  turret traced y 4.2 → 4.12 → 3.60 (crenellated run) → 4.19 → 4.20 (NE turret), confirming the 0.8m step
+  allowance clears the 0.6m lip. One ladder against a 5.28m Castle Wall gave a non-actionable prompt;
+  stacking a second landed the climb at y 5.28 exactly.
+
+  **Two real issues found after that initial pass and fixed the same day**, since neither is a
+  mechanics bug: (1) the mold itself (screenshot-confirmed) is not a bare ladder — it is a small stone
+  gate-arch with a ladder built into it, and no other `isLadder`-flagged mold exists anywhere in the
+  extraction to swap in for it (`capabilities.json` has exactly one). Renamed **Siege Stair** and
+  repriced with a little stone to match what is actually drawn, rather than continuing to call a stone
+  module a "ladder." (2) The non-actionable prompt always read "Lean this ladder against a wall to
+  climb" even when it genuinely WAS leaning and the real problem was reach, misdirecting the player
+  toward re-placing instead of stacking a second one — `climbTargetFor` now reports (via an optional
+  out-param the other two call sites don't have to touch) whether something real was in range at all,
+  so the prompt reads "Too short to reach — stack another ladder" instead when that's the true reason.
+
+  **Also disclosed here, honestly, and true of all five of Wave 8's new catalog pieces below (the
+  ladder/Siege Stair, the Catapult already shipped earlier, and the Jail Cell/Jail Tower/Jewel
+  Tower/Drawbridge Front)**: every one of them is locked in the build menu behind assembling its real
+  LEGO set in the workshop first (`setBuild.ts`'s `setOwning` — Siege Stair and Catapult under set 6096
+  "Bull's Attack", Jail Cell/Jail Tower under 6094 "Guarded Treasury", Jewel Tower/Drawbridge Front
+  under 6098 "King Leo's Castle"). This is the SAME precedent the catalog already used for `oc6094-1`/
+  `oc6032b4`, not a new gate invented for this wave, but it means none of this wave's new content is
+  actually reachable in a fresh save until the matching workshop set is built — a real, long-form
+  prerequisite, not a five-minute unlock. Original note follows —
+- [WAS TODO] **A real ladder — climb the walls, look out over the world** (requested 2026-07-29): checked
   the rig lab's own JSON rather than assuming — `public/assets/rigs/capabilities.json` really does
   carry a dedicated ladder mold, `oc6096-5` (from the Bull's Attack set, alongside Cedric's own
   counterweight siege engine, `oc6096b3`, which separately carries a `ladder`-labelled sub-part of its
@@ -715,7 +798,50 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
 - [TODO] Dye recipes for new palette rows.
 
 **Build system**
-- [TODO] Functional doors/windows; enclosed-area detection → "your homestead is a fort!" buffs.
+- [COMPLETE] ✅ **Functional doors + enclosed-area "your homestead is a fort" buff — SHIPPED 2026-08-06
+  (Wave 8).** The eight `windows_doors` molds were decorative bricks you walked through; the biggest of
+  them (`l407100`, big enough to be a doorway rather than a 1×2 pane) is now the **Portcullis**: hold E
+  to raise/lower it, shut it blocks the player, the nav grid, raiders and takes a battering ram, open it
+  lets everyone through. It shares `gateOpen` and `toggleGate` with the Castle Gate rather than growing
+  a parallel record — one `isDoorLike()` predicate (`game/types.ts`) replaced the half-dozen hardcoded
+  `type === 'gate'` checks, so no new save field exists to be backward-compatible about.
+  **Visual correction, same day**: this shipped first as an "Oak Door" with a procedural wooden leaf
+  hinge-swinging behind the mold. Live verification screenshotted the real problem: `l407100` is not a
+  hollow frame, it's a barred lattice filling the whole opening — the bars stayed visibly standing in
+  the doorway even while "open," and shut, the leaf's flat panel didn't reach the lintel and sky showed
+  through a real gap. Renamed **Portcullis** and reworked to match what the mold actually is: no
+  procedural leaf at all, the real mesh raises straight up (2.3m, into an implied gatehouse slot above)
+  when open and drops back to the ground when shut — a naming/motion fix, not a new asset, and every
+  collision/nav/raider/ram/fort-seal check reads `gateOpen` exactly as before, unaffected by how it's
+  drawn.
+  **Sound Walls** (`game/fort.ts`) is the buff: a 1m lattice over the current land tier is stamped with
+  every rampart (lab `canConnectAsWall` meshes, `walls`-category pieces, shut gates/doors, and the
+  keep's own built pieces) and flooded four-connected from outside the fence — if the homestead centre
+  cannot be reached, the ring is closed, and you take 20% less damage anywhere inside it (applied after
+  armour in `damagePlayer`, so plate and stone are two separate investments). A HUD chip next to the
+  clock shows the ring and its piece count, and closing/breaking it toasts. **Design note, honestly
+  stated**: the research suggested walking Wave 8's own wall-connection GRAPH instead of a geometry
+  pass. The graph is built and used (it reports the longest joined run), but the SEAL test is a flood
+  fill on purpose — "are these pieces joined" is not the same question as "is the homestead inside
+  them", and only the fill also answers a ring closed against the keep, a run that is merely long, and
+  a single raised gate. Known limits: the 1m grid tolerates gaps under ~1m as sealed, and the check
+  asks about the homestead CENTRE specifically (a ring built off to one side does not count).
+
+  **Verified live, exact numbers**: a ring of 4 Wall Corners + 4 Castle Walls + 4 Portcullises (12
+  pieces) built at the homestead. Real E-hold on a door: prompt "Hold E — Close the Portcullis" →
+  `gateOpen` false, `door_open` sample played (previously unused), "You pull the door to."; reopening
+  gave "Hold E — Open the Portcullis" → `gateOpen` true. Collision: walking into a shut door stopped
+  dead at the threshold; open, the same walk passed straight through. All 4 doors open → `enclosed`
+  false, ring 0, area 0. All 4 shut → `enclosed` TRUE, ring 12 pieces, area 85 m², longest run 12 — HUD
+  chip read "Sound Walls · 12 pieces" and vanished the instant one door was raised. Through the real
+  `damagePlayer` path: a hit that cost 2.0 HP outside the ring cost exactly 1.6 HP (20% less) standing
+  inside it with all four shut; raising just one door dropped the buff immediately (full 2.0 HP again),
+  and re-shutting it resealed the ring (85 m² again). Deleting a wall segment outright correctly broke
+  the seal too (longest run 12 → 11). Windows were deliberately left out of this pass — see below.
+- [TODO] Windows as a separate interactable (shutters/arrow slits) — the door covers the "a doorway is
+  a thing that opens" half of the original line; a window that opens wants a mechanical reason to
+  (shooting through it, light, ventilation for a future warmth system) rather than a toggle for its
+  own sake, and that is a design call, not a build task.
 - [TODO] **Building-conferred villager attribute bonuses (RTS-style)**: certain placed buildings passively
   grant stat/capacity bonuses to villagers just by existing on the grid (e.g., a future storage/
   warehouse-type building boosting carry capacity), rather than requiring direct interaction. Genuinely
@@ -1009,8 +1135,9 @@ villagers reacting (fleeing, defenders rallying) to the siege specifically rathe
 1. [COMPLETE] **User-reported batch above** — instance-bleed visibility ✅ and NPC equipment/Armory ✅ both
    shipped 2026-07-19. Remaining: regional quest log; real wall collision (arrow slits); GUI overhaul
    (holding for the user's reference); Beda & Alric's purpose; mobile-friendly tech debt.
-2. [TODO] **Phase 25 wave 2** — remaining verified oc-series set pieces, wall-connection
-   snapping via `wallRole`/`canConnectAsWall`. [COMPLETE] Road pavement shipped (see L297/L71).
+2. [COMPLETE] **Phase 25 wave 2** — remaining verified oc-series set pieces ✅ and wall-connection
+   snapping via `wallRole`/`canConnectAsWall` ✅ both shipped 2026-08-06 (Wave 8, see the Phase 25
+   entry above). [COMPLETE] Road pavement shipped (see L297/L71).
 3. [TODO] **Phase 24 follow-ups** — per-defender orders, HUD order chip, deposit floaties, stall UI.
 4. [TODO] **Instance-separation audit list** (Phase 23 doctrine) whenever a listed system is touched.
 5. [TODO] Backlog alongside: halberd/spear player weapons, armor tiers, dungeon follow-ups,
@@ -5276,3 +5403,7 @@ needs its own pass before implementation.
   overlap (both states have to be true at once), which is likely why it's gone unnoticed. Fix is
   probably just deleting the stray spliced copy, but that needs its own verification pass, not a
   drive-by edit inside an unrelated wave.
+  **Independently re-confirmed twice since**: Wave 7's own verification found it again (still
+  byte-identical, still outside that wave's diff) and Wave 8's implementation pass found it a third
+  time (`git log -L` traces it to the file's original commit). Still open, still nobody's touched it —
+  it keeps surviving unrelated waves specifically because it's this narrow.

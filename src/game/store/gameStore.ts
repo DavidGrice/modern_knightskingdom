@@ -1714,8 +1714,18 @@ function createGameStore() {
       // wall" checklist item alongside NavGrid.rebuild()'s own missing
       // gateOpen check — the same bug had two different-shaped halves).
       set({ gateOpen: { ...st.gateOpen, [buildingId]: !wasOpen }, buildings: [...st.buildings], dirty: true });
-      audio.play(wasOpen ? 'portcullis' : 'drawbridge', 0.8);
-      st.notify(wasOpen ? 'The gate grinds shut.' : 'The gate creaks open.');
+      // Wave 8 · doors share this record and this action (see isDoorLike), so
+      // they share the reference-bump above for free — what differs is only
+      // what it sounds and reads like. A door has a real `door_open` sample in
+      // the bank that nothing was using; a portcullis grinds.
+      const isDoor = st.buildings.find((b) => b.id === buildingId)?.type === 'door';
+      if (isDoor) audio.play('door_open', 0.75);
+      else audio.play(wasOpen ? 'portcullis' : 'drawbridge', 0.8);
+      st.notify(
+        isDoor
+          ? (wasOpen ? 'You pull the door to.' : 'The door swings open.')
+          : (wasOpen ? 'The gate grinds shut.' : 'The gate creaks open.'),
+      );
     },
 
     damageBuilding: (id, amount, cause) => {

@@ -14,7 +14,7 @@
 // without anyone remembering to say so.
 import * as THREE from 'three';
 import { collisionBoxesFor } from './data/buildables';
-import { isBuilt, isHomeBuilding, type PlacedBuilding } from './types';
+import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from './types';
 import { terrainBlocks, terrainExclusions } from './navTerrain';
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWorld';
@@ -396,7 +396,10 @@ export class NavGrid {
       // check was simply absent before, so every gate — open or closed —
       // was permanently solid to findPath/navSteer regardless of state,
       // while the player could already walk straight through an open one.
-      if (b.type === 'gate' && (useGameStore.getState().gateOpen[b.id] ?? true)) continue;
+      // Wave 8 · an opened door is as walkable as a raised gate — the two are
+      // one rule now (isDoorLike), so a villager routes through the door you
+      // left open instead of walking round your whole yard
+      if (isDoorLike(b.type) && (useGameStore.getState().gateOpen[b.id] ?? true)) continue;
       for (const box of collisionBoxesFor(b.type, b.rot)) {
         const base = (b.y ?? 0) + box.yBase;
         const top = (b.y ?? 0) + box.yTop;

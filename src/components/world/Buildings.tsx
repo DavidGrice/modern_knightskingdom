@@ -214,6 +214,48 @@ function GateFixture({ id }: { id: string }) {
   );
 }
 
+/** Wave 8 fix (2026-08-06) · live verification screenshotted this as a
+ *  procedurally-hinged leaf behind the l407100 mold, and the mold itself is
+ *  NOT a hollow frame — it is a barred lattice (see its own thumbnail: a
+ *  criss-cross grille filling the whole opening). A swinging leaf behind bars
+ *  that stay put either way was wrong on both states: shut, the leaf's flat
+ *  panel didn't fill the lintel and sky showed through the gap; open, the
+ *  bars were still standing in the doorway you'd just "opened."
+ *
+ *  Reframed as a **Portcullis** instead of an Oak Door — the mold already
+ *  looks like one, so this is a naming/motion fix, not a new asset. No
+ *  procedural leaf at all: the real mesh IS the gate, and it raises straight
+ *  up into the gatehouse above when open, the way an actual portcullis does,
+ *  instead of swinging on a hinge it was never modelled with. `isDoorLike`/
+ *  `gateOpen` (types.ts) don't care what a door looks like, only whether it's
+ *  open — this is a pure render change. */
+function DoorFixture({ id }: { id: string }) {
+  const open = useGameStore((s) => s.gateOpen[id] ?? true);
+  const lift = useRef<THREE.Group>(null);
+  const liftY = useRef(0);
+  // raised clear of head height (declared 2.8m tall) but not the WHOLE
+  // height — a real portcullis still shows a sliver in its slot at the top
+  // of the gate, which reads better than the mesh vanishing outright.
+  // Mutated on the group's own transform (not a React prop) the same way
+  // GateFixture's bridge/leaf groups above already animate — a ref written
+  // inside useFrame doesn't re-render, so the position has to be set on the
+  // real Object3D, not re-passed as a prop each frame.
+  const RAISED = 2.3;
+  useFrame((_, dt) => {
+    const k = Math.min(1, dt * 3.4);
+    const target = open ? RAISED : 0;
+    liftY.current += (target - liftY.current) * k;
+    if (lift.current) lift.current.position.y = liftY.current;
+  });
+  return (
+    <group ref={lift}>
+      <Suspense fallback={null}>
+        <PropModel url="/assets/props/windows_doors/12_l407100.glb" height={2.8} />
+      </Suspense>
+    </group>
+  );
+}
+
 function Bed() {
   return (
     <group>
@@ -367,6 +409,9 @@ export function BuildingMesh({ b }: { b: PlacedBuilding }) {
   }
   if (b.type === 'gate') {
     return <group position={[b.x, y, b.z]} rotation-y={yaw}><GateFixture id={b.id} /></group>;
+  }
+  if (b.type === 'door') {
+    return <group position={[b.x, y, b.z]} rotation-y={yaw}><DoorFixture id={b.id} /></group>;
   }
   if (b.type === 'warcart' || b.type === 'bladecart') {
     return <CartMesh b={b} def={def} yaw={yaw} />;

@@ -190,6 +190,31 @@ const CRAFTED: Buildable[] = [
     requiresUnlock: 'smithing',
   },
   {
+    // Wave 8 · the windows_doors folder held eight real frames and every one
+    // of them was placed as a decorative brick you could walk straight
+    // through — E did nothing at a door. This is the same mold (l407100, the
+    // one big enough to be a doorway rather than a 1×2 window pane) promoted
+    // into a piece that BEHAVES: shut it blocks, open it lets you and your
+    // villagers through, and it seals a wall run for the fort check the same
+    // way a gate does (see isDoorLike in game/types.ts — the two share one
+    // state record and one set of rules rather than growing a parallel one).
+    //
+    // Named for what the mold actually is, corrected 2026-08-06: l407100 is a
+    // barred lattice filling its whole opening, not a plain hollow frame — it
+    // reads as a portcullis, not an oak door, and Buildings.tsx's DoorFixture
+    // now raises/lowers the real mesh instead of hinging a procedural leaf
+    // that never matched what was drawn behind it.
+    //
+    // Cheaper and earlier than the Castle Gate on purpose: a gate is 4m of
+    // ironbound castle front, this is the way into your own yard.
+    // Proportions are the mold's own (2.1 × 2.94 × 0.84 at brick scale) held
+    // exactly, at a 2m-wide opening so it plugs a gap in a wall run.
+    id: 'door', name: 'Portcullis', thumb: `${P}/windows_doors/12_l407100.png`, model: `${P}/windows_doors/12_l407100.glb`,
+    category: 'walls', size: [2, 2.8, 0.8], snap: GRID, stackable: true,
+    cost: { plank: 5, iron_bar: 1 }, buildXp: 18,
+    requiresUnlock: 'building2',
+  },
+  {
     // J51 · this is the FOUNDATION, not the castle. Placing it marks out a
     // 16m courtyard with nine named sockets; the corners, wall runs and
     // bailey are then chosen and raised one at a time (game/data/keep.ts),
@@ -328,6 +353,39 @@ const PREFABS: Buildable[] = [
   { id: 'oc6094-1', name: 'Weapons Rack', thumb: `${B}/oc6094-1.png`, model: `${B}/oc6094-1.glb`,
     category: 'prefab', size: [0.9, 2.4, 1], snap: GRID, stackable: false,
     cost: { wood: 3, iron_bar: 1 }, buildXp: 15 },
+  // Wave 8 · four more of the lab's VERIFIED oc-series set pieces, which have
+  // been in the extraction (and in capabilities.json, `seedSource: verified`,
+  // with real structureKinds) the whole time and were only ever placeable as
+  // anonymous "Castle Piece 8×9" generic bricks. Same promotion oc6094-1 and
+  // oc6032b4 already had; the generic duplicates are deliberately left alone,
+  // exactly as those two left theirs (an old save may hold a `gen_` id).
+  //
+  // Sizes are the generic entries' own measurements rescaled from the brick
+  // pipeline's k = 0.04375 to the castle family's k = 0.05 (×8/7), so these
+  // stand at the same scale as the mc-series walls rather than 12% short.
+  // PropModel scales a mesh UNIFORMLY to its declared height, so the three
+  // axes have to keep the model's real proportions or the collision box stops
+  // matching what is drawn.
+  { id: 'oc6094-2', name: 'Jail Cell', thumb: `${B}/oc6094-2.png`, model: `${B}/oc6094-2.glb`,
+    category: 'prefab', size: [3.2, 6.4, 3.6], snap: GRID, stackable: false,
+    cost: { stone: 12, iron_bar: 2 }, buildXp: 40, requiresUnlock: 'smithing' },
+  { id: 'oc6094b5', name: 'Jail Tower', thumb: `${B}/oc6094b5.png`, model: `${B}/oc6094b5.glb`,
+    category: 'prefab', size: [4.8, 12.64, 3.6], snap: GRID, stackable: false,
+    cost: { stone: 20, wood: 6, iron_bar: 3 }, buildXp: 70, requiresUnlock: 'smithing' },
+  // true k=0.05 height is 15.84, which no placement could ever accept:
+  // evalPlacement rejects anything taller than MAX_STACK_HEIGHT (14). Scaled
+  // down as a WHOLE piece (all three axes ×12/15.84) rather than by squashing
+  // the declared height alone, which would have left the footprint 30% wider
+  // than the mesh PropModel actually draws.
+  { id: 'oc6098b3', name: 'Jewel Tower', thumb: `${B}/oc6098b3.png`, model: `${B}/oc6098b3.glb`,
+    category: 'prefab', size: [2.42, 12, 3.03], snap: GRID, stackable: false,
+    cost: { stone: 18, iron_bar: 2, gold: 40 }, buildXp: 65, requiresUnlock: 'keep' },
+  // the lab's one `wallRole: 'gate'` piece — a whole castle front with its own
+  // drawbridge, not a wall segment. Priced and gated like the Siege Tower
+  // because it is that kind of undertaking.
+  { id: 'oc6098-1', name: 'Drawbridge Front', thumb: `${B}/oc6098-1.png`, model: `${B}/oc6098-1.glb`,
+    category: 'prefab', size: [19.2, 5.58, 14], snap: GRID, stackable: false,
+    cost: { stone: 40, plank: 16, iron_bar: 6 }, buildXp: 120, requiresUnlock: 'keep' },
   { id: 'oc6032b4', name: 'Armory Stand', thumb: `${B}/oc6032b4.png`, model: `${B}/oc6032b4.glb`,
     category: 'prefab', size: [1.4, 2.2, 0.9], snap: GRID, stackable: false,
     cost: { wood: 4, iron_bar: 2 }, buildXp: 18 },
@@ -377,6 +435,30 @@ const SIEGE: Buildable[] = [
   { id: 'oc6096b3', name: 'Siege Tower', thumb: `${L}/oc6096b3.png`, model: `${L}/oc6096b3.glb`,
     category: 'siege', size: [7.84, 10.56, 7.78], snap: GRID, stackable: false,
     cost: { wood: 30, plank: 20, iron_bar: 6 }, buildXp: 110, requiresUnlock: 'keep' },
+  // Wave 8 · the climbing piece. The lab charted this one as
+  // `structureKind: 'ladder'`, `isLadder`, `isMovableLadder`, `canStandOn` —
+  // everything a climbing piece needs — and it was placeable only as a
+  // nameless "Castle Piece 6×5" you walked past. It lives with the engines
+  // because that is what it is for: the way UP a wall you cannot knock down.
+  //
+  // Named for what the mold actually shows, corrected 2026-08-06: its own
+  // thumbnail is a small stone gate-arch with a wooden ladder built into it,
+  // not a bare portable ladder — no other `isLadder` mold exists in the
+  // extraction to swap in for it (grepped `capabilities.json`; this is the
+  // only one), so the fix is honest naming/pricing rather than pretending it
+  // is something it isn't. A stub of masonry with a stair in it, raised
+  // against your own wall, is a real siege-camp structure — a Siege Stair —
+  // just not a thing you casually lean and re-lean, so the cost picked up a
+  // little stone to match what's actually drawn.
+  //
+  // Deliberately `stackable`, unlike every engine here: at its true k=0.05
+  // scale one is 3.2m, which clears a keep's wall walk (3.6 / 4.2 with a
+  // pull-up) but not a placed 5.28m castle wall. Two lashed together do —
+  // and the climb reads the whole stacked column's top, so stacking is a real
+  // answer rather than decoration (see climbTargetFor in PlayerController).
+  { id: 'oc6096-5', name: 'Siege Stair', thumb: `${B}/oc6096-5.png`, model: `${B}/oc6096-5.glb`,
+    category: 'siege', size: [2.4, 3.2, 2], snap: 1, stackable: true,
+    cost: { stone: 3, wood: 8, plank: 4 }, buildXp: 20, requiresUnlock: 'building2' },
   // explosives: `traits.explosive.damagesWalls` — set one down, strike it,
   // and it takes out what's around it
   { id: 'l248901', name: 'Powder Barrel', thumb: `${L}/l248901.png`, model: `${L}/l248901.glb`,

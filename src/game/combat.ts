@@ -18,6 +18,7 @@ import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
+import { fortDamageReduction } from './fort';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -346,7 +347,13 @@ export function armorReduction(inv: Partial<Record<ItemId, number>>, perks: stri
 
 export function damagePlayer(amount: number) {
   const st = useGameStore.getState();
-  let dmg = amount * (1 - armorReduction(st.inventory, st.perks));
+  // Wave 8 · Sound Walls. A closed wall ring around the homestead takes a
+  // fifth off every blow landed on you INSIDE it (game/fort.ts). Applied on
+  // top of armour rather than into armorReduction's own capped pool, because
+  // they are two different investments: plate is what you wear, the ring is
+  // what you built, and a knight in full harness behind a finished wall should
+  // feel both.
+  let dmg = amount * (1 - armorReduction(st.inventory, st.perks)) * (1 - fortDamageReduction());
   if (combatState.blocking && (st.inventory.shield ?? 0) > 0 && combatState.stamina > 10) {
     dmg = Math.max(0, Math.round(dmg * 0.25 * 10) / 10);
     combatState.stamina = Math.max(0, combatState.stamina - 14);

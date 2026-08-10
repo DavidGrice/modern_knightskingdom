@@ -121,6 +121,19 @@ export function isBuilt(b: PlacedBuilding): boolean {
   return (b.built ?? 1) >= 1;
 }
 
+/** Wave 8 · a piece that SEALS when shut and lets you through when open.
+ *  The Castle Gate was the only one for a long time, so half a dozen systems
+ *  (player collision, the nav grid, raider targeting, the battering ram, the
+ *  fort ring check) each hardcoded `type === 'gate'`. The Portcullis
+ *  (buildables.ts's `door` entry — named for what its mold actually is, a
+ *  barred lattice, not a plain hollow doorway) is mechanically the same thing
+ *  at a smaller size, and shares `gateOpen` rather than growing a parallel
+ *  `doorOpen` record — one predicate here means a future piece of this same
+ *  shape reaches all of them by being added once. */
+export function isDoorLike(type: string): boolean {
+  return type === 'gate' || type === 'door';
+}
+
 /** true for a homestead building (world absent/null) — every homestead-only
  *  system (villager recruitment, taxes, raid triggers, the builder/merchant/
  *  bed-seek passes) should filter through this so a remote claimed-plot

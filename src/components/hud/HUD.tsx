@@ -22,6 +22,7 @@ import FpsReadout from './FpsReadout';
 import FishingMeter from './FishingMeter';
 import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
+import FortStatus from './FortStatus';
 import ArenaHud from './ArenaHud';
 import OrderRadial from './OrderRadial';
 import KkIcon from '../ui/KkIcon';
@@ -343,6 +344,10 @@ export default function HUD() {
       <div className="kk-topright">
         {!buildMode && <Compass />}
         <WorldClock />
+        {/* Wave 8 · shown in build mode too — closing the ring is something
+            you do WHILE building, and watching the chip appear is the clearest
+            possible confirmation that the last gap is plugged */}
+        <FortStatus />
         <FpsReadout />
       </div>
 

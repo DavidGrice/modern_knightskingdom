@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { BUILDABLE_BY_ID, BUILD_REGION, GRID, labAssetId, sizeFor } from '@/game/data/buildables';
 import { labIsCorner } from '@/game/data/labCapabilities';
+import { wallSnap } from '@/game/walls';
 import { WORLD_HALF } from '@/game/data/world';
 import { buildCamState } from '@/game/buildCam';
 import { playerState } from '@/game/playerState';
@@ -37,6 +38,7 @@ export default function BuildController() {
   const camRef = useRef<THREE.OrthographicCamera>(null);
 
   const destination = useGameStore((s) => s.destination);
+  const buildings = useGameStore((s) => s.buildings);
   const claimedWorlds = useGameStore((s) => s.claimedWorlds);
   const claim = destination ? claimedWorlds[destination] : null;
   // a claimed template plot builds around wherever it was planted; home
@@ -195,6 +197,13 @@ export default function BuildController() {
       return { x: Math.round(point.x / GRID) * GRID, z: Math.round(point.z / GRID) * GRID };
     }
     if (!activeType || !def) return null;
+    // Wave 8 · wall-connect. A wall-family piece near a standing one latches
+    // to its open END rather than to the bare 2m lattice: the family runs 8m
+    // straights against 4m corners against a 2m door, and no single grid pitch
+    // lines all of those up flush. Everything else — and a wall out in open
+    // ground — keeps the original per-piece grid snap untouched.
+    const link = wallSnap(activeType, rot, point.x, point.z, buildings, destination ?? null);
+    if (link) return { x: link.x, z: link.z };
     const [sx, sz] = sizeFor(activeType, rot);
     const snap = def.snap;
     return {
@@ -220,6 +229,16 @@ export default function BuildController() {
   // a corner turns a run either way, so it has no meaningful "front" to
   // point at — see labIsCorner
   const isCorner = !!activeType && labIsCorner(labAssetId(activeType));
+  // Wave 8 · is the ghost currently LATCHED to a neighbouring wall? Re-asking
+  // wallSnap about the already-snapped point rather than threading a second
+  // piece of state out of snapPoint: the answer is by construction the same
+  // point when it latched, and null when it did not.
+  const wallLink = activeType && ghost
+    ? wallSnap(activeType, rot, ghost.x, ghost.z, buildings, destination ?? null)
+    : null;
+  const linkedTo = wallLink && Math.abs(wallLink.x - ghost!.x) < 0.01 && Math.abs(wallLink.z - ghost!.z) < 0.01
+    ? buildings.find((b) => b.id === wallLink.toId) ?? null
+    : null;
 
   // rebuilt only when the piece's footprint actually changes, not per frame
   const ghostEdges = useMemo(
@@ -321,6 +340,20 @@ export default function BuildController() {
             </mesh>
             )}
           </group>
+          {/* wall-connect joint: a gold seam drawn ON the shared edge, so
+              "this piece is joined to that one" is something you can see
+              before you commit rather than something you infer afterwards.
+              Outside the rotated group — the seam is a world-space mark
+              between two centres, not a feature of the piece. */}
+          {linkedTo && (
+            <mesh
+              position={[(linkedTo.x - ghost.x) / 2, gy + 0.14, (linkedTo.z - ghost.z) / 2]}
+              rotation-x={-Math.PI / 2}
+            >
+              <planeGeometry args={[0.7, 0.7]} />
+              <meshBasicMaterial color="#e8c141" transparent opacity={0.95} depthTest={false} />
+            </mesh>
+          )}
           {/* stack elevation marker */}
           {gy > 0.05 && (
             <mesh position-y={gy / 2}>
