@@ -12,6 +12,13 @@ export type ItemId =
   | 'sword' | 'shield' | 'crossbow' | 'bolt' | 'gold'
   | 'wheat' | 'bread' | 'longbow' | 'arrow'
   | 'helmet' | 'chestplate'
+  // Wave 9 · the two chestplate tiers above the plain iron one. Deliberately
+  // separate ItemIds rather than a `tier` field on `chestplate`: a crafted
+  // plate lives in the Satchel/Armory as a COUNT, and the recipes below re-
+  // forge the tier under them (a Forged plate costs an Iron one), which only
+  // works if each tier is its own countable thing. `ChestplateTier` names the
+  // same three in the vocabulary a worn slot uses — joined in data/armor.ts.
+  | 'chestplate_forged' | 'chestplate_crested'
   // Wave 7 · the two polearms. Both were render-only before: the halberd was
   // an NPC-exclusive mold that only ever entered play as Armory stock
   // (Sealed Crypt salvage) for a defender's loadout, and the spear had no
@@ -21,9 +28,24 @@ export type ItemId =
   // the Satchel, so a defender's halberd and the player's own never mix.
   | 'halberd' | 'spear'
   | 'herb' | 'potion_heal' | 'potion_stamina' | 'potion_nightvision'
+  // Wave 9 · cooking past bread-and-fish. All three are campfire dishes made
+  // from ingredients the world ALREADY yields (data/recipes.ts) — no new
+  // gatherable, no new node kind — and all three are `EDIBLES` (data/items.ts)
+  // on the same vigour ladder the first two dishes set.
+  | 'pottage' | 'fish_stew' | 'blossom_tart'
+  // Wave 9 · dyes. One per unlockable palette row (data/dyes.ts): brewed at
+  // the campfire like the draughts beside them, then spent ONCE to open that
+  // row of colours for the rest of the save. They are not worn and not
+  // consumed per recolour — see `SaveGame.dyes`.
+  | 'dye_woad' | 'dye_madder' | 'dye_tyrian' | 'dye_bark'
   // Wave 5: filled at the brook, poured on a cultivated plot. Not crafted —
   // the water IS the acquisition (see PlayerController's 'draw_water').
-  | 'water_bucket';
+  | 'water_bucket'
+  // Wave 9 · the two carrier tiers, finally acquirable. Deliberately spelled
+  // the SAME as `CarrierTier`'s own two members so the item and the worn tier
+  // are one vocabulary (see CARRIER_ITEM in data/villagers.ts) — a third tier
+  // would be added in both places or in neither, never half.
+  | 'basket' | 'cart';
 
 export interface CharacterConfig {
   name: string;
@@ -88,6 +110,20 @@ export interface Buildable {
   buildXp: number;
 }
 
+/** Wave 9 · which tool the aerial build view's left button is holding. */
+export type BuildTool = 'build' | 'demolish';
+
+/** Wave 9 · an axis-aligned patch of ground in world metres, dragged out in
+ *  build mode. Used by the area-demolish marquee; deliberately plain data so
+ *  the drag (BuildController) and the confirmation (BuildBar) can be in two
+ *  different components without either owning the other. */
+export interface BuildRect {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
 export interface PlacedBuilding {
   id: string;
   type: string;      // buildable id
@@ -95,6 +131,21 @@ export interface PlacedBuilding {
   z: number;
   y?: number;        // base elevation (stacking); 0 / undefined = on the ground
   rot: 0 | 1 | 2 | 3; // quarter turns
+  /** Wave 9 freeform mode: the piece's TRUE facing in radians, when it was set
+   *  down off the quarter-turn lattice. Absent (every snapped piece, and every
+   *  save written before Wave 9) means `rot * PI/2` exactly, so nothing older
+   *  changes.
+   *
+   *  Deliberately a SECOND field rather than widening `rot` to a plain number:
+   *  every footprint/overlap test in the game (evalPlacement's AABB check,
+   *  sizeFor's width/depth swap, walls.ts's attach points, collisionShapes'
+   *  boxes) is axis-aligned and only stays correct because rotation is a
+   *  multiple of 90°. So `rot` remains the piece's collision truth — rounded to
+   *  the nearest quarter turn — and `yaw` is what it LOOKS like. A piece turned
+   *  35° therefore stops you along its nearest square footprint; that is the
+   *  honest cost of freeform placement without an oriented-box collision
+   *  system, and it is why freeform is off by default and aimed at decor. */
+  yaw?: number;
   /** Phase 19 build-then-construct: 0..1 construction progress. Absent = 1
    *  (fully built), so every building from an older save just works. */
   built?: number;
@@ -263,6 +314,13 @@ export interface SaveGame {
   skillTree?: string[];
   /** player attribute points invested (data/playerAttributes.ts) */
   attrSpent?: Partial<Record<'might' | 'diligence' | 'craft' | 'courage' | 'wit', number>>;
+  /** Wave 9 · palette rows opened with a brewed dye (data/dyes.ts row ids);
+   *  absent/empty = only the free swatches, i.e. exactly how every pre-Wave-9
+   *  save already looked. Saved with the CHARACTER, not in localStorage like
+   *  the crest unlocks: a dye is brewed from this save's own herbs and
+   *  flowers, so it belongs to this save, whereas a crest is a deed earned
+   *  once by the player themselves. */
+  dyes?: string[];
   /** 0-100 wear per degradable tool (axe/pickaxe/fishing_rod/sword); absent = full (100) */
   durability?: Partial<Record<ItemId, number>>;
   /** ids of skill perks picked at rank-ups (see data/perks.ts) */
@@ -342,12 +400,24 @@ export type Alliance = 'leo' | 'cedric';
 export type DefenderLoadout = 'bow' | 'sword_shield' | 'halberd';
 
 /** A worn item that raises `carryCapacityOf()`'s result (game/data/
- *  attributes.ts) — basket first, cart a larger tier above it. Acquisition
- *  (crafting recipe, Armory stock, roster equip UI, a visual mesh) is
- *  deliberately NOT built yet — see ROADMAP.md's "Carrier item content"
- *  entry. This type exists now so the capacity formula and Villager.gear
- *  shape are real and testable ahead of that. */
+ *  attributes.ts) — basket first, cart a larger tier above it. Wave 9 built
+ *  the acquisition half this type was waiting on: both are real `ItemId`s
+ *  with recipes, they stock the shared Armory like helmet/chestplate, and the
+ *  Roster equips them. Mutually exclusive (one field, not two booleans), so
+ *  the store action that sets it is modelled on `setDefenderLoadout`'s
+ *  auto-refund swap rather than on `equipVillagerGear`'s boolean toggle. */
 export type CarrierTier = 'basket' | 'cart';
+
+/** Wave 9 · armor tiers. The plate a figure wears, best last. `true` on an
+ *  older save (and on anything that still equips the plain `chestplate` item)
+ *  means 'iron' — the original single tier — which is why `gear.chestplate`
+ *  stays assignable from a boolean instead of being migrated: every read goes
+ *  through `chestplateTierOf()` (data/armor.ts), so no save has to be
+ *  rewritten and every truthiness test already in the codebase still means
+ *  "wearing a plate". The tiers are mutually exclusive on ONE field, so the
+ *  store action that sets it is `setDefenderLoadout`-shaped (the old plate
+ *  goes back to the Armory when you upgrade), exactly like CarrierTier. */
+export type ChestplateTier = 'iron' | 'forged' | 'crested';
 
 export interface Villager {
   id: string;
@@ -374,9 +444,12 @@ export interface Villager {
    *  defenders additionally get a small combat bonus per piece, see
    *  Defenders.tsx). Absent/false = bare-headed/chested. `carrier` raises
    *  carry capacity (game/data/attributes.ts's carryCapacityOf) — absent =
-   *  no bonus. Unlike helmet/chestplate it isn't Armory-backed yet; see
-   *  CarrierTier's own comment. */
-  gear?: { helmet?: boolean; chestplate?: boolean; carrier?: CarrierTier };
+   *  no bonus. As of Wave 9 it is Armory-backed exactly like the other two,
+   *  just tiered instead of boolean (see CarrierTier).
+   *  `chestplate` is tiered too as of Wave 9 and keeps accepting the old
+   *  `true` (= iron) so no save needs migrating — read it through
+   *  `chestplateTierOf()` in data/armor.ts rather than switching on it here. */
+  gear?: { helmet?: boolean; chestplate?: boolean | ChestplateTier; carrier?: CarrierTier };
   /** player-edited appearance overrides (data/villagerLooks.ts). Only the
    *  fields actually changed are stored; anything absent keeps tracking the
    *  id-derived default, so untouched villagers need no migration. */

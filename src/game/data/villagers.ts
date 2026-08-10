@@ -1,4 +1,4 @@
-import type { ClaimedPlot, DefenderLoadout, ItemId, VillagerJob } from '../types';
+import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, VillagerJob } from '../types';
 import { BUILD_REGION } from './buildables';
 import { hashId } from './villagerLooks';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
@@ -133,6 +133,22 @@ export const LOADOUT_REQUIRES: Record<DefenderLoadout, Partial<Record<ItemId, nu
   halberd: { halberd: 1 },
   bow: { crossbow: 1 },
 };
+
+// Wave 9 · carriers. Same Armory-backed, mutually-exclusive shape as the
+// loadouts directly above (one field on the villager, the old tier refunded
+// when you switch), NOT the boolean helmet/chestplate shape — a villager
+// wears a basket OR a cart, never both, so a straight upgrade must hand the
+// basket back rather than quietly consuming it. Any job may wear one:
+// carry capacity is a working stat, and a defender who also hauls is fine.
+export const CARRIERS: { id: CarrierTier; label: string; icon: string; blurb: string }[] = [
+  { id: 'basket', label: 'Basket', icon: '🧺', blurb: '+4 carried per trip' },
+  { id: 'cart', label: 'Hand Cart', icon: '🛒', blurb: '+10 carried per trip' },
+];
+
+/** the Armory item each tier spends — 1:1 with the tier's own name by design
+ *  (see ItemId's Wave 9 note), kept as a real table so the two vocabularies
+ *  are joined in exactly one place. */
+export const CARRIER_ITEM: Record<CarrierTier, ItemId> = { basket: 'basket', cart: 'cart' };
 
 export const JOB_BY_ID = Object.fromEntries(JOBS.map((j) => [j.id, j])) as Record<VillagerJob, JobDef>;
 

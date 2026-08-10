@@ -4,7 +4,8 @@
 // What IS stored is tradeXp (Villager.tradeXp): mutable per-trade mastery
 // earned by actually working, kept per job so a veteran lumberjack switched
 // to mining starts that trade green but keeps their axe mastery.
-import type { CarrierTier, ItemId, Villager, VillagerJob } from '../types';
+import type { CarrierTier, ItemId, PlacedBuilding, Villager, VillagerJob } from '../types';
+import { isBuilt } from '../types';
 
 export type AttrId = 'might' | 'diligence' | 'craft' | 'courage' | 'wit';
 
@@ -68,35 +69,68 @@ const CARRY_LEVEL_BONUS_PER_LEVEL = 1;
 const CARRY_LEVEL_CAP = 10;
 
 /** Confirmed alongside the base numbers above: a basket is a modest boost,
- *  a cart roughly doubles a maxed-out veteran's capacity. Acquisition for
- *  either doesn't exist yet (ROADMAP.md's "Carrier item content" entry) —
- *  this table is real and load-bearing the moment `villager.gear.carrier`
- *  is set by any means, including a debug/test assignment. */
+ *  a cart roughly doubles a maxed-out veteran's capacity. Wave 9 built the
+ *  acquisition half (ItemId + workbench recipe + Armory stock + the Roster's
+ *  carrier row) — these numbers are unchanged, they were always real. */
 const CARRIER_BONUS: Record<CarrierTier, number> = { basket: 4, cart: 10 };
 
 export function carrierBonus(carrier?: CarrierTier): number {
   return carrier ? CARRIER_BONUS[carrier] : 0;
 }
 
-/** Stub for the (unbuilt) RTS-style mechanic where a placed building
- *  passively grants villager bonuses just by existing on the grid —
- *  ROADMAP.md's "Building-conferred villager attribute bonuses" entry.
- *  Always 0 until that system exists; kept as a real function (not inlined
- *  into `carryCapacityOf`) so wiring it in later is a one-line change here,
- *  not a formula rework. */
-export function externalCapacityBonus(_v: Villager): number {
-  return 0;
+// --- building-conferred bonuses (Wave 9) -----------------------------------
+// ROADMAP.md's "Building-conferred villager attribute bonuses (RTS-style)",
+// finally real. The trigger building is the Wave 9 Storehouse
+// (data/buildables.ts) rather than the plain Stockpile, so the two stay
+// distinct: a Stockpile is where goods GO, a Storehouse is an investment that
+// changes how your people work.
+//
+// DESIGN CALL — ownership, not proximity. The obvious version ("within X
+// metres of a Storehouse") was written and rejected: carry capacity is only
+// ever consulted where the villager is FILLING their sack, i.e. out at a tree
+// or an ore vein, which is precisely where they are furthest from any store.
+// A radius check would therefore have paid out only during the deposit itself
+// — visible in a debug readout, invisible in play — and would have flickered
+// on and off as they walked. Counting the Storehouses standing in the
+// villager's OWN settlement (matching the `world` instance-separation
+// doctrine every other per-world system uses) is stable, legible, and makes
+// the piece an economic upgrade instead of a placement puzzle.
+export const STOREHOUSE_CARRY_BONUS = 3;
+/** two Storehouses' worth. Capped so this can't be stacked into a homestead
+ *  where hauling stops mattering — the point is to soften Phase 5's real
+ *  haul-travel cost, not to delete it. */
+export const STOREHOUSE_BONUS_CAP = 6;
+
+/** Passive carry bonus a villager gets from what their settlement has built.
+ *  `buildings` omitted (every UI/preview caller that has no store handy)
+ *  answers 0 rather than guessing — this module stays pure data, it never
+ *  reaches into the store itself. */
+export function externalCapacityBonus(v: Villager, buildings?: PlacedBuilding[]): number {
+  if (!buildings?.length) return 0;
+  const world = v.world ?? null;
+  let n = 0;
+  for (const b of buildings) {
+    if (b.type !== 'storehouse') continue;
+    if ((b.world ?? null) !== world) continue;
+    if (!isBuilt(b)) continue;
+    n++;
+    if (n * STOREHOUSE_CARRY_BONUS >= STOREHOUSE_BONUS_CAP) break;
+  }
+  return Math.min(STOREHOUSE_BONUS_CAP, n * STOREHOUSE_CARRY_BONUS);
 }
 
 /** How much `job` can carry before a haul trip is forced (phase 5's
  *  GatherAtNode/HaulToDeposit). Same job/villager split as `tradeLevelOf` —
  *  job passed separately rather than always reading `v.job`, so a
  *  hypothetical "what would this be for a different job" query is possible
- *  without a throwaway villager copy. */
-export function carryCapacityOf(v: Villager, job: VillagerJob): number {
+ *  without a throwaway villager copy. `buildings` is optional for the same
+ *  reason `externalCapacityBonus` takes it optionally: the one hot caller
+ *  (Agent.ts's think tick) already holds the live store state, everything
+ *  else is a roster readout that can honestly answer without it. */
+export function carryCapacityOf(v: Villager, job: VillagerJob, buildings?: PlacedBuilding[]): number {
   const level = Math.min(tradeLevelOf(v, job), CARRY_LEVEL_CAP);
   return CARRY_BASE_CAPACITY
     + CARRY_LEVEL_BONUS_PER_LEVEL * level
     + carrierBonus(v.gear?.carrier)
-    + externalCapacityBonus(v);
+    + externalCapacityBonus(v, buildings);
 }

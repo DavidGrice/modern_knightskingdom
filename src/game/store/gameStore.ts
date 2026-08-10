@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 import type {
-  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, CharacterConfig, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
+  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
   LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
@@ -28,21 +28,25 @@ import { CHALLENGES, challengeProgress } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
 import { CLASS_BY_ID } from '../data/classes';
 import { attrsOf, tradeLevelOf, tradeXpOf, tripSpeedMult, SIDE_GOODS, type AttrId } from '../data/attributes';
-import { PLAYER_ATTRS, attrPointsEarned, attrPointsSpent } from '../data/playerAttributes';
+import { PLAYER_ATTRS, attrPointsEarned, attrPointsSpent, respecCost } from '../data/playerAttributes';
+import { bestStore, roomFor } from '../storage';
 import { COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult } from '../data/companionTraits';
 import { GUILD_BY_ID, guildEligible, SWITCH_TITHE } from '../data/guilds';
 import { TALENT_BY_ID, talentBuyable } from '../data/skillTree';
-import { DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
+import { CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
 import { RECIPES } from '../data/recipes';
 import { capOf, labDamagedForm } from '../data/labCapabilities';
 import { ITEMS } from '../data/items';
+import { CHESTPLATE_BY_TIER, CHESTPLATE_ITEM, chestplateTierOf } from '../data/armor';
+import { DYE_ROW_BY_ID } from '../data/dyes';
 import { PERKS } from '../data/perks';
 import {
   activeBuildRegion, BUILDABLE_BY_ID, BUILD_REGION, MAX_STACK_HEIGHT, buildableForLabAsset,
-  heightOf, labAssetId, maxHpFor, sizeFor,
+  buildingsInRect, heightOf, labAssetId, maxHpFor, sizeFor,
 } from '../data/buildables';
 import { STARTER_BLUEPRINT_BY_ID } from '../data/blueprints';
+import { wallSnap } from '../walls';
 import { levelFromXp, perkSlotsEarned, rankFromTotalLevel, RANKS, SKILLS, totalSkillLevel, xpForLevel } from '../data/ranks';
 import { audio } from '@/lib/audio';
 import { worldEnv, seasonOf } from '../env';
@@ -68,6 +72,13 @@ const ZERO_STATS: LifetimeStats = {
 
 /** seconds of active play for a wheat crop to mature */
 export const GROW_TIME = 200;
+
+// Wave 9 · a full store refuses goods on every villager trip and every swing;
+// one toast per this window is enough to be understood without becoming the
+// notification feed. Module-level (not store state) for the same reason
+// `notifSeq` is: it is presentation bookkeeping, never saved.
+const FULL_STORE_NOTIFY_MS = 9000;
+let lastFullStoreNotifyAt = 0;
 
 /** real-time cooldown between keep tax collections (Phase 13) */
 export const TAX_COOLDOWN_MS = 5 * 60 * 1000;
@@ -101,6 +112,20 @@ interface GameState {
   buildSelection: string | null; // buildable id chosen in the aerial build bar
   blueprintSelection: string | null; // blueprint id chosen for multi-piece stamping
   movingBuilding: PlacedBuilding | null; // picked-up structure being repositioned
+  /** Wave 9 · which build-mode tool the pointer is holding. 'build' is
+   *  everything the build view could already do (place / move / right-click
+   *  remove); 'demolish' swaps the left button for an area drag. Transient UI,
+   *  never saved — the tool you were holding is not part of the homestead. */
+  buildTool: BuildTool;
+  /** Wave 9 · freeform placement: the ghost stops rounding to the piece's grid
+   *  (and stops latching to wall ends), and R turns it in fine steps instead of
+   *  quarter turns. Off by default and transient — the grid is still the way
+   *  the game is meant to be built, this is for dressing a scene. */
+  freeformBuild: boolean;
+  /** Wave 9 · the area-demolish marquee once the drag has been released and is
+   *  awaiting confirmation. Non-null = a rectangle is armed and BuildBar is
+   *  showing what it would cost. Transient. */
+  demolishRect: BuildRect | null;
   cameraMode: CameraMode;
   targetKind: string | null;     // what the interact ray is aimed at (drives viewmodel tool)
   emote: { clip: string; seq: number } | null;
@@ -156,6 +181,7 @@ interface GameState {
   guild: string | null;          // Phase 21: primary guild id (data/guilds.ts); null = unaffiliated
   skillTree: string[];           // Phase 21: purchased talent ids (data/skillTree.ts)
   attrSpent: Partial<Record<AttrId, number>>; // player attribute points invested (playerAttributes.ts)
+  dyes: string[];                // Wave 9: palette rows opened with a brewed dye (data/dyes.ts)
   durability: Partial<Record<ItemId, number>>; // 0-100 wear per degradable tool, absent = full
   perks: string[];               // skill-perk ids picked at rank-ups (see data/perks.ts)
   stats: LifetimeStats;          // lifetime counters shown on the Stats page
@@ -280,6 +306,9 @@ interface GameState {
   joinGuild: (guildId: string) => void;
   buyTalent: (talentId: string) => void;
   spendAttrPoint: (id: AttrId) => void;
+  /** Wave 9 · hand every invested attribute point back for gold (cost from
+   *  data/playerAttributes' respecCost). No-op when nothing is invested. */
+  respecAttributes: () => void;
   chooseTrait: (villagerId: string, traitId: string) => void;
   useTool: (id: ItemId) => void;
   repairTool: (id: ItemId) => void;
@@ -293,6 +322,14 @@ interface GameState {
   donateToArmory: (item: ItemId, qty: number) => void;
   equipVillagerGear: (villagerId: string, slot: 'helmet' | 'chestplate') => void;
   unequipVillagerGear: (villagerId: string, slot: 'helmet' | 'chestplate') => void;
+  /** Wave 9 armor tiers — the tiered half of the chestplate slot. The pair
+   *  above still works and still means the plain iron plate (they delegate
+   *  here), so the Armory's drag-and-drop and every older caller are
+   *  unchanged; this is what a tier button in the Roster calls. */
+  equipVillagerChestplate: (villagerId: string, tier: ChestplateTier) => void;
+  unequipVillagerChestplate: (villagerId: string) => void;
+  /** Wave 9 dyes — spends one brewed dye to open its palette row for good */
+  unlockDye: (rowId: string) => void;
   setVillagerLook: (villagerId: string, look: Partial<NonNullable<Villager['look']>>) => void;
   resetVillagerLook: (villagerId: string) => void;
   assignJob: (villagerId: string, job: VillagerJob) => void;
@@ -302,6 +339,10 @@ interface GameState {
   claimBed: (villagerId: string) => { x: number; z: number };
   setDefenderLoadout: (villagerId: string, loadout: DefenderLoadout) => void;
   unequipDefenderLoadout: (villagerId: string) => void;
+  /** Wave 9 carriers — tiered, not boolean, so these mirror the loadout pair
+   *  directly above (auto-refund on a swap) rather than equipVillagerGear. */
+  equipVillagerCarrier: (villagerId: string, tier: CarrierTier) => void;
+  unequipVillagerCarrier: (villagerId: string) => void;
   stationDefender: (villagerId: string, buildingId: string | null) => void;
   setDefenderShift: (villagerId: string, shift: 'day' | 'night') => void;
   gainDefenderXp: (villagerId: string, amount: number) => void;
@@ -318,7 +359,9 @@ interface GameState {
   recordDungeonClear: () => void;
 
   // systems
-  addItems: (items: Partial<Record<ItemId, number>>, source?: 'gather' | 'craft' | 'grant') => void;
+  /** returns what was actually accepted after the storage cap (game/storage.ts)
+   *  — identical to `items` whenever there is room, which is the normal case */
+  addItems: (items: Partial<Record<ItemId, number>>, source?: 'gather' | 'craft' | 'grant') => Partial<Record<ItemId, number>>;
   addXp: (skill: SkillId, amount: number) => void;
   harvestNode: (nodeId: string) => void;
   /** AI-only, single-swing harvest for `GatherAtNode` (PHASE_2_NAVIGATION_
@@ -343,7 +386,15 @@ interface GameState {
   tickRespawns: () => void;
   craft: (recipeId: string) => boolean;
   canAfford: (cost: Partial<Record<ItemId, number>>) => boolean;
-  placeBuilding: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3) => boolean;
+  placeBuilding: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number) => boolean;
+  /** Wave 9 · lay a whole run of one wall-family piece in a single action.
+   *  `cells` are the already-stepped centres BuildController's row drag drew,
+   *  in order from the anchor outward; each is re-offered to walls.ts's
+   *  `wallSnap` as it goes so a run genuinely latches onto whatever is standing
+   *  (including the segment laid a moment earlier), and the run STOPS at the
+   *  first cell that will not take — out of materials, off the region, blocked.
+   *  Returns how many actually went down. One undo entry for the lot. */
+  placeRow: (type: string, cells: { x: number; z: number }[], rot: 0 | 1 | 2 | 3) => number;
   constructBuilding: (id: string, amount: number) => void;
   /** J51 · lay the castle foundation at (x, z) — sockets open once it exists */
   foundKeep: (x: number, z: number) => void;
@@ -366,7 +417,10 @@ interface GameState {
   /** J51 · a raised piece takes siege damage — knocked down (socket cleared,
    *  half materials refunded) at 0 HP, same shape as damageBuilding */
   damageKeepPart: (socketId: string, amount: number, cause?: string) => void;
-  removeBuilding: (id: string, consumed?: boolean) => void;
+  /** `quiet` (Wave 9) folds the per-piece toast + crash sound into the caller's
+   *  own single report — for area demolition, where twenty of each at once is
+   *  noise rather than feedback. */
+  removeBuilding: (id: string, consumed?: boolean, quiet?: boolean) => void;
   /** resolve stacking elevation + validity for a ghost at (x, z) */
   evalPlacement: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3, ignoreId?: string) => { y: number; valid: boolean };
   pickupBuilding: (id: string) => void;
@@ -375,8 +429,21 @@ interface GameState {
    *  ghost flow an ordinary building uses */
   pickupKeep: () => void;
   cancelMove: () => void;
-  finishMove: (x: number, z: number, rot: 0 | 1 | 2 | 3) => boolean;
+  finishMove: (x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number) => boolean;
   undoLast: () => void;
+  /** Wave 9 · build-view tool/mode switches (all transient, never saved) */
+  setBuildTool: (tool: BuildTool) => void;
+  setFreeformBuild: (on: boolean) => void;
+  /** arm (or clear, with null) the area-demolish marquee */
+  setDemolishRect: (rect: BuildRect | null) => void;
+  /** what the armed marquee currently covers: the pieces it would take and the
+   *  materials they would hand back. Pure read — BuildBar shows it before the
+   *  player commits, which is the whole safety net for an action that can level
+   *  a wall run in one click. */
+  demolishPreview: () => { ids: string[]; refund: Partial<Record<ItemId, number>> };
+  /** tear down everything the armed marquee covers, piece by piece through the
+   *  ordinary removeBuilding path, then clear the marquee */
+  demolishArea: () => void;
 }
 
 /**
@@ -416,8 +483,9 @@ function villagerAtWork(
   const m = villagerMobs[v.id];
   if (!m) return true; // not spawned in the world yet — nothing to be far from
   const near = (x: number, z: number) => Math.hypot(m.x - x, m.z - z) <= WORK_RANGE;
-  // the stores end of the round trip counts for every trade
-  const store = worldBuildings.find((b) => b.type === 'stockpile' && isBuilt(b));
+  // the stores end of the round trip counts for every trade (Wave 9: a
+  // Storehouse is the stores too, and outranks a Stockpile — see bestStore)
+  const store = bestStore(worldBuildings);
   if (store && near(store.x, store.z)) return true;
   // Empire arc, Wave 3: was a hardcoded HOME_X/HOME_Z check — now the
   // villager's own settlement anchor (still HOME_X/HOME_Z for every
@@ -447,8 +515,13 @@ let buildSeq = 1;
 let villagerSeq = 1;
 let blueprintSeq = 1;
 let lastJoustAt = 0;
-/** ids of buildings placed this session, newest last (undo stack) */
-let placeHistory: string[] = [];
+/** buildings placed this session, newest last (undo stack). Wave 9 widened
+ *  each entry from one id to a GROUP of ids so a row-fill drag — which lays a
+ *  dozen wall segments in a single gesture — undoes as the one action it felt
+ *  like. Ordinary single placements push a one-element group, and blueprint
+ *  stamping still pushes one group per piece (a stamp is deliberately undone
+ *  piece by piece, as it always was). */
+let placeHistory: string[][] = [];
 /** J51 · the keep's own parts/built/hp while its foundation is being carried
  *  (movingBuilding only has room for a plain PlacedBuilding's own fields) —
  *  set by pickupKeep, consumed by cancelMove/finishMove, always null
@@ -695,6 +768,9 @@ function createGameStore() {
     buildSelection: null,
     blueprintSelection: null,
     movingBuilding: null,
+    buildTool: 'build',
+    freeformBuild: false,
+    demolishRect: null,
     cameraMode: 'fps',
     targetKind: null,
     emote: null,
@@ -732,6 +808,7 @@ function createGameStore() {
     guild: null,
     skillTree: [],
     attrSpent: {},
+    dyes: [],
     durability: {},
     perks: [],
     stats: { ...ZERO_STATS },
@@ -786,7 +863,7 @@ function createGameStore() {
         notifications: [], prompt: null, actionProgress: null, dirty: true,
         timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
         gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, guild: null, skillTree: [], attrSpent: {},
+        destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, guild: null, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
@@ -845,6 +922,7 @@ function createGameStore() {
         guild: s.guild ?? null,
         skillTree: s.skillTree ?? [],
         attrSpent: s.attrSpent ?? {},
+        dyes: s.dyes ?? [],
         durability: s.durability ?? {}, perks: s.perks ?? [],
         stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
         claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
@@ -904,6 +982,7 @@ function createGameStore() {
         guild: s.guild,
         skillTree: s.skillTree,
         attrSpent: s.attrSpent,
+        dyes: s.dyes,
         durability: s.durability, perks: s.perks,
         stats: s.stats,
         claimedWorlds: s.claimedWorlds, settlements: s.settlements, cultivatedPlots: s.cultivatedPlots,
@@ -1047,10 +1126,71 @@ function createGameStore() {
     setPaused: (paused) => set({ paused }),
     setBuildMode: (buildMode) => {
       if (!buildMode) get().cancelMove();
-      set({ buildMode, panel: 'none', buildSelection: null });
+      // Wave 9 · leaving the build view puts the tools down: an armed demolish
+      // marquee must never survive to fire on the next visit, and coming back
+      // in holding the wrecking tool by surprise is the same class of mistake.
+      // Freeform is a mode you chose, so it rides along with the tool reset for
+      // the same reason — the grid is the default the view opens in.
+      set({ buildMode, panel: 'none', buildSelection: null, buildTool: 'build', demolishRect: null, freeformBuild: false });
     },
-    setBuildSelection: (buildSelection) => set({ buildSelection }),
-    setBlueprintSelection: (blueprintSelection) => set({ blueprintSelection }),
+    setBuildSelection: (buildSelection) => set({
+      buildSelection,
+      // picking a piece is unambiguously "I want to build" — it puts the
+      // wrecking tool down rather than leaving a selected piece that the left
+      // button would not actually place
+      ...(buildSelection ? { buildTool: 'build' as BuildTool, demolishRect: null } : {}),
+    }),
+    setBlueprintSelection: (blueprintSelection) => set({
+      blueprintSelection,
+      ...(blueprintSelection ? { buildTool: 'build' as BuildTool, demolishRect: null } : {}),
+    }),
+
+    // ---- Wave 9 · build-view tools ------------------------------------
+    setBuildTool: (buildTool) => set({
+      buildTool,
+      demolishRect: null,
+      // the wrecking tool owns the left button, so a piece still selected
+      // underneath it would only be a lie about what a click does
+      ...(buildTool === 'demolish' ? { buildSelection: null, blueprintSelection: null } : {}),
+    }),
+    setFreeformBuild: (freeformBuild) => set({ freeformBuild }),
+    setDemolishRect: (demolishRect) => set({ demolishRect }),
+
+    demolishPreview: () => {
+      const st = get();
+      const r = st.demolishRect;
+      const refund: Partial<Record<ItemId, number>> = {};
+      if (!r) return { ids: [], refund };
+      const hit = buildingsInRect(st.buildings, st.destination ?? null, r);
+      for (const b of hit) {
+        for (const [itemId, n] of Object.entries(BUILDABLE_BY_ID[b.type]?.cost ?? {})) {
+          // the same half-of-cost removeBuilding actually pays back, so the
+          // number shown before the click is the number that arrives after it
+          const back = Math.floor((n as number) / 2);
+          if (back > 0) refund[itemId as ItemId] = (refund[itemId as ItemId] ?? 0) + back;
+        }
+      }
+      return { ids: hit.map((b) => b.id), refund };
+    },
+
+    demolishArea: () => {
+      const st = get();
+      const { ids } = st.demolishPreview();
+      if (ids.length === 0) {
+        set({ demolishRect: null });
+        st.notify('Nothing inside that patch to pull down.');
+        return;
+      }
+      // one piece at a time through the ordinary teardown, so the half-material
+      // refund is whatever removeBuilding already does — an area tool that
+      // reimplemented removal would drift out of step with it the first time
+      // removal grew a rule. `quiet` only suppresses the per-piece toast and
+      // crash: twenty of each at once is noise, not feedback.
+      for (const id of ids) get().removeBuilding(id, false, true);
+      set({ demolishRect: null });
+      audio.play('brick_collide', 0.7);
+      st.notify(`Cleared ${ids.length} ${ids.length === 1 ? 'piece' : 'pieces'} (half materials refunded)`, true);
+    },
 
     collectTaxes: () => {
       const st = get();
@@ -1305,7 +1445,7 @@ function createGameStore() {
         // build-then-construct: blueprint pieces are construction sites too —
         // XP/quest credit lands per-piece as each finishes (constructBuilding)
         const pb: PlacedBuilding = { id: `b${buildSeq++}`, type: p.type, x: p.x, z: p.z, y: p.y, rot: p.rot, built: 0, world: st.destination ?? null };
-        placeHistory = [...placeHistory.slice(-24), pb.id];
+        placeHistory = [...placeHistory.slice(-24), [pb.id]];
         return pb;
       });
       set({ inventory: inv, buildings: [...st.buildings, ...placed], dirty: true });
@@ -1517,6 +1657,32 @@ function createGameStore() {
       audio.play('unlock', 0.7);
       const def = PLAYER_ATTRS.find((a) => a.id === id)!;
       st.notify(`${def.icon} ${def.label} rises to ${attrSpent[id]} — ${def.blurb}.`, true);
+    },
+
+    // Wave 9 · the respec ROADMAP has listed as a follow-up since the
+    // attribute layer shipped. Wholesale reset for a scaling gold fee — see
+    // data/playerAttributes' respecCost for why full-reset and why scaling.
+    // Nothing here needs a migration: `attrSpent` is an ordinary save field
+    // already, and emptying it is just another value it could always have
+    // held. Every consumer (combat.ts's stamina/melee, sale price, yield and
+    // craft rolls) reads it live with a `?? 0`, so they all correct
+    // themselves on the next read with no invalidation step.
+    respecAttributes: () => {
+      const st = get();
+      const spent = attrPointsSpent(st.attrSpent);
+      if (spent <= 0) {
+        st.notify('You have invested nothing to take back.');
+        return;
+      }
+      const cost = respecCost(spent);
+      if ((st.inventory.gold ?? 0) < cost) {
+        st.notify(`Rethinking your nature costs ${cost} gold.`);
+        return;
+      }
+      st.addItems({ gold: -cost });
+      set({ attrSpent: {}, dirty: true });
+      audio.play('unlock', 0.7);
+      st.notify(`↺ ${spent} attribute point${spent > 1 ? 's' : ''} returned to you for ${cost} gold — spend them anew.`, true);
     },
 
     // Phase 21 guilds: join free the first time (if the matching Challenge
@@ -2044,34 +2210,103 @@ function createGameStore() {
       st.notify(`${n}× ${ITEMS[item]?.name ?? item} sent to the Armory.`);
     },
 
+    // Wave 9 · the chestplate half of this pair now DELEGATES to the tiered
+    // actions below, so there is exactly one code path putting a plate on a
+    // villager. Nothing about the boolean callers changed: dropping the plain
+    // `chestplate` item on the paperdoll still equips the iron tier, and
+    // taking it off still returns whichever tier they were actually wearing.
     equipVillagerGear: (villagerId, slot) => {
       const st = get();
+      if (slot === 'chestplate') { st.equipVillagerChestplate(villagerId, 'iron'); return; }
       const v = st.villagers.find((x) => x.id === villagerId);
       if (!v) return;
-      const item: ItemId = slot === 'helmet' ? 'helmet' : 'chestplate';
+      const item: ItemId = 'helmet';
       const stock = st.armory[item] ?? 0;
       if (v.gear?.[slot]) return; // already wearing one
       if (stock <= 0) {
-        st.notify(`The Armory has no spare ${slot === 'helmet' ? 'helmets' : 'chestplates'}.`);
+        st.notify('The Armory has no spare helmets.');
         return;
       }
       const villagers = st.villagers.map((x) =>
         x.id === villagerId ? { ...x, gear: { ...x.gear, [slot]: true } } : x);
       set({ villagers, armory: { ...st.armory, [item]: stock - 1 }, dirty: true });
       audio.play('brick_connect', 0.6);
-      st.notify(`${v.name} dons a ${slot === 'helmet' ? 'helmet' : 'chestplate'} from the Armory.`);
+      st.notify(`${v.name} dons a helmet from the Armory.`);
     },
 
     unequipVillagerGear: (villagerId, slot) => {
       const st = get();
+      if (slot === 'chestplate') { st.unequipVillagerChestplate(villagerId); return; }
       const v = st.villagers.find((x) => x.id === villagerId);
       if (!v?.gear?.[slot]) return;
-      const item: ItemId = slot === 'helmet' ? 'helmet' : 'chestplate';
+      const item: ItemId = 'helmet';
       const villagers = st.villagers.map((x) =>
         x.id === villagerId ? { ...x, gear: { ...x.gear, [slot]: false } } : x);
       set({ villagers, armory: { ...st.armory, [item]: (st.armory[item] ?? 0) + 1 }, dirty: true });
       audio.play('brick_collide', 0.5);
-      st.notify(`${v.name} returns the ${slot === 'helmet' ? 'helmet' : 'chestplate'} to the Armory.`);
+      st.notify(`${v.name} returns the helmet to the Armory.`);
+    },
+
+    // Wave 9 armor tiers — the carrier/loadout shape, for the same reason:
+    // `gear.chestplate` is ONE field holding a tier, so upgrading iron to
+    // forged must hand the iron plate back to the Armory in the same action
+    // or the swap would quietly destroy it. Note the tier a villager wears is
+    // read through `chestplateTierOf` rather than off the field, so a legacy
+    // `true` (the old single tier) unequips as an Iron Plate rather than
+    // falling through and returning nothing.
+    equipVillagerChestplate: (villagerId, tier) => {
+      const st = get();
+      const v = st.villagers.find((x) => x.id === villagerId);
+      if (!v) return;
+      const worn = chestplateTierOf(v.gear);
+      if (worn === tier) return;
+      const def = CHESTPLATE_BY_TIER[tier];
+      if ((st.armory[def.item] ?? 0) <= 0) {
+        st.notify(`The Armory has no spare ${def.label.toLowerCase()}.`);
+        return;
+      }
+      const armory = { ...st.armory };
+      if (worn) {
+        const old = CHESTPLATE_ITEM[worn];
+        armory[old] = (armory[old] ?? 0) + 1;
+      }
+      armory[def.item] = (armory[def.item] ?? 0) - 1;
+      const villagers = st.villagers.map((x) =>
+        (x.id === villagerId ? { ...x, gear: { ...x.gear, chestplate: tier } } : x));
+      set({ villagers, armory, dirty: true });
+      audio.play('brick_connect', 0.6);
+      st.notify(`${v.name} buckles on the ${def.label} — ${def.blurb}`);
+    },
+
+    unequipVillagerChestplate: (villagerId) => {
+      const st = get();
+      const v = st.villagers.find((x) => x.id === villagerId);
+      const worn = chestplateTierOf(v?.gear);
+      if (!v || !worn) return;
+      const item = CHESTPLATE_ITEM[worn];
+      const villagers = st.villagers.map((x) =>
+        (x.id === villagerId ? { ...x, gear: { ...x.gear, chestplate: false } } : x));
+      set({ villagers, armory: { ...st.armory, [item]: (st.armory[item] ?? 0) + 1 }, dirty: true });
+      audio.play('brick_collide', 0.5);
+      st.notify(`${v.name} returns the ${CHESTPLATE_BY_TIER[worn].label.toLowerCase()} to the Armory.`);
+    },
+
+    // Wave 9 dyes · spend one brewed dye to open its palette row for the rest
+    // of the save (data/dyes.ts argues once-not-per-recolour). Deliberately
+    // additive: nothing here can ever REMOVE a colour, and a save with no
+    // `dyes` at all simply keeps the free swatches it always had.
+    unlockDye: (rowId) => {
+      const st = get();
+      const row = DYE_ROW_BY_ID[rowId];
+      if (!row || st.dyes.includes(rowId)) return;
+      if ((st.inventory[row.item] ?? 0) <= 0) {
+        st.notify(`You have no ${ITEMS[row.item]?.name ?? 'dye'} — steep one at a campfire.`);
+        return;
+      }
+      st.addItems({ [row.item]: -1 });
+      set({ dyes: [...st.dyes, rowId], dirty: true });
+      audio.play('brick_connect', 0.6);
+      st.notify(`${row.label} unlocked — the vat takes, and the colour is yours for good.`, true);
     },
 
     // appearance editing (2026-07-20): only the fields the player actually
@@ -2178,6 +2413,47 @@ function createGameStore() {
       const villagers = st.villagers.map((x) => (x.id === villagerId ? { ...x, loadout: undefined } : x));
       set({ villagers, armory, dirty: true });
       st.notify(`${v.name} returns their weapon to the Armory — bare-handed for now.`);
+    },
+
+    // Wave 9 carriers — deliberately the loadout pair's shape, not
+    // equipVillagerGear's: `gear.carrier` is ONE field holding a tier, so
+    // going basket -> cart must hand the basket back to the Armory in the
+    // same breath it takes the cart, or the upgrade would quietly destroy it.
+    // Any job may wear one (carry capacity is a working stat, and a defender
+    // who also hauls is perfectly reasonable).
+    equipVillagerCarrier: (villagerId, tier) => {
+      const st = get();
+      const v = st.villagers.find((x) => x.id === villagerId);
+      if (!v || v.gear?.carrier === tier) return;
+      const item = CARRIER_ITEM[tier];
+      if ((st.armory[item] ?? 0) <= 0) {
+        st.notify(`The Armory has no spare ${ITEMS[item]?.name.toLowerCase() ?? tier}.`);
+        return;
+      }
+      const armory = { ...st.armory };
+      if (v.gear?.carrier) {
+        const old = CARRIER_ITEM[v.gear.carrier];
+        armory[old] = (armory[old] ?? 0) + 1;
+      }
+      armory[item] = (armory[item] ?? 0) - 1;
+      const villagers = st.villagers.map((x) =>
+        (x.id === villagerId ? { ...x, gear: { ...x.gear, carrier: tier } } : x));
+      set({ villagers, armory, dirty: true });
+      audio.play('brick_connect', 0.6);
+      const def = CARRIERS.find((c) => c.id === tier);
+      st.notify(`${v.name} takes up a ${def?.label ?? tier} — ${def?.blurb ?? 'they carry more'}.`);
+    },
+
+    unequipVillagerCarrier: (villagerId) => {
+      const st = get();
+      const v = st.villagers.find((x) => x.id === villagerId);
+      if (!v?.gear?.carrier) return;
+      const item = CARRIER_ITEM[v.gear.carrier];
+      const villagers = st.villagers.map((x) =>
+        (x.id === villagerId ? { ...x, gear: { ...x.gear, carrier: undefined } } : x));
+      set({ villagers, armory: { ...st.armory, [item]: (st.armory[item] ?? 0) + 1 }, dirty: true });
+      audio.play('brick_collide', 0.5);
+      st.notify(`${v.name} returns the ${ITEMS[item]?.name.toLowerCase() ?? 'carrier'} to the Armory.`);
     },
 
     stationDefender: (villagerId, buildingId) => {
@@ -2320,13 +2596,18 @@ function createGameStore() {
       }
       if (changed) set({ villagerProgress: progress, dirty: true });
       if (delivered.length) {
-        st.addItems(gains, 'gather');
+        const took = st.addItems(gains, 'gather');
         // cosmetic phrasing only, still homestead-specific by design (every
         // delivery is a home delivery today) — see this pass's own note on
         // `checkVillagerArrival` staying homestead-only for why a mixed
-        // multi-world delivery batch isn't a real case yet
-        const toStore = st.buildings.some((b) => isHomeBuilding(b) && b.type === 'stockpile' && isBuilt(b));
-        st.notify(`${delivered.join(', ')} hauled supplies to the ${toStore ? 'stockpile' : 'stores'}.`);
+        // multi-world delivery batch isn't a real case yet.
+        // Wave 9: stay quiet when a full store took none of it — addItems
+        // has already said why, and "hauled supplies" over a refused load
+        // would flatly contradict it.
+        if (Object.keys(took).length) {
+          const store = bestStore(st.buildings, isHomeBuilding);
+          st.notify(`${delivered.join(', ')} hauled supplies to the ${store ? (BUILDABLE_BY_ID[store.type]?.name ?? 'stores').toLowerCase() : 'stores'}.`);
+        }
       }
     },
 
@@ -2472,16 +2753,46 @@ function createGameStore() {
       }, 4200);
     },
 
+    // Wave 9 · the one inventory-mutation entry point in the game, and so the
+    // only place storage capacity has to be enforced (game/storage.ts holds
+    // the design reasoning). Returns what was ACTUALLY accepted, so a caller
+    // that announces its haul ("You got 3× Wood Log!") can announce the truth
+    // instead of what it hoped for. Every pre-Wave-9 call site ignores the
+    // return value and behaves exactly as before.
+    //
+    // The cap binds `source: 'gather'` ONLY — the player's own harvest, a
+    // villager's delivery, and the AI's HaulToDeposit. A 'grant' (quest
+    // reward, dungeon/crypt loot, the royal chest, a sale's gold) is a gift
+    // that arrives once and cannot be re-earned, so turning one away would be
+    // destroying content, not squeezing an economy. Same principle the craft
+    // action follows for its own direct write: the cap governs what the world
+    // YIELDS you, not what you are given or what your own hands convert.
     addItems: (items, source = 'grant') => {
       const st = get();
       const inv = { ...st.inventory };
-      for (const [id, n] of Object.entries(items)) {
-        inv[id as ItemId] = (inv[id as ItemId] ?? 0) + (n as number);
+      const capped = source === 'gather';
+      const accepted: Partial<Record<ItemId, number>> = {};
+      const refused: Partial<Record<ItemId, number>> = {};
+      for (const [rawId, rawN] of Object.entries(items)) {
+        const id = rawId as ItemId;
+        const n = rawN as number;
+        const have = inv[id] ?? 0;
+        // spending is never blocked, and an uncapped item (gold, tools,
+        // weapons, potions) short-circuits to the old unconditional path
+        const take = capped && n > 0 ? Math.min(n, roomFor(id, have, st.buildings)) : n;
+        if (take < n) refused[id] = n - take;
+        if (take !== 0) {
+          inv[id] = have + take;
+          accepted[id] = take;
+        }
       }
-      const goldGained = items.gold ?? 0;
+      const goldGained = accepted.gold ?? 0;
       let gathered = 0;
       if (source === 'gather') {
-        for (const [id, n] of Object.entries(items)) {
+        for (const [id, n] of Object.entries(accepted)) {
+          // quest counters and lifetime stats track what reached the stores,
+          // not what was swung at — an objective must not tick on a log that
+          // was turned away at a full storehouse
           bumpQuestCounters('gather', id, n as number);
           gathered += n as number;
         }
@@ -2495,6 +2806,19 @@ function createGameStore() {
         },
         dirty: true,
       });
+      // Refusal is LOUD (silently eating a haul is indistinguishable from a
+      // bug) but throttled — a full store refuses on every villager trip and
+      // every axe swing, and five identical toasts is its own kind of noise.
+      const refusedIds = Object.keys(refused) as ItemId[];
+      if (refusedIds.length) {
+        const nowMs = Date.now();
+        if (nowMs - lastFullStoreNotifyAt > FULL_STORE_NOTIFY_MS) {
+          lastFullStoreNotifyAt = nowMs;
+          const names = refusedIds.map((id) => ITEMS[id]?.name ?? id).join(', ');
+          st.notify(`📦 Your stores are full — ${names} turned away. Build a Stockpile or Storehouse, or spend what you have.`);
+        }
+      }
+      return accepted;
     },
 
     flushStats: (delta) => {
@@ -2575,11 +2899,14 @@ function createGameStore() {
         // by the multi-hit drip fix below
         let fish = st.skillTree.includes('fishing3') && Math.random() < 0.15 ? 2 : 1;
         if (st.perks.includes('hermit')) fish *= 2; // Hermit trade-off perk
-        st.addItems({ fish }, 'gather');
+        // Wave 9 · report what the stores actually took, not what was on the
+        // hook — a "You got 2 fish!" over a full store is indistinguishable
+        // from a bug. addItems raises its own "stores are full" toast.
+        const got = st.addItems({ fish }, 'gather').fish ?? 0;
         st.addXp('fishing', 14);
         st.useTool('fishing_rod');
         audio.play('treasure', 0.6);
-        st.notify(`🐟 You got ${fish} fish!`);
+        if (got > 0) st.notify(`🐟 You got ${got} fish!`);
       } else {
         // one harvest action now empties the WHOLE node at once — rolls the
         // exact same per-hit odds/bonuses as before, `node.hitsLeft` times,
@@ -2632,16 +2959,20 @@ function createGameStore() {
         if (st.perks.includes('hermit')) {
           for (const k of Object.keys(totals) as ItemId[]) totals[k] = (totals[k] ?? 0) * 2;
         }
-        st.addItems(totals, 'gather');
+        // Wave 9 · the node is still fully spent (the swing happened either
+        // way — the wasted yield IS the cost of letting your stores overflow),
+        // but the notification below reports what the stores took, not what
+        // the tree held. addItems raises its own "stores are full" toast.
+        const got = st.addItems(totals, 'gather');
         st.addXp(xpSkill, xpTotal);
         audio.play(node.kind === 'tree' ? 'thud' : node.kind === 'rock' ? 'brick_collide' : 'villager', node.kind === 'herb' ? 0.4 : 0.8);
         // J45 · what you pick up is a PIECE, and it is named as one — you
         // did not gather "3 stone", you gathered three 2x2 stone bricks
-        const label = Object.entries(totals)
+        const label = Object.entries(got)
           .filter(([, n]) => (n ?? 0) > 0)
           .map(([id, n]) => `${n}× ${brickLabel(id as ItemId, ITEMS[id as ItemId]?.name ?? id)}`)
           .join(', ');
-        st.notify(`You got ${label}!`);
+        if (label) st.notify(`You got ${label}!`);
       }
       // read stats fresh (not the `st` snapshot from the top of this action) —
       // the addItems() call above already wrote its own stats update via its
@@ -2722,6 +3053,13 @@ function createGameStore() {
       // Craft attribute: +4% per point that the work turns out a double batch
       const doubled = Math.random() < (st.attrSpent.craft ?? 0) * 0.04;
       const made = recipe.outputCount * (doubled ? 2 : 1);
+      // Wave 9 · this writes `inv` directly rather than through addItems, so
+      // it deliberately bypasses the storage cap — do NOT "fix" that. The
+      // ingredients are already spent two lines above, so a refused output
+      // would destroy them outright; and a craft is a CONVERSION of goods you
+      // already stored, not a new haul off the land, so it can only ever nudge
+      // one good over the line while pulling others down. The cap governs what
+      // the world yields you, not what your own hands turn it into.
       inv[recipe.output] = (inv[recipe.output] ?? 0) + made;
       set({
         inventory: inv,
@@ -2784,7 +3122,7 @@ function createGameStore() {
       return { y, valid: true };
     },
 
-    placeBuilding: (type, x, z, rot) => {
+    placeBuilding: (type, x, z, rot, yaw) => {
       const st = get();
       const b = BUILDABLE_BY_ID[type];
       if (!b) return false;
@@ -2820,10 +3158,81 @@ function createGameStore() {
       // delivered, ghost outline shown) — XP/stats/quest credit move to
       // constructBuilding's completion, when the thing actually stands.
       const placed: PlacedBuilding = { id: `b${buildSeq++}`, type, x, z, y, rot, built: 0, world: st.destination ?? null };
-      placeHistory = [...placeHistory.slice(-24), placed.id];
+      // Wave 9 freeform: only carry a `yaw` when it is genuinely off the
+      // lattice, so a snapped piece's record is byte-for-byte what it always
+      // was and no save grows a field it does not need
+      if (yaw !== undefined && Math.abs(yaw - (rot * Math.PI) / 2) > 1e-4) placed.yaw = yaw;
+      placeHistory = [...placeHistory.slice(-24), [placed.id]];
       set({ inventory: inv, buildings: [...st.buildings, placed], dirty: true });
       audio.play('brick_link', 0.6);
       return true;
+    },
+
+    placeRow: (type, cells, rot) => {
+      const st = get();
+      const def = BUILDABLE_BY_ID[type];
+      if (!def || cells.length === 0) return 0;
+      // the Grand Keep branches out of the ordinary placement path entirely
+      // (foundKeep lays a foundation, not a mesh) and there is only ever one —
+      // a "run" of them is not a thing that can exist
+      if (type === 'keep') return 0;
+      if (def.requiresUnlock && !st.unlocks.includes(def.requiresUnlock)) return 0;
+      const inv = { ...st.inventory };
+      const placed: PlacedBuilding[] = [];
+      const world = st.destination ?? null;
+      const afford = () => Object.entries(def.cost).every(
+        ([id, n]) => (inv[id as ItemId] ?? 0) >= (n as number),
+      );
+      for (const cell of cells) {
+        if (!afford()) break;
+        // re-offer every step to the wall-connect magnet against the CURRENT
+        // run (the pieces this loop already laid included), so filling a gap
+        // between two standing walls lands flush on both ends instead of
+        // marching off the stepped ideal by whatever the neighbours' widths
+        // did not divide into
+        const standing = [...st.buildings, ...placed];
+        const link = wallSnap(type, rot, cell.x, cell.z, standing, world);
+        const x = link ? link.x : cell.x;
+        const z = link ? link.z : cell.z;
+        // evalPlacement only knows the committed store, so the run's own
+        // freshly-laid segments have to be checked here by hand — otherwise
+        // every step after the first would happily place on top of the last
+        const [sx, sz] = sizeFor(type, rot);
+        const clashes = placed.some((p) => {
+          const [psx, psz] = sizeFor(p.type, p.rot);
+          return Math.abs(p.x - x) < sx / 2 + psx / 2 - 0.02 && Math.abs(p.z - z) < sz / 2 + psz / 2 - 0.02;
+        });
+        if (clashes) break;
+        const ev = st.evalPlacement(type, x, z, rot);
+        if (!ev.valid) break;
+        for (const [id, n] of Object.entries(def.cost)) {
+          inv[id as ItemId] = (inv[id as ItemId] ?? 0) - (n as number);
+        }
+        placed.push({ id: `b${buildSeq++}`, type, x, z, y: ev.y, rot, built: 0, world });
+      }
+      if (placed.length === 0) {
+        audio.play('brick_collide', 0.5);
+        // Wave 9 fix (2026-08-10, live verification) · a run that lays
+        // NOTHING used to be silent — only the partial/full cases below ever
+        // called notify(). The most common real cause (confirmed live) is the
+        // first cell overlapping a piece from a run laid moments earlier that
+        // hasn't finished construction yet: evalPlacement correctly refuses to
+        // stack on an unbuilt piece, but with no words that reads as the tool
+        // being broken rather than the rule doing its job.
+        st.notify('Nothing to lay there — out of reach, blocked, or not enough materials.');
+        return 0;
+      }
+      // ONE undo entry for the whole run — a gesture that laid twelve walls in
+      // one drag should come back up the same way (see placeHistory above)
+      placeHistory = [...placeHistory.slice(-24), placed.map((p) => p.id)];
+      set({ inventory: inv, buildings: [...st.buildings, ...placed], dirty: true });
+      audio.play('brick_link', 0.7);
+      if (placed.length < cells.length) {
+        st.notify(`Run laid: ${placed.length} of ${cells.length} — the rest would not fit or was not paid for.`);
+      } else {
+        st.notify(`Run laid: ${placed.length} × ${def.name}`);
+      }
+      return placed.length;
     },
 
     // ---- J51 · the composed keep -------------------------------------
@@ -3106,7 +3515,7 @@ function createGameStore() {
       });
     },
 
-    finishMove: (x, z, rot) => {
+    finishMove: (x, z, rot, yaw) => {
       const st = get();
       const mv = st.movingBuilding;
       if (!mv) return false;
@@ -3124,10 +3533,16 @@ function createGameStore() {
         ? { x, z, ...carriedKeepExtra }
         : null;
       carriedKeepExtra = null;
+      // Wave 9 · a piece set down in freeform keeps its true facing; set down
+      // back on the grid (or as the keep, which has no facing of its own) it
+      // sheds any it was carrying, so the record stays exactly as clean as it
+      // would have been had freeform never been touched
+      const freeYaw = mv.type !== 'keep' && yaw !== undefined && Math.abs(yaw - (placeRot * Math.PI) / 2) > 1e-4
+        ? yaw : undefined;
       set({
         // world stamped to wherever it's actually being set down — covers the
         // edge case of a pickup→travel→place happening in one build session
-        buildings: [...st.buildings, { ...mv, x, z, y, rot: placeRot, world: st.destination ?? null }],
+        buildings: [...st.buildings, { ...mv, x, z, y, rot: placeRot, yaw: freeYaw, world: st.destination ?? null }],
         movingBuilding: null,
         ...(restoredKeep ? { keep: restoredKeep } : {}),
         dirty: true,
@@ -3139,23 +3554,30 @@ function createGameStore() {
     undoLast: () => {
       const st = get();
       while (placeHistory.length) {
-        const id = placeHistory.pop()!;
-        const b = st.buildings.find((x) => x.id === id);
-        if (!b) continue; // already removed by hand
-        const def = BUILDABLE_BY_ID[b.type];
+        const group = placeHistory.pop()!;
+        // a group is one gesture; anything in it already torn down by hand is
+        // simply skipped, and a group emptied that way is not an undo at all
+        const gone = group.filter((id) => st.buildings.some((x) => x.id === id));
+        if (gone.length === 0) continue;
         const inv = { ...st.inventory };
-        for (const [itemId, n] of Object.entries(def.cost)) {
-          inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + (n as number);
+        for (const id of gone) {
+          const b = st.buildings.find((x) => x.id === id)!;
+          for (const [itemId, n] of Object.entries(BUILDABLE_BY_ID[b.type].cost)) {
+            inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + (n as number);
+          }
         }
-        set({ buildings: st.buildings.filter((x) => x.id !== id), inventory: inv, dirty: true });
+        const def = BUILDABLE_BY_ID[st.buildings.find((x) => x.id === gone[0])!.type];
+        set({ buildings: st.buildings.filter((x) => !gone.includes(x.id)), inventory: inv, dirty: true });
         audio.play('brick_collide', 0.6);
-        st.notify(`Undid ${def.name} (materials returned)`);
+        st.notify(gone.length > 1
+          ? `Undid ${gone.length} × ${def.name} (materials returned)`
+          : `Undid ${def.name} (materials returned)`);
         return;
       }
       st.notify('Nothing to undo.');
     },
 
-    removeBuilding: (id, consumed = false) => {
+    removeBuilding: (id, consumed = false, quiet = false) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
       if (!b) return;
@@ -3168,10 +3590,10 @@ function createGameStore() {
         if (refund > 0) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + refund;
       }
       set({ buildings: st.buildings.filter((x) => x.id !== id), inventory: inv, dirty: true });
-      audio.play('brick_collide', 0.6);
+      if (!quiet) audio.play('brick_collide', 0.6);
       // a consumed piece (a charge that went off) left nothing to salvage —
       // don't claim a refund that didn't happen
-      if (!consumed) st.notify(`${def.name} removed (half materials refunded)`);
+      if (!consumed && !quiet) st.notify(`${def.name} removed (half materials refunded)`);
     },
   };
   });

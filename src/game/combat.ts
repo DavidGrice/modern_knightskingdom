@@ -14,6 +14,7 @@ import { EYE_HEIGHT } from './data/world';
 import { SKILLS, levelFromXp } from './data/ranks';
 import { resetDungeon } from './dungeon';
 import { ITEMS } from './data/items';
+import { bestChestplateOwned } from './data/armor';
 import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
@@ -340,7 +341,11 @@ if (w) w.__kke = useEnemyStore;
 export function armorReduction(inv: Partial<Record<ItemId, number>>, perks: string[] = []): number {
   let r = 0;
   if ((inv.helmet ?? 0) > 0) r += 0.1;
-  if ((inv.chestplate ?? 0) > 0) r += 0.2;
+  // Wave 9 · the best plate you own, not just "a plate" (data/armor.ts). The
+  // 0.45 ceiling below is untouched and still does its job — a Castle-Crested
+  // plate plus helm plus Ironclad now runs into it, which is the point of
+  // having it: a shield block stays the primary defense.
+  r += bestChestplateOwned(inv)?.reduction ?? 0;
   if (perks.includes('ironclad')) r += 0.05;
   return Math.min(0.45, r);
 }

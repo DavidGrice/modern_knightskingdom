@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import RiggedFigure from '../character/RiggedFigure';
 import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
+import { bestChestplateOwned } from '@/game/data/armor';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { playerState } from './PlayerController';
 import { activeMelee, combatState, type MeleeWeaponId } from '@/game/combat';
@@ -26,7 +27,9 @@ export default function PlayerAvatar() {
   // the first-person view (and the damage) say polearm.
   const [meleeTool, setMeleeTool] = useState<MeleeWeaponId>('sword');
   const hasHelmet = useGameStore((s) => (s.inventory.helmet ?? 0) > 0);
-  const hasChestplate = useGameStore((s) => (s.inventory.chestplate ?? 0) > 0);
+  // Wave 9 · the player wears the BEST plate they own (there is no armor equip
+  // slot — owning it is wearing it, which is also how armorReduction reads it)
+  const plateTier = useGameStore((s) => bestChestplateOwned(s.inventory)?.id ?? null);
   const emoteSeq = useRef(0);
   const emoteActive = useRef(false);
 
@@ -81,7 +84,7 @@ export default function PlayerAvatar() {
       {rig && meleeTool === 'spear' && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
       {rig && hasShield && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
       {rig && hasHelmet && createPortal(<HeldHelmet />, rig.joints.head)}
-      {rig && hasChestplate && createPortal(<Chestplate />, rig.joints.body)}
+      {rig && plateTier && createPortal(<Chestplate tier={plateTier} />, rig.joints.body)}
     </group>
   );
 }

@@ -22,7 +22,8 @@ import AppearancePanel from './AppearancePanel';
 import BestiaryPanel from './BestiaryPanel';
 import AllegianceMeter from './AllegianceMeter';
 import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
-import { EDIBLES, ITEMS, UTILITY_POTIONS } from '@/game/data/items';
+import { EDIBLES, ITEMS, UTILITY_POTIONS, consumeVerb } from '@/game/data/items';
+import { CHESTPLATES, bestChestplateOwned } from '@/game/data/armor';
 import { activeMelee, combatState, isMeleeSlot, type WeaponSlot } from '@/game/combat';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { CEDRIC_CAMP } from '@/game/data/world';
@@ -36,7 +37,8 @@ import { sideQuestsOf } from '@/game/data/npcs';
 import { CHALLENGES, challengeProgress } from '@/game/data/challenges';
 import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, SWITCH_TITHE } from '@/game/data/guilds';
 import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable } from '@/game/data/skillTree';
-import { PLAYER_ATTRS, ATTR_POINT_EVERY, attrPointsEarned, attrPointsSpent } from '@/game/data/playerAttributes';
+import { PLAYER_ATTRS, ATTR_POINT_EVERY, attrPointsEarned, attrPointsSpent, respecCost } from '@/game/data/playerAttributes';
+import { BULK_GOODS, isBulkGood, storageCapacity } from '@/game/storage';
 import type { ItemId, Recipe } from '@/game/types';
 import Ico from '../ui/Ico';
 
@@ -83,7 +85,10 @@ function EquipmentSection() {
   const hasHalberd = (inventory.halberd ?? 0) > 0;
   const hasSpear = (inventory.spear ?? 0) > 0;
   const hasHelmet = (inventory.helmet ?? 0) > 0;
-  const hasChestplate = (inventory.chestplate ?? 0) > 0;
+  // Wave 9 · armor is tiered now (data/armor.ts). There is no armor equip
+  // slot — owning a plate IS wearing it, the same rule armorReduction uses —
+  // so the paperdoll and the tiles below both key off the best one owned.
+  const plate = bestChestplateOwned(inventory);
   const active = loadout.weapon === 'melee' ? loadout.melee : loadout.ranged;
 
   const weapons: { kind: WeaponSlot; icon: string; name: string; owned: boolean }[] = [
@@ -133,7 +138,7 @@ function EquipmentSection() {
             {hasSword && active !== 'halberd' && active !== 'spear' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
             {hasShield && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
             {hasHelmet && createPortal(<HeldHelmet />, rig.joints.head)}
-            {hasChestplate && createPortal(<Chestplate />, rig.joints.body)}
+            {plate && createPortal(<Chestplate tier={plate.id} />, rig.joints.body)}
           </>
         )}
       />
@@ -168,10 +173,28 @@ function EquipmentSection() {
             <div className="icon">{hasHelmet ? '🪖' : '🔒'}</div>
             <div className="name">Helm</div>
           </div>
-          <div className={`equip-tile ${hasChestplate ? 'owned selected' : 'locked'}`} style={{ cursor: 'default' }}>
-            <div className="icon">{hasChestplate ? '🦺' : '🔒'}</div>
-            <div className="name">Chestplate</div>
-          </div>
+          {/* Wave 9 · one tile per plate tier, worst to best. Only the best one
+              owned reads as worn, because only that one counts — the lesser
+              plates are still in the Satchel (and are the Forge's ingredient
+              for the next rung up), so they show as owned-but-outclassed
+              rather than vanishing. */}
+          {CHESTPLATES.map((c) => {
+            const owned = (inventory[c.item] ?? 0) > 0;
+            const worn = plate?.id === c.id;
+            return (
+              <div
+                key={c.id}
+                className={`equip-tile ${worn ? 'owned selected' : owned ? 'owned' : 'locked'}`}
+                style={{ cursor: 'default', opacity: owned && !worn ? 0.7 : 1 }}
+                title={owned
+                  ? `${c.label} — ${c.blurb} (${Math.round(c.reduction * 100)}% less damage taken)${worn ? '' : ' · outclassed by the better plate you own'}`
+                  : `${c.label} — forge one to wear it`}
+              >
+                <div className="icon">{owned ? c.icon : '🔒'}</div>
+                <div className="name">{c.label}</div>
+              </div>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
           <button
@@ -202,8 +225,14 @@ function InventoryPanel() {
   const inventory = useGameStore((s) => s.inventory);
   const addItems = useGameStore((s) => s.addItems);
   const notify = useGameStore((s) => s.notify);
+  const buildings = useGameStore((s) => s.buildings);
   const entries = Object.entries(inventory).filter(([, n]) => (n ?? 0) > 0);
   const [showControls, setShowControls] = useState(false);
+  // Wave 9 · the storage ceiling has to be VISIBLE somewhere before it bites,
+  // or the first refusal toast reads as a bug. This is the one screen that
+  // already shows what you're holding, so it shows the room left too.
+  const cap = storageCapacity(buildings);
+  const atCap = BULK_GOODS.filter((id) => (inventory[id] ?? 0) >= cap);
 
   function eat(id: ItemId) {
     const vigour = EDIBLES[id];
@@ -215,7 +244,7 @@ function InventoryPanel() {
     addItems({ [id]: -1 });
     combatState.hp = Math.min(combatState.maxHp, combatState.hp + vigour);
     audio.play('villager', 0.4);
-    notify(`You eat the ${ITEMS[id].name.toLowerCase()} (+${vigour} vigour)`);
+    notify(`You ${consumeVerb(id)} the ${ITEMS[id].name.toLowerCase()} (+${vigour} vigour)`);
   }
 
   function drinkPotion(id: ItemId) {
@@ -248,13 +277,25 @@ function InventoryPanel() {
           "Stone Brick 2x2", not an abstract count of "stone" — and they file
           into their own drawer ahead of tools and stores. */}
       <div className="creator-section" style={{ marginBottom: 10 }}>Parts Bin</div>
+      <div style={{ fontSize: 11.5, color: atCap.length ? 'var(--gold)' : 'var(--parchment-dark)', marginBottom: 8 }}>
+        Stores hold <b>{cap}</b> of each good.
+        {atCap.length
+          ? ` Full: ${atCap.map((id) => ITEMS[id]?.name ?? id).join(', ')} — anything more is turned away. Raise a Stockpile or Storehouse, or spend what you have.`
+          : ' Raise a Stockpile or Storehouse to keep more.'}
+      </div>
       {parts.length === 0 && <div className="loading-note">No pieces yet. The woods await…</div>}
       <div className="inv-grid">
         {parts.map(([id, n]) => {
           const def = ITEMS[id as ItemId];
           const brick = brickFor(id as ItemId)!;
+          const full = isBulkGood(id as ItemId) && (n ?? 0) >= cap;
           return (
-            <div className="inv-slot brick" key={id} title={`${brickLabel(id as ItemId, def?.name ?? id)} — gathered as ${def?.name ?? id}`}>
+            <div
+              className="inv-slot brick"
+              key={id}
+              style={full ? { borderColor: 'var(--gold)' } : undefined}
+              title={`${brickLabel(id as ItemId, def?.name ?? id)} — gathered as ${def?.name ?? id}${isBulkGood(id as ItemId) ? ` · ${n}/${cap} stored${full ? ' (FULL)' : ''}` : ''}`}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img className="brick-thumb" src={brick.thumb} alt="" />
               <div className="iname">{brickLabel(id as ItemId, def?.name ?? id)}</div>
@@ -270,13 +311,21 @@ function InventoryPanel() {
           const def = ITEMS[id as ItemId];
           const vigour = EDIBLES[id as ItemId];
           const usable = !!vigour || UTILITY_POTIONS.includes(id as ItemId);
-          const hint = vigour ? `click to drink (+${vigour} vigour)` : usable ? 'click to drink' : undefined;
+          // bread is eaten, a draught is drunk — see consumeVerb (data/items.ts)
+          const verb = consumeVerb(id as ItemId);
+          const hint = vigour ? `click to ${verb} (+${vigour} vigour)` : usable ? `click to ${verb}` : undefined;
+          // the food half of BULK_GOODS (fish, bread, herb, flowers) files
+          // here rather than in the Parts Bin, so the cap has to read the
+          // same way on this grid too
+          const capped = isBulkGood(id as ItemId);
+          const full = capped && (n ?? 0) >= cap;
+          const stored = capped ? ` · ${n}/${cap} stored${full ? ' (FULL)' : ''}` : '';
           return (
             <div
               className="inv-slot"
               key={id}
-              title={hint ? `${def?.name} — ${hint}` : def?.name}
-              style={usable ? { cursor: 'pointer', borderColor: '#7a9a4f' } : undefined}
+              title={`${hint ? `${def?.name} — ${hint}` : def?.name}${stored}`}
+              style={full ? { cursor: usable ? 'pointer' : undefined, borderColor: 'var(--gold)' } : usable ? { cursor: 'pointer', borderColor: '#7a9a4f' } : undefined}
               onClick={() => usable && use(id as ItemId)}
             >
               <div className="icon"><Ico e={def?.icon ?? '❔'} /></div>
@@ -692,10 +741,20 @@ function AttributesSection() {
   const xp = useGameStore((s) => s.xp);
   const attrSpent = useGameStore((s) => s.attrSpent);
   const spendAttrPoint = useGameStore((s) => s.spendAttrPoint);
+  const respecAttributes = useGameStore((s) => s.respecAttributes);
+  const gold = useGameStore((s) => s.inventory.gold ?? 0);
+  // Wave 9 · a respec is irreversible spending, and this codebase has exactly
+  // one confirmation precedent (a bare window.confirm in MainMenu) — rather
+  // than reach for a browser dialog inside the game HUD, the button arms
+  // itself on the first click and commits on the second, then disarms. Local
+  // state on purpose: it must reset the moment the panel closes.
+  const [arming, setArming] = useState(false);
   const totalLevel = SKILLS.reduce((t, s) => t + levelFromXp(xp[s.id]), 0);
   const earned = attrPointsEarned(totalLevel);
   const spent = attrPointsSpent(attrSpent);
   const free = earned - spent;
+  const cost = respecCost(spent);
+  const canRespec = spent > 0 && gold >= cost;
   return (
     <>
       <div className="creator-section" style={{ marginTop: 16 }}>
@@ -730,6 +789,35 @@ function AttributesSection() {
           );
         })}
       </div>
+      {spent > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            className="menu-btn small"
+            style={{
+              margin: 0, width: 'auto', padding: '5px 12px',
+              opacity: canRespec ? 1 : 0.45,
+              borderColor: arming ? 'var(--gold)' : undefined,
+              color: arming ? 'var(--gold)' : undefined,
+            }}
+            disabled={!canRespec}
+            title={`Hands all ${spent} invested point${spent > 1 ? 's' : ''} back so you can spend them differently. Costs ${cost} gold (you have ${gold}).`}
+            onClick={() => {
+              if (!arming) { setArming(true); return; }
+              setArming(false);
+              respecAttributes();
+            }}
+          >
+            {arming ? `✓ Confirm — ${cost} gold` : `↺ Rethink your nature — ${cost} gold`}
+          </button>
+          <span style={{ fontSize: 11.5, color: 'var(--parchment-dark)' }}>
+            {arming
+              ? 'Click again to take all your points back.'
+              : gold >= cost
+                ? `Returns all ${spent} invested point${spent > 1 ? 's' : ''} to the pool.`
+                : `You need ${cost - gold} more gold.`}
+          </span>
+        </div>
+      )}
     </>
   );
 }

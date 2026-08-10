@@ -1,4 +1,4 @@
-import type { Buildable, ClaimedPlot } from '../types';
+import type { Buildable, BuildRect, ClaimedPlot, PlacedBuilding } from '../types';
 import GENERATED from './bricks.generated.json';
 import LAND_TIERS_DATA from './landTiers.generated.json';
 import { FIXED_WORLD_PROPS } from './world';
@@ -111,6 +111,27 @@ const CRAFTED: Buildable[] = [
     id: 'stockpile', name: 'Stockpile', thumb: `${P}/scenery/l301500.png`, model: `${P}/scenery/l301500.glb`,
     category: 'essentials', size: [1.4, 1.1, 1.9], snap: GRID, stackable: false,
     cost: { wood: 6 }, buildXp: 10,
+  },
+  {
+    // Wave 9 · the Stockpile's grown-up sibling, and the first building in the
+    // game that passively buffs villagers just by standing (ROADMAP's
+    // "Building-conferred villager attribute bonuses" — see
+    // attributes.ts's externalCapacityBonus for the shape of that bonus and
+    // why it is ownership-scoped rather than proximity-scoped). It does two
+    // things and nothing else: it holds far more of every good than a
+    // Stockpile (game/storage.ts's STORAGE_PER_BUILDING) and every villager
+    // in the same settlement carries more per trip because of it.
+    //
+    // No storehouse mold exists in the extraction, so it reuses the same real
+    // crate (l301500) the Stockpile and Workbench already share, placed
+    // markedly larger — the established "same mold, different scale reads as
+    // a different thing" rule the Stockpile itself was introduced under. Real
+    // cost, deliberately steeper than the Stockpile's 6 wood: this is the
+    // piece you save toward, not the one you scatter.
+    id: 'storehouse', name: 'Storehouse', thumb: `${P}/scenery/l301500.png`, model: `${P}/scenery/l301500.glb`,
+    category: 'essentials', size: [3, 2.4, 4], snap: GRID, stackable: false,
+    cost: { plank: 10, stone: 6 }, buildXp: 35,
+    requiresUnlock: 'building2',
   },
   {
     id: 'flowerbed', name: 'Flower Bed', thumb: `${P}/scenery/l374100.png`, model: `${P}/scenery/l374100.glb`,
@@ -521,6 +542,35 @@ export function sizeFor(type: string, rot: number): [number, number] {
 
 export function heightOf(type: string): number {
   return BUILDABLE_BY_ID[type]?.size[1] ?? 1;
+}
+
+/**
+ * Wave 9 · which standing pieces a dragged-out patch of ground actually takes.
+ * Footprint OVERLAP, not centre-inside: a marquee that clips the end of an 8m
+ * wall obviously means that wall, and asking the player to lasso an exact
+ * centre point is a precision game nobody wants to play.
+ *
+ * Lives here, next to `sizeFor`, because it is pure footprint geometry — and
+ * because the area-demolish tool has to ask it twice from two places (the
+ * live marquee in BuildController, the armed confirmation in the store) and
+ * those two must never disagree about what is inside the box.
+ *
+ * The Grand Keep's foundation is always excluded: its parts/progress/HP live
+ * outside PlacedBuilding and only `pickupKeep` knows how to carry them, so a
+ * castle is taken down deliberately or not at all.
+ */
+export function buildingsInRect(
+  buildings: PlacedBuilding[],
+  world: string | null,
+  rect: BuildRect,
+): PlacedBuilding[] {
+  return buildings.filter((b) => {
+    if ((b.world ?? null) !== (world ?? null)) return false;
+    if (b.type === 'keep') return false;
+    const [bsx, bsz] = sizeFor(b.type, b.rot);
+    return b.x + bsx / 2 > rect.minX && b.x - bsx / 2 < rect.maxX
+      && b.z + bsz / 2 > rect.minZ && b.z - bsz / 2 < rect.maxZ;
+  });
 }
 
 // Real wall collision (2026-07-20): the mc-series prefab walls/towers were

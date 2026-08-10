@@ -192,10 +192,17 @@ export class Agent {
     // (the phase-1 probe, a court NPC, a despawned villager mid-frame)
     // means there is no live economy record to read, so both reset to
     // their "nothing to report" value rather than going stale.
-    const villager = useGameStore.getState().villagers.find((v) => v.id === this.id);
+    const gs = useGameStore.getState();
+    const villager = gs.villagers.find((v) => v.id === this.id);
     if (villager) {
       this.bb.job = villager.job;
-      this.bb.carryCapacity = carryCapacityOf(villager, villager.job);
+      // Wave 9 · `buildings` feeds externalCapacityBonus (data/attributes.ts):
+      // a Storehouse raised in this villager's own settlement lifts what they
+      // carry per trip. Passed from the same live getState() read as the
+      // roster above, so it is exactly as fresh — a Storehouse that finished
+      // construction this second is felt within one think tick, same as a
+      // job reassignment or a newly equipped carrier.
+      this.bb.carryCapacity = carryCapacityOf(villager, villager.job, gs.buildings);
     } else {
       this.bb.job = null;
       this.bb.carryCapacity = 0;

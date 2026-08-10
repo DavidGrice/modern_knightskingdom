@@ -345,7 +345,7 @@ function ConstructionSite({ b }: { b: PlacedBuilding }) {
   const progress = b.built ?? 0;
   const y = b.y ?? 0;
   const [w, h, d] = def.size;
-  const yaw = (b.rot * Math.PI) / 2;
+  const yaw = b.yaw ?? (b.rot * Math.PI) / 2;
   const stakes: [number, number][] = [
     [-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2],
   ];
@@ -386,7 +386,12 @@ function ConstructionSite({ b }: { b: PlacedBuilding }) {
 export function BuildingMesh({ b }: { b: PlacedBuilding }) {
   const def = BUILDABLE_BY_ID[b.type];
   if (!def) return null;
-  const yaw = (b.rot * Math.PI) / 2;
+  // Wave 9 · a freeform piece renders at its TRUE facing; everything else (and
+  // every save before Wave 9) has no `yaw` and keeps the quarter turn exactly.
+  // `solidOffsetRotated` deliberately stays on `rot`: that shift exists to line
+  // a piece's solid mass up with the collision box, and the collision box is
+  // still the axis-aligned quarter-turn one (see PlacedBuilding.yaw).
+  const yaw = b.yaw ?? (b.rot * Math.PI) / 2;
   const y = b.y ?? 0;
   const solidWorld = solidOffsetRotated(b.type, b.rot);
   if (b.type === 'campfire') {
@@ -485,6 +490,10 @@ export default function Buildings() {
           onClick={(e: any) => {
             const st = useGameStore.getState();
             if (!st.buildMode || st.buildSelection || st.movingBuilding) return;
+            // Wave 9 · while the wrecking tool is out the left button belongs
+            // to the area marquee — opening a piece's action menu underneath
+            // a drag that started on it would fight the gesture
+            if (st.buildTool === 'demolish') return;
             e.stopPropagation();
             // L72 · a click asks what you want to do with the piece rather
             // than picking it up unasked — moving is one of the answers

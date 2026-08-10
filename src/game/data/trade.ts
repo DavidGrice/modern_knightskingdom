@@ -36,6 +36,13 @@ export const SELL_PRICES: Partial<Record<ItemId, number>> = {
   iron_bar: 8,
   wheat: 2,
   bread: 6,
+  // Wave 9 · the cooked dishes. Priced a little above what their ingredients
+  // would have fetched raw (bread and cooked fish each clear +2 that way), a
+  // touch better for the fiddlier ones — so cooking for the merchant is a
+  // modest trade and eating them is still the point.
+  pottage: 6,
+  fish_stew: 11,
+  blossom_tart: 14,
 };
 
 export interface BuyOffer {

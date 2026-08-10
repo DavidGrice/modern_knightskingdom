@@ -49,8 +49,13 @@ export function isRampart(type: string): boolean {
 
 /** …and of those, the ones that snap: structure-scale pieces only. The
  *  stud-pitch brick tier (snap 0.35) is placed by eye a brick at a time, and a
- *  1.5m magnet on a 0.35m brick would fight the player rather than help. */
-function snapsAsWall(type: string): boolean {
+ *  1.5m magnet on a 0.35m brick would fight the player rather than help.
+ *
+ *  Wave 9 exports this: it is exactly the set row-fill (BuildController's
+ *  shift-drag) may run, for the same reason — a row is only meaningful for a
+ *  piece whose own footprint is the step, and a 0.35m brick laid 60 at a time
+ *  is a wall you painted, not a wall you built. */
+export function snapsAsWall(type: string): boolean {
   return isRampart(type) && (BUILDABLE_BY_ID[type]?.snap ?? 0) >= 1;
 }
 

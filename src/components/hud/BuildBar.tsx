@@ -18,6 +18,56 @@ import { isHomeBuilding } from '@/game/types';
 import type { Buildable, ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
 
+// Wave 9 · the wrecking tool's confirmation. Area demolition is the only
+// action in the game that can level a whole wall run in one click, so it is
+// the only one that arms first and fires second: the drag marks the patch, the
+// rail says what is in it and what comes back, and nothing moves until this
+// button is pressed. (Deliberately not `window.confirm` — the game's one use
+// of that sits on the main menu, outside the HUD, and a browser dialog in the
+// middle of a build session steals focus and breaks the held-key state.)
+function DemolishConfirm() {
+  const demolishRect = useGameStore((s) => s.demolishRect);
+  const demolishPreview = useGameStore((s) => s.demolishPreview);
+  const demolishArea = useGameStore((s) => s.demolishArea);
+  const setDemolishRect = useGameStore((s) => s.setDemolishRect);
+  // subscribed, not just read: the marquee stays armed while the player pans
+  // around it, so a piece torn down by hand in the meantime has to drop out of
+  // the count before they press the button
+  const buildings = useGameStore((s) => s.buildings);
+  const { ids, refund } = useMemo(
+    () => demolishPreview(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [demolishRect, buildings, demolishPreview],
+  );
+  if (!demolishRect) return null;
+  const back = Object.entries(refund);
+  return (
+    <div className="build-hint clickable" style={{ borderColor: '#e04434' }}>
+      <b>{ids.length} {ids.length === 1 ? 'piece' : 'pieces'}</b> inside the patch
+      {back.length > 0 && (
+        <> — returns {back.map(([id, n]) => `${n} ${ITEMS[id as ItemId]?.name ?? id}`).join(', ')}</>
+      )}
+      {' '}
+      <button
+        className="menu-btn small"
+        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        disabled={ids.length === 0}
+        onClick={demolishArea}
+      >
+        ✓ Pull it down
+      </button>
+      {' '}
+      <button
+        className="menu-btn small"
+        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        onClick={() => setDemolishRect(null)}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 type Tab = Buildable['category'] | 'blueprints';
 type BuildSort = 'default' | 'az' | 'affordable';
 
@@ -98,6 +148,10 @@ export default function BuildBar() {
   const buyLand = useGameStore((s) => s.buyLand);
   const inventory = useGameStore((s) => s.inventory);
   const villagers = useGameStore((s) => s.villagers);
+  const buildTool = useGameStore((s) => s.buildTool);
+  const setBuildTool = useGameStore((s) => s.setBuildTool);
+  const freeform = useGameStore((s) => s.freeformBuild);
+  const setFreeformBuild = useGameStore((s) => s.setFreeformBuild);
   const [tab, setTab] = useState<Tab>('essentials');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<BuildSort>('default');
@@ -139,14 +193,48 @@ export default function BuildBar() {
               Cancel
             </button>
           </>
+        ) : buildTool === 'demolish' ? (
+          <>
+            <b>Wrecking Tool</b> — drag a patch over what you want gone, then confirm ·{' '}
+            <b>X</b> or the tool row below puts it away
+          </>
         ) : (
           <>
-            <b>Aerial Build View</b> — hold click to place · click a piece to move it · <b>R</b> rotate · <b>U</b> undo ·
-            right-click removes · <b>WASD</b> pan · scroll zoom · <b>B</b>/<b>Esc</b> return
+            <b>Aerial Build View</b> — hold click to place · <b>shift-drag</b> lays a wall run ·
+            click a piece to move it · <b>R</b> rotate · <b>U</b> undo · right-click removes ·{' '}
+            <b>WASD</b>/middle-drag pan · <b>Q</b>/<b>E</b> turn the view · scroll zoom · <b>B</b>/<b>Esc</b> return
           </>
         )}
       </div>
+      <DemolishConfirm />
       <div className="build-menu clickable">
+        {/* Wave 9 · the two things that change what the LEFT BUTTON does, kept
+            together above the catalogue: which tool is in hand, and whether
+            the grid is holding it. Both are also keys (X, F) — the row is for
+            discovering that they exist. */}
+        <div className="build-sort" style={{ marginBottom: 6 }}>
+          <button
+            className={buildTool === 'build' ? 'selected' : ''}
+            onClick={() => setBuildTool('build')}
+            title="Place, move and stack pieces"
+          >
+            🔨 Build
+          </button>
+          <button
+            className={buildTool === 'demolish' ? 'selected' : ''}
+            onClick={() => setBuildTool(buildTool === 'demolish' ? 'build' : 'demolish')}
+            title="Drag a patch, then confirm — takes down every piece inside it (X)"
+          >
+            🧹 Demolish Area
+          </button>
+          <button
+            className={freeform ? 'selected' : ''}
+            onClick={() => setFreeformBuild(!freeform)}
+            title="Ignore the grid: place at the cursor and turn in small steps (F). Pieces still cost the same and still collide as their nearest square footprint."
+          >
+            ✥ Freeform
+          </button>
+        </div>
         <input
           className="build-search"
           placeholder="Search all pieces…"

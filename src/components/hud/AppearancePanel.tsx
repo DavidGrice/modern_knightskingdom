@@ -15,27 +15,33 @@
 // earned XP bonus, and the name is on the save.
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
-import { FACE_OPTIONS, CREST_OPTIONS, PALETTE_SWATCHES } from '@/game/data/minifigs';
+import { FACE_OPTIONS, CREST_OPTIONS } from '@/game/data/minifigs';
 import { crestLocked, crestLockHint } from '@/game/data/crestUnlocks';
+import { swatchIndices } from '@/game/data/dyes';
 import { loadPalette } from '@/lib/minifig';
 import RotatablePreview from '../character/RotatablePreview';
 import KkIcon from '../ui/KkIcon';
 import MenuTabs from './MenuTabs';
+import DyeRack from './DyeRack';
 
 export default function AppearancePanel() {
   const setPanel = useGameStore((s) => s.setPanel);
   const character = useGameStore((s) => s.character);
   const setCharacter = useGameStore((s) => s.setCharacter);
+  // Wave 9 · the free swatches PLUS whatever dye rows this save has opened
+  // (data/dyes.ts). The character creator deliberately does NOT read this —
+  // it runs before a save exists, so it keeps offering exactly the free set.
+  const dyes = useGameStore((s) => s.dyes);
   const [swatches, setSwatches] = useState<{ index: number; css: string }[]>([]);
 
   useEffect(() => {
     loadPalette().then((colors) => {
-      setSwatches(PALETTE_SWATCHES.map((i) => {
+      setSwatches(swatchIndices(dyes).map((i) => {
         const [r, g, b] = colors[i] ?? [128, 128, 128];
         return { index: i, css: `rgb(${r},${g},${b})` };
       }));
     });
-  }, []);
+  }, [dyes]);
 
   if (!character) return null;
 
@@ -126,6 +132,8 @@ export default function AppearancePanel() {
           <Swatches label="Legs" value={character.legColor} onPick={(i) => set({ legColor: i })} />
           <Swatches label="Hips" value={character.hipColor} onPick={(i) => set({ hipColor: i })} />
         </div>
+
+        <DyeRack />
 
         <div className="loading-note" style={{ marginTop: 12 }}>
           Your crest badge, first-person sleeves and the portrait up in the corner all

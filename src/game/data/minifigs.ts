@@ -62,6 +62,23 @@ export const FACE_OPTIONS: FaceOption[] = [
   { id: 'minifigprincessstorm00', label: 'Fierce', gender: 'female', thumb: `${FACE_BASE}minifigprincessstorm00.png` },
 ];
 
+/** Where a donor's face picture actually lives.
+ *
+ *  The cropped `/assets/creator/faces/` sprites only exist for the eight
+ *  donors the CREATOR offers (FACE_OPTIONS above) — prepare-assets.mjs never
+ *  cut one for `minifiggenericgood00`/`minifiggenericbad00`, and never will:
+ *  they aren't creator faces, they're the two generic villager bodies. Any UI
+ *  that draws a face for an ARBITRARY donor (the roster's villager appearance
+ *  editor, whose pool is VILLAGER_LOOKS and therefore includes both generics)
+ *  must ask here rather than string-building the creator path, which 404s on
+ *  every render for those two. The fallback is the donor's full-figure
+ *  catalogue thumbnail under /assets/minifigs — a file that exists for every
+ *  donor in the extraction. */
+export function faceThumbFor(donorId: string): string {
+  const face = FACE_OPTIONS.find((f) => f.id === donorId);
+  return face ? face.thumb : `/assets/minifigs/${donorId}.png`;
+}
+
 export const CREST_OPTIONS: CrestOption[] = [
   { id: 'minifigrichardstrong00', label: 'Iron Chevron', gender: 'male', thumb: `${CREST_BASE}minifigrichardstrong00.png` },
   { id: 'minifigjohnmayne00', label: "Quartermaster's Sash", gender: 'male', thumb: `${CREST_BASE}minifigjohnmayne00.png` },

@@ -8,14 +8,16 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import RiggedFigure from '../character/RiggedFigure';
-import { HeldHelmet, Chestplate, ResourceProp } from '../character/Equipment';
+import { HeldHelmet, Chestplate, ResourceProp, WornCarrier } from '../character/Equipment';
 import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
 import { HOME_X, HOME_Z, JOB_BY_ID, villagerHomeSpot } from '@/game/data/villagers';
 import { tripSpeedMult } from '@/game/data/attributes';
+import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
 import { navSteer } from '@/game/navgrid';
+import { bestStore } from '@/game/storage';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { isBuilt, isHomeBuilding } from '@/game/types';
@@ -238,7 +240,11 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         if (stall) { wx = stall.x; wz = stall.z; }
       }
       if (wx !== null && wz !== null) {
-        const store = st.buildings.find((b) => b.type === 'stockpile' && isBuilt(b) && isHomeBuilding(b));
+        // Wave 9 · a Storehouse is a store too, and outranks a Stockpile —
+        // one shared preference order (game/storage.ts's bestStore) so the
+        // walk-to point, the "at the stores" work check and the delivery
+        // notification can never disagree about where the stores are
+        const store = bestStore(st.buildings, isHomeBuilding);
         const hx = store ? store.x : HOME_X;
         const hz = store ? store.z : HOME_Z;
         // merchants tend the stall the whole trip; laborers split out/back
@@ -393,7 +399,11 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     <group ref={group}>
       <RiggedFigure config={config} height={1.7} clip={clip} loop={loop} timeScale={0.9} onReady={setRig} />
       {rig && villager.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
-      {rig && villager.gear?.chestplate && createPortal(<Chestplate />, rig.joints.body)}
+      {/* Wave 9 · whichever plate tier they're actually wearing (data/armor.ts) */}
+      {rig && chestplateTierOf(villager.gear) && createPortal(<Chestplate tier={chestplateTierOf(villager.gear)!} />, rig.joints.body)}
+      {/* Wave 9 · hips, the only joint nothing else claims — so a hauler can
+          wear their basket AND carry the load in hand at the same time */}
+      {rig && villager.gear?.carrier && createPortal(<WornCarrier tier={villager.gear.carrier} />, rig.joints.hips)}
       {rig && carrying && createPortal(<ResourceProp resource={carrying.resource} />, rig.joints.rightarm)}
     </group>
   );
