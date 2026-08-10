@@ -7,9 +7,10 @@ import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { mountOf, stabledHorses } from '@/game/riding';
 import MenuTabs from './MenuTabs';
-import { DEFENDER_LOADOUTS, JOBS, LOADOUT_REQUIRES, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
+import { CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, JOBS, LOADOUT_REQUIRES, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
 import { ITEMS } from '@/game/data/items';
-import { ATTRS, attrsOf, tradeLevelOf } from '@/game/data/attributes';
+import { ATTRS, attrsOf, carryCapacityOf, tradeLevelOf } from '@/game/data/attributes';
+import { CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
 import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/data/companionTraits';
 import { ArmorySection } from './NpcEquipPanel';
 import { levelFromXp, xpForLevel } from '@/game/data/ranks';
@@ -50,10 +51,13 @@ export default function VillagersPanel() {
   const stationDefender = useGameStore((s) => s.stationDefender);
   const setDefenderShift = useGameStore((s) => s.setDefenderShift);
   const chooseTrait = useGameStore((s) => s.chooseTrait);
+  const equipVillagerCarrier = useGameStore((s) => s.equipVillagerCarrier);
+  const unequipVillagerCarrier = useGameStore((s) => s.unequipVillagerCarrier);
   const openVillagerEquip = useGameStore((s) => s.openVillagerEquip);
   // homestead-only counts: a remote claimed-plot structure shouldn't count
   // toward villager arrivals or read as a stationable tower here
-  const buildings = useGameStore((s) => s.buildings).filter(isHomeBuilding);
+  const allBuildings = useGameStore((s) => s.buildings);
+  const buildings = allBuildings.filter(isHomeBuilding);
 
   const keep = useGameStore((s) => s.keep);
 
@@ -103,7 +107,18 @@ export default function VillagersPanel() {
               <div className="r-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {v.name}
                 {v.gear?.helmet && <span title="Wearing a helmet">🪖</span>}
-                {v.gear?.chestplate && <span title="Wearing a chestplate">🦺</span>}
+                {/* Wave 9 · the plate's own tier icon, so the roster says
+                    WHICH plate at a glance (data/armor.ts) */}
+                {chestplateTierOf(v.gear) && (
+                  <span title={`Wearing ${CHESTPLATE_BY_TIER[chestplateTierOf(v.gear)!].label}`}>
+                    {CHESTPLATE_BY_TIER[chestplateTierOf(v.gear)!].icon}
+                  </span>
+                )}
+                {v.gear?.carrier && (
+                  <span title={`Carrying a ${CARRIERS.find((c) => c.id === v.gear!.carrier)?.label}`}>
+                    {CARRIERS.find((c) => c.id === v.gear!.carrier)?.icon}
+                  </span>
+                )}
                 <button
                   className="menu-btn small"
                   style={{ margin: 0, width: 'auto', padding: '3px 9px', fontSize: 11 }}
@@ -180,6 +195,56 @@ export default function VillagersPanel() {
                   </>
                 );
               })()}
+              {/* Wave 9 · the carrier row. Shown for every job, not just
+                  defenders: carry capacity is a working stat. Tier buttons
+                  mirror the Loadout row directly below — one field, so
+                  picking Cart while wearing a Basket hands the basket back to
+                  the Armory in the same action (gameStore's
+                  equipVillagerCarrier). The capacity number beside it is the
+                  real `carryCapacityOf` the AI reads, Storehouse bonus and
+                  all, so the effect of both is visible before you spend. */}
+              <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
+                {/* `allBuildings`, not the homestead-filtered list above:
+                    externalCapacityBonus scopes to the villager's OWN world,
+                    so pre-filtering to home would hide a settlement
+                    resident's own Storehouse from their readout */}
+                Carrier — carries <b style={{ color: 'var(--gold)' }}>{carryCapacityOf(v, v.job, allBuildings)}</b> per trip
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button
+                  className="menu-btn small"
+                  style={{
+                    margin: 0, width: 'auto', padding: '5px 10px',
+                    opacity: !v.gear?.carrier ? 1 : 0.65,
+                    borderColor: !v.gear?.carrier ? 'var(--gold)' : undefined,
+                  }}
+                  onClick={() => unequipVillagerCarrier(v.id)}
+                  title="Bare-handed — returns any carrier to the Armory"
+                >
+                  🤲 Bare Arms
+                </button>
+                {CARRIERS.map((c) => {
+                  const item = CARRIER_ITEM[c.id];
+                  const worn = v.gear?.carrier === c.id;
+                  const stock = armory[item] ?? 0;
+                  return (
+                    <button
+                      key={c.id}
+                      className="menu-btn small"
+                      disabled={!worn && stock <= 0}
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: worn ? 1 : stock > 0 ? 0.85 : 0.4,
+                        borderColor: worn ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={() => equipVillagerCarrier(v.id, c.id)}
+                      title={worn ? `Worn — ${c.blurb} (return it with Bare Arms)` : `${c.blurb} · ${stock} in the Armory`}
+                    >
+                      {worn || stock > 0 ? c.icon : '🔒'} {c.label}
+                    </button>
+                  );
+                })}
+              </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                 {JOBS.map((j) => (
                   <button

@@ -585,7 +585,41 @@ granting the unlock + materials and seeing all 26 pieces appear.
   readied and no joust prompt appeared. Dismounting (a real held-E, not a snap) restored the on-foot
   pose and left the camera preference exactly where mounting found it. Zero console/page errors
   across every run. `npm run verify` clean throughout.
-- [TODO] Armor tiers (iron → forged → castle-crested via torso decal variants).
+- [CORRECTED + COMPLETE 2026-08-10, Wave 9 pass C] ✅ **Armor tiers (iron → forged → castle-crested).**
+  Shipped — but **not "via torso decal variants", because this pipeline has no such thing**, and the
+  original line assumed a mechanism that doesn't exist. A minifig's torso print is baked into its donor
+  OBJ/MTL (`lib/minifig.ts`); there is no runtime decal-compositing layer to swap, and
+  `data/villagerLooks.ts` records — in a comment written after real breakage — that head and torso MUST
+  come from the same donor, so changing the print would change the wearer's face and pose with it. The
+  numbered donor variants (`minifigrichardstrong00-03` etc.) are no shortcut either: they differ by held
+  weapon/pose, not armor quality, and `weaponParts.ts` already consumes them as weapon geometry.
+  So the tiers are rendered the way this game has always rendered a chestplate: **procedurally**.
+  `Chestplate()` was already a hand-built plate under the file's own "procedural where the original has
+  no equivalent" rule (the same one the axe/pickaxe/campfire/forge/bed follow), and it now takes a tier —
+  plain iron with its single boss (byte-for-byte what shipped before, so no existing figure changed),
+  a darker banded-and-riveted plate with a chevron for **forged**, and bright steel under gold trim with
+  gold shoulder caps and a raised three-merlon castle over a gate for **castle-crested**. The decal is
+  real geometry standing off the plate rather than a texture — both what the pipeline supports and what
+  actually reads at minifig scale.
+  Three real items (`chestplate_forged`, `chestplate_crested`) with Forge recipes that **re-forge the
+  tier below** (Forged = an Iron Plate + 4 bar + 1 plank; Crested = a Forged Plate + 6 bar + 2 plank), so
+  the ladder reads as one plate you keep improving and the Armory can never hold a Castle-Crested plate
+  belonging to someone who never made an iron one. Both halves of the game read the tier: a defender's
+  max HP takes 6 / 10 / 16 instead of a flat 6 (`Defenders.tsx` via `chestplateHp`), and the player's
+  passive `armorReduction` takes 20% / 28% / 36% — the 0.45 ceiling is untouched and finally does its
+  job, since crested + helm + Ironclad now runs into it and a shield block stays the primary defense.
+  *Design call:* **one tiered slot, not three independent ones.** `Villager.gear.chestplate` keeps its
+  single field and simply holds a tier now, with a legacy `true` reading as `'iron'` through
+  `chestplateTierOf()` — so **no save needs migrating**, every existing truthiness test still means
+  "wearing a plate", and `equipVillagerGear(id, 'chestplate')` still works by delegating to the tiered
+  action. That makes the store action `setDefenderLoadout`-shaped: equipping a better plate hands the old
+  one back to the Armory in the same click instead of destroying it — deliberately the same shape as this
+  wave's carriers, since it is the same problem. The player has no armor equip slot (owning a plate IS
+  wearing it, which is how `armorReduction` has always read it), so the Satchel paperdoll and the
+  first-person avatar both key off the best plate owned; lesser plates show owned-but-outclassed rather
+  than vanishing, because they are the Forge's ingredient for the next rung. New art-asset extraction —
+  genuinely new "forged"/"crested" donor prints — remains the only thing that would beat this, and is a
+  texture-pipeline task, not a code one.
 - [CORRECTED 2026-08-06, Wave 8] ~~Catapult/trebuchet (only the cannon exists; firing sound `snd060`
   is waiting).~~ **This line was already out of date and nobody had noticed.** A catapult has been in
   the game since the 2026-07-20 rig-lab pass: `oc6096-4` "Catapult" is a registered buildable in the
@@ -787,7 +821,21 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   entry point (`roadEntry()`, the same one every newcomer uses) instead of an arbitrary point 18m
   behind `MERCHANT_SPOT` that had nothing to do with the actual road.
 - [TODO] Taming: falcon companion (`snd054`).
-- [TODO] Cooking depth beyond bread/cooked fish.
+- [COMPLETE] ✅ **Cooking depth beyond bread/cooked fish** (2026-08-10, Wave 9 pass C): three new campfire
+  dishes above the two that existed — **Herb Pottage** (2 herb + 1 wheat), **Fisherman's Stew** (2 fish +
+  1 herb + 1 wheat, behind the same `fishing` gate Cook Fish uses) and **Blossom Tart** (3 wheat + 2
+  flowers + 1 herb) — each on the existing station/skill/`requiresUnlock` convention and each an `EDIBLES`
+  entry continuing that ladder: 6 / 9 / 13 vigour, above the Healing Draught's 5 rather than beside it,
+  so the draught stays the cheap mid-fight top-up (2 herbs, drinkable in a scrap) and these are a meal you
+  cooked ahead. *Design call:* **zero new gatherables.** Everything here is something the world already
+  yields — wheat off a farm plot, fish off the pond, herb off a node, flowers off a node or as a craft
+  side-good (`SIDE_GOODS`) — because a new raw ingredient means a new `ResourceNodeState.kind`, which is a
+  type-union change rippling through the gather and render paths: a mechanic, not the content this line
+  asked for. Notably **flowers had never had a food use at all** (only the two draughts), and the tart is
+  the answer — petals in a tart is exactly what a medieval kitchen did with them. The stew deliberately
+  takes RAW fish, so it competes with Cook Fish for the same catch instead of stacking on top of it. All
+  three sell (6/11/14, a little above what their ingredients would fetch raw) and all three are listed in
+  `BULK_GOODS` with bread and cooked fish, since stored food is stored goods.
 - [COMPLETE] ✅ **Unlockable crests** *(shipped 2026-07-19)* — went **account-level** instead of in-save:
   `data/crestUnlocks.ts` keeps unlocks in localStorage (`kk_crests`, like `kk_settings`), so jailing
   Cedric once on any save gives the Bull Sigil to every future hero. Five earned crests: Rampant Lion ←
@@ -795,7 +843,35 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   1st / 2nd full Sealed Crypt clear (the dungeon cosmetic loot). `checkDeeds` runs a derived sweep
   (deeds + lifetime `dungeonsCleared`), so pre-existing saves back-fill automatically; the creator greys
   locked tiles with 🔒 + unlock hint and skips them for default selection.
-- [TODO] Dye recipes for new palette rows.
+- [CORRECTED + COMPLETE 2026-08-10, Wave 9 pass C] ✅ **Dye recipes for new palette rows.** The line
+  presumed a partial system with gaps to fill; **there was no dye system at all** — grep for `dye` across
+  `src/` returned nothing. What existed was `PALETTE_SWATCHES` (`data/minifigs.ts`), 30 curated indices
+  into the runtime palette, read by all three colour pickers (creator, Appearance panel, villager editor)
+  with **every swatch always clickable and never any cost**. So this is 100% new content and mechanism:
+  `data/dyes.ts` IS the system. Four dyes brewed at the **campfire** on the `farming` skill, beside the
+  draughts and for the same reason — a dye vat is a pot of plants over a fire, and this game has no other
+  "boil something" station: **Woad** (3 flowers + 1 herb), **Madder** (2 flowers + 2 iron_ore), **Bark**
+  (4 wood + 1 herb) and **Tyrian** (5 flowers + 3 herb), priced by how hard the colour is to come by
+  rather than how it looks. No `requiresUnlock` — the ingredients gate them honestly (no madder before
+  you're mining ore) and no quest line has ever mentioned dye.
+  *Design call 1:* **dyes ADD rows, they never gate the ones you have.** Locking some of today's 30
+  swatches would take colours away from every existing save, and — worse — the character creator runs
+  BEFORE a save exists, so a locked row would be free at Forge Your Hero and cost herbs to pick again an
+  hour later. The free 30 stay exactly as free as they are; each dye opens four colours the game has never
+  offered at all (verified against the real `palette.json`: the pale heraldic blues, and oranges, purples
+  and browns that have **no representative in the free set whatsoever**), so a dyed row is visibly a new
+  thing to wear rather than a slightly different blue.
+  *Design call 2:* **unlock once, keep for the save** — not consumed per recolour. Recolouring is
+  fiddling: you try a leg colour, hate it, try another. Charging a brewed item per click would make
+  experimenting expensive and turn the picker into a shop. This mirrors the shape of the game's one
+  existing cosmetic gate (`data/crestUnlocks.ts`'s locked-tile-plus-hint) but persists in the **save**
+  rather than localStorage, because a dye is brewed from this character's own herbs whereas a crest is a
+  deed the player earned once and keeps across every hero.
+  UI is one shared `DyeRack` rendered in **both** pickers — a dye is opened for the save, not for one
+  figure, so unlocking Royal Purples while dressing a villager must put the same colours in the player's
+  own picker, and rendering the same component over the same store field is the only way that can't
+  drift. Locked rows show their **real colours** (dimmed) rather than grey placeholders: the point of a
+  dye is seeing what you'd be buying. New save field `dyes?: string[]`, absent = today's exact behaviour.
 
 **Build system**
 - [COMPLETE] ✅ **Functional doors + enclosed-area "your homestead is a fort" buff — SHIPPED 2026-08-06
@@ -842,36 +918,125 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   a thing that opens" half of the original line; a window that opens wants a mechanical reason to
   (shooting through it, light, ventilation for a future warmth system) rather than a toggle for its
   own sake, and that is a design call, not a build task.
-- [TODO] **Building-conferred villager attribute bonuses (RTS-style)**: certain placed buildings passively
-  grant stat/capacity bonuses to villagers just by existing on the grid (e.g., a future storage/
-  warehouse-type building boosting carry capacity), rather than requiring direct interaction. Genuinely
-  new content and schema — no existing "kind → passive bonus" table to extend today. Closest precedents:
-  guild membership's flat %-bonuses (`data/guilds.ts`, Woodsmen's Lodge/Miners' Brotherhood/Builders'
-  Guild) and the affordance `effects` map (`NPC_AI_SPEC.md` §4.2), but that one only fires on active
-  interaction, never proximity/existence. Cross-reference the enclosed-area buff line just above — both
-  are "your build layout passively affects gameplay" ideas and probably deserve one coherent design pass
-  together rather than two separate bolt-on systems. Phase 4's `carryCapacityOf()` (`game/data/
-  attributes.ts`) ships with a stubbed `externalCapacityBonus()` hook (always 0 until this exists) ready
-  for it once designed.
-- [TODO] **Carrier item content (basket/cart)**: Phase 4.1 ships the `Villager.gear.carrier?: 'basket' | 'cart'`
-  field and its `carryCapacityOf()` bonus (+4/+10) — real, live, testable by direct assignment. What it
-  doesn't ship: how a player actually gets one. Needs two new `ItemId`s, a crafting recipe, Armory stock
-  integration, a roster-panel equip/unequip toggle (mirroring the existing helmet/chestplate UI), and a
-  worn-item visual mesh — `rig.joints.rightarm` is already `ResourceProp`'s (the carried resource itself)
-  and `leftarm` is shields', so the visual needs a joint that doesn't collide with either.
-- [TODO] **Real stockpile storage capacity**: today a stockpile is purely cosmetic — confirmed by reading
-  `gameStore.ts` directly, it's only (a) a work-presence anchor for the trip timer and (b) flavor text in
-  the delivery notification. `addItems()` writes straight into one global, uncapped `st.inventory` with no
-  location or capacity check at all; there is no inventory-cap concept anywhere in the codebase. Worth
-  building for real once Phase 5's haul-travel-time economy cost (5.8b) has shipped and had time to be
-  felt — "unlimited storage + a real travel cost" may already read as correct on its own, or the capacity
-  squeeze may be what makes stockpile *placement* (not just existence) matter. Needs its own design pass:
-  a flat cap vs. one that scales per stockpile built, and what happens when storage is full (hard reject,
-  waste the yield, or block further gathering until the player spends/sells). Would give Phase 5's
-  `haul_to_deposit` `target_usable` consideration (currently just `isBuilt`, a placeholder) real teeth —
-  "has room" instead of "exists."
-- [TODO] Row-fill wall placement (drag a line), demolish-area tool, middle-mouse pan + Q/E aerial rotation.
-- [TODO] Freeform placement mode (unsnapped position/rotation/scale — existing catalog pieces only).
+- [COMPLETE] ✅ **Building-conferred villager attribute bonuses (RTS-style)** (Wave 9 pass A): the new
+  **Storehouse** (`data/buildables.ts`, 10 plank + 6 stone, `building2` gate, the same real crate mold the
+  Stockpile uses at a markedly larger size) is the first piece in the game that buffs villagers just by
+  standing. `externalCapacityBonus()` is no longer a stub — it takes the buildings array and grants
+  +3 carry per Storehouse standing in the villager's OWN settlement, capped at +6 (two of them).
+  *Design call, documented in `attributes.ts`:* **ownership, not proximity.** The obvious radius version was
+  written and rejected — carry capacity is only ever consulted where the villager is FILLING their sack
+  (out at a tree or a vein), which is precisely where they are furthest from any store, so a radius check
+  would have paid out only during the deposit itself and flickered on/off as they walked. Wiring is the
+  one call site the stub was designed for: `carryCapacityOf(v, job, buildings?)`, fed from `Agent.ts`'s
+  existing live `getState()` read, so a Storehouse that finishes construction is felt within one think
+  tick. The adjacent "enclosed-area buff" idea was deliberately NOT folded in — it is a combat buff keyed
+  off wall topology, this is an economy buff keyed off ownership; they share a slogan, not a mechanism.
+- [COMPLETE] ✅ **Carrier item content (basket/cart)** (Wave 9 pass A): `basket`/`cart` are real `ItemId`s
+  with Workbench recipes (3 plank + 2 wood; 6 plank + 4 wood + 2 iron_bar behind the `smithing` gate,
+  priced against the +4/+10 capacity they buy), a Carriers row in the Armory (craft → donate → assign,
+  exactly the helmet/chestplate pipeline), and a Carrier row in the Roster showing the villager's real
+  `carryCapacityOf` number so the effect is visible before you spend. Store actions are
+  `equipVillagerCarrier`/`unequipVillagerCarrier`, modelled on `setDefenderLoadout` **not** on
+  `equipVillagerGear`: `gear.carrier` is one field holding a mutually-exclusive tier, so upgrading
+  basket→cart hands the basket back to the Armory in the same action instead of destroying it. Worn mesh
+  `WornCarrier` portals to **`rig.joints.hips`** — verified free (rightarm holds weapons AND the carried
+  `ResourceProp`, leftarm the shield, head/body the armor; hips is read only by the walk-bob animator and
+  portaled nowhere), so a hauler can wear the basket and carry the load in hand at once. Procedural, per
+  the file's own "procedural where the original has no equivalent" rule — no basket or cart mold exists.
+- [COMPLETE] ✅ **Real stockpile storage capacity** (Wave 9 pass A): `game/storage.ts`. Two design calls,
+  both argued in that file's header. **(1) Per-good, not per-total** — one shared total sounds more like a
+  warehouse but fails in play: hoarding 400 stone would silently block the fish you need to eat, with no
+  way to see which good caused it. Per-kind keeps both the message ("your Wood stores are full") and the
+  fix legible, and matches how the deposit AI thinks (a hauler carries exactly one resource). **(2) Scales
+  with what you built, and refuses out loud** — 80 base, +12/barrel, +60/stockpile, +160/storehouse.
+  Excess is refused with a throttled notification, never silently swallowed and never destroyed: `addItems`
+  takes what fits, returns what it took (so `harvestNode`/fishing/the delivery toast now report the truth
+  instead of what they hoped for) and never *shrinks* an already-over-cap stock, so demolishing a Stockpile
+  can't delete goods you own. The cap binds `source: 'gather'` only — a quest reward, crypt loot or the
+  royal chest arrives once and can't be re-earned, and `craft` writes directly because its ingredients are
+  already spent; the cap governs what the world YIELDS you, not gifts or your own conversions. Gold, tools,
+  weapons, armor, carriers and potions are exempt by kind (`BULK_GOODS`). `haul_to_deposit`'s `target_usable`
+  now means **"has room"** instead of "exists", exactly as this entry asked: a hauler facing full stores
+  holds their load and waits (gather.ts's "wait, don't fail" philosophy) rather than walking it across the
+  map to be turned away, and resumes on the next think tick once you spend or sell. The Satchel's Parts Bin
+  shows the ceiling and marks full goods, so the first refusal is never a surprise.
+- [COMPLETE] ✅ **Row-fill wall placement, demolish-area tool, middle-mouse pan + Q/E aerial rotation**
+  (Wave 9 pass B): all four live in `BuildController.tsx`, plus `placeRow`/`demolishArea` in the store.
+  **Row-fill is shift-drag**, deliberately behind a modifier: an unmodified drag already means the opposite
+  ("I moved off the cell — don't place", the 0.4s hold-to-place misclick guard), and the two readings of the
+  same motion cannot both be right. It only offers itself for `walls.ts`'s `snapsAsWall` set (now exported),
+  steps by the piece's own footprint from a wall-snapped anchor, and re-offers every step to `wallSnap`
+  against the run it is laying, so filling a gap between two standing walls lands flush on both ends and
+  every segment comes out `touching()` — a dragged run and a hand-laid one read identically to `game/fort.ts`.
+  Direction comes from two ground-plane raycasts, i.e. world space, so it is automatically correct at any
+  camera azimuth. The ghost greys out at the exact cell the materials run out (`rowAfford`), the run stops at
+  the first cell that will not take, and the whole run is **one** undo entry — `placeHistory` widened from
+  ids to groups for that (blueprints still push one group per piece, unchanged).
+  **Area demolish arms, then fires**: the drag marks a patch, the rail names the count and the exact refund,
+  and nothing moves until you press the button — it is the one action in the game that can level a wall run
+  in a click. It loops the ordinary `removeBuilding` (new `quiet` flag folds twenty toasts into one report),
+  and the Grand Keep's foundation is excluded, since its parts/progress/HP live outside `PlacedBuilding`.
+  `buildingsInRect` lives in `data/buildables.ts` next to `sizeFor` so the live outline and the confirmation
+  can never disagree about what is inside the box.
+  **Q/E turn in quarter turns, eased** — everything the grid is made of turns in quarter turns, so a view
+  that could stop at 37° would be the only thing not lined up with the ground it looks at. WASD and the new
+  middle-drag both pan through the camera's *current* basis, so "up" and "right" keep meaning what the screen
+  shows after a turn; the vertical drag is un-foreshortened by the rake so the ground stays under the cursor.
+- [COMPLETE] ✅ **Freeform placement mode** (Wave 9 pass B): **F** toggles it, and it is scoped honestly.
+  *Position* is fully freeform (the cursor is the answer — no rounding, no wall magnet). *Rotation* is
+  freeform to look at: a new optional `PlacedBuilding.yaw` holds the true facing (R turns 15° at a time,
+  shift-R a quarter turn) while `rot` stays the nearest quarter turn and remains the piece's **collision**
+  truth. That split is the whole point — `evalPlacement`'s overlap test, `sizeFor`'s width/depth swap,
+  `walls.ts`'s attach points and `collisionShapes` are all axis-aligned and only correct because rotation is
+  a multiple of 90°; widening `rot` to a plain number means an oriented-box/SAT collision system and a save
+  shape change, which is its own feature (see line ~5173's own conclusion). So a piece angled 35° stops you
+  along its nearest square footprint, which is the documented cost of the mode, and why it defaults off and
+  is aimed at decor. *Scale* deliberately not attempted: `Buildable.size` is a catalog constant with no
+  per-instance override, a third separate schema addition implied by nothing here. Validity is NOT bypassed —
+  region bounds, stacking, overlap and node clearance all still rule, and pieces cost exactly what they cost.
+
+  **Wave 9, verified live end-to-end through the real UI/input (all 11 sub-features above), with exact
+  numbers**: the storage cap measured by what a real 99999-unit gather actually took — 80 base, 140 with
+  a Stockpile, 300 with a Storehouse too, 312 with a Barrel — and a real gather into a full 80-cap store
+  accepted exactly 80 and posted "Your stores are full — Wood Log turned away," never shrinking an
+  over-cap stock and never blocking `grant`/`craft`. Storehouse carry bonus read 4→7→10 off a real
+  villager's own Roster line (third Storehouse correctly capped at +6), ownership-not-proximity confirmed
+  by a Storehouse 400m away still granting it in the same settlement. Carriers crafted at a real
+  Workbench for their real costs, donated and equipped through the real Armory/Roster flow (basket→cart
+  swap handed the basket back, not destroyed), worn mesh confirmed live on `rig.joints.hips`. Attribute
+  respec: 3 points → "↺ Rethink your nature — 70 gold" (25 + 15×3 exactly), confirm charged exactly 70
+  and emptied `attrSpent`. Row-fill laid a real 6-piece run in one shift-drag at exact footprint spacing,
+  refunded as one `U` undo, stopped correctly on short materials, and correctly laid nothing for a
+  non-wall piece. Area-demolish armed a real marquee, named the exact piece count and refund, excluded a
+  Grand Keep foundation standing in the patch, and left everything outside it untouched. Q/E landed on
+  exact quarter turns; middle-drag pan matched the grab-the-ground math exactly (un-foreshortened by the
+  camera's rake) and repaired itself correctly after a turn (screen-space, not stale world-space). Dyes:
+  all four campfire recipes crafted and poured through the real Appearance/villager pickers, each
+  growing the swatch count by the same 16 in both panels off one shared save field, indices checked
+  against the real `palette.json` and found genuinely new colour families. Cooking: three new dishes
+  crafted and eaten for their exact documented vigour. Armor: the Forge ladder correctly consumed the
+  rung below at each step, player damage reduction measured exactly 20/28/36% through the real
+  `damagePlayer` path (the 0.45 ceiling now genuinely binding), defender max HP exactly +6/+10/+16, and
+  the crested plate's distinct raised emblem confirmed both by geometry fingerprint and by eye (a
+  screenshot of the real rotatable equipment preview). Zero console/page errors across every run.
+
+  **Three real defects found by verification and fixed the same day, all re-verified**: (1) the haul AI's
+  new "wait if the store has no room" behavior only gated the START of a delivery — the deposit itself
+  still cleared a villager's whole load unconditionally, so if a store filled up mid-walk the difference
+  between what was accepted and what was carried was silently destroyed, precisely the outcome this
+  wave's own storage design says a cap must never produce. `ai/actions/haul.ts` now reads what `addItems`
+  actually accepted: a full deposit clears the load as before, a partial one keeps the remainder in the
+  villager's own hands to redeliver, and a zero-room deposit fails cleanly with nothing lost, trade XP
+  only paid on what actually reached the stores. (2) Two console 404s (generic villager donors' face
+  thumbnails, a pre-existing gap, not a Wave 9 regression) closed by resolving the real asset path up
+  front instead of retrying through a broken one. (3) Every edible's Satchel tooltip read "click to
+  drink" regardless of whether it was food or a potion — a `consumeVerb()` helper now answers correctly
+  per item, and the matching "You drink/eat the …" toast was fixed alongside it rather than left to drift.
+  **A fourth, smaller gap found in a second review pass**: a row-fill drag that laid nothing at all (most
+  commonly: its first cell overlapping a piece from a run laid moments earlier that hadn't finished
+  construction yet — `evalPlacement` correctly refuses to stack on an unbuilt piece, but said nothing)
+  was silent apart from a collision sound, reading as a broken tool rather than a rule doing its job.
+  `placeRow` now notifies plainly when a run lays zero pieces.
 
 **Cast & AI**
 - [COMPLETE] ✅ **Comprehensive AI/animation rig** (requested 2026-07-28, scoped and built 2026-08-03):
@@ -1085,6 +1250,16 @@ measured against the exact math (3→3.9 sword damage, 100→80 max stamina, 10�
   total skill levels, spent in the Abilities panel (`attrSpent` through full save persistence).
   Might +1 melee dmg/2pts · Diligence +4%/pt bonus tree/vein yield · Craft +4%/pt double craft batch ·
   Courage +5 max stamina/pt · Wit +4%/pt sale prices. Verified: Courage spend = exactly 105 stamina.
+- [COMPLETE] ✅ **Attribute respec** (the follow-up below, built Wave 9 pass A): `respecAttributes()` +
+  a two-click arm/confirm button in the Abilities panel's Attributes section. **Full reset, scaling gold
+  cost** (`respecCost` in `data/playerAttributes.ts`, 25 base + 15/point), both argued in that file.
+  Full-reset because investing is already one point at a time — a per-point refund is just the `+` button
+  with a minus sign, and would let a player shave a point off Might before a fight and put it back after
+  for almost nothing. Scaling because this economy's other gates (guild tithe, land tiers, talents) are all
+  flat, and a flat fee here would be trivial for a champion undoing twenty points and punishing for one
+  undoing two — so this is deliberately the codebase's first scaling cost, flagged as a judgment call. No
+  migration needed: `attrSpent` was always an ordinary save field and every consumer reads it live with
+  `?? 0`, so combat/yield/price/craft all correct themselves on the next read.
 
 **Companion trait trees (every villager's own mini skill tree):**
 - `data/companionTraits.ts` — per-job pools (defender Shieldwall/Riposte/Longshot; gatherers
@@ -1093,7 +1268,8 @@ measured against the exact math (3→3.9 sword damage, 100→80 max stamina, 10�
   the Roster, persisted on `Villager.traits`, stacking with innate attributes + mastery. Verified:
   Deep Cut lumberjack hauled exactly 3 wood.
 
-*Follow-ups: attribute respec (gold), defender formations by loadout, courtiers watching duels.*
+*Follow-ups: ~~attribute respec (gold)~~ (done, Wave 9 — see above), defender formations by loadout,
+courtiers watching duels.*
 
 ---
 

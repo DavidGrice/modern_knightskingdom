@@ -12,9 +12,10 @@ import { useEnemyStore, lootFor, KIND_LABEL, type EnemyData } from '@/game/comba
 import { registerDefender, defenderOrders, scoutReported } from '@/game/defenders';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
+import { chestplateHp, chestplateTierOf } from '@/game/data/armor';
 import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
-import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate } from '../character/Equipment';
+import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate, WornCarrier } from '../character/Equipment';
 import { villagerConfig } from '@/game/data/villagerLooks';
 import { HOME_X, HOME_Z, isWatchHours, isWorkingHours } from '@/game/data/villagers';
 import { worldEnv } from '@/game/env';
@@ -85,8 +86,11 @@ function DefenderFigure({ villager }: { villager: Villager }) {
   ds.postX = postX; ds.postY = postY; ds.postZ = postZ; ds.elevated = elevated;
   // Shieldwall companion trait: +8 max health; worn armor adds its own
   // smaller bonus on top (chestplate guards the body, helmet the head)
+  // Wave 9 · the plate's contribution is now its TIER's (data/armor.ts:
+  // iron 6, forged 10, castle-crested 16) rather than a flat 6 for any plate.
+  // A legacy `true` reads as iron, so no existing defender lost a point.
   ds.maxHp = 18 + level * 6 + (hasTrait(villager, 'def_shieldwall') ? 8 : 0)
-    + (villager.gear?.chestplate ? 6 : 0) + (villager.gear?.helmet ? 3 : 0);
+    + chestplateHp(villager.gear) + (villager.gear?.helmet ? 3 : 0);
   if (ds.hp <= 1) ds.hp = ds.maxHp; // first mount
 
   const group = useRef<THREE.Group>(null);
@@ -385,7 +389,10 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       {rig && loadout === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
       {rig && loadout === 'bow' && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
       {rig && villager.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
-      {rig && villager.gear?.chestplate && createPortal(<Chestplate />, rig.joints.body)}
+      {rig && chestplateTierOf(villager.gear) && createPortal(<Chestplate tier={chestplateTierOf(villager.gear)!} />, rig.joints.body)}
+      {/* Wave 9 · a defender may wear a carrier too (any job may) — same free
+          hips joint, so it never fights the weapon in their hand */}
+      {rig && villager.gear?.carrier && createPortal(<WornCarrier tier={villager.gear.carrier} />, rig.joints.hips)}
       </group>
     </group>
   );

@@ -20,6 +20,7 @@
 // Might/Craft/Wit trip-bonus rolls tickVillagers still has are deliberately
 // NOT ported here — see ROADMAP.md.
 import { useGameStore } from '@/game/store/gameStore';
+import { roomFor } from '@/game/storage';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
@@ -94,17 +95,37 @@ class HaulToDepositActivity implements Activity {
     agent.intent = { type: 'PLAY_ANIM', clip: 'anim_c_pleased', loop: false, anchored: true };
     this.holdTimer += dt;
     if (this.holdTimer < PERFORM_HOLD) return 'RUNNING';
-    if (!agent.bb.carrying) return this.finish(agent, 'SUCCESS'); // nothing to deposit — is_carrying gates this, shouldn't happen
-    if (CARRYING_ENABLED) {
-      // §3.5/§4: transfer via addItems(), never a direct inventory write —
-      // addItems also feeds lifetime stats, mastery and deeds
-      useGameStore.getState().addItems({ [agent.bb.carrying.resource]: agent.bb.carrying.amount }, 'gather');
-      // one completed haul stands in for tickVillagers' own "one completed
-      // trip" for trade-mastery purposes — see this file's own header
-      useGameStore.getState().awardTradeXp(agent.id, 10);
+    const load = agent.bb.carrying;
+    if (!load) return this.finish(agent, 'SUCCESS'); // nothing to deposit — is_carrying gates this, shouldn't happen
+    if (!CARRYING_ENABLED) {
+      agent.bb.carrying = null;
+      return this.finish(agent, 'SUCCESS');
     }
-    agent.bb.carrying = null;
-    return this.finish(agent, 'SUCCESS');
+    // §3.5/§4: transfer via addItems(), never a direct inventory write —
+    // addItems also feeds lifetime stats, mastery and deeds.
+    //
+    // Wave 9 · it now returns what the stores ACCEPTED (game/storage.ts), and
+    // this has to honour that. `target_usable` only refuses to *start* a haul
+    // into a full store; the walk itself takes real time, and the player can
+    // fill that last slot from their own gathering while the villager is still
+    // crossing the yard. Clearing `carrying` unconditionally would quietly
+    // destroy the difference — the one outcome the cap was explicitly designed
+    // never to produce. Whatever would not fit stays on their back, so they
+    // stand there holding it until room appears, exactly as the consideration
+    // promises for a haul that never left.
+    const took = useGameStore.getState().addItems({ [load.resource]: load.amount }, 'gather');
+    const accepted = took[load.resource] ?? 0;
+    if (accepted <= 0) {
+      // load intact, no trip credit — a haul that discharged nothing did not
+      // complete, and awarding trade xp for it would pay per walk, not per load
+      return this.finish(agent, 'FAILURE');
+    }
+    // one completed haul stands in for tickVillagers' own "one completed
+    // trip" for trade-mastery purposes — see this file's own header
+    useGameStore.getState().awardTradeXp(agent.id, 10);
+    const left = load.amount - accepted;
+    agent.bb.carrying = left > 0 ? { resource: load.resource, amount: left } : null;
+    return this.finish(agent, left > 0 ? 'FAILURE' : 'SUCCESS');
   }
 
   /** Same reasoning as GatherAtNodeActivity's own finish() — every terminal
@@ -153,7 +174,11 @@ export const HAUL_TO_DEPOSIT: Action = {
   interruptPriority: 1, // CATEGORY_INTERRUPT_PRIORITY.work
   minDuration: 2,
   cooldown: 0,
-  targetKinds: ['stockpile', 'barrel'],
+  // Wave 9 · the Storehouse joins the deposit points. TargetRegistry keys a
+  // building target by its raw buildable id (`kind: b.type`), so adding it
+  // here is the whole wiring — candidate assembly picks the nearest of the
+  // three exactly as it already did for two.
+  targetKinds: ['storehouse', 'stockpile', 'barrel'],
   considerations: [
     { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: boolCurve },
     { name: 'load_fraction', input: (agent) => loadFraction(agent), curve: loadFractionCurve },
@@ -161,6 +186,19 @@ export const HAUL_TO_DEPOSIT: Action = {
       name: 'target_usable',
       input: (agent, ctx) => {
         if (!ctx.target?.available) return 0;
+        // Wave 9 · "has room", not merely "exists" — the teeth ROADMAP.md
+        // wanted this consideration to grow once a storage cap was real
+        // (game/storage.ts). A deposit point whose stores are full for the
+        // resource being carried scores 0, so the hauler HOLDS their load
+        // and waits rather than walking it across the map to be turned away
+        // — the same "wait, don't fail" philosophy gather.ts already applies
+        // to a blocked node. Spending or selling that good re-opens it on
+        // the very next think tick, no invalidation needed.
+        const load = agent.bb.carrying;
+        if (load) {
+          const st = useGameStore.getState();
+          if (roomFor(load.resource, st.inventory[load.resource] ?? 0, st.buildings) <= 0) return 0;
+        }
         const blockedUntil = agent.bb.blockedTargets.get(ctx.target.id);
         if (blockedUntil === undefined) return 1;
         if (blockedUntil > ctx.now) return 0;

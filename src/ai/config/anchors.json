@@ -19,6 +19,7 @@
     "fishing": { "mode": "radial", "radius": 1.6, "slots": 1 }
   },
   "buildings": {
+    "storehouse": { "mode": "radial", "radius": 2.6, "slots": 4 },
     "stockpile": { "mode": "radial", "radius": 1.2, "slots": 3 },
     "barrel":    { "mode": "radial", "radius": 0.9, "slots": 1 },
     "farmplot":  { "mode": "radial", "radius": 1.1, "slots": 4 },
