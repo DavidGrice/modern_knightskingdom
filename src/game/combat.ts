@@ -18,6 +18,7 @@ import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
+import { fortDamageReduction } from './fort';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -33,6 +34,24 @@ function onBattlement(): boolean {
  *  ALSO swing/fire when the hold is meant for the tool in hand) and
  *  `PlayerController`'s own prompt/held-input logic read from. */
 export const CLICK_HELD_TARGET_KINDS = new Set(['construct', 'tree', 'rock', 'fishing', 'herb']);
+
+/** Wave 7 · melee is no longer just "the sword or your fists". Mirrors the
+ *  existing `rangedWeapon` sub-selector's shape exactly rather than inventing
+ *  a second convention for the same job. */
+export type MeleeWeaponId = 'sword' | 'halberd' | 'spear';
+
+/** Every weapon the player can ready, melee and ranged in ONE list, in the
+ *  order Q cycles them. Both switch points (the equip panel's tile row and
+ *  GameScreen's swapWeapon) walk this, so a future weapon reaches both by
+ *  being added here once instead of by editing two hardcoded arrays that
+ *  already drifted apart before. */
+export const WEAPON_SLOTS = ['sword', 'halberd', 'spear', 'crossbow', 'longbow'] as const;
+export type WeaponSlot = (typeof WEAPON_SLOTS)[number];
+
+/** which sub-selector a slot writes: `meleeWeapon` or `rangedWeapon` */
+export function isMeleeSlot(k: WeaponSlot): k is MeleeWeaponId {
+  return k === 'sword' || k === 'halberd' || k === 'spear';
+}
 
 export const combatState = {
   hp: 10,
@@ -50,6 +69,10 @@ export const combatState = {
   weapon: 'melee' as 'melee' | 'ranged',
   /** which ranged weapon is readied when weapon === 'ranged' */
   rangedWeapon: 'crossbow' as 'crossbow' | 'longbow',
+  /** which melee weapon is readied when weapon === 'melee'. 'sword' doubles
+   *  as the bare-fisted default (see activeMelee) — nothing is ever guaranteed
+   *  to be owned, so this is a PREFERENCE, not a claim of ownership. */
+  meleeWeapon: 'sword' as MeleeWeaponId,
   /** performance.now() the longbow draw started, 0 = not drawing */
   drawStart: 0,
   aiming: false,
@@ -324,7 +347,13 @@ export function armorReduction(inv: Partial<Record<ItemId, number>>, perks: stri
 
 export function damagePlayer(amount: number) {
   const st = useGameStore.getState();
-  let dmg = amount * (1 - armorReduction(st.inventory, st.perks));
+  // Wave 8 · Sound Walls. A closed wall ring around the homestead takes a
+  // fifth off every blow landed on you INSIDE it (game/fort.ts). Applied on
+  // top of armour rather than into armorReduction's own capped pool, because
+  // they are two different investments: plate is what you wear, the ring is
+  // what you built, and a knight in full harness behind a finished wall should
+  // feel both.
+  let dmg = amount * (1 - armorReduction(st.inventory, st.perks)) * (1 - fortDamageReduction());
   if (combatState.blocking && (st.inventory.shield ?? 0) > 0 && combatState.stamina > 10) {
     dmg = Math.max(0, Math.round(dmg * 0.25 * 10) / 10);
     combatState.stamina = Math.max(0, combatState.stamina - 14);
@@ -406,30 +435,150 @@ export function resolveDuel(won: boolean, mobId: number) {
 
 if (w) w.__kkResolveDuel = resolveDuel;
 
-/** player melee swing: hits the closest enemy in reach within the facing cone */
+export interface MeleeStats {
+  /** damage at full condition, and once fully worn */
+  dmg: number;
+  wornDmg: number;
+  /** metres of reach, and the MINIMUM facing dot a target must be within —
+   *  1 = dead ahead, 0 = anywhere in the 180° frontal arc */
+  reach: number;
+  cone: number;
+  /** seconds between swings (CombatController's own cooldown) and stamina spent */
+  cd: number;
+  stamina: number;
+  /** true = the swing lands on EVERY foe in the arc, not just the nearest */
+  sweep: boolean;
+  /** damage multiplier for a couched charge — only ever applied while mounted
+   *  AND galloping. 1 = this weapon has no charge. */
+  charge: number;
+}
+
+/**
+ * Wave 7 · the player's melee weapons in one table, instead of the sword's
+ * numbers inlined in playerAttack(). The `sword` row is EXACTLY what the game
+ * already did (3 / 1.5 worn / 2.5m / 0.55s / 8 stamina / dot > 0.3), so
+ * nothing about swinging a sword changed; the other two are deliberate steps
+ * off it rather than invented numbers:
+ *
+ *   halberd — slower and costlier per swing, and its single-target DPS
+ *             (4.5/0.95 ≈ 4.7) is deliberately BELOW the sword's (3/0.55 ≈
+ *             5.5). What it buys instead is reach and a sweep across the
+ *             whole frontal arc, which is what makes it worth carrying into
+ *             a raid and pointless in a duel.
+ *   spear   — the longest reach in the game and a quicker jab than the
+ *             halberd, paid for with the narrowest cone (you must actually be
+ *             pointed at what you are stabbing) and less per hit. Its `charge`
+ *             is the mounted twin of the ranged weapons' existing battlement
+ *             bonus (see onBattlement): momentum earning a real mechanical
+ *             edge, not just a posture — a couched lance at a gallop is the
+ *             hardest single melee blow in the game, and the only one you
+ *             cannot land on foot.
+ *
+ * Stamina is derived, not guessed: each weapon's cost/cd lands within a
+ * whisker of the 14/s regen rate (8/0.55, 14/0.95, 10/0.7 ≈ 14.5, 14.7,
+ * 14.3), so no polearm is quietly cheaper to spam than the sword already is.
+ */
+export const MELEE: Record<MeleeWeaponId, MeleeStats> = {
+  sword: { dmg: 3, wornDmg: 1.5, reach: 2.5, cone: 0.3, cd: 0.55, stamina: 8, sweep: false, charge: 1 },
+  halberd: { dmg: 4.5, wornDmg: 2.2, reach: 3.3, cone: 0, cd: 0.95, stamina: 14, sweep: true, charge: 1 },
+  spear: { dmg: 3.5, wornDmg: 1.8, reach: 3.9, cone: 0.6, cd: 0.7, stamina: 10, sweep: false, charge: 2.2 },
+};
+
+/** Which melee weapon is actually in hand. The readied one only counts while
+ *  it is still OWNED — selling or losing a halberd has to fall back to the
+ *  sword (and the sword to bare fists, which is what 'sword' means when
+ *  `inventory.sword` is 0), the same ownership check `rangedMode` has always
+ *  made before showing a crossbow. */
+export function activeMelee(): MeleeWeaponId {
+  const mw = combatState.meleeWeapon;
+  if (mw !== 'sword' && (useGameStore.getState().inventory[mw] ?? 0) > 0) return mw;
+  return 'sword';
+}
+
+/** Resolve ONE landed melee blow: damage, the camp's rally, knockback, and
+ *  the kill/loot/notify path if it fell. Split out of playerAttack when the
+ *  halberd's sweep made "the single best target" no longer the only shape a
+ *  swing can have — a swept kill has to loot, rally and credit the arena
+ *  exactly like a thrust one, and that is not a rule worth keeping two
+ *  copies of. */
+function landMeleeHit(e: EnemyData, d: number, dmg: number) {
+  const st = useGameStore.getState();
+  const { enemies } = useEnemyStore.getState();
+  e.hp -= dmg;
+  // the camp rallies (AI wave 2): striking one hostile alerts every fellow
+  // within earshot, pulling them into the fight beyond the normal 26m leash
+  for (const o of enemies) {
+    if (o.id === e.id || o.mob.state === 'dying' || o.kind === 'storm') continue;
+    if (Math.hypot(o.mob.x - e.mob.x, o.mob.z - e.mob.z) < 40) o.mob.alertT = 12;
+  }
+  // knockback
+  const kb = 0.9;
+  const dd = d || 1;
+  e.mob.x += ((e.mob.x - playerState.x) / dd) * kb;
+  e.mob.z += ((e.mob.z - playerState.z) / dd) * kb;
+  if (e.hp <= 0 && e.mob.state !== 'dying') {
+    if (e.kind === 'storm') {
+      resolveDuel(true, e.id);
+      return;
+    }
+    e.mob.state = 'dying';
+    e.mob.dieT = 0;
+    st.recordKill(e.kind);
+    if (e.arena) arenaState.kills++;
+    st.addXp('combat', KIND_XP[e.kind]);
+    // hand over what this individual was actually carrying (rolled at spawn)
+    const drop = lootFor(e);
+    st.addItems(drop, 'grant');
+    const haul = Object.entries(drop)
+      .filter(([, n]) => (n ?? 0) > 0)
+      .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
+      .join(', ');
+    st.notify(haul ? `${KIND_LABEL[e.kind]} defeated! Looted ${haul}.` : `${KIND_LABEL[e.kind]} defeated!`);
+    // Cedric's Siege: only the sanctioned final stand ever permanently
+    // defeats him — every other spawn of his kind flees well before 0 HP
+    // (see Enemies.tsx's flee-guard), so reaching this branch with
+    // finalStand unset should be effectively unreachable, but the gate stays
+    // as the deliberate second line of defense against that assumption.
+    if (e.kind === 'cedric' && e.finalStand) st.markCedricDefeated();
+  }
+}
+
+/** player melee swing: the readied weapon's own reach/arc, resolved against
+ *  the nearest foe in the facing cone — or, for a sweeping polearm, against
+ *  every foe in it. Nothing here gates on `ridingState`: a swing from the
+ *  saddle has always been the same swing, and the only mounted difference is
+ *  the spear's couched-charge multiplier below. */
 export function playerAttack(): boolean {
   const st = useGameStore.getState();
-  if (combatState.stamina < 8) return false;
-  combatState.stamina -= 8;
+  const kind = activeMelee();
+  // deliberately not named `w` — that is this module's window handle
+  const wp = MELEE[kind];
+  if (combatState.stamina < wp.stamina) return false;
+  combatState.stamina -= wp.stamina;
   combatState.attackAt = performance.now();
-  const hasSword = (st.inventory.sword ?? 0) > 0;
-  // a worn-out sword still swings, just softer — durability is a nudge
+  const held = (st.inventory[kind] ?? 0) > 0;
+  // a worn-out weapon still swings, just softer — durability is a nudge
   // toward the workbench, not a hard block on fighting
-  const swordWorn = (st.durability.sword ?? 100) <= 0;
+  const worn = (st.durability[kind] ?? 100) <= 0;
   // Knights' Order passive + Heavy Hand talent: flat melee damage bonuses
   const orderBonus = (st.guild === 'knights' ? 1 : 0) + (st.skillTree.includes('combat3') ? 1 : 0)
     + Math.floor((st.attrSpent.might ?? 0) / 2); // Might attribute
-  const swordDmg = hasSword ? (swordWorn ? 1.5 : 3) : 1;
-  // Berserker trade-off: +30% sword damage specifically (its own downside is
-  // the −20% max stamina above) — unarmed swings don't benefit
-  const berserkerMult = hasSword && st.perks.includes('berserker') ? 1.3 : 1;
-  const dmg = swordDmg * berserkerMult + orderBonus;
-  if (hasSword) st.useTool('sword');
-  audio.play('sword_swish', hasSword ? 0.8 : 0.45);
+  const baseDmg = held ? (worn ? wp.wornDmg : wp.dmg) : 1; // nothing held = bare fists
+  // Berserker trade-off: +30% damage with a weapon in hand specifically (its
+  // own downside is the −20% max stamina above) — unarmed swings don't benefit
+  const berserkerMult = held && st.perks.includes('berserker') ? 1.3 : 1;
+  // the couched charge, applied to the finished figure the way the ranged
+  // weapons' battlement bonus is: it scales the WHOLE blow, guild bonuses and
+  // all, because it is momentum behind the point, not a better point
+  const charge = wp.charge > 1 && ridingState.active && combatState.galloping ? wp.charge : 1;
+  const dmg = (baseDmg * berserkerMult + orderBonus) * charge;
+  if (held) st.useTool(kind);
+  audio.play('sword_swish', held ? 0.8 : 0.45);
 
   const fx = -Math.sin(playerState.yaw);
   const fz = -Math.cos(playerState.yaw);
   const { enemies } = useEnemyStore.getState();
+  const landed: { e: EnemyData; d: number }[] = [];
   let best: EnemyData | null = null;
   let bestD = Infinity;
   for (const e of enemies) {
@@ -437,62 +586,29 @@ export function playerAttack(): boolean {
     const dx = e.mob.x - playerState.x;
     const dz = e.mob.z - playerState.z;
     const d = Math.hypot(dx, dz);
-    if (d > 2.5) continue;
-    if ((dx * fx + dz * fz) / (d || 1) < 0.3) continue;
-    if (d < bestD) { best = e; bestD = d; }
+    if (d > wp.reach) continue;
+    if ((dx * fx + dz * fz) / (d || 1) < wp.cone) continue;
+    if (wp.sweep) landed.push({ e, d });
+    else if (d < bestD) { best = e; bestD = d; }
   }
+  if (best) landed.push({ e: best, d: bestD });
   // nothing living in reach — but the raiders' ram is a legitimate target,
   // and breaking it before it reaches the gate is the whole point of having
   // defenders on the wall
-  if (!best) {
+  if (!landed.length) {
     if (raiderRamState.active && !raiderRamState.wrecked) {
       const rdx = raiderRamState.x - playerState.x;
       const rdz = raiderRamState.z - playerState.z;
       const rd = Math.hypot(rdx, rdz);
-      if (rd < 2.5 + RAM_RADIUS && (rdx * fx + rdz * fz) / (rd || 1) > 0.3) {
+      if (rd < wp.reach + RAM_RADIUS && (rdx * fx + rdz * fz) / (rd || 1) > wp.cone) {
         hitRaiderRam(dmg);
       }
     }
     return true;
   }
-  best.hp -= dmg;
-  // the camp rallies (AI wave 2): striking one hostile alerts every fellow
-  // within earshot, pulling them into the fight beyond the normal 26m leash
-  for (const e of enemies) {
-    if (e.id === best.id || e.mob.state === 'dying' || e.kind === 'storm') continue;
-    if (Math.hypot(e.mob.x - best.mob.x, e.mob.z - best.mob.z) < 40) e.mob.alertT = 12;
-  }
-  // knockback
-  const kb = 0.9;
-  const d = bestD || 1;
-  best.mob.x += ((best.mob.x - playerState.x) / d) * kb;
-  best.mob.z += ((best.mob.z - playerState.z) / d) * kb;
+  // one impact sound per SWING, not per body a sweep passes through
   audio.play('brick_collide', 0.8);
-  if (best.hp <= 0 && best.mob.state !== 'dying') {
-    if (best.kind === 'storm') {
-      resolveDuel(true, best.id);
-      return true;
-    }
-    best.mob.state = 'dying';
-    best.mob.dieT = 0;
-    st.recordKill(best.kind);
-    if (best.arena) arenaState.kills++;
-    st.addXp('combat', KIND_XP[best.kind]);
-    // hand over what this individual was actually carrying (rolled at spawn)
-    const drop = lootFor(best);
-    st.addItems(drop, 'grant');
-    const haul = Object.entries(drop)
-      .filter(([, n]) => (n ?? 0) > 0)
-      .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
-      .join(', ');
-    st.notify(haul ? `${KIND_LABEL[best.kind]} defeated! Looted ${haul}.` : `${KIND_LABEL[best.kind]} defeated!`);
-    // Cedric's Siege: only the sanctioned final stand ever permanently
-    // defeats him — every other spawn of his kind flees well before 0 HP
-    // (see Enemies.tsx's flee-guard), so reaching this branch with
-    // finalStand unset should be effectively unreachable, but the gate stays
-    // as the deliberate second line of defense against that assumption.
-    if (best.kind === 'cedric' && best.finalStand) st.markCedricDefeated();
-  }
+  for (const h of landed) landMeleeHit(h.e, h.d, dmg);
   return true;
 }
 

@@ -19,7 +19,7 @@ import { findPath, rebuildNav } from '@/game/navgrid';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import HealthBillboard from './HealthBillboard';
 import type { RiggedMinifig } from '@/lib/minifigRig';
-import { isHomeBuilding } from '@/game/types';
+import { isDoorLike, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId } from '@/game/types';
 import { ITEMS } from '@/game/data/items';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD, POND, WORLD_HALF } from '@/game/data/world';
@@ -453,9 +453,10 @@ function Enemy({ data }: { data: EnemyData }) {
         m.x = THREE.MathUtils.clamp(m.x, -WORLD_HALF + 2, WORLD_HALF - 2);
         m.z = THREE.MathUtils.clamp(m.z, -WORLD_HALF + 2, WORLD_HALF - 2);
       }
-      // a shut gate blocks raiders like a wall (the one building type enemies collide with)
+      // a shut gate blocks raiders like a wall (the one building type enemies
+      // collide with) — Wave 8: a barred door does the same
       for (const b of st.buildings) {
-        if (b.type !== 'gate' || (st.gateOpen[b.id] ?? true)) continue;
+        if (!isDoorLike(b.type) || (st.gateOpen[b.id] ?? true)) continue;
         const [sx, sz] = sizeFor(b.type, b.rot);
         const hx = sx / 2 + 0.5;
         const hz = sz / 2 + 0.5;

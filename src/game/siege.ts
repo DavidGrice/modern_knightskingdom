@@ -6,11 +6,11 @@ import { audio } from '@/lib/audio';
 import { useGameStore } from './store/gameStore';
 import { useEnemyStore, damagePlayer } from './combat';
 import { playerState } from './playerState';
-import { labExplosive } from './data/labCapabilities';
+import { labExplosive, labSiegeRole } from './data/labCapabilities';
 import { labAssetId } from './data/buildables';
 import { fireProp } from '@/components/world/RiggedProp';
 import { KEEP_SOCKETS } from './data/keep';
-import type { PlacedBuilding } from './types';
+import { isDoorLike, type PlacedBuilding } from './types';
 
 /** J51 · every finished keep piece within `radius` of (x, z) takes the same
  *  hit an ordinary building would — the keep has no PlacedBuilding entries
@@ -61,6 +61,36 @@ export function quintainHit(buildingId: string, mounted: boolean) {
   if (mounted) st.notify('Mounted strike! Double training XP.');
 }
 
+/**
+ * Wave 8 · what an engine SOUNDS like when it looses.
+ *
+ * Every siege piece has shared one `audio.play('cannon')` since the lab pass
+ * put nine engines in the catalog — so a counterweight catapult went off with
+ * a gunpowder bang, which is the one noise a catapult definitely does not
+ * make. There is no new sample to reach for (the extracted bank has 40 named
+ * WAVs and no `snd060` anything — see lib/audio's SOUNDS), so the variety is
+ * built from what the bank really holds, keyed off the lab's own `siegeRole`
+ * rather than an id list: torsion arms get the timber THUD of the arm hitting
+ * its stop under a whoosh, bolt-throwers get the crossbow's release, and only
+ * actual powder keeps the cannon's report.
+ */
+function fireSound(assetId: string) {
+  switch (labSiegeRole(assetId)) {
+    case 'catapult':
+    case 'stone_thrower':
+    case 'siege_tower':
+      audio.play('sword_swish', 0.7);
+      audio.play('thud', 0.95);
+      return;
+    case 'crossbow_emplacement':
+    case 'turret':
+      audio.play('crossbow', 0.9);
+      return;
+    default:
+      audio.play('cannon', 0.9);
+  }
+}
+
 /** Fire an engine. `aimYaw` is supplied when the player is CREWING it (see
  *  game/crew.ts): a manned engine shoots where you're looking instead of
  *  along the quarter-turn it happened to be placed at. */
@@ -82,7 +112,7 @@ export function fireCannon(cannon: PlacedBuilding, aimYaw?: number) {
     pos: { x: cannon.x + dx * 1.2, y: (cannon.y ?? 0) + 1.1, z: cannon.z + dz * 1.2 },
     vel: { x: dx * 17, y: 4.5, z: dz * 17 },
   });
-  audio.play('cannon', 0.9);
+  fireSound(labAssetId(cannon.type));
 }
 
 if (typeof window !== 'undefined') {
@@ -202,10 +232,10 @@ export function ramCheck(rammerId: string, x: number, z: number) {
     if (d > 2.1) continue;
     lastRamHitAt = now;
     audio.play('thud', 0.85);
-    if (b.type === 'gate') {
+    if (isDoorLike(b.type)) {
       if (st.gateOpen[b.id] ?? true) continue; // already open — nothing to ram
       st.toggleGate(b.id);
-      st.notify('The ram splinters the gate open!', true);
+      st.notify(b.type === 'door' ? 'The ram bursts the door off its hinges!' : 'The ram splinters the gate open!', true);
     } else {
       st.damageBuilding(b.id, 12, 'was rammed');
     }

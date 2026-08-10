@@ -7,10 +7,10 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import RiggedFigure from '../character/RiggedFigure';
-import { HeldSword, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
+import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { playerState } from './PlayerController';
-import { combatState } from '@/game/combat';
+import { activeMelee, combatState, type MeleeWeaponId } from '@/game/combat';
 
 export default function PlayerAvatar() {
   const character = useGameStore((s) => s.character);
@@ -21,6 +21,10 @@ export default function PlayerAvatar() {
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
   const hasSword = useGameStore((s) => (s.inventory.sword ?? 0) > 0);
   const hasShield = useGameStore((s) => (s.inventory.shield ?? 0) > 0);
+  // Wave 7 · third person shows what you have READIED, not just "a sword if
+  // you own one" — otherwise a halberd wielder swings a sword out here while
+  // the first-person view (and the damage) say polearm.
+  const [meleeTool, setMeleeTool] = useState<MeleeWeaponId>('sword');
   const hasHelmet = useGameStore((s) => (s.inventory.helmet ?? 0) > 0);
   const hasChestplate = useGameStore((s) => (s.inventory.chestplate ?? 0) > 0);
   const emoteSeq = useRef(0);
@@ -33,6 +37,10 @@ export default function PlayerAvatar() {
       g.position.set(playerState.x, playerState.y, playerState.z);
       g.rotation.y = playerState.yaw + Math.PI; // model faces +Z; movement forward is -Z
     }
+    // cheap store read, and setState only on an actual swap — same
+    // "compare-then-set" shape the clip selection below already uses
+    const m = activeMelee();
+    if (m !== meleeTool) setMeleeTool(m);
     // emote takes priority until its clip ends
     if (emote && emote.seq !== emoteSeq.current) {
       emoteSeq.current = emote.seq;
@@ -68,7 +76,9 @@ export default function PlayerAvatar() {
           setClip('anim_r_restpose');
         }}
       />
-      {rig && hasSword && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+      {rig && meleeTool === 'sword' && hasSword && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+      {rig && meleeTool === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+      {rig && meleeTool === 'spear' && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
       {rig && hasShield && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
       {rig && hasHelmet && createPortal(<HeldHelmet />, rig.joints.head)}
       {rig && hasChestplate && createPortal(<Chestplate />, rig.joints.body)}

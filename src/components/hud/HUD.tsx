@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
 import { sideQuestGiverName, sideQuestsOf } from '@/game/data/npcs';
 import { clockLabel, nightFactor } from '@/game/env';
-import { combatState } from '@/game/combat';
+import { activeMelee, combatState, type MeleeWeaponId } from '@/game/combat';
 import { aimState, type AimTarget, type Standing } from '@/game/targeting';
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
@@ -22,6 +22,7 @@ import FpsReadout from './FpsReadout';
 import FishingMeter from './FishingMeter';
 import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
+import FortStatus from './FortStatus';
 import ArenaHud from './ArenaHud';
 import OrderRadial from './OrderRadial';
 import KkIcon from '../ui/KkIcon';
@@ -241,19 +242,26 @@ function Ledger() {
  *  ammo count, and the tools you are actually carrying. */
 function ReadiedRow() {
   const inventory = useGameStore((s) => s.inventory);
-  const [weapon, setWeapon] = useState({ ranged: false, bow: false });
+  const [weapon, setWeapon] = useState({ ranged: false, bow: false, melee: 'sword' as MeleeWeaponId });
 
   useEffect(() => {
     const t = setInterval(() => setWeapon({
       ranged: combatState.weapon === 'ranged',
       bow: combatState.rangedWeapon === 'longbow',
+      // Wave 7 · which of the three melee weapons is lit, not just "melee".
+      // activeMelee() rather than the raw preference, so a slot can never
+      // light up for a weapon that has left the Satchel.
+      melee: activeMelee(),
     }), 160);
     return () => clearInterval(t);
   }, []);
 
   const has = (id: ItemId) => (inventory[id] ?? 0) > 0;
+  const melee = (id: MeleeWeaponId) => !weapon.ranged && weapon.melee === id;
   const slots: { id: ItemId; icon: string; on: boolean; count?: number; key?: string }[] = [
-    { id: 'sword', icon: 'k-sword', on: !weapon.ranged },
+    { id: 'sword', icon: 'k-sword', on: melee('sword') },
+    { id: 'halberd', icon: 'k-sword', on: melee('halberd'), key: 'Q' },
+    { id: 'spear', icon: 'k-sword', on: melee('spear'), key: 'Q' },
     { id: 'crossbow', icon: 'k-crossbow', on: weapon.ranged && !weapon.bow, count: inventory.bolt ?? 0, key: 'Q' },
     { id: 'longbow', icon: 'k-crossbow', on: weapon.ranged && weapon.bow, count: inventory.arrow ?? 0, key: 'Q' },
     { id: 'axe', icon: 'k-axe', on: false },
@@ -336,6 +344,10 @@ export default function HUD() {
       <div className="kk-topright">
         {!buildMode && <Compass />}
         <WorldClock />
+        {/* Wave 8 · shown in build mode too — closing the ring is something
+            you do WHILE building, and watching the chip appear is the clearest
+            possible confirmation that the last gap is plugged */}
+        <FortStatus />
         <FpsReadout />
       </div>
 

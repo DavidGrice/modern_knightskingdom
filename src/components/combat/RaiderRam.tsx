@@ -19,6 +19,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { ramCheck } from '@/game/siege';
 import { raiderRamState } from '@/game/raiderRam';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
+import { isDoorLike } from '@/game/types';
 import RiggedProp, { setPropTravel } from '../world/RiggedProp';
 
 const RAM_SPEED = 1.3; // roughly a slow determined trudge, matching the player's own push pace
@@ -56,7 +57,9 @@ export default function RaiderRam() {
     }
 
     const st = useGameStore.getState();
-    const gate = st.buildings.find((b) => b.type === 'gate' && !(st.gateOpen[b.id] ?? true));
+    // whatever is barred against them: the castle gate first, else any shut
+    // door (Wave 8 — isDoorLike; a ram against a garden door is still a ram)
+    const gate = st.buildings.find((b) => isDoorLike(b.type) && !(st.gateOpen[b.id] ?? true));
     const tx = gate ? gate.x : HOME_X;
     const tz = gate ? gate.z : HOME_Z;
     const dx = tx - raiderRamState.x;

@@ -7,7 +7,7 @@ import { DEFENDER_ORDER_COUNT, giveDefenderOrder } from '@/game/data/defenderOrd
 import { useGameStore } from '@/game/store/gameStore';
 import { persistSave } from '@/lib/save';
 import { audio } from '@/lib/audio';
-import { combatState } from '@/game/combat';
+import { combatState, isMeleeSlot, WEAPON_SLOTS, type WeaponSlot } from '@/game/combat';
 import { isRebindListening } from '@/game/data/keybinds';
 import { statsAccum } from '@/game/statsAccum';
 import { preloadCommonAssets } from '@/game/preload';
@@ -19,6 +19,17 @@ import FactionTheme from '../hud/FactionTheme';
 import Panels from '../hud/Panels';
 import BuildBar from '../hud/BuildBar';
 import AIDebugOverlay from '@/ai/debug/AIDebugOverlay';
+
+/** what Q's readied-weapon toast says. Each line names the thing the weapon
+ *  does DIFFERENTLY from the last one, since that is the only part a player
+ *  can't see from the viewmodel itself. */
+const SWAP_HINT: Record<WeaponSlot, string> = {
+  sword: '⚔️ Sword readied',
+  halberd: '🔱 Halberd readied (slow, long reach — one swing sweeps the whole line in front of you)',
+  spear: '🗡️ Spear readied (longest reach; couch it at a gallop for a charging blow)',
+  crossbow: '🏹 Crossbow readied (RMB to aim)',
+  longbow: '🏹 Longbow readied (hold LMB to draw, release to loose)',
+};
 
 function PauseMenu({ onQuit }: { onQuit: () => void }) {
   const setPaused = useGameStore((s) => s.setPaused);
@@ -132,30 +143,33 @@ export default function GameScreen() {
           break;
         case 'swapWeapon': {
           if (st.paused || st.buildMode || st.panel !== 'none') break;
-          const hasCrossbow = (st.inventory.crossbow ?? 0) > 0;
-          const hasLongbow = (st.inventory.longbow ?? 0) > 0;
-          if (!hasCrossbow && !hasLongbow) break;
-          const order = ['melee', 'crossbow', 'longbow'] as const;
-          const current = combatState.weapon === 'melee' ? 'melee' : combatState.rangedWeapon;
-          let idx = order.indexOf(current);
-          let next: (typeof order)[number] = current;
-          for (let i = 0; i < order.length; i++) {
-            idx = (idx + 1) % order.length;
-            const cand = order[idx];
-            if (cand === 'melee' || (cand === 'crossbow' && hasCrossbow) || (cand === 'longbow' && hasLongbow)) {
-              next = cand;
+          // Wave 7 · walks combat.ts's shared WEAPON_SLOTS instead of its own
+          // hardcoded triple. 'sword' is always a valid stop (it doubles as
+          // bare fists when none is owned — see activeMelee), everything else
+          // has to actually be in the Satchel; if NOTHING else is, there is
+          // no second stop to cycle to and Q stays a no-op as before.
+          const ownsSlot = (k: WeaponSlot) => k === 'sword' || (st.inventory[k] ?? 0) > 0;
+          if (!WEAPON_SLOTS.some((k) => k !== 'sword' && ownsSlot(k))) break;
+          const current: WeaponSlot = combatState.weapon === 'melee' ? combatState.meleeWeapon : combatState.rangedWeapon;
+          let idx = WEAPON_SLOTS.indexOf(current);
+          let next: WeaponSlot = current;
+          for (let i = 0; i < WEAPON_SLOTS.length; i++) {
+            idx = (idx + 1) % WEAPON_SLOTS.length;
+            if (ownsSlot(WEAPON_SLOTS[idx])) {
+              next = WEAPON_SLOTS[idx];
               break;
             }
           }
-          combatState.weapon = next === 'melee' ? 'melee' : 'ranged';
-          if (next !== 'melee') combatState.rangedWeapon = next;
+          if (isMeleeSlot(next)) {
+            combatState.weapon = 'melee';
+            combatState.meleeWeapon = next;
+          } else {
+            combatState.weapon = 'ranged';
+            combatState.rangedWeapon = next;
+          }
           combatState.aiming = false;
           combatState.drawStart = 0;
-          st.notify(
-            next === 'melee' ? '⚔️ Melee readied'
-              : next === 'crossbow' ? '🏹 Crossbow readied (RMB to aim)'
-              : '🏹 Longbow readied (hold LMB to draw, release to loose)',
-          );
+          st.notify(SWAP_HINT[next]);
           break;
         }
       }

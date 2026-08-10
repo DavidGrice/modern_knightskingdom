@@ -3,7 +3,7 @@
 // stamina drain/regen, slow health regen, knock-out teleport handling.
 import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_HELD_TARGET_KINDS } from '@/game/combat';
+import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_HELD_TARGET_KINDS, MELEE, activeMelee } from '@/game/combat';
 import { useGameStore } from '@/game/store/gameStore';
 import { crewState } from '@/game/crew';
 
@@ -40,7 +40,11 @@ export default function CombatController() {
         } else if (ranged) {
           if (rangedCd <= 0 && fireBolt()) rangedCd = 1.1;
         } else if (attackCd <= 0 && playerAttack()) {
-          attackCd = 0.55;
+          // Wave 7 · the swing cadence is the WEAPON's, not a constant — a
+          // halberd is slower than a sword and a spear sits between them
+          // (combat.ts's MELEE). Read after the swing lands so a swap
+          // mid-cooldown can't shorten the swing already paid for.
+          attackCd = MELEE[activeMelee()].cd;
         }
       } else if (e.button === 2) {
         if (ranged) combatState.aiming = true;

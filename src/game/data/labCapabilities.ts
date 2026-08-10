@@ -41,6 +41,10 @@ export interface LabWallTraits {
   wallRole?: 'corner' | 'straight' | 'tower' | 'gate_flank' | string;
   canStandOn?: boolean;
   canConnectAsWall?: boolean;
+  /** the lab's own flags on oc6096-5: a piece you climb, and one you can pick
+   *  up and re-lean somewhere else (Wave 8 — see labIsLadder) */
+  isLadder?: boolean;
+  isMovableLadder?: boolean;
   isDestructible?: boolean;
   hasHole?: boolean;
   isRuined?: boolean;
@@ -252,6 +256,24 @@ export function labOccupyMode(assetId: string | undefined): 'standing' | 'seated
 export function labIsCorner(assetId: string | undefined): boolean {
   const role = capOf(assetId)?.traits.wall?.wallRole;
   return role === 'corner' || role === 'corner_connectable';
+}
+
+/** A piece you CLIMB (`traits.wall.isLadder`). Wave 8's Siege Stair is the
+ *  one asset carrying it, but the interact never names that id — a second
+ *  ladder mesh promoted out of the generic catalog would light up for free,
+ *  the same way labCanFire already covers nine engines with no per-piece
+ *  branch anywhere. */
+export function labIsLadder(assetId: string | undefined): boolean {
+  return !!capOf(assetId)?.traits.wall?.isLadder;
+}
+
+/** How a siege piece SOUNDS when it looses: the lab's own `siegeRole`, which
+ *  cleanly separates gunpowder (`cannon`) from torsion arms (`catapult`,
+ *  `stone_thrower`) from bolt-throwers (`crossbow_emplacement`, `turret`).
+ *  Wave 8 · every engine used to play the cannon's report — a counterweight
+ *  catapult that goes bang is the one thing a catapult definitely does not do. */
+export function labSiegeRole(assetId: string | undefined): string | null {
+  return capOf(assetId)?.traits.vehicle?.siegeRole ?? null;
 }
 
 /** a charge that goes off and damages what's around it */

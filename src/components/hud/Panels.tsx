@@ -21,9 +21,9 @@ import RotatablePreview from '../character/RotatablePreview';
 import AppearancePanel from './AppearancePanel';
 import BestiaryPanel from './BestiaryPanel';
 import AllegianceMeter from './AllegianceMeter';
-import { HeldSword, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
+import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
 import { EDIBLES, ITEMS, UTILITY_POTIONS } from '@/game/data/items';
-import { combatState } from '@/game/combat';
+import { activeMelee, combatState, isMeleeSlot, type WeaponSlot } from '@/game/combat';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
@@ -61,11 +61,16 @@ function PanelFrame({ title, children }: { title: string; children: React.ReactN
 function EquipmentSection() {
   const character = useGameStore((s) => s.character);
   const inventory = useGameStore((s) => s.inventory);
-  const [loadout, setLoadout] = useState({ weapon: combatState.weapon, ranged: combatState.rangedWeapon });
+  // `melee` is activeMelee(), not the raw preference — a tile must not read as
+  // selected for a weapon that is no longer in the Satchel (it would be drawn
+  // 'locked' and 'selected' at the same time)
+  const [loadout, setLoadout] = useState({
+    weapon: combatState.weapon, ranged: combatState.rangedWeapon, melee: activeMelee(),
+  });
 
   useEffect(() => {
     const t = setInterval(() => {
-      setLoadout({ weapon: combatState.weapon, ranged: combatState.rangedWeapon });
+      setLoadout({ weapon: combatState.weapon, ranged: combatState.rangedWeapon, melee: activeMelee() });
     }, 150);
     return () => clearInterval(t);
   }, []);
@@ -75,29 +80,37 @@ function EquipmentSection() {
   const hasShield = (inventory.shield ?? 0) > 0;
   const hasCrossbow = (inventory.crossbow ?? 0) > 0;
   const hasLongbow = (inventory.longbow ?? 0) > 0;
+  const hasHalberd = (inventory.halberd ?? 0) > 0;
+  const hasSpear = (inventory.spear ?? 0) > 0;
   const hasHelmet = (inventory.helmet ?? 0) > 0;
   const hasChestplate = (inventory.chestplate ?? 0) > 0;
-  const active = loadout.weapon === 'melee' ? 'sword' : loadout.ranged;
+  const active = loadout.weapon === 'melee' ? loadout.melee : loadout.ranged;
 
-  const weapons: { kind: 'sword' | 'crossbow' | 'longbow'; icon: string; name: string; owned: boolean }[] = [
+  const weapons: { kind: WeaponSlot; icon: string; name: string; owned: boolean }[] = [
     { kind: 'sword', icon: '⚔️', name: 'Sword', owned: hasSword },
+    { kind: 'halberd', icon: '🔱', name: 'Halberd', owned: hasHalberd },
+    { kind: 'spear', icon: '🗡️', name: 'Spear', owned: hasSpear },
     { kind: 'crossbow', icon: '🏹', name: 'Crossbow', owned: hasCrossbow },
     { kind: 'longbow', icon: '🏹', name: 'Longbow', owned: hasLongbow },
   ];
 
-  function equip(kind: 'sword' | 'crossbow' | 'longbow', owned: boolean) {
+  function equip(kind: WeaponSlot, owned: boolean) {
     if (!owned) return;
-    combatState.weapon = kind === 'sword' ? 'melee' : 'ranged';
-    if (kind !== 'sword') combatState.rangedWeapon = kind;
+    // Wave 7 · melee is a three-way choice now, so which SUB-selector this
+    // writes depends on the family rather than on "is it the sword"
+    const melee = isMeleeSlot(kind);
+    combatState.weapon = melee ? 'melee' : 'ranged';
+    if (melee) combatState.meleeWeapon = kind;
+    else combatState.rangedWeapon = kind;
     audio.play('brick_connect', 0.6);
-    setLoadout({ weapon: combatState.weapon, ranged: combatState.rangedWeapon });
+    setLoadout({ weapon: combatState.weapon, ranged: combatState.rangedWeapon, melee: activeMelee() });
   }
 
   // drag-and-drop: dragging any owned weapon tile onto the row equips it —
   // the same effect as clicking it, just with the "drag it into a slot" feel
   function onWeaponDrop(e: React.DragEvent) {
     e.preventDefault();
-    const kind = e.dataTransfer.getData('text/plain') as 'sword' | 'crossbow' | 'longbow';
+    const kind = e.dataTransfer.getData('text/plain') as WeaponSlot;
     const w = weapons.find((x) => x.kind === kind);
     if (w) equip(w.kind, w.owned);
   }
@@ -112,7 +125,12 @@ function EquipmentSection() {
         cameraZ={4.4}
         held={(rig) => (
           <>
-            {hasSword && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+            {/* the paperdoll holds what is READIED (Wave 7), so clicking a
+                tile below is visibly answered by the figure, not just by a
+                highlight — falls back to the sword the way it always did */}
+            {hasHalberd && active === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+            {hasSpear && active === 'spear' && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
+            {hasSword && active !== 'halberd' && active !== 'spear' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
             {hasShield && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
             {hasHelmet && createPortal(<HeldHelmet />, rig.joints.head)}
             {hasChestplate && createPortal(<Chestplate />, rig.joints.body)}

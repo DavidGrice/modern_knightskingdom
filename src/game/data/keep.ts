@@ -116,6 +116,45 @@ export function partsFor(kind: SocketKind): KeepPart[] {
   return KEEP_PARTS.filter((p) => p.fits.includes(kind));
 }
 
+// Wave 8 · the wall walk, as real floor.
+//
+// `walkway` was already a real number the game acted on — Defenders.tsx posts
+// a defender at exactly that height, which is why archers on the wall have
+// looked right for waves. What never existed was anything for the PLAYER to
+// stand on up there: the raised pieces are not PlacedBuildings (they live only
+// in KeepState), so PlayerController's floorHeightAt loop over `st.buildings`
+// cannot see them and gravity pulls straight through to the courtyard.
+//
+// Footprints come from the socket layout at the top of this file rather than a
+// new per-part field: a corner socket is the 4m square its piece fills, a wall
+// socket the 8m run turned the way the socket faces. The halves below are the
+// EXACT halves, not inset — a corner's edge and its neighbouring run's edge
+// have to meet on the same line or the ring has a hole in it you fall through.
+const WALK_CORNER_HALF = 2;   // 4m corner/turret piece
+const WALK_RUN_HALF = 4;      // 8m wall run, along its own length
+const WALK_DEEP_HALF = 1.2;   // …and 2.4m across it
+
+/** Height of the wall walk at a world point, or 0 where there is none.
+ *  Feet-Y, the same convention `walkway` itself and `playerState.y` use. */
+export function keepWalkwayAt(keep: KeepState | null | undefined, x: number, z: number): number {
+  if (!keep) return 0;
+  const lx = x - keep.x;
+  const lz = z - keep.z;
+  let best = 0;
+  for (const s of KEEP_SOCKETS) {
+    const part = KEEP_PART_BY_ID[keep.parts[s.id] ?? ''];
+    if (!part?.walkway || part.walkway <= best) continue;
+    if ((keep.built[s.id] ?? 0) < 1) continue; // an unfinished piece holds no one
+    // yaw 0 and π run along X; the quarter turns run along Z
+    const alongX = s.kind === 'corner' || Math.abs(Math.sin(s.yaw)) < 0.5;
+    const hx = s.kind === 'corner' ? WALK_CORNER_HALF : alongX ? WALK_RUN_HALF : WALK_DEEP_HALF;
+    const hz = s.kind === 'corner' ? WALK_CORNER_HALF : alongX ? WALK_DEEP_HALF : WALK_RUN_HALF;
+    if (Math.abs(lx - s.x) > hx || Math.abs(lz - s.z) > hz) continue;
+    best = part.walkway;
+  }
+  return best;
+}
+
 /** a keep as it is stored: where its foundation sits, and what is in each
  *  socket. Sockets with no entry are empty ground. */
 export interface KeepState {

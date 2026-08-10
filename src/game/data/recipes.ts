@@ -54,6 +54,21 @@ export const RECIPES: Recipe[] = [
     cost: { iron_bar: 3, plank: 1 }, station: 'forge', skill: 'smithing', skillXp: 40,
     requiresUnlock: 'smithing',
   },
+  // Wave 7 · the two polearms, priced against the sword above (3 bar / 1
+  // plank): a halberd is more head and more haft, a spear is mostly haft with
+  // a point on it — so one costs more iron than the sword and the other less,
+  // and both cost more timber. Same forge station and same 'smithing' gate as
+  // every other weapon, so neither jumps the quest line.
+  {
+    id: 'halberd', name: 'Halberd', icon: '🔱', output: 'halberd', outputCount: 1,
+    cost: { iron_bar: 4, plank: 3 }, station: 'forge', skill: 'smithing', skillXp: 55,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'spear', name: 'Spear', icon: '🗡️', output: 'spear', outputCount: 1,
+    cost: { iron_bar: 2, plank: 3 }, station: 'forge', skill: 'smithing', skillXp: 35,
+    requiresUnlock: 'smithing',
+  },
   {
     id: 'shield', name: 'Kingdom Shield', icon: '🛡️', output: 'shield', outputCount: 1,
     cost: { iron_bar: 2, plank: 2 }, station: 'forge', skill: 'smithing', skillXp: 35,
