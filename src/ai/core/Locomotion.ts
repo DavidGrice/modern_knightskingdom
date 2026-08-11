@@ -157,7 +157,23 @@ export function stepLocomotion(agent: Agent, dt: number): void {
     return;
   }
 
-  const speed = intent.speed === 'run' ? RUN_SPEED : WALK_SPEED;
+  // Wave 10 · a WALK is a work trip's travel leg, so it scales with the same
+  // trip-duration multiplier the pre-AI flat timer already used (bb.
+  // tripSpeedMult, live-read in Agent.think from tripSpeedMult()/
+  // tripTraitMult()). Divided, not multiplied: that value is a DURATION
+  // multiplier (0.55 = "this trip takes 55% as long"), so the speed it implies
+  // is its reciprocal.
+  //
+  // A RUN is deliberately left alone. RUN_SPEED only ever carries a flee
+  // (flee.ts is the sole 'run' intent in the codebase), and Diligence/trade
+  // mastery are work stats — a diligent villager works faster, they do not
+  // panic faster. The walk is also capped AT the run pace: the theoretical
+  // best multiplier (0.55 × 0.88 = 0.484) would otherwise put a walking
+  // villager at 1.86 m/s, above the run, which reads as skating rather than
+  // as brisk. The cap only binds for a near-maxed veteran; every ordinary
+  // villager lands well under it.
+  const mult = agent.bb.tripSpeedMult > 0 ? agent.bb.tripSpeedMult : 1;
+  const speed = intent.speed === 'run' ? RUN_SPEED : Math.min(WALK_SPEED / mult, RUN_SPEED);
   agent.position.x += nx * speed * dt;
   agent.position.z += nz * speed * dt;
   // face the steering direction, not the target itself — the same

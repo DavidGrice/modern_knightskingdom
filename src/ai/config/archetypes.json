@@ -26,14 +26,25 @@
     "court NPC (King Leo, Richard, Storm, the starter farmers — anyone",
     "courtAmbientSync.ts spawns an Agent for) can never wander off post or",
     "flee a raid three regions away, while still reading as alive via the",
-    "same fidget/notice content a working villager gets."
+    "same fidget/notice content a working villager gets.",
+    "Updated 2026-08-10 (Wave 10): villager gained seek_deposit (a stranded",
+    "hauler's walk back into haul_to_deposit's own query radius) and",
+    "tend_farmplot (the farmer's plant/harvest cycle, which gather_resource",
+    "was never shaped to run). Deliberately villager-only: neither belongs to",
+    "a court NPC or a guard, who have no sack and no job. NOTE for anyone",
+    "reading this list as a manifest — 'wander', 'socialize' and 'idle' have",
+    "NO real Action behind them in src/ai/actions and never have;",
+    "assembleCandidates silently skips ids with no registered action, so they",
+    "are aspirational content, not behaviour. That gap is exactly why a",
+    "stranded carrying villager had nothing at all to move them before",
+    "seek_deposit existed."
   ],
   "villager": {
     "label": "Villager",
     "needProfile": "villager",
     "intrinsic": [
       "wander", "socialize", "idle", "flee_to_safety", "sleep", "gather_resource", "haul_to_deposit",
-      "idle_fidget", "notice_player"
+      "seek_deposit", "tend_farmplot", "idle_fidget", "notice_player"
     ]
   },
   "court": {

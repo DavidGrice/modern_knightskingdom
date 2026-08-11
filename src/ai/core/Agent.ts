@@ -34,7 +34,8 @@ import { agentManager } from './AgentManager';
 // top-level scope, same rule, verified the same way (a real production
 // build, not just tsc).
 import { useGameStore } from '@/game/store/gameStore';
-import { carryCapacityOf } from '@/game/data/attributes';
+import { carryCapacityOf, tripSpeedMult } from '@/game/data/attributes';
+import { tripTraitMult } from '@/game/data/companionTraits';
 
 /** NPC_AI_SPEC §3.1 / PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.1 — the
  *  output crossing the decision→actuation boundary. Written by the
@@ -203,9 +204,18 @@ export class Agent {
       // construction this second is felt within one think tick, same as a
       // job reassignment or a newly equipped carrier.
       this.bb.carryCapacity = carryCapacityOf(villager, villager.job, gs.buildings);
+      // Wave 10 · the same live-read rule, for the speed half of a trip. Both
+      // formulas were already written, tuned and shipped for the pre-AI flat
+      // timer (which still uses them, gameStore's tickVillagers) — the AI path
+      // simply never consulted them, so a player's investment in a villager's
+      // Diligence, trade mastery or a Swift Return trait bought exactly
+      // nothing once that villager went AI-driven. See bb.tripSpeedMult's own
+      // comment for who reads it.
+      this.bb.tripSpeedMult = tripSpeedMult(villager) * tripTraitMult(villager);
     } else {
       this.bb.job = null;
       this.bb.carryCapacity = 0;
+      this.bb.tripSpeedMult = 1;
     }
 
     // phase 6: this.senses.update(now)

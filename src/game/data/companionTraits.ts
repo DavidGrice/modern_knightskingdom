@@ -33,6 +33,17 @@ export const COMPANION_TRAITS: CompanionTraitDef[] = [
   { id: 'far_goldwheat', job: 'farmer', name: 'Golden Wheat', icon: '🌾', desc: '+1 wheat every trip' },
   { id: 'far_herbalist', job: 'farmer', name: 'Herbalist', icon: '🌿', desc: 'double side-goods chance' },
   { id: 'far_swift', job: 'farmer', name: 'Swift Return', icon: '💨', desc: 'trips 12% faster' },
+  // herbalist / fisherman (Wave 10) — same three-slot shape every other
+  // gathering trade already has (a +1 haul trait, a side-goods trait, a Swift
+  // Return). Without these the two new jobs would render no trait row at all
+  // in the Roster (VillagersPanel bails on an empty pool), which reads as a
+  // half-built job rather than a deliberate one.
+  { id: 'her_deeproots', job: 'herbalist', name: 'Deep Roots', icon: '🌿', desc: '+1 herb every trip' },
+  { id: 'her_bloomeye', job: 'herbalist', name: "Bloom Eye", icon: '🌼', desc: 'double side-goods chance' },
+  { id: 'her_swift', job: 'herbalist', name: 'Swift Return', icon: '💨', desc: 'trips 12% faster' },
+  { id: 'fis_deepwater', job: 'fisherman', name: 'Deep Water', icon: '🎣', desc: '+1 fish every trip' },
+  { id: 'fis_netcast', job: 'fisherman', name: 'Net Cast', icon: '🕸️', desc: 'double side-goods chance' },
+  { id: 'fis_swift', job: 'fisherman', name: 'Swift Return', icon: '💨', desc: 'trips 12% faster' },
   // merchant
   { id: 'mer_silver', job: 'merchant', name: 'Silver Tongue', icon: '🪙', desc: '+2 gold every stall trip' },
   { id: 'mer_swift', job: 'merchant', name: 'Quick Deals', icon: '💨', desc: 'trips 12% faster' },
@@ -65,9 +76,11 @@ export function hasTrait(v: Villager, id: string): boolean {
 /** which trait adds +1 to the main haul / doubles side-goods, per job */
 export const HAUL_TRAIT: Partial<Record<VillagerJob, string>> = {
   lumberjack: 'lum_deepcut', miner: 'min_deepvein', farmer: 'far_goldwheat',
+  herbalist: 'her_deeproots', fisherman: 'fis_deepwater',
 };
 export const SIDE_TRAIT: Partial<Record<VillagerJob, string>> = {
   lumberjack: 'lum_forager', miner: 'min_orenose', farmer: 'far_herbalist',
+  herbalist: 'her_bloomeye', fisherman: 'fis_netcast',
 };
 
 /** trip-duration multiplier from traits (job-matched Swift traits only) */

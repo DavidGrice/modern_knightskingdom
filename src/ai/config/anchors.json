@@ -10,7 +10,22 @@
     "fishing's fallbackRadius is NOT authored here as a literal — it is",
     "POND.radius + 4, computed in config/index.ts's anchorRuleFor() from the",
     "real pond definition (game/data/world.ts), so it can never drift out of",
-    "sync with the pond's actual size the way a second hardcoded number could."
+    "sync with the pond's actual size the way a second hardcoded number could.",
+    "",
+    "AUTHORING RULE for a 'radial' rule, learned the hard way from the barrel",
+    "(Wave 10 verification): a target's OWN footprint is stamped into the nav",
+    "grid inflated by AGENT_RADIUS (0.55m, game/navgrid.ts) and then rounded",
+    "OUT to whole cells (cellSize 1.0 everywhere, ai/config/navgrid.json), so",
+    "the blocked square around a piece reaches up to `halfSize + 0.55 + 1`",
+    "from its centre. A `radius` smaller than that can never produce a",
+    "walkable sample — every one of the 8 lands inside the piece's own",
+    "blocked footprint — and resolution falls entirely to nearestWalkable,",
+    "whose budget is `ceil(fallbackRadius / cellSize)` CELLS. The barrel had",
+    "radius 0.9 with no fallbackRadius, which is a 1-cell budget inside a",
+    "3-4 cell blocked square: resolveAnchor returned null for every barrel",
+    "ever placed, so haul_to_deposit read 'blocked' and a villager carrying a",
+    "load to one stood there holding it forever. Keep radius clear of the",
+    "inflated footprint AND leave the fallback at least 2-3 cells of room."
   ],
   "nodes": {
     "tree":    { "mode": "radial", "radius": 1.3, "slots": 2 },
@@ -21,9 +36,9 @@
   "buildings": {
     "storehouse": { "mode": "radial", "radius": 2.6, "slots": 4 },
     "stockpile": { "mode": "radial", "radius": 1.2, "slots": 3 },
-    "barrel":    { "mode": "radial", "radius": 0.9, "slots": 1 },
+    "barrel":    { "mode": "radial", "radius": 1.6, "slots": 1, "fallbackRadius": 2.5 },
     "farmplot":  { "mode": "radial", "radius": 1.1, "slots": 4 },
-    "campfire":  { "mode": "radial", "radius": 1.6, "slots": 5 },
+    "campfire":  { "mode": "radial", "radius": 1.6, "slots": 5, "fallbackRadius": 3.0 },
     "workbench": { "mode": "fixed",  "offset": [0, 1.1], "facing": 0, "slots": 1 },
     "forge":     { "mode": "fixed",  "offset": [0, 1.2], "facing": 0, "slots": 1 },
     "bed":       { "mode": "fixed",  "offset": [0, 0.9], "facing": 2, "slots": 1 }

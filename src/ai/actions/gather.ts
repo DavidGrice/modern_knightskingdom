@@ -13,10 +13,10 @@
 // 5.8b — see haul.ts's own CARRYING_ENABLED flag.
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
-import { isWorkingHours } from '@/game/data/villagers';
+import { isWorkingHours, JOB_NODE_KIND } from '@/game/data/villagers';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
-import type { ItemId, VillagerJob } from '@/game/types';
+import type { ItemId } from '@/game/types';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
@@ -34,27 +34,28 @@ const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRad
 // the obstruction is gone, without needing an explicit unblock signal.
 const BLOCKED_RETRY_COOLDOWN = 15;
 
-// Only kinds with an obvious 1:1 job AND a real ResourceNodeState kind today
-// (game/types.ts: 'tree'|'rock'|'fishing'|'herb', no 'farmplot' — that's a
-// building, farmer's own case, excluded below per §1.1). herb/fishing have
-// no job that claims them yet (no herbalist/fisherman job exists in JOBS,
-// game/data/villagers.ts) — present in TARGET_KINDS so real candidates get
-// generated, permanently gated to 0 via job_match until a job claims them,
-// same "content gap found, not invented" shape this project has hit before.
-const JOB_RESOURCE_MAP: Partial<Record<VillagerJob, string>> = {
-  lumberjack: 'tree',
-  miner: 'rock',
-};
-
+// Which trade claims which node kind. Wave 10 · this was a private
+// JOB_RESOURCE_MAP literal here holding only lumberjack->tree/miner->rock,
+// with herb/fishing documented as "permanently gated to 0 via job_match until
+// a job claims them" — two jobs now do (herbalist/fisherman, data/
+// villagers.ts), so the table moved next to JOBS itself as JOB_NODE_KIND and
+// is shared with villagerAtWork()/Villagers.tsx's worksite walk rather than
+// hand-copied into each. Nothing about this Activity needed changing for the
+// two new kinds: gatherSwing's own item ternary and NODE_ITEM below already
+// covered 'herb'/'fishing' from the start — the gap really was only ever at
+// the job-definition layer.
 const NODE_ITEM: Record<string, ItemId> = { tree: 'wood', rock: 'stone', herb: 'herb', fishing: 'fish' };
 
-// farmplot stays behind this flag pending §1.1's open question (does it even
-// yield a carryable resource, or is farming maintenance-only) — PHASE_2's
-// own explicit instruction, not an oversight.
-const FARMPLOT_GATHER_ENABLED = false;
-const TARGET_KINDS = FARMPLOT_GATHER_ENABLED
-  ? ['tree', 'rock', 'herb', 'fishing', 'farmplot']
-  : ['tree', 'rock', 'herb', 'fishing'];
+// Node kinds only — 'farmplot' is deliberately NOT here. Wave 10 resolved
+// PHASE_2 §1.1's open question by looking at what a farmplot actually is: a
+// PlacedBuilding whose readiness lives in `st.plots` as a countdown, worked
+// through a plant -> wait -> harvest cycle, with no hitsLeft to swing at and
+// no respawnAt to wait on. Forcing it through this Activity was never one
+// flag away — `target.source !== 'node'` fails it on the first tick, every
+// tick. It has its own Activity now (ai/actions/farm.ts, `tend_farmplot`),
+// which is the shape a timer-based resource actually wants; the old
+// FARMPLOT_GATHER_ENABLED flag is gone with the question it was holding open.
+const TARGET_KINDS = ['tree', 'rock', 'herb', 'fishing'];
 
 class GatherAtNodeActivity implements Activity {
   private phase: 'travel' | 'align' | 'perform' = 'travel';
@@ -143,9 +144,20 @@ class GatherAtNodeActivity implements Activity {
     // resource — bank what's already there and stop, don't mix or discard
     if (agent.bb.carrying && agent.bb.carrying.resource !== expectedItem) return this.finish(agent, 'SUCCESS');
 
+    // Wave 10 · the WORKING leg of a trip scales with the same trip-duration
+    // multiplier Locomotion now applies to the walking leg (bb.tripSpeedMult
+    // — Diligence, trade mastery, a Swift Return trait). This matters more
+    // than the walk for a veteran, not less: carryCapacityOf already rewards
+    // trade mastery with a bigger sack (up to ~30), and at a flat 1.2s a swing
+    // that is 36 straight seconds of standing still swinging — the single
+    // largest block in the 150-200s worst case ROADMAP.md flagged. Scaling
+    // both legs by one number keeps "a gifted veteran works nearly twice as
+    // fast" (attributes.ts's own words) true of the whole trip rather than of
+    // a timer that no longer exists for AI-driven villagers.
+    const swingInterval = SWING_INTERVAL * (agent.bb.tripSpeedMult > 0 ? agent.bb.tripSpeedMult : 1);
     this.swingTimer += dt;
-    if (this.swingTimer < SWING_INTERVAL) return 'RUNNING';
-    this.swingTimer -= SWING_INTERVAL;
+    if (this.swingTimer < swingInterval) return 'RUNNING';
+    this.swingTimer -= swingInterval;
 
     const result = useGameStore.getState().gatherSwing(this.targetId.slice(5));
     if (!result) return this.finish(agent, 'SUCCESS'); // depleted/vanished exactly on this swing
@@ -227,7 +239,7 @@ export const GATHER_RESOURCE: Action = {
       // Activity's own guard stays as defense in depth, not the only line.
       name: 'job_match',
       input: (agent, ctx) =>
-        ctx.target && ctx.target.source === 'node' && agent.bb.job && JOB_RESOURCE_MAP[agent.bb.job] === ctx.target.kind ? 1 : 0,
+        ctx.target && ctx.target.source === 'node' && agent.bb.job && JOB_NODE_KIND[agent.bb.job] === ctx.target.kind ? 1 : 0,
       curve: boolCurve,
     },
     {

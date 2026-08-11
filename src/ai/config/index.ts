@@ -70,8 +70,14 @@ export interface AnchorRuleRadial {
   mode: 'radial';
   radius: number;
   slots: number;
-  /** fishing only — see anchorRuleFor's own comment for why this is
-   *  resolved in code, not authored as a literal in anchors.json. */
+  /** How far nearestWalkable may search when every radial sample lands on
+   *  blocked ground — in WORLD units; AnchorResolution converts to a cell
+   *  budget. Defaults to `radius`, which is only ever right for a piece
+   *  whose radius already clears its own nav-inflated footprint; see
+   *  anchors.json's authoring rule (and the barrel, which it defaulted into
+   *  a 1-cell budget and an unresolvable anchor). Authored per kind in
+   *  anchors.json EXCEPT for fishing, which derives it — see anchorRuleFor's
+   *  own comment. */
   fallbackRadius?: number;
 }
 export interface AnchorRuleFixed {

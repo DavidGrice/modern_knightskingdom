@@ -4881,34 +4881,120 @@ renderer treats any non-null intent as authoritative with no way to tell "still 
 moved on." Both fixed; confirmed end-to-end by re-running the original discovery scenario, not just in
 isolation.
 
-[TODO] **Still open, found not invented:**
-- [TODO] **Might/Craft/Wit trip bonuses don't reach the AI-driven haul path.** The old `tickVillagers` timer
-  rolls a double-load chance off Might, side-goods off Craft, and a Wit-scaled bonus for merchants
-  (`gameStore.ts`'s per-trip block) — `haul.ts`'s real `addItems()` call just grants `jobDef.perTrip`
-  flat, no attribute rolls at all. Flagged in `haul.ts`'s own header comment and `PHASE_STATUS.md`'s
-  5.8b row when it shipped, deliberately deferred rather than ported blind — the old formulas were
-  written for a per-trip timer, not a per-node-visit loop, and need their own pass to decide what "a
-  trip" even means now that gathering can span several nodes before a single haul.
-- [TODO] **Stranded carrying.** If an AI-driven villager's sack is full and genuinely no stockpile is within
-  `haul_to_deposit`'s query radius (40m), they're stuck: the intent-clearing fix stops them from visibly
-  freezing (they fall back to the old walk-to-worksite cascade), but the resources they're already
-  carrying are never deposited — there's no code path that hands carried goods to the legacy system.
-  Confirmed real, not hypothetical: a live trace during this validation pass showed target nodes
-  legitimately spawning 45-50m from home. A wider query radius or a periodic capacity-triggered
-  re-query are the two obvious mitigations; neither is built.
-- [TODO] **herb/fishing node kinds have no `job_match`.** `gather.ts`'s job_match only claims `tree`/`rock` for
-  lumberjack/miner — an herbalist or fisherman job type would need to exist first (neither does today),
-  so these node kinds sit permanently inert for the AI system. Content gap, not a bug.
-- [TODO] **Farmplot gathering stays behind `FARMPLOT_GATHER_ENABLED = false`** (`gather.ts`) pending
-  `PHASE_2_NAVIGATION_AND_GATHERING.md` §1.1's open design question (farmplots regrow on a timer, not a
-  hit-count like trees/rocks — the existing `GatherAtNodeActivity` shape doesn't fit them as-is).
-- [TODO] **AI-driven trip times are real-distance-bound, and that can be slow.** The old per-job timer granted
-  a trip's yield on a fixed clock regardless of where the villager actually stood; the new reasoner
-  walks a real path to a real node and back, so a poorly-placed homestead (nearest tree/rock 45-50m out)
-  can make a single lumberjack/miner cycle take 150-200+ real seconds end to end — confirmed by direct
-  trace, not assumed. Not a bug (the trip genuinely finishes, verified), but worth a deliberate call
-  later: is "distance now has a real, felt cost" the intended balance change, or does target scoring
-  want a stronger nearest-node bias than proximity alone gives it today.
+**All five closed by Wave 10 (AI economy correctness), 2026-08-10:**
+- [COMPLETE] **Might/Craft trip bonuses now reach the AI-driven haul path.** `haul.ts`'s `rollTripBonus()`
+  makes the same rolls `tickVillagers` always did — Might for a double load, Craft for a `SIDE_GOODS`
+  bonus, both stacked with the job's `HAUL_TRAIT`/`SIDE_TRAIT` companion traits — off `attrsOf(agent.id)`,
+  the villagers' own deterministic attribute roll (`data/attributes.ts`), NOT the player's separate
+  spent-point system. **The design call the entry was waiting on:** a trip is ONE COMPLETED DEPOSIT.
+  Per-swing would fire the old odds twenty times a trip, per-gather-completion once per node rather than
+  once per journey; the deposit is the only moment in the decomposed shape that is 1:1 with the old
+  "one trip finished" — which is exactly the equivalence `awardTradeXp`'s +10 already assumed. The
+  bonus goes in BEFORE `addItems` so Wave 9's storage cap applies to the real number, and the villager's
+  own carried goods come off their back before the bonus does, so a nearly-full store turns the bonus
+  away rather than stranding gathered goods. Wit stays out on purpose: the old rule is merchant-only and
+  a merchant is structurally outside gather/haul, so a Wit branch here could only be dead code.
+- [COMPLETE] **Stranded carrying — fixed, though the entry's premise was half wrong.** The suggested
+  "periodic re-query" was already built: `assembleCandidates` re-runs `queryNearby` against the agent's
+  live position every think tick. The real gap is that an empty result is no candidate AT ALL, and
+  nothing else in the live registry can move a carrying villager (`gather_resource` is capacity-gated,
+  `idle_fidget` has no locomotion, and `wander`/`idle` are ids in `archetypes.json` with no Action behind
+  them). The rescue that made this look survivable was `Villagers.tsx`'s legacy Phase-24B cascade,
+  driven by the unrelated old trip timer, present only for four jobs, and double-crediting the old
+  economy meanwhile. New `seek_deposit` Action (`ai/actions/seekDeposit.ts`) closes it inside the AI:
+  no `targetKinds`, an unbounded scan for the nearest `DEPOSIT_KINDS` building, a plain `MOVE_TO`
+  (flee.ts's pattern), weight 0.6 so it only ever wins when both real work actions have no candidate,
+  and it gates ITSELF off inside 40m so `haul_to_deposit` takes over normally. The radius is unchanged.
+- [COMPLETE] **herb/fishing node kinds have a `job_match`** — and the gap was bigger than "add two lines":
+  no herbalist/fisherman job existed in EITHER system. `VillagerJob` (`types.ts`) gains both, `JOBS`
+  (`data/villagers.ts`) defines them, they appear in the Roster with no UI work (that panel is fully
+  data-driven), and both get `SIDE_GOODS` rows and a three-trait companion pool for parity with the
+  other trades. The one-line part really was one line — the job->kind table moved next to `JOBS` as the
+  shared `JOB_NODE_KIND`, now read by `gather.ts`'s job_match, `villagerAtWork()` and `Villagers.tsx`'s
+  worksite walk instead of three hand-copied ternaries (without the `villagerAtWork` case, the new jobs
+  would have been paid `perTrip` on a timer from anywhere on the map — L66's bug, straight back).
+- [COMPLETE] **Farmplots have their own Activity; `FARMPLOT_GATHER_ENABLED` is deleted.** §1.1's open
+  question resolves to "they genuinely don't fit, and shouldn't be made to": a farmplot is a
+  `PlacedBuilding` whose readiness is a countdown in `st.plots`, worked plant -> wait -> harvest, with a
+  state whose correct behaviour is to put something IN. Flipping the flag alone would have hard-failed
+  every tick on `GatherAtNodeActivity`'s `target.source !== 'node'` guard. New `tend_farmplot`
+  (`ai/actions/farm.ts`) reuses the shared reserve/travel/align/perform skeleton and the farmplot anchor
+  rule that already existed, reads the three-state machine in one place, and calls a new AI-only
+  `tendPlot()` store action (`gatherSwing`'s counterpart for a timer-based resource) that hands the crop
+  back to the caller so it rides in `bb.carrying` and is hauled like every other trade's load — a farmer
+  whose wheat appeared in the stores as she cut it would be the one trade paying no travel cost at all.
+  A growing bed scores 0 rather than low, so nobody stands over the seedlings.
+- [COMPLETE] **Trip-time balance call made, and it was not "accept the numbers".** The real finding on
+  reading the code: an existing, already-tuned speed mechanism was silently dropped when the AI path was
+  built. `tripSpeedMult()` (Diligence ±2.5%/pt, trade mastery -2%/level, floor 0.55x) and
+  `tripTraitMult()` (Swift-family traits, x0.88) scaled the old flat timer and are referenced NOWHERE in
+  `gather.ts`/`haul.ts`/`Locomotion.ts` — so a player investing in a villager bought exactly nothing once
+  that villager went AI-driven. Ported as `bb.tripSpeedMult`, live-read every think tick alongside
+  `bb.job`/`bb.carryCapacity`: Locomotion divides WALK speed by it (run is untouched — it only ever
+  carries a flee, and Diligence is a work stat, not a panic one; walk is capped at the run pace so a
+  maxed veteran reads brisk rather than skating), and `gather.ts` multiplies its swing interval by it —
+  which matters more, since a maxed sack is ~30 swings, i.e. 36 straight seconds, the largest block in
+  the 150-200s worst case. A blanket travel-time cap was considered and REJECTED: 5.8b deliberately
+  accepted real haul travel as a real cost, and capping it would delete that decision rather than tune
+  it. Distance still costs; investment now buys its way out of it, through the same levers the pre-AI
+  game already taught players.
+
+  **Verified live, through the real Reasoner/Activity loop (not direct store calls), with exact
+  numbers**: a lumberjack with Might 7/Craft 5 hauling 3 wood — `rand≈1` (neither roll fires): stores
+  take exactly 3; `rand=0` (both fire): request `{wood:6, flowers:1}`, accepted in full; with a
+  `lum_deepcut` HAUL_TRAIT and the double suppressed: 3→4. With the store 2 short of a 140 cap: request
+  8 wood, accepted 2, and the villager kept the other 2 of their own load on their back — confirming the
+  bonus really does apply before `addItems` and the villager's real goods really do come off first.
+  Stranded carrying: a tree 46m from the stockpile (outside haul's 40m query) produced
+  `gather_resource → seek_deposit (MOVE_TO, 47.7m) → haul_to_deposit (39.8m, exactly the handoff line)
+  → deposited`; with the stores already full, `seek_deposit` correctly never engaged and the villager
+  idled instead of marching a load nowhere useful. Herbalist and fisherman both gather→haul for real
+  (`{herb:6}`/`{fish:6}` stored, trade XP granted); with the legacy timer path active, mobs pinned away
+  from any matching node got **no** `villagerProgress` credit at all — the old "paid per trip from
+  anywhere on the map" bug did not come back. `tend_farmplot`: untilled→planted set `st.plots` to exactly
+  `GROW_TIME`; a growing bed produced only `idle_fidget`; forcing it ripe harvested `{wheat:2}` into
+  `bb.carrying` with the inventory unchanged at that instant and the player's own farming XP untouched,
+  then a normal haul deposited it. Trip-speed multiplier measured exact on both legs: at mult 0.925,
+  walk 0.973 m/s (formula: 0.9/0.925 = 0.973) and swings averaging 1.11s (formula: 1.2×0.925); at a
+  near-maxed 0.484 the walk measured exactly 1.600 m/s — `RUN_SPEED`, the cap holding, not the
+  uncapped-formula 1.86; a real live raid (`flee_to_safety`, not a code-read) confirmed the run branch
+  measured exactly `RUN_SPEED` regardless of a villager's own trip multiplier, i.e. genuinely unscaled.
+  Zero console/page errors across the full run.
+
+**One real bug found by Wave 10's live verification pass, and fixed (2026-08-10):**
+- [COMPLETE] **Every Barrel ever placed was an unreachable deposit point.** `resolveAnchor()` returned
+  null for `barrel` 100% of the time, so `MOVE_TO_ANCHOR` set `movement: 'blocked'` on the first tick and
+  a villager carrying a load to one stood holding it forever, even from 5m away. The cause is a geometry
+  mismatch nothing had ever forced into the open: `anchors.json` gave the barrel a radial anchor radius of
+  0.9, but the nav grid stamps a piece's footprint inflated by `AGENT_RADIUS` (0.55) and rounded out to
+  whole 1.0m cells, so the barrel's own blocked square reaches 3-4 cells across — all 8 radial samples land
+  inside it, always — and the `nearestWalkable` fallback budget is `ceil(radius / cellSize)` = **1 cell**,
+  which never escapes that square either. Stockpile (1.2 -> 2 cells) and Storehouse (2.6 -> 3) cleared it
+  only by accident of being bigger. **Pre-existing, not introduced by Wave 10** — `targetKinds` has listed
+  `barrel` since Wave 9 — but Wave 10 made it reachable in a new and worse way: `seek_deposit` shares the
+  same `DEPOSIT_KINDS` list for its unbounded nearest-store scan, so a stranded hauler now actively marched
+  across the map to a barrel they could never use and then looped `seek_deposit -> null -> idle_fidget`
+  indefinitely, where before they would have fallen through to the legacy cascade. Fixed at the root rather
+  than by excluding barrels from the scan (which would have left the 5m case broken): the barrel anchor is
+  now `radius 1.6, fallbackRadius 2.5`, clearing its own inflated footprint. Verified by simulating the
+  real grid rasteriser + `resolveAnchor` over 4000 random placements — old rule 0/4000 resolved, new rule
+  4000/4000, 99% of them from a real "stand beside it and face it" sample rather than the fallback.
+  `anchors.json` now carries the authoring rule so the next small buildable does not repeat it.
+  Hardened alongside: `seek_deposit` now reads the shared `bb.blockedTargets` map (it deliberately does
+  NOT write it — a plain MOVE_TO walk can't itself observe a store as unreachable the way
+  MOVE_TO_ANCHOR's anchor resolution can; only gather/haul/tend_farmplot record entries), so a store this
+  agent has already failed to path to is skipped and the walk aims at the next-nearest one instead of
+  re-marching at an unreachable store every time its 4s cooldown lapses.
+  Swept every other radial building rule against the same simulated rasteriser afterwards, since the cause
+  is an authoring hazard rather than a one-off: `storehouse`, `stockpile` and `farmplot` never return null
+  (the farmplot is only 0.5m tall, so `WALK_LOW` skips it entirely and it stamps no footprint at all —
+  which is why `tend_farmplot` worked first time), but **`campfire` had the barrel's exact defect at 1% of
+  placements** — radius 1.6 against a 1.55m inflated half-extent, fallback budget 2 cells against a blocked
+  square that needs 3. It is latent rather than live (no Action carries `campfire` in its `targetKinds`;
+  `warm_at_campfire` is still spec-only), so it is fixed with the strictly-additive half only —
+  `fallbackRadius: 3.0`, which cannot change any placement that already resolved, and takes campfire to
+  0 null. Its low 19% real-sample rate is left alone deliberately: that is slot SPACING, and it is design
+  work for `warm_at_campfire` to do when it actually lands, not something to guess at now.
 
 ## Bugs logged 2026-07-30, not yet fixed
 

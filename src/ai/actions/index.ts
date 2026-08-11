@@ -11,21 +11,34 @@
 // worksite cascade and this Activity can coexist for the same villager
 // without fighting over movement. `HaulToDeposit`'s real yield transfer is
 // still gated off (`CARRYING_ENABLED` in haul.ts) until 5.8b.
+//
+// Wave 10 adds two: `tend_farmplot` (farm.ts — the farmer's own timer-based
+// resource, which `gather_resource` was never shaped to handle) and
+// `seek_deposit` (seekDeposit.ts — the AI-native escape from "sack full,
+// nothing within haul's query radius", which until now was rescued only by
+// accident, by Villagers.tsx's unrelated legacy cascade). Both are also added
+// to the villager archetype's `intrinsic` list (config/archetypes.json) —
+// `assembleCandidates` silently skips any registered action an archetype was
+// never offered, so registering alone would have made both permanently inert.
 import { registerActions, type Action } from '../core/Reasoner';
 import { FLEE_TO_SAFETY } from './flee';
 import { SLEEP } from './sleep';
 import { GATHER_RESOURCE } from './gather';
 import { HAUL_TO_DEPOSIT } from './haul';
+import { SEEK_DEPOSIT } from './seekDeposit';
+import { TEND_FARMPLOT } from './farm';
 import { IDLE_FIDGET } from './ambient';
 import { NOTICE_PLAYER } from './notice';
 
 export const ACTIONS: Action[] = [
-  FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, IDLE_FIDGET, NOTICE_PLAYER,
+  FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
+  IDLE_FIDGET, NOTICE_PLAYER,
 ];
 registerActions(ACTIONS);
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkactions = {
-    FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, IDLE_FIDGET, NOTICE_PLAYER,
+    FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
+    IDLE_FIDGET, NOTICE_PLAYER,
   };
 }

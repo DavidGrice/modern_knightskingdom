@@ -391,7 +391,17 @@ export interface ActiveSideQuest {
   have: number;
 }
 
-export type VillagerJob = 'idle' | 'lumberjack' | 'miner' | 'farmer' | 'merchant' | 'defender' | 'builder';
+/** Wave 10 · `herbalist`/`fisherman` join the trades. Both node kinds
+ *  (`ResourceNodeState.kind` already has 'herb'/'fishing') existed from the
+ *  start but were player-harvest-only — no job claimed either, which is why
+ *  `gather.ts`'s job_match scored every herb/fishing candidate 0 forever.
+ *  Widening this union is save-safe in both directions: `job` is stored as a
+ *  plain string, every consumer looks it up through `JOB_BY_ID`/a `Partial`
+ *  record rather than an exhaustive switch, and an old save simply has no
+ *  villager holding either value yet. */
+export type VillagerJob =
+  | 'idle' | 'lumberjack' | 'miner' | 'farmer' | 'herbalist' | 'fisherman'
+  | 'merchant' | 'defender' | 'builder';
 
 /** Phase 19 alliance branch: pledge to the crown or to Cedric's rebellion —
  *  whichever side you DIDN'T choose raids the homestead from then on. */

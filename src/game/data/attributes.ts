@@ -50,11 +50,24 @@ export function tripSpeedMult(v: Villager): number {
   return Math.max(0.55, 1 - 0.025 * (a.diligence - 5) - 0.02 * lvl);
 }
 
-/** Craft side-goods: what a skilled hand brings home besides the main haul. */
+/** Craft side-goods: what a skilled hand brings home besides the main haul.
+ *  Keyed by the good actually being carried, not by the job — Wave 10's AI
+ *  haul path (ai/actions/haul.ts) rolls this against the sack's real contents,
+ *  which is the honest question for a villager whose job was switched
+ *  mid-trip; `tickVillagers` keys it off `jobDef.produces`, which for every
+ *  entry here is the same answer.
+ *
+ *  Wave 10 adds the two new trades' rows. Both reuse goods that already exist
+ *  and already have a real use (flowers -> blossom_tart, herb -> pottage and
+ *  the potion line), rather than inventing a bonus item: wildflowers grow
+ *  among the herbs, and watercress grows at the shallows a line goes out
+ *  from. */
 export const SIDE_GOODS: Partial<Record<ItemId, ItemId>> = {
   wood: 'flowers',
   stone: 'iron_ore',
   wheat: 'herb',
+  herb: 'flowers',
+  fish: 'herb',
 };
 
 // --- carry capacity (Phase 4, §4.1/§4.3) -----------------------------------
