@@ -16,18 +16,30 @@
 // +10 tickVillagers grants per completed timer-trip — extracted into its
 // own reusable store action specifically so an AI-migrated villager doesn't
 // silently stop leveling once tickVillagers stops granting it for them
-// (gameStore.ts's own workSignal-active skip, added alongside this). The
-// Might/Craft/Wit trip-bonus rolls tickVillagers still has are deliberately
-// NOT ported here — see ROADMAP.md.
+// (gameStore.ts's own workSignal-active skip, added alongside this).
+//
+// Wave 10 · the Might/Craft trip-bonus rolls tickVillagers has always had are
+// ported here at last — see rollTripBonus() below for the "what is a trip
+// now" call that was the actual blocker, and for why Wit stays out.
 import { useGameStore } from '@/game/store/gameStore';
 import { roomFor } from '@/game/storage';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
+import { attrsOf, SIDE_GOODS } from '@/game/data/attributes';
+import { hasTrait, HAUL_TRAIT, SIDE_TRAIT } from '@/game/data/companionTraits';
+import type { ItemId } from '@/game/types';
 import { targetRegistry, type TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 import type { Curve } from '../core/curves';
 
 const SLOT_KIND = 'haul';
+/** Every building kind a load can actually be set down at. Exported because
+ *  seekDeposit.ts (Wave 10) has to look for the SAME set when it walks a
+ *  stranded hauler back into range — two hand-copied lists is how "the
+ *  fallback walks you somewhere haul_to_deposit doesn't recognise" happens.
+ *  Keep in step with STORAGE_PER_BUILDING (game/storage.ts): a deposit point
+ *  that holds nothing is a wasted walk. */
+export const DEPOSIT_KINDS = ['storehouse', 'stockpile', 'barrel'];
 const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRadius
 // how long anim_c_pleased holds before the deposit actually lands — without
 // this the Activity would enter 'perform' and complete on the very same
@@ -38,6 +50,54 @@ const CARRYING_ENABLED = true;
 // same reasoning and value as gather.ts's own BLOCKED_RETRY_COOLDOWN — see
 // bb.blockedTargets' own comment in Blackboard.ts for the full story
 const BLOCKED_RETRY_COOLDOWN = 15;
+
+/** Wave 10 · the Might/Craft rolls `tickVillagers` has always made, finally
+ *  reaching the AI path.
+ *
+ *  THE DESIGN CALL THIS NEEDED (ROADMAP.md's own "the old formulas were
+ *  written for a per-trip timer, not a per-node-visit loop, and need their own
+ *  pass to decide what 'a trip' even means now"): a trip is ONE COMPLETED
+ *  DEPOSIT. The old system rolled once per `jobDef.tripSeconds` walk-work-walk
+ *  cycle; the AI path decomposed that into many 1.2s `gatherSwing()` calls
+ *  plus a separate haul, so rolling per swing would fire the same odds twenty
+ *  times per trip and per gather-completion would fire it once per NODE, not
+ *  once per journey home. The deposit is the only moment in the new shape that
+ *  is 1:1 with the old "one trip finished" — which is precisely the equivalence
+ *  `awardTradeXp`'s own +10 already assumed when 5.8b landed. Same anchor,
+ *  same odds, no rebalance.
+ *
+ *  Deliberately NOT ported: Wit. The old rule is `if (v.job === 'merchant')`,
+ *  and a merchant is structurally outside this Activity — no node kind yields
+ *  gold and no gathering job maps to the stall, so a Wit branch here could
+ *  only ever be dead code pretending to be parity. Diligence is not a yield
+ *  stat in either system (it is trip DURATION — bb.tripSpeedMult, Wave 10's
+ *  own separate half of this).
+ *
+ *  Keyed off the CARRIED resource rather than `jobDef.produces`: the sack
+ *  knows what it actually holds, which is the honest question for a villager
+ *  whose job changed mid-trip. `attrsOf` is the villager attribute roll
+ *  (deterministic per id, game/data/attributes.ts) — NOT the player's own
+ *  spent-point attributes (game/data/playerAttributes.ts), a separate system
+ *  that governs the player's own swing and has no business scaling an NPC's.
+ *  Returns the EXTRA on top of the real load, never the total, so the caller
+ *  can keep the villager's own goods and a fabricated bonus distinguishable
+ *  when a full store only takes part of it. */
+function rollTripBonus(agent: Agent, resource: ItemId, amount: number): { extra: number; side: ItemId | null } {
+  const attrs = attrsOf(agent.id);
+  const villager = useGameStore.getState().villagers.find((v) => v.id === agent.id);
+  const job = villager?.job;
+  let haul = amount;
+  if (Math.random() * 20 < attrs.might) haul *= 2;
+  const haulTrait = job ? HAUL_TRAIT[job] : undefined;
+  if (villager && haulTrait && hasTrait(villager, haulTrait)) haul += 1;
+  const sideGood = SIDE_GOODS[resource];
+  const sideTrait = job ? SIDE_TRAIT[job] : undefined;
+  const sideChance = attrs.craft * (villager && sideTrait && hasTrait(villager, sideTrait) ? 2 : 1);
+  // `sideGood !== resource` is defensive, not currently reachable — a side-good
+  // that WAS the main haul would silently double-count against one cap slot
+  const side = sideGood && sideGood !== resource && Math.random() * 25 < sideChance ? sideGood : null;
+  return { extra: haul - amount, side };
+}
 
 class HaulToDepositActivity implements Activity {
   private phase: 'travel' | 'align' | 'perform' = 'travel';
@@ -113,7 +173,15 @@ class HaulToDepositActivity implements Activity {
     // never to produce. Whatever would not fit stays on their back, so they
     // stand there holding it until room appears, exactly as the consideration
     // promises for a haul that never left.
-    const took = useGameStore.getState().addItems({ [load.resource]: load.amount }, 'gather');
+    //
+    // Wave 10 · the attribute rolls go in HERE, before addItems, not after —
+    // the doubled load has to be what the store is offered so Wave 9's own
+    // room check and partial accept apply to the real number. Doubling
+    // `accepted` afterwards would mint goods a full store had already refused.
+    const bonus = rollTripBonus(agent, load.resource, load.amount);
+    const request: Partial<Record<ItemId, number>> = { [load.resource]: load.amount + bonus.extra };
+    if (bonus.side) request[bonus.side] = 1;
+    const took = useGameStore.getState().addItems(request, 'gather');
     const accepted = took[load.resource] ?? 0;
     if (accepted <= 0) {
       // load intact, no trip credit — a haul that discharged nothing did not
@@ -123,7 +191,14 @@ class HaulToDepositActivity implements Activity {
     // one completed haul stands in for tickVillagers' own "one completed
     // trip" for trade-mastery purposes — see this file's own header
     useGameStore.getState().awardTradeXp(agent.id, 10);
-    const left = load.amount - accepted;
+    // What the villager ACTUALLY carried comes off their back first; the Might
+    // bonus is what rides on top and is therefore what a nearly-full store
+    // turns away. The alternative ordering would leave real, gathered goods
+    // stranded on their back while a fabricated bonus took the last slot —
+    // exactly the "the cap must never destroy the difference" rule Wave 9
+    // wrote this partial-accept branch for.
+    const carriedAccepted = Math.min(accepted, load.amount);
+    const left = load.amount - carriedAccepted;
     agent.bb.carrying = left > 0 ? { resource: load.resource, amount: left } : null;
     return this.finish(agent, left > 0 ? 'FAILURE' : 'SUCCESS');
   }
@@ -178,7 +253,7 @@ export const HAUL_TO_DEPOSIT: Action = {
   // building target by its raw buildable id (`kind: b.type`), so adding it
   // here is the whole wiring — candidate assembly picks the nearest of the
   // three exactly as it already did for two.
-  targetKinds: ['storehouse', 'stockpile', 'barrel'],
+  targetKinds: DEPOSIT_KINDS,
   considerations: [
     { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: boolCurve },
     { name: 'load_fraction', input: (agent) => loadFraction(agent), curve: loadFractionCurve },

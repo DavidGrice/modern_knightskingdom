@@ -96,9 +96,19 @@ export interface Blackboard {
    *  (a villager who can never gather anything again), not a cosmetic
    *  glitch. Same shape as `cooldowns` above, but keyed by target id
    *  instead of action id: `target_usable` (gather.ts/haul.ts) checks it
-   *  alongside `Target.available`, and the two gather/haul Activities are
-   *  the only writers, recording an entry only on a `'blocked'`-caused
-   *  FAILURE — never on a normal SUCCESS/partial-load/abort. */
+   *  alongside `Target.available`, and the writers are gather/haul/
+   *  tend_farmplot (actions/farm.ts, Wave 10), recording an entry only on a
+   *  `'blocked'`-caused FAILURE — never on a normal SUCCESS/partial-load/
+   *  abort.
+   *
+   *  Wave 10 verification · seek_deposit (actions/seekDeposit.ts) reads this
+   *  map but deliberately does NOT write it (see that file's own comment on
+   *  why: a MOVE_TO walk can't itself observe a store as unreachable the way
+   *  MOVE_TO_ANCHOR's anchor resolution can) — it shares the same
+   *  opportunistic expiry cleanup as the writers so a stranded hauler is
+   *  never marched at a store haul_to_deposit has already proven unreachable.
+   *  Entries are keyed identically (`bldg:<id>`, see buildingTarget() in
+   *  TargetRegistry.ts). */
   blockedTargets: Map<string, number>;
 
   /** §9 — written every think, read by the overlay. Empty until phase 5. */
@@ -136,6 +146,20 @@ export interface Blackboard {
    *  live-read rule — a villager who levels up or equips a basket mid-
    *  session must not need a respawn to see the new number. */
   carryCapacity: number;
+
+  /** Wave 10 · the villager's own trip-DURATION multiplier — `tripSpeedMult(v)
+   *  * tripTraitMult(v)` (game/data/attributes.ts, data/companionTraits.ts),
+   *  the exact pair the pre-AI flat timer already scaled `jobDef.tripSeconds`
+   *  by. Lower is faster (0.55 floor from Diligence + trade mastery, ×0.88
+   *  from a Swift-family companion trait), 1 = "no villager record, no
+   *  opinion" — a court NPC or the phase-1 probe moves at the plain base
+   *  pace. Locomotion divides walk speed by it and gather.ts multiplies its
+   *  swing interval by it, so the same investment that used to shorten a
+   *  timer now shortens both real legs of a real trip. Refreshed every think
+   *  tick alongside `job`/`carryCapacity`, same live-read rule: a villager who
+   *  just levelled or picked Swift Return must not need a respawn to feel it.
+   *  Never stored in a save — every input to it already is. */
+  tripSpeedMult: number;
 }
 
 export function createBlackboard(
@@ -173,5 +197,6 @@ export function createBlackboard(
     // think defaults (an idle agent, base capacity, nothing derived yet)
     job: null,
     carryCapacity: 0,
+    tripSpeedMult: 1,
   };
 }

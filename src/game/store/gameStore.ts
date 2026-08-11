@@ -33,7 +33,7 @@ import { bestStore, roomFor } from '../storage';
 import { COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult } from '../data/companionTraits';
 import { GUILD_BY_ID, guildEligible, SWITCH_TITHE } from '../data/guilds';
 import { TALENT_BY_ID, talentBuyable } from '../data/skillTree';
-import { CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
+import { CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
 import { RECIPES } from '../data/recipes';
 import { capOf, labDamagedForm } from '../data/labCapabilities';
@@ -374,6 +374,17 @@ interface GameState {
    *  the calling Activity's own `bb.carrying`, not the shared inventory
    *  (§4: that only happens on `HaulToDeposit`'s deposit, via `addItems`). */
   gatherSwing: (nodeId: string) => { item: ItemId; amount: number } | null;
+  /** Wave 10 · AI-only, the villager farmer's half of the farmplot cycle —
+   *  `gatherSwing`'s counterpart for a TIMER-based resource. `plantPlot`/
+   *  `harvestPlot` stay exactly as the player's own hands use them (a notify,
+   *  farming skill XP, straight into the satchel); this one moves the same
+   *  `st.plots` state machine but hands the yield BACK to the caller so it
+   *  lands in the hauler's sack and is walked to the stores like every other
+   *  trade's load, instead of teleporting into the inventory out at the plot.
+   *  One call per arrival, not a swing loop: `'planted'` when an untilled plot
+   *  was sown, a yield when a ready one was cut, `null` when the plot is still
+   *  growing or gone (the caller has nothing to do there). */
+  tendPlot: (buildingId: string) => 'planted' | { item: ItemId; amount: number } | null;
   /** Phase 5, iteration 5.8b — the trade-mastery half of a completed trip,
    *  extracted out of tickVillagers' own inline block (it was hardcoded
    *  there, flagged during phase-5 validation as a real continuity risk)
@@ -474,11 +485,14 @@ function villagerAtWork(
   // §4 (phase 5, 5.8a): a real GatherAtNode/HaulToDeposit activity in its
   // align/perform phase is a FACT ("reserved on node:17, actively working
   // it"), not an inference from proximity — trust it ahead of the heuristic
-  // below rather than running both. Only ever set for lumberjack/miner (the
-  // only jobs gather_resource's job_match currently claims); farmer/
-  // merchant/builder fall straight through to the unchanged heuristic,
-  // exactly as before 5.8a. Absent or inactive (outside work hours,
-  // no reachable node, threatened, mid-travel) falls through the same way.
+  // below rather than running both. Wave 10 widened who can set it: the two
+  // new node trades (herbalist/fisherman) via gather_resource's job_match, and
+  // the farmer via the new tend_farmplot Activity (ai/actions/farm.ts), on top
+  // of the original lumberjack/miner. Merchant and builder still fall straight
+  // through to the unchanged heuristic below, exactly as before 5.8a — as does
+  // anyone whose signal is absent or inactive (outside work hours, no
+  // reachable node, threatened, mid-travel, or walking a stranded load home
+  // under seek_deposit, which is travel and deliberately publishes nothing).
   if (workSignals[v.id]?.active) return true;
   const m = villagerMobs[v.id];
   if (!m) return true; // not spawned in the world yet — nothing to be far from
@@ -493,11 +507,20 @@ function villagerAtWork(
   // own doc comment).
   const anchor = settlementAnchor(v.world, st.claimedWorlds);
   if (near(anchor.x, anchor.z)) return true;
-  if (v.job === 'lumberjack' || v.job === 'miner') {
-    const want = v.job === 'lumberjack' ? 'tree' : 'rock';
-    const any = st.nodes.some((n) => n.kind === want && !n.respawnAt);
+  // Wave 10 · was an inline lumberjack/miner ternary; now the shared
+  // JOB_NODE_KIND table (data/villagers.ts), so the two new node-working
+  // trades are held to the SAME standing-at-a-node requirement rather than
+  // falling through to the blanket `return true` at the bottom of this
+  // function — which would have granted an herbalist or fisherman their whole
+  // per-trip yield on the timer alone, from anywhere on the map. That is the
+  // exact "felling a hundred metres from the nearest tree" bug L66 fixed for
+  // the original two trades, and adding a job without adding its case here is
+  // how it would have come straight back.
+  const nodeKind = JOB_NODE_KIND[v.job];
+  if (nodeKind) {
+    const any = st.nodes.some((n) => n.kind === nodeKind && !n.respawnAt);
     if (!any) return true; // nothing to work — do not stall the economy
-    return st.nodes.some((n) => n.kind === want && !n.respawnAt && near(n.x, n.z));
+    return st.nodes.some((n) => n.kind === nodeKind && !n.respawnAt && near(n.x, n.z));
   }
   if (v.job === 'farmer') {
     const plot = worldBuildings.find((b) => b.type === 'farmplot' && isBuilt(b));
@@ -3007,6 +3030,35 @@ function createGameStore() {
         ),
       });
       return { item, amount: 1 };
+    },
+
+    tendPlot: (buildingId) => {
+      const st = get();
+      const b = st.buildings.find((x) => x.id === buildingId);
+      if (!b || b.type !== 'farmplot' || !isBuilt(b)) return null;
+      const left = st.plots[buildingId];
+      if (left === undefined) {
+        // untilled -> sown. Same growth timer the player's own plantPlot
+        // computes (perk + Rich Soil talent): the farm's soil is the farm's
+        // soil, whoever pushed the seed into it. Deliberately quiet — no
+        // notify, no sound: a villager doing their job all day should not
+        // narrate every furrow, unlike the player's own deliberate action.
+        let growTime = st.perks.includes('green_thumb') ? GROW_TIME * 0.85 : GROW_TIME;
+        if (st.skillTree.includes('farming2')) growTime *= 0.88;
+        set({ plots: { ...st.plots, [buildingId]: growTime }, dirty: true });
+        return 'planted';
+      }
+      if (left > 0) return null; // still growing — nothing a farmer can do but wait
+      const plots = { ...st.plots };
+      delete plots[buildingId]; // back to untilled, exactly as harvestPlot leaves it
+      set({ plots, dirty: true });
+      // same yield as the player's own harvest (Heavy Sheaves included) — but
+      // NOT addXp('farming'): that is the player's own skill, and a villager
+      // swinging the sickle must not level it. Their equivalent, trade
+      // mastery, is granted by the completed HAUL (awardTradeXp in haul.ts),
+      // which is where every other trade earns it too.
+      const sheaves = st.skillTree.includes('farming3') ? 1 : 0;
+      return { item: 'wheat' as ItemId, amount: 2 + sheaves + (Math.random() < 0.35 ? 1 : 0) };
     },
 
     awardTradeXp: (villagerId, amount) => {

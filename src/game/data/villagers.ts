@@ -1,4 +1,4 @@
-import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, VillagerJob } from '../types';
+import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeState, VillagerJob } from '../types';
 import { BUILD_REGION } from './buildables';
 import { hashId } from './villagerLooks';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
@@ -99,6 +99,13 @@ export const JOBS: JobDef[] = [
   { id: 'lumberjack', label: 'Lumberjack', icon: '🪓', produces: 'wood', perTrip: 2, tripSeconds: 45 },
   { id: 'miner', label: 'Miner', icon: '⛏️', produces: 'stone', perTrip: 2, tripSeconds: 55 },
   { id: 'farmer', label: 'Farmer', icon: '🌾', produces: 'wheat', perTrip: 2, tripSeconds: 60 },
+  // Wave 10 · the two trades the world already had nodes for and nobody to
+  // work them (game/types.ts's ResourceNodeState 'herb'/'fishing' — player-
+  // harvest-only until now, which is exactly why gather.ts's job_match could
+  // never claim either kind). tripSeconds sit either side of the miner's 55:
+  // herbs are close, shallow work, a day on the water is not.
+  { id: 'herbalist', label: 'Herbalist', icon: '🌿', produces: 'herb', perTrip: 2, tripSeconds: 50 },
+  { id: 'fisherman', label: 'Fisherman', icon: '🎣', produces: 'fish', perTrip: 2, tripSeconds: 65 },
   // only actually produces once a Market Stall is built (see tickVillagers) —
   // represents the stall's stock quietly selling to passersby while you're
   // off adventuring, same passive-delivery shape as every other job
@@ -151,6 +158,25 @@ export const CARRIERS: { id: CarrierTier; label: string; icon: string; blurb: st
 export const CARRIER_ITEM: Record<CarrierTier, ItemId> = { basket: 'basket', cart: 'cart' };
 
 export const JOB_BY_ID = Object.fromEntries(JOBS.map((j) => [j.id, j])) as Record<VillagerJob, JobDef>;
+
+/** Wave 10 · which `ResourceNodeState.kind` each node-working trade plies.
+ *  ONE table, read by all three systems that used to hand-copy their own
+ *  version of it — `gather.ts`'s `job_match` consideration (was a private
+ *  `JOB_RESOURCE_MAP` literal), `villagerAtWork()`'s "are they standing at a
+ *  workable node" check and `Villagers.tsx`'s Phase-24B worksite walk (both
+ *  were inline `job === 'lumberjack' ? 'tree' : 'rock'` ternaries). Three
+ *  copies was survivable while the answer was two jobs long; adding a third
+ *  and fourth trade to three separate ternaries is exactly how the AI path
+ *  and the legacy timer end up disagreeing about where a villager works.
+ *  A job absent from this table is not a node-working trade at all (farmer
+ *  works a farmplot BUILDING — see ai/actions/farm.ts; merchant a stall;
+ *  builder a site). */
+export const JOB_NODE_KIND: Partial<Record<VillagerJob, ResourceNodeState['kind']>> = {
+  lumberjack: 'tree',
+  miner: 'rock',
+  herbalist: 'herb',
+  fisherman: 'fishing',
+};
 
 /** requirements to attract the Nth villager (1-indexed) */
 export function villagerRequirement(n: number): { beds: number; buildings: number } {

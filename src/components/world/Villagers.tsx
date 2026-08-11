@@ -12,7 +12,7 @@ import { HeldHelmet, Chestplate, ResourceProp, WornCarrier } from '../character/
 import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
-import { HOME_X, HOME_Z, JOB_BY_ID, villagerHomeSpot } from '@/game/data/villagers';
+import { HOME_X, HOME_Z, JOB_BY_ID, JOB_NODE_KIND, villagerHomeSpot } from '@/game/data/villagers';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
@@ -211,7 +211,13 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     // synchronized in-world performance, phased off the same
     // villagerProgress fraction: first ~70% out at the worksite, last ~30%
     // hauling back to the Stockpile (or homestead center without one).
-    if (villager.job === 'lumberjack' || villager.job === 'miner' || villager.job === 'farmer' || villager.job === 'merchant') {
+    // Wave 10 · the node-working trades are matched through the shared
+    // JOB_NODE_KIND table rather than a hardcoded pair, so the two new ones
+    // (herbalist/fisherman) get the same in-world performance the original two
+    // always had instead of silently falling through to the plain wander below
+    // — which is what "add a job and forget this cascade" would have produced.
+    const workedKind = JOB_NODE_KIND[villager.job];
+    if (workedKind || villager.job === 'farmer' || villager.job === 'merchant') {
       const st = useGameStore.getState();
       const jobDef = JOB_BY_ID[villager.job];
       const trip = jobDef.tripSeconds * tripSpeedMult(villager);
@@ -220,11 +226,10 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       // the trade's worksite
       let wx: number | null = null;
       let wz: number | null = null;
-      if (villager.job === 'lumberjack' || villager.job === 'miner') {
-        const want = villager.job === 'lumberjack' ? 'tree' : 'rock';
+      if (workedKind) {
         let best = Infinity;
         for (const n of st.nodes) {
-          if (n.kind !== want || n.respawnAt) continue;
+          if (n.kind !== workedKind || n.respawnAt) continue;
           const d = Math.hypot(n.x - home[0], n.z - home[1]);
           if (d < best) { best = d; wx = n.x; wz = n.z; }
         }
