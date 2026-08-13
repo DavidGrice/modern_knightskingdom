@@ -37,14 +37,43 @@
     "assembleCandidates silently skips ids with no registered action, so they",
     "are aspirational content, not behaviour. That gap is exactly why a",
     "stranded carrying villager had nothing at all to move them before",
-    "seek_deposit existed."
+    "seek_deposit existed. ('wander' stopped being aspirational in phase 8 —",
+    "see the note two paragraphs down. 'socialize' and 'idle' still are.)",
+    "Updated 2026-08-11 (Wave 11, phase 7): villager gained take_cover",
+    "(actions/takeCover.ts) — the first combat-category action any archetype",
+    "here has ever been offered, and the first thing in the game to react to a",
+    "hostile a villager can actually PERCEIVE (phase 6) rather than to the",
+    "global raid flag flee_to_safety gates on. guard's own take_cover and",
+    "engage_threat ids stop being aspirational in the same pass: both now have",
+    "real registered Actions (actions/index.ts). guard is still never spawned by",
+    "any live code path — engage_threat's own capability gate is job ==",
+    "'defender', which is exactly the job rosterSync.ts excludes from having an",
+    "Agent, so it cannot fire for anyone today. That is deliberate and is",
+    "argued in full in actions/engageThreat.ts's header; reversing the exclusion",
+    "is a migration off Defenders.tsx's shipped, tuned combat AI and needs its",
+    "own sign-off, not a quiet config edit here. take_cover is deliberately NOT",
+    "given to 'court': that archetype's whole point (below) is that a court NPC",
+    "can never leave their post, and a cover point is by definition somewhere",
+    "else. companion's follow_leader/assist_leader remain aspirational — this",
+    "game has no follower entity for them to be about (see PHASE_STATUS.md's",
+    "phase 7 section).",
+    "Updated 2026-08-11 (Wave 11, phase 8): 'wander' finally has a real Action",
+    "(actions/wander.ts) — and is the ONLY entry in this file that needed no",
+    "edit at all to go live, having sat first in villager's list since phase 1.",
+    "It carries its own capability gate rather than being handed out per",
+    "archetype: it fires only for a tier-D roster villager, i.e. one no renderer",
+    "is mounting, because every other agent already has Villagers.tsx's shipped",
+    "cascade moving them and a competing MOVE_TO would starve it. That is why",
+    "'guard' and 'ambient' can keep listing 'wander' below with no effect —",
+    "neither is spawned by any live code path, and the gate would decline them",
+    "anyway (it requires a roster job, which only a real villager has)."
   ],
   "villager": {
     "label": "Villager",
     "needProfile": "villager",
     "intrinsic": [
       "wander", "socialize", "idle", "flee_to_safety", "sleep", "gather_resource", "haul_to_deposit",
-      "seek_deposit", "tend_farmplot", "idle_fidget", "notice_player"
+      "seek_deposit", "tend_farmplot", "idle_fidget", "notice_player", "take_cover"
     ]
   },
   "court": {

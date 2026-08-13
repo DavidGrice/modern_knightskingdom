@@ -16,16 +16,18 @@ import {
   type ArchetypeDef,
   type NeedId,
   type NeedTuning,
+  type SteeringMode,
   type Tier,
 } from '../config';
 import { createBlackboard, type Blackboard } from './Blackboard';
 import type { TargetId } from './TargetRegistry';
 import { tickReasoner, type Activity } from './Reasoner';
+import { tickSenses } from './Perception';
 // AgentManager.ts imports Agent (this file) at its own top level to
 // construct instances in spawn() — a real cycle, referenced here only
 // inside the `intent` setter body below, never at this module's own
 // top-level scope. See that setter's own comment for why this is safe.
-import { agentManager } from './AgentManager';
+import { agentManager, tierChangeHooks } from './AgentManager';
 // A second, longer cycle for the same reason: gameStore.ts imports
 // rosterSync.ts/npcSync.ts (for resetVillagerAgentSync/resetNpcAgentSync),
 // which import agentManager from AgentManager.ts above, which imports this
@@ -112,7 +114,11 @@ export class Agent {
   tier: Tier = 'A';
   thinkHz: number;
   perceiveHz: number;
-  steering: 'full' | 'simplified' | 'teleport';
+  /** §8's steering budget for this tier. Phase 8 is the first thing to
+   *  CONSUME it — until then `Locomotion.stepLocomotion` ran the same full
+   *  navSteer for every agent on every render frame regardless of tier, so
+   *  LOD throttled thinking and not moving. See `steerIntervalFor` there. */
+  steering: SteeringMode;
   /** iteration 2.7 — true when the current tier was forced to C by a
    *  windowed region's nav-window bound, distinct from "out of frustum" (the
    *  other way to land on C). §9's debug overlay reads this alongside tier
@@ -122,6 +128,21 @@ export class Agent {
    *  setTier() itself no-ops when the tier doesn't change, but the REASON
    *  can still be worth re-confirming. */
   boundCapped = false;
+  /** Phase 8 — the third way to land on C, and the only one that is neither
+   *  "behind the camera" nor "outside the nav window": in frustum, same
+   *  region, but past `LOD.farDistance`. A separate flag rather than a widened
+   *  `boundCapped` because those are genuinely different diagnoses and the
+   *  overlay has to be able to say which — and because `boundCapped`'s
+   *  meaning is already load-bearing for the window-bound smoke test. */
+  distanceCapped = false;
+
+  /** Phase 8 — game time when a RENDERER last drove this agent's locomotion
+   *  (`Villagers.tsx`/`Npc.tsx`, via `stepLocomotion`), or -1 if one never
+   *  has. Read only by `stepUnrenderedAgents` (Locomotion.ts): a tier-D agent
+   *  has no rendered figure to step it, so something has to, and this is how
+   *  that sweep knows it isn't doubling up with a renderer that IS mounted.
+   *  Deliberately not stamped by the sweep's own calls. */
+  actuatedAt = -1;
 
   // --- scheduling (§8), owned by Scheduler ---
   /** seconds of game time banked toward the next think */
@@ -158,6 +179,7 @@ export class Agent {
 
   setTier(tier: Tier) {
     if (tier === this.tier) return;
+    const from = this.tier;
     this.tier = tier;
     const t = tierDef(tier);
     this.thinkHz = t.thinkHz;
@@ -171,6 +193,13 @@ export class Agent {
     // dropped to C reading "7.1/2 Hz" looks like a bug and is not one)
     this.hzWindowStart = this.lastThinkAt < 0 ? 0 : this.lastThinkAt;
     this.hzCount = 0;
+    // Phase 8 (§8) — the only place in the system that knows a tier actually
+    // changed, as opposed to being re-confirmed. Locomotion registers the one
+    // real listener (re-entry snap + dropping a stale coarse path); reached
+    // through a hook list, not an import, for the cycle reason AgentManager's
+    // own `tierChangeHooks` comment sets out. Called last, so a listener sees
+    // the fully-updated agent rather than a half-applied tier.
+    for (let i = 0; i < tierChangeHooks.length; i++) tierChangeHooks[i](this, from, tier);
   }
 
   /** One think tick. Called by the Scheduler at the tier's rate, never from
@@ -218,7 +247,18 @@ export class Agent {
       this.bb.tripSpeedMult = 1;
     }
 
-    // phase 6: this.senses.update(now)
+    // §6 — perception, BEFORE the reasoner on purpose: `bb.threatLevel` and
+    // `bb.beliefs` are inputs the very next line scores against (six shipped
+    // actions carry a `not_threatened` consideration), so sensing after
+    // deciding would mean every agent reacting to the world as it was one
+    // tick ago. Reached through `core/Perception.ts`'s registration seam
+    // rather than by importing `src/ai/perception` here — same real
+    // circular-import hazard `tickReasoner` below already routes around, see
+    // that file's own header. Inert if the perception layer never loaded.
+    // `elapsed` is the same dt every other per-tick system in this method
+    // uses; the perceive-rate throttle (§6.1/§8) lives inside the seam.
+    tickSenses(this, now, elapsed);
+
     // §5.0/§5.5/§5.6 — assembles, scores, picks a winner from whatever
     // real content has registered itself (src/ai/actions, reached via
     // registerActions() — deliberately NOT a direct import here, see

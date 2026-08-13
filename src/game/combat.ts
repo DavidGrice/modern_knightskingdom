@@ -20,6 +20,16 @@ import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
 import { fortDamageReduction } from './fort';
+// NPC_AI_SPEC §6.2 — the AI's world-sound emitter. Both modules are
+// deliberately import-light leaves of the perception layer (sounds.ts pulls
+// only playerState + the config JSON; Belief.ts owns the entity-id scheme),
+// so pushing sounds from here adds no edge to the AI system's already
+// carefully-managed import graph — the same "dependency-free leaf both sides
+// import" role game/carts.ts plays (PROJECT_CONTEXT §2). Nothing here READS
+// the AI: this file stays the mechanics layer (PROJECT_CONTEXT §8's own
+// boundary statement), it just says out loud what it did.
+import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
+import { enemyBeliefId, noiseBeliefId } from '@/ai/perception/Belief';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -368,6 +378,16 @@ export function damagePlayer(amount: number) {
   }
   combatState.hp = Math.max(0, combatState.hp - dmg);
   combatState.flash = 0.55;
+  // NPC_AI_SPEC §6.2 — a blow landing on the player is the loudest thing that
+  // happens in this game, and it is exactly the kind of event the spec wants
+  // NPCs to hear rather than see. Emitted here, right beside the `audio.play`
+  // above, so what an NPC hears and what the player hears cannot drift apart.
+  // The source is `noise:combat`, not `player`: what carries is "a fight, over
+  // there" — an unattributed hostile cue that raises threat and seeds a
+  // fuzzed-position belief — not the player's own identity, who is never
+  // hostile (see perception/Belief.ts's id scheme).
+  emitSound(playerState.x, playerState.z, SOUND_LOUDNESS.playerStruck, 'combat',
+    noiseBeliefId('combat'), st.destination ?? null);
   if (combatState.hp <= 0) {
     combatState.hp = combatState.maxHp;
     combatState.stamina = combatState.maxStamina;
@@ -510,6 +530,13 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number) {
   const st = useGameStore.getState();
   const { enemies } = useEnemyStore.getState();
   e.hp -= dmg;
+  // NPC_AI_SPEC §6.2 — steel on a raider gives that raider away by sound.
+  // Keyed to `enemy:<id>` (not `noise:`) on purpose: this sound identifies a
+  // specific mob, so it refreshes the SAME belief the vision sensor uses for
+  // it, and a villager who only heard the clash ends up with a low-confidence,
+  // deliberately fuzzed idea of where that particular raider is.
+  emitSound(e.mob.x, e.mob.z, SOUND_LOUDNESS.meleeHit, 'combat',
+    enemyBeliefId(e.id), st.destination ?? null);
   // the camp rallies (AI wave 2): striking one hostile alerts every fellow
   // within earshot, pulling them into the fight beyond the normal 26m leash
   for (const o of enemies) {
@@ -795,6 +822,11 @@ export function stepBolt(b: Bolt, dt: number): boolean {
       const dealt = b.damage * mult;
       e.hp -= dealt;
       audio.play('thud', 0.7);
+      // NPC_AI_SPEC §6.2 — the ranged counterpart of landMeleeHit's own
+      // emission. Quieter than a melee exchange (a shaft landing is one thud,
+      // not a running fight), but it still gives the struck mob away.
+      emitSound(e.mob.x, e.mob.z, SOUND_LOUDNESS.boltHit, 'combat',
+        enemyBeliefId(e.id), st.destination ?? null);
       // the shaft stops in the wound and rides the body from here on
       const inv = 1 / (Math.hypot(b.vel.x, b.vel.y, b.vel.z) || 1);
       b.stuckAt = b.age;

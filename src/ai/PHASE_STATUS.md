@@ -17,9 +17,9 @@ one's debug view works.*
 | 3 | Actuation | **done — 7/7 iterations** — 2026-07-28, see below | current-intent readout |
 | 4 | Smart objects | **done — 3/3 iterations** — 2026-07-28, see below | anchor axes |
 | 5 | Utility reasoner | **done — 10/10 iterations** — 2026-07-28, see below | ✅ renderer already built |
-| 6 | Perception | not started | belief markers, vision cones |
-| 7 | Combat + companion | not started | — |
-| 8 | LOD tiers + ambient | partially pre-built (see below) | ✅ tier in overlay |
+| 6 | Perception | **done** — 2026-08-11 (Wave 11), see below | ✅ belief rows + cone/marker gizmos (Alt+`` ` ``) |
+| 7 | Combat + companion | **done (combat) / scoped down (companion)** — 2026-08-11 (Wave 11), see below | ✅ COMBAT row + cover/threat gizmo legs |
+| 8 | LOD tiers + ambient | **done** — 2026-08-11 (Wave 11), see below | ✅ tier + why · COARSE sweep · `wander` scored |
 | 9 | LLM dialogue (optional) | not started | — |
 
 ---
@@ -313,6 +313,502 @@ pattern of logging deferred ideas rather than dropping them silently.
    session pick this back up correctly without re-deriving it.
 3. Move to the next iteration in sequence — don't skip ahead across a
    dependency, even if it looks safe.
+
+---
+
+## Phase 6 — Perception, done 2026-08-11 (Wave 11)
+
+**The gap this closed.** `bb.threatLevel` and `bb.beliefs` were authored in
+phase 1 straight from §3.2/§3.3 and then never written by anything: grepping
+the tree before this phase, `bb.beliefs.set(...)` had *zero* call sites and
+the only write to `threatLevel` was its `0` in `createBlackboard`. Six shipped
+actions (`gather` / `haul` / `farm` / `seek_deposit` / `notice` / `ambient`)
+each carry an identical `not_threatened` consideration reading `1 -
+bb.threatLevel`, so every one of them had been evaluating `1 - 0 = 1` forever
+— every villager permanently, structurally, perfectly safe. That plumbing is
+now live.
+
+**Built:**
+
+- `config/perception.json` + typed accessors in `config/index.ts`
+  (`PERCEPTION`, `VISION_HALF_COS`). Every §6 number is authored here; the
+  file's `_doc` carries the reference range each one was chosen against.
+- `perception/VisionSensor.ts` — §6.1's three phases: squared-distance broad
+  phase, dot-product cone, and a budgeted narrow phase (4 checks/agent/tick,
+  round-robin cursor). Confidence ramps (0.4 s at the agent's feet → the
+  spec's 1.5 s at the edge of range), never snaps.
+- `perception/HearingSensor.ts` + `perception/sounds.ts` — §6.2, event-driven.
+  A small ring of recent world sounds each agent drains past its own
+  watermark; `game/combat.ts` pushes three real events beside the `audio.play`
+  calls it already made (player struck / melee landed / bolt landed), and the
+  player's own sprint is pumped as the one continuous source. Heard beliefs
+  get §6.2's fuzzed position and a low confidence ceiling.
+- `perception/Belief.ts` — the entity-id scheme (`enemy:<id>` / `noise:<what>`
+  / `player`), upsert, and §3.3's exponential decay + 0.05 prune.
+- `perception/Senses.ts` — §6.3 threat derivation from all three spec inputs,
+  plus the two-cadence tick (decay + derivation every think, sensors at
+  `perceiveHz`).
+- `core/Perception.ts` — the registration seam `Agent.think()` calls through,
+  for the same real circular-import reason `registerActions` exists.
+- `debug/AIPerceptionGizmos.tsx` (§9's "vision cone, belief markers at
+  `lastKnownPosition` with confidence-scaled opacity") and new belief /
+  sensor rows in `AIDebugOverlay`. **Alt+`` ` ``** toggles the gizmos, works
+  with the panel shut.
+
+**First real consumer of `agent.perceiveHz`.** That field has been assigned
+per tier since phase 1 and, until now, read by nothing but the overlay's own
+text. Perception runs at it directly rather than carrying an `updateHz` of its
+own — §2's tier-B window-radius gap is this project's own worked example of
+what two numbers that must agree by hand eventually do.
+
+**Documented divergences from the spec, both deliberate:**
+
+1. **§6.1's narrow phase is a nav-grid march, not a raycast.** There is no
+   `losCollider` layer in this project and building one means authoring a
+   second collision set for every building. `NavGrid.isWalkable`'s blocked
+   cells are already exactly "solid between 0.55 m and 1.7 m", i.e. solid at
+   torso height, which is the better predicate anyway. Same trade phase 2
+   made choosing to extend `navgrid.ts` over adopting navcat.
+2. **§6.3's "lerp toward the target by 0.3" is re-expressed as a 0.28 s time
+   constant.** Per *tick* it would make an identical situation escalate 20×
+   faster on a tier-A agent than a tier-D one, purely from LOD. Same
+   correction phase 1 already made for needs decay.
+
+**Deliberately not built (and why):**
+
+- **`notice_player` was left exactly as it is.** Its header names full §6
+  Perception as the thing it is standing in for, but it is a shipped, tested
+  action and its plain 5 m distance check is *correct* for "the player walked
+  up to me". Rewiring it onto a belief would be a behaviour change to phase
+  5's content dressed as phase 6's work.
+- **No fellow-agent beliefs.** §6.1's broad phase says "against agent list",
+  but nothing reads a belief about a neighbouring villager: threat counts only
+  hostiles, and `follow_leader` / `assist_leader` are phase 7's, unbuilt.
+  Phase 7 adds the population here when it adds the reader.
+- **No new outlet for threat.** Threat now suppresses work correctly through
+  the six existing `not_threatened` considerations, but nothing *new* fires on
+  it — `flee_to_safety` still gates on `raid_active` alone, untouched. A
+  threat-driven flee/cower is real behaviour design and belongs to phase 7,
+  not to a sensor phase that would have had to edit a tuned survival action to
+  claim it.
+- **`bb.lastDamageAt` still has no producer**, and that is a fact about the
+  game rather than a gap: `Enemies.tsx` only ever targets the player, sworn
+  defenders, or keep pieces, and `rosterSync.ts` excludes defenders from
+  having an `Agent` at all — no agent in this system is reachable by any
+  damage path that exists. §6.3's damage term is implemented and inert, with
+  `reportAgentDamaged()` as the one line phase 7 needs.
+
+**Nothing is persisted.** No `SaveGame` field was added or changed: beliefs
+and perception state are transient exactly like the rest of the Blackboard,
+rebuilt within a second of loading.
+
+---
+
+## Phase 7 — Combat + companion, 2026-08-11 (Wave 11)
+
+Build-order item 7 is *"Intrinsic actions, category weights, interrupt
+priorities, `EngageThreat` / `FollowLeader` activities."* Three of those four
+shipped in full. The fourth (`FollowLeader`) is scoped down deliberately and
+the reason is below — it is not an oversight and not a stub.
+
+**The gap this closed.** `CATEGORY_WEIGHT.combat` (3.0) and
+`CATEGORY_INTERRUPT_PRIORITY.combat` (8) have been defined in `Reasoner.ts`
+since phase 5 and had **never been used by a single Action**. Phase 6 made
+`bb.threatLevel` real but deliberately gave it no new outlet — its own closing
+note says so — so threat could only ever *suppress* work through six
+`not_threatened` considerations. This phase is that outlet.
+
+**Built:**
+
+- `actions/takeCover.ts` — **`take_cover`** (combat, 3.0 / interruptPriority 8,
+  minDuration 2, no cooldown). The live deliverable, on the real `villager`
+  archetype. A villager who *perceives* a hostile (§6's beliefs, not the raid
+  flag) runs to a point that puts a real standing building between them and
+  that hostile's `lastKnownPosition`, then turns and watches it. Cover is
+  chosen by the buildable's own authored height (`heightOf`) rather than a
+  hand-listed set of "cover-ish" types, and the stand point is offset from the
+  piece's real footprint edge (`sizeFor`, projected onto the retreat direction
+  — the box's own support function), so one `standoff` number works for an 8 m
+  castle wall and a 2 m barrel alike. Falls back to a fanned open-ground
+  retreat, then to `flee_to_safety`'s own HOME point.
+- **The alarm.** Breaking for cover emits a real §6.2 world sound carrying the
+  *sighted* hostile's own belief id, so a neighbour who hears it gains a
+  low-confidence belief about that same raider at a fuzzed position — the first
+  thing in this project to emit into the hearing sensor from the AI side rather
+  than from `game/combat.ts`, and it makes one villager's panic spread as
+  information. Plus one throttled player-facing notice, the same "call each
+  hostile out once" shape `scoutReported` already uses for a scouting defender.
+- `actions/engageThreat.ts` — **`engage_threat`** (combat, 3.0 / 8,
+  minDuration 1.5). A complete Activity: closes on the believed position,
+  faces, swings `anim_g_swordswish`, and deals real damage through the same
+  `EnemyData.hp` path `Defenders.tsx` uses, with the same kill bookkeeping
+  (`recordKill` / `gainDefenderXp` / `lootFor` / `notify`). Registered, and the
+  dead `engage_threat` id in `archetypes.json`'s `guard` list finally has an
+  Action behind it. **It cannot fire for anyone today, on purpose** — see
+  "population" below.
+- `game/defenders.ts` gains **`defenderStrike(v)`**, the damage expression
+  lifted verbatim out of `Defenders.tsx`'s attack branch (which now calls it).
+  §0.2's "one arbiter" argument applies to a damage formula too: two copies
+  would drift the first time Courage or the Riposte trait was retuned, and
+  "defenders hit differently depending on which system is driving them" is
+  close to unfindable.
+- `perception/Belief.ts` gains **`nearestNoticedHostile(bb, x, z)`** — the
+  sanctioned §3.3 reader ("combat and search behavior must read
+  `lastKnownPosition`, never the live transform"), shared by both combat
+  actions so neither invents its own subtly different "which one am I
+  answering".
+- `config/combat.json` + typed accessors (`COMBAT`) — every phase-7 tunable,
+  each with the existing game range it was chosen against, same convention
+  `perception.json` established.
+- `actions/combatState.ts` — per-agent combat decision state for §9, module map
+  + `despawnHooks` cleanup, exactly `perception/state.ts`'s shape and for the
+  same reason (an `Activity` instance is private to the agent running it, so
+  a debug view has nowhere to look).
+
+**The population question, which is the whole design decision.** Read against
+the live code, not assumed:
+
+- `setDefenderLoadout` refuses any villager whose job is not `'defender'`, so
+  "can fight" and "is a sworn defender" are the same predicate — there is no
+  armed farmer and no way to make one.
+- `Enemies.tsx` only ever targets the player, a sworn defender (via
+  `defenderState`) or a keep piece, so an ordinary villager cannot be damaged.
+- `rosterSync.ts` structurally excludes `job === 'defender'` from having an
+  `Agent` at all, because `Defenders.tsx` already owns a complete, tuned combat
+  AI for them.
+
+So an ordinary villager who "fought back" would be **an invincible farmer
+killing raiders for free** — a real balance regression dressed as an AI
+feature. Getting behind something solid while shouting about what they saw is
+the honest combat behaviour this population has, and it is genuinely new:
+nothing in the game reacted to a lone night skeleton before, because the only
+existing reaction (`flee_to_safety`) gates on the global raid flag.
+`engage_threat`'s own gate is `bb.job === 'defender'` — the exact mirror of
+rosterSync's exclusion, so it lights up the moment that decision is reversed
+and cannot fire before. **Reversing it is a migration off a shipped, tuned
+combat AI and needs its own sign-off and its own live verification**, not a
+side effect of the phase that happened to write the action.
+
+**`FollowLeader` / `assist_leader` — scoped down, honestly.** There is exactly
+one follower behaviour in this game: `defenderOrders.order === 'follow'`
+(`Defenders.tsx`), a defender forming up 2.6 m behind the player. It belongs to
+the population this reasoner structurally excludes, it already works, and
+duplicating it is the same forbidden migration as above. There is no pet, no
+escort, no companion entity anywhere else in the codebase — `companionTraits.ts`
+is a per-villager perk tree, not a follower. Building `follow_leader` for
+ordinary villagers would therefore be **new game content nobody asked for**, not
+a migration of existing behaviour, so it was not built. `bb.leaderId` (a phase-1
+field, still unwritten) and the `companion` category weights stay as they are,
+ready for a real companion feature to land on. The `companion` archetype's own
+`intrinsic` list is left untouched.
+
+**Deliberately not done, and why:**
+
+- **`flee_to_safety` is untouched.** Adding a threat consideration would change
+  its `n` and therefore rescore a tuned, shipped survival action. `take_cover`
+  sits *under* it (3.0 vs 4.0, priority 8 vs 10) and answers the case flee
+  never could: a perceived hostile with no raid on.
+- **`notice_player`, `idle_fidget` and the six `not_threatened` considerations
+  are untouched.**
+- **`reportAgentDamaged()` still has no caller.** `Enemies.tsx`'s existing
+  `defTarget.hp -= …` site is the one line that makes §6.3's damage term live,
+  and it resolves to nothing today (`agentManager.get(defenderId)` is always
+  `undefined`). Writing into a shipped combat file for a provably-inert call —
+  and adding an import edge there that cannot be verified without running the
+  game — buys nothing. It belongs to the same sign-off as the exclusion.
+- **ROADMAP.md untouched**, matching phase 6's own call: the wave-level entry
+  belongs to phase 8's closing pass.
+
+**Nothing is persisted.** No `SaveGame` field added or changed — combat state
+is transient exactly like beliefs, needs and cooldowns.
+
+**Debug view (§0.5).** The `` ` `` panel gains a `COMBAT cover · vs enemy:7 @
+x,z · behind stonewall @ x,z · 4.2m to go` row (and `swing 0.6s · hits 3` in
+engage mode), and both new actions appear in the existing SCORED ACTIONS list
+with their considerations. **Alt+`` ` ``** gizmos gain two legs per engaged
+agent: amber agent→cover, red cover→believed threat — a good cover choice reads
+as a bent elbow with the agent and the raider at opposite ends, which is the one
+question ("is the barn actually *between* them") the DOM panel cannot answer.
+
+**Verification:** `npx tsc --noEmit` clean. Not run live this session (`npm run
+dev`/`build` were out of scope per the task) — the behaviours above are reasoned
+from the real code paths, not observed, and `take_cover` in particular wants a
+live pass with a night skeleton before it is called finished.
+
+---
+
+## Phase 8 — done, 2026-08-11 (Wave 11)
+
+**LOD tiers + ambient.** Two genuinely separate halves of one build-order item.
+
+### What was already true, and needed nothing
+
+Tier *assignment* (`AgentManager.refreshTiers`), the round-robin `Scheduler`
+with its hard 3-thinks-per-frame cap, the per-tier `thinkHz`, the random spawn
+phase offset and the whole overlay tier readout have existed since phase 1
+(§8 was pulled forward because the Scheduler could not exist without it). §8's
+"tier D advances needs statistically" is also already satisfied by
+construction, not by a separate path: needs decay by the time elapsed since
+*that agent's own* last think, so a 0.5 Hz tier-D agent ends up exactly as
+hungry as a 10 Hz tier-A one. **Nothing was rebuilt.**
+
+### The real gap: `agent.steering` cost nothing
+
+`steering` was computed per tier from phase 1 and read by **nothing but the
+debug overlay's own text**. Every agent ran the same full `navSteer` (plus, on
+a `MOVE_TO_ANCHOR`, an anchor resolve) on *every render frame* regardless of
+tier — so LOD throttled *thinking* and not *moving*, which is the more
+expensive half for an agent actually walking somewhere. Phase 8 makes the
+column real, in `core/Locomotion.ts`:
+
+- **full** (A/B) — every frame, byte-identical to every phase before this.
+- **simplified** (C) — the steering branch runs every `simplifiedInterval`
+  (0.15 s) and integrates the *whole banked dt*, so average speed is unchanged:
+  ~6.7 Hz against 60, a 9× cut, for agents that are out of frustum or 60 m+ away
+  by definition. The residual is a ~13 cm hop in a shadow.
+- **teleport** (D) — §8's "jump along their path in coarse steps", every 2 s
+  (deliberately tier D's own 0.5 Hz think period, so there is not a second
+  cadence to reason about), capped at 4 m per jump and clamped to the
+  straight-line distance remaining.
+
+`jumpAlongPath` walks the cached **polyline**, not the steering vector. That
+distinction only matters at this cadence: a 2 s jump is 1.8–3.2 m and
+`navSteer` advances its waypoint index within 1.1 m of a corner, so integrating
+a direction for that long would sail past the corner the path existed to route
+around and cut through the wall. At tier A/B the same integration covers 1.5–2.7
+*centimetres* per frame and the question never arises.
+
+### The freeze nobody had noticed
+
+`stepLocomotion` is called from `Villagers.tsx`/`Npc.tsx` — renderers, which
+only mount a figure for the region the player is standing in, i.e. precisely the
+set tier D excludes. So an off-region villager did not merely think slowly, it
+**held whatever Intent it had, motionless, until the player came back**: a
+villager caught mid-`haul_to_deposit` resumed the trip as if no time had passed.
+`stepUnrenderedAgents(dt)`, called once from `AiRuntime`'s existing `useFrame`
+after `agentManager.update`, is the caller that isn't a renderer. It sweeps only
+`steering === 'teleport'` agents, with an `actuatedAt` timestamp guard so it can
+never double-step one a renderer *is* driving (see below for why that case is
+not hypothetical).
+
+`tierChangeHooks` (a new hook list on `AgentManager`, registered from
+`Locomotion` — the same dependency direction `despawnHooks` already uses to
+avoid a confirmed-live circular-import crash) fires only when a tier actually
+*changes*. Its one listener implements §8's re-entry rule: on D→anything, drop
+the stale nav path (it was solved for a 0.5 Hz walker; handing it to 60 Hz
+steering makes the agent sprint the stale leg) and snap to the nearest walkable
+cell if the ground was built over while the agent was away.
+
+`rosterSync.mirrorVillagerPositions` had to stop fighting all of this: it
+copied the (frozen) mob position into `agent.position` every frame, which would
+have pinned a coarse-stepping agent in place. While unrendered the agent owns
+its position; a single write back to the mob happens on the frame it returns.
+The mob is deliberately left stale meanwhile rather than tracked live —
+`gameStore.villagerAtWork()` reads `villagerMobs` positions to decide whether a
+production timer keeps ticking, and a live mirror would change a shipped Wave
+9/10 economy path as a side effect of an LOD change.
+
+### `farDistance` — the threshold the spec's own table omits
+
+§8's B row reads "15 m to region's nav-window edge", which silently assumes
+every region *has* a window. The two fixed regions (home ±56 m, the Sealed
+Crypt) don't, so an agent 90 m down the meadow sat on B — 5 Hz thinks, full
+per-frame steering — purely for being inside a long third-person frustum.
+`farDistance` is 60, and that is **not a new opinion**: it is exactly
+`GRAPHICS_PROFILES.performance.characterLodDistance`, the distance this project
+already decided a rigged character stops being worth *drawing*, measured the
+same way against the same camera. One number, two systems, no second copy to
+drift. A new `distanceCapped` flag (kept separate from `boundCapped`, whose
+meaning is load-bearing for the window-bound smoke test) makes the overlay able
+to say *which* of C's three causes applied.
+
+### The ambient half: `wander`
+
+`idle_fidget` was already a real ambient action, but its Activity emits
+`PLAY_ANIM` and **only** `PLAY_ANIM` — standing-still fidgeting, never
+locomotion. So "background NPCs move around" was still 100% `Villagers.tsx`'s
+pre-AI cascade, and `wander` remained what `archetypes.json`'s own `_doc` called
+aspirational: an intrinsic id, first in the villager list since phase 1, with no
+Action behind it. `actions/wander.ts` + `config/ambient.json` give it one — the
+only registry addition in this whole wave that needed **no** `archetypes.json`
+edit to go live.
+
+**The scope decision, which is the one worth arguing.** `wander` is gated to
+tier-D roster villagers, and that is deliberate rather than timid:
+
+- An intent it emits is only ever *actuated* for a `steering === 'teleport'`
+  agent — `stepUnrenderedAgents` sweeps exactly that set, and every other tier
+  is by definition in the player's own region where a renderer is mounted.
+- Emitting one for anybody else would win the `MOVE_TO` splice at the **top** of
+  `Villagers.tsx`'s cascade (its first branch, iteration 3.3) and starve the
+  four branches below it of the frames they run in: the newcomer walking the
+  road in (`mob.arriving`, a flag that never clears if its branch never runs),
+  the Wave 9/10 worksite performance, the builder's construction site, and the
+  midday-market/evening-campfire rituals. At `ambient` 0.3 it wins whenever
+  nothing else scores — which for a `builder`, who has no work Action in this
+  reasoner at all, is essentially always.
+
+So the set of agents `wander` can safely move **is** the set nothing else is
+moving. A second gate (`bb.job !== null`) excludes court NPCs, which `npcSync`
+spawns under the same `'villager'` archetype and whose positions
+`mirrorNpcPositions` pins to their mob unconditionally — a quest giver who has
+left their post is a bug even when nobody is looking. A third check consults
+`VillagerFigure`'s own mount predicate directly, because `rosterSync` spawns
+every villager Agent with `region: null` regardless of its `world`, so "tier D"
+would stop implying "unrendered" the day Wave 4 residents become real.
+
+Geometry is lifted from the cascade rather than re-guessed (`WANDER_RADIUS` 14,
+its `2 + rand*(14-2)` ring), centred on `villagerHomeSpot` — load-bearing here
+in a way it isn't there, since a ring re-centred on each new position is a
+random walk and an unrendered agent can wander for a whole dungeon visit with
+nobody to notice it drifting. The pause between strolls is the Action's own
+`cooldown` (6 s), during which `idle_fidget` (cooldown 8) is the only thing left
+that can win: the cascade's own "walk somewhere, stand and look around, walk
+somewhere else" beat falls out of **composing the two existing ambient actions**
+rather than out of a third timer.
+
+### Open decisions the research flagged, and what was decided
+
+- **What "simplified" steering means with no local-avoidance layer to strip**
+  (§7.5's `Avoidance.js` still does not exist). Answered as *cadence*, not
+  *fidelity*: tier C runs the same steering less often and integrates the banked
+  dt, so nothing about the result changes, only how often it is recomputed.
+  Honest consequence: **C and A/B differ in cost, not behaviour.** A real
+  fidelity distinction stays blocked on avoidance not existing, and is left to
+  whoever builds it.
+- **Tier-D coarse step size/interval** — 2 s / 4 m cap, reasoned above.
+- **Re-entry snap** — reuses `NavGrid.nearestWalkable` at its own default
+  radius, which `findPath` has used since before this system existed, rather
+  than a new primitive.
+- **Which archetype `wander` attaches to** — the already-real `villager`, which
+  already listed it, not the never-spawned `ambient` one.
+
+**Deliberately not done:** no local avoidance (§7.5); no migration of
+`Villagers.tsx`'s cascade (`wander` is scoped precisely so it does not compete
+with it); no change to any Wave 3–10 system beyond `rosterSync`'s mirror, which
+phase 8's own coarse stepping made mandatory.
+
+**Nothing is persisted.** No `SaveGame` field added or changed — tier, steering
+mode, banked dt and wander targets are all transient, rebuilt within a frame.
+
+**Debug view (§0.5).** The `` ` `` panel header now reads `phase 8 · LOD +
+ambient`; the scheduler row gains **`COARSE n`** (agents coarse-stepped last
+frame — zero at home, and it should climb the instant the player steps through a
+portal; still zero there means the sweep is not reaching them and §8's whole
+tier-D path is silently inert), and the agent row now names *why* a tier was
+assigned — `(window edge)` or `(past 60m)` — since C's three causes are
+diagnosed completely differently. `wander` appears in SCORED ACTIONS with its
+three considerations, so a gate that is declining an agent says so on screen.
+
+**Verification:** `npx tsc --noEmit` clean. Not run live this session (`npm run
+dev`/`build` were out of scope per the task), so the behaviours above are
+reasoned from the real code paths, not observed. The one worth watching first is
+a portal round trip: `COARSE` should go non-zero, an idle villager's `wander`
+should start winning, and they should be somewhere else — on walkable ground —
+when the player comes home.
+
+---
+
+## Wave 11 — what the live verification pass found, and the fixes
+
+Phases 6/7/8 all shipped with the same honest caveat: typecheck-clean, reasoned
+from real code paths, **not observed running**. A live pass then drove the real
+`think()` → `tickSenses` → `tickReasoner` loop in the browser. Most of it held
+up (measured think rates per tier, real damage and a real kill through
+`engage_threat`, `wander`'s gates, mirror freeze/hand-back, decay and prune
+rates matching the config to three decimals). Four things did not, and all four
+were the kind of defect only running it can show.
+
+### 1. `take_cover` never once reached the cover it picked
+
+Observed in **4 of 4** independent scenarios. The villager noticed the raider,
+shouted, started running — and then the action gated out mid-flight and handed
+them back to `idle_fidget`, standing in the open. The "arrived, turn and watch"
+branch of `TakeCoverActivity` was never reached in any run.
+
+The cause is structural, not scenario-specific, and it is the action punishing
+itself for working: retreating turns the agent's yaw — and with it the 114.6°
+vision cone — away from the raider, so the belief stops being refreshed and
+decays at 0.25/s, while proximity falls at the same time for the same reason.
+Threat is the product of the two, so it was back under `minThreat` 0.4 within
+~3 s of losing sight, which is shorter than most cover runs. `minDuration` (2 s)
+could not help either: `pickAction` only protects a running action that is *not
+gated* (Reasoner.ts), and this one was gated.
+
+Fixed by giving `take_cover` three gate regimes instead of one threshold
+(`coverThreatInput`, takeCover.ts). `minThreat` 0.4 is now an **entry** number
+only; while travelling the gate reads a flat `cover.commitThreat` for up to
+`cover.commitSec` (12 s, a backstop — the phase normally ends by arriving, or by
+`bb.movement` reporting `blocked`, which counts); once stood down behind the
+piece it releases at `cover.sustainThreat` 0.15, renormalised onto the same
+curve so the score still decays smoothly rather than stepping. The Activity
+matches: a belief that fades mid-sprint no longer ends the run, only a fade
+*after* arrival does.
+
+`commitThreat` is 0.8 and not 1.0 for a reason worth keeping: at 1.0 the action
+sits on its 3.0 weight ceiling, which puts the reasoner's switch threshold
+(×1.25 momentum, ×1.15 to switch) at 4.31 — *above* `flee_to_safety`'s flat 4.0.
+Committing hard enough to finish a cover run would have quietly stopped a raid
+from ever pulling that villager home, trading one live bug for a worse one. At
+0.8 the bar is 3.35: over everything below survival (the best work action can
+reach 1.4), under flee. Phase 7's "during a raid nothing changes, flee still
+wins" is now arithmetic rather than an assumption.
+
+### 2. …and it flickered against `idle_fidget` around the 0.4 line
+
+Same root cause, second symptom: threat oscillating around a single threshold
+re-entered and re-exited the action four times in ~1.5 s, and each re-entry ran
+`chooseCover()` afresh from the new position and committed to a **different**
+destination. The hysteresis above is the fix — entry 0.4, release 0.15 — and the
+commitment window means a run in progress is never abandoned to be re-decided.
+No cooldown was added: a cooldown damps re-entry by making the correct behaviour
+impossible for N seconds, which is not the same thing.
+
+### 3. `chooseCover` silently discarded valid cover
+
+`sizeFor` and the nav grid do not agree about how big a building is: navgrid.ts
+inflates every collision box by `AGENT_RADIUS` 0.55 and then stamps whole 1.0 m
+cells, and a piece's collision volume is not always its authored display size.
+Measured first-walkable distances past the edge `sizeFor` reports: market_stall
+1.2 m, tower 1.5 m, storehouse 2.0 m — against a flat `standoff` of 1.2. So
+`market_stall`/`tower`/`forge`/`stable` worked and `storehouse` failed
+`isWalkable`, was dropped with no trace, and the villager ran 8 m into the open
+instead. "Get behind that building" worked or didn't depending on how the
+geometry happened to round.
+
+The stand point is now **probed outward along the same retreat ray** in
+`standoffStep` 0.5 increments up to `standoffProbe` 2.8 m past the ideal offset.
+Along that ray only, so every property the single offset had is preserved: the
+piece stays between villager and threat, and `minRetreatGain` only becomes
+easier to clear further out.
+
+### 4. A one-shot sound raised threat about half the time
+
+`hearing.confidence` 0.35 against `belief.noticedAt` 0.3 left a heard-only
+belief just `ln(0.35/0.3)/0.25` = **0.62 s** above the noticed threshold, and
+§3.3's per-agent reaction delay (0.2–0.6 s, rolled at spawn) is spent inside
+that window. Two identical runs of the same test — one combat sound at 5 m —
+gave threat 0.23 and threat 0.00, decided by nothing but which reaction time
+that agent happened to roll.
+
+`noticedAt` is now **0.2**, which widens the window to 2.24 s: more than three
+times the worst-case delay, so the "sound raises an eyebrow" behaviour lands on
+every agent instead of half of them. The ceiling a heard belief can reach is
+unchanged at 0.35, so it still cannot cross `cover.minThreat` 0.4 — the alarm's
+loop-freedom margin (combat.json's `cover._doc`) is untouched.
+
+### Still open
+
+- **`engage_threat` remains unreachable in the shipped game** and
+  `reportAgentDamaged()` still has no caller — both by design, both needing the
+  `rosterSync` defender-exclusion decision reversed first, which is its own
+  sign-off (see phase 7 above). Neither is a verification failure; the live pass
+  could only exercise the kill path by hand-building a defender-job agent.
+- **`take_cover`'s new numbers are reasoned, not yet re-observed live.**
+  `commitSec` 12 and `sustainThreat` 0.15 want a night-skeleton pass on a real
+  homestead: the villager should now finish the run, turn, watch for ~7–8 s, and
+  then go back to work — with the panel's new `COMBAT … committed 1.4/12s` /
+  `watching · release <0.15` marker saying which gate is holding them there.
 
 ---
 

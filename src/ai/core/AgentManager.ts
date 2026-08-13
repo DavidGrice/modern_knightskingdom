@@ -36,6 +36,20 @@ import { Scheduler } from './Scheduler';
 // cannot re-close the same loop.
 export const despawnHooks: ((id: string) => void)[] = [];
 
+/** Phase 8 (§8) — fired by `Agent.setTier()` whenever an agent's tier actually
+ *  CHANGES, never on a refresh that re-confirms the same one.
+ *
+ *  §8 asks for one behaviour no other part of this system can express: "when a
+ *  tier-D agent re-enters view, snap it to the nearest valid navmesh point and
+ *  resume normally." That is a navigation concern, and this module must not
+ *  import `game/navgrid.ts` — the same real, confirmed-live cycle break
+ *  `despawnHooks` above exists to route around ("Cannot access 'useGameStore'
+ *  before initialization" on every page load, which `next build` compiled
+ *  happily). So the dependency runs the same direction it already does:
+ *  `Locomotion.ts` imports THIS module and pushes its own hook at its own
+ *  module scope. Nothing else registers one today. */
+export const tierChangeHooks: ((agent: Agent, from: Tier, to: Tier) => void)[] = [];
+
 // §0.4 — scratch objects reused every LOD refresh, never reallocated
 const _viewProj = new THREE.Matrix4();
 const _frustum = new THREE.Frustum();
@@ -144,11 +158,13 @@ export class AgentManager {
     _viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_viewProj);
     const near2 = LOD.nearDistance * LOD.nearDistance;
+    const far2 = LOD.farDistance * LOD.farDistance;
     const radius = LOD.agentRadius;
     for (let i = 0; i < this.agents.length; i++) {
       const a = this.agents[i];
       let tier: Tier;
       a.boundCapped = false;
+      a.distanceCapped = false;
       if (a.region !== this.activeRegion) {
         tier = 'D';
       } else if (windowBounds && !inWindowBounds(a.position, windowBounds)) {
@@ -162,7 +178,21 @@ export class AgentManager {
         // bottom of the frame is still visible from the waist up
         _sphere.set(a.position, radius);
         if (!_frustum.intersectsSphere(_sphere)) tier = 'C';
-        else tier = camera.position.distanceToSquared(a.position) < near2 ? 'A' : 'B';
+        else {
+          // Phase 8 — the same camera distance the graphics LOD already
+          // measures (RiggedFigure.tsx), against three thresholds instead of
+          // two. `farDistance` is B's far bound: §8's own B row assumes every
+          // region has a nav window to cap it, and the two FIXED regions
+          // (home, the Crypt) don't, so an agent 90 m off across the meadow
+          // sat on B — 5 Hz thinks and full per-frame steering — purely for
+          // being inside a long third-person frustum. Beyond it they are
+          // already past the distance this project stops DRAWING characters
+          // at on Performance, which is where the number comes from.
+          const d2 = camera.position.distanceToSquared(a.position);
+          if (d2 < near2) tier = 'A';
+          else if (d2 < far2) tier = 'B';
+          else { tier = 'C'; a.distanceCapped = true; }
+        }
       }
       a.setTier(tier);
     }

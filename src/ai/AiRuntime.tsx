@@ -13,6 +13,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
 import { getNavGrid } from '@/game/navgrid';
 import { agentManager, type WindowBounds } from './core/AgentManager';
+import { stepUnrenderedAgents } from './core/Locomotion';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
 import { mirrorCourtAmbientPositions, syncCourtAmbientAgents } from './courtAmbientSync';
@@ -23,6 +24,13 @@ import { mirrorCourtAmbientPositions, syncCourtAmbientAgents } from './courtAmbi
 // entry point for the whole AI system per this file's own header comment.
 import './core/AnchorResolution';
 import './core/Reasoner';
+// phase 6, §6 — side-effect import: `src/ai/perception/index.ts` calls
+// `registerSenses()` at its own module load, which is the only thing that
+// makes `Agent.think()`'s `tickSenses` call do anything. Same pattern (and
+// same reason) as `./actions` below: neither may be imported from `Agent.ts`
+// directly without re-closing a circular import that has already broken this
+// app once for real — see `core/Perception.ts` and `core/Reasoner.ts`.
+import './perception';
 import './actions';
 
 /** Phase 1's one NPC: it ticks, decays its needs, and prints. Parked a few
@@ -95,6 +103,17 @@ export default function AiRuntime() {
       }
     }
     agentManager.update(dt, camera, st.destination ?? null, windowBounds);
+    // Phase 8, §8 — "tier D agents ... jump along their path in coarse steps."
+    // Every other tier is actuated by a renderer (Villagers.tsx/Npc.tsx call
+    // stepLocomotion from their own useFrame), but a renderer only mounts a
+    // figure for the region the player is standing in — which is precisely the
+    // set tier D excludes. Without this call an off-region villager holds
+    // whatever Intent it had, motionless, until the player comes back.
+    // AFTER agentManager.update on purpose: refreshTiers runs in there, so
+    // this sweep acts on this frame's tiers rather than the last one's, and a
+    // D->A transition has already fired its re-entry snap by the time we get
+    // here. Internally throttled — see stepUnrenderedAgents' own header.
+    stepUnrenderedAgents(dt);
   });
 
   return null;

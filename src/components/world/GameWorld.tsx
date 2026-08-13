@@ -43,6 +43,7 @@ import Cannonballs from '../combat/Cannonballs';
 import Bolts from '../combat/Bolts';
 import ArenaSpawner from '../combat/ArenaSpawner';
 import AiRuntime from '@/ai/AiRuntime';
+import AIPerceptionGizmos from '@/ai/debug/AIPerceptionGizmos';
 
 export default function GameWorld() {
   const buildMode = useGameStore((s) => s.buildMode);
@@ -116,6 +117,11 @@ export default function GameWorld() {
       <ArenaSpawner />
       {/* NPC_AI_SPEC §2 — steps the agent scheduler; renders nothing */}
       <AiRuntime />
+      {/* §9's scene gizmos (phase 6): vision cones + belief markers. Always
+          mounted, drawing nothing until Alt+` turns it on — the geometry is
+          preallocated once and the per-frame path early-outs on a boolean,
+          so an off gizmo layer costs one branch. */}
+      <AIPerceptionGizmos />
     </>
   );
 }
