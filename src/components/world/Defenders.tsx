@@ -9,7 +9,7 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, lootFor, KIND_LABEL, type EnemyData } from '@/game/combat';
-import { registerDefender, defenderOrders, scoutReported } from '@/game/defenders';
+import { registerDefender, defenderOrders, defenderStrike, scoutReported } from '@/game/defenders';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
 import { chestplateHp, chestplateTierOf } from '@/game/data/armor';
@@ -342,10 +342,12 @@ function DefenderFigure({ villager }: { villager: Villager }) {
         // Courage (Phase 24A) weights the swing; Riposte trait adds steel;
         // a bare-fisted defender (no Armory weapon spent on them yet) hits
         // noticeably softer than one armed with sword/halberd — real reason
-        // to spend that stock rather than leaving the roster unarmed
-        const meleeBase = loadout ? 3 : 1;
-        const dmg = (loadout === 'bow' ? 2 : meleeBase) + level + Math.floor((attrsOf(villager.id).courage - 5) / 3)
-          + (hasTrait(villager, 'def_riposte') ? 1 : 0);
+        // to spend that stock rather than leaving the roster unarmed.
+        // Wave 11 · the expression itself moved to `defenderStrike`
+        // (game/defenders.ts), term for term, so the AI reasoner's own
+        // `engage_threat` action swings for exactly this and cannot drift
+        // from it — see that function's comment.
+        const dmg = defenderStrike(villager);
         target.hp -= dmg;
         if (target.hp <= 0 && target.mob.state !== 'dying') {
           target.mob.state = 'dying';

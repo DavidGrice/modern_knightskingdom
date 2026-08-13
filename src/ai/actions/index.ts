@@ -20,6 +20,27 @@
 // to the villager archetype's `intrinsic` list (config/archetypes.json) —
 // `assembleCandidates` silently skips any registered action an archetype was
 // never offered, so registering alone would have made both permanently inert.
+//
+// Wave 11 / phase 7 adds the first two `combat`-category actions this registry
+// has ever held — `take_cover` (takeCover.ts) and `engage_threat`
+// (engageThreat.ts). Both category values (`CATEGORY_WEIGHT.combat` 3.0,
+// `CATEGORY_INTERRUPT_PRIORITY.combat` 8) have been defined in `Reasoner.ts`
+// since phase 5 and used by nothing until now. `take_cover` is also added to
+// the villager archetype's `intrinsic` list (config/archetypes.json) —
+// `assembleCandidates` silently skips any registered action an archetype was
+// never offered, so registering alone would have made it permanently inert.
+// `engage_threat` is deliberately NOT added to `villager`: it is already listed
+// for `guard`, and its own capability gate can never pass for a villager (see
+// that file's header for the full population argument).
+//
+// Wave 11 / phase 8 adds `wander` (wander.ts) — the last of the three ids
+// archetypes.json's own `_doc` has been calling aspirational since phase 1
+// (`wander`/`socialize`/`idle`) to get a real Action, and the only registry
+// entry here that needs NO archetypes.json edit to take effect: `wander` has
+// been first in the villager list since that file was written. It carries its
+// own capability gate instead (tier D / roster villager), for the reasons its
+// header sets out — registering it is what makes §8's coarse stepping have
+// something to step for an agent no renderer is mounting.
 import { registerActions, type Action } from '../core/Reasoner';
 import { FLEE_TO_SAFETY } from './flee';
 import { SLEEP } from './sleep';
@@ -29,16 +50,19 @@ import { SEEK_DEPOSIT } from './seekDeposit';
 import { TEND_FARMPLOT } from './farm';
 import { IDLE_FIDGET } from './ambient';
 import { NOTICE_PLAYER } from './notice';
+import { TAKE_COVER } from './takeCover';
+import { ENGAGE_THREAT } from './engageThreat';
+import { WANDER } from './wander';
 
 export const ACTIONS: Action[] = [
   FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
-  IDLE_FIDGET, NOTICE_PLAYER,
+  IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, WANDER,
 ];
 registerActions(ACTIONS);
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkactions = {
     FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
-    IDLE_FIDGET, NOTICE_PLAYER,
+    IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, WANDER,
   };
 }

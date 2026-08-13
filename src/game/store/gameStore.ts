@@ -20,6 +20,7 @@ import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { resetNpcAgentSync } from '@/ai/npcSync';
 import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
+import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SELL_PRICES } from '../data/trade';
@@ -867,6 +868,9 @@ function createGameStore() {
       resetNpcAgentSync();
       resetCourtAmbientAgentSync();
       targetRegistry.clear();
+      // §6.2 — the AI's world-sound ring is module state too: a fresh session
+      // must not have two seconds of the last one's combat still audible.
+      resetSounds();
       clearAllWorkSignals();
       set({
         character,
@@ -905,6 +909,9 @@ function createGameStore() {
       resetNpcAgentSync();
       resetCourtAmbientAgentSync();
       targetRegistry.clear();
+      // §6.2 — the AI's world-sound ring is module state too: a fresh session
+      // must not have two seconds of the last one's combat still audible.
+      resetSounds();
       clearAllWorkSignals();
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];

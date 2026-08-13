@@ -1,7 +1,14 @@
 # `src/ai` — NPC AI system
 
-Implements [`NPC_AI_SPEC.md`](NPC_AI_SPEC.md). **Phase 1 only** is built
-(spec §10.1: skeleton + debug overlay). Phases 2–9 are not started.
+Implements [`NPC_AI_SPEC.md`](NPC_AI_SPEC.md).
+
+> **This file's own status sections below are stale** — they still describe the
+> phase-1 tree, and were not updated as phases 2–8 shipped (noticed during Wave
+> 11's phase 7, flagged rather than silently half-fixed: bringing them current
+> means rewriting seven phases of file map and acceptance checks, which is its
+> own pass). **[`PHASE_STATUS.md`](PHASE_STATUS.md) is authoritative for what is
+> built**; the "Adaptations from the spec" table below is still accurate and is
+> the reason to keep reading this file.
 
 ## Which file do you want?
 
