@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { BUILD_REGION } from '@/game/data/buildables';
+import { DOWNS, DOWNS_PEAK, downsSurfaceY } from '@/game/data/downs';
 import { BATTLE_DOME, CEDRIC_CAMP, CEDRIC_WORLD, KEEP_INTERIOR, POND, STORM_WORLD, WORLD_HALF } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
@@ -73,6 +74,29 @@ export default function Minimap() {
 
       const cb = colorblindRef.current;
       if (!dest) {
+        // Wave 12 · the North Downs, shaded by height — drawn FIRST, because
+        // it is ground and everything else stands on it. Bands rather than an
+        // outline: every other thing on this map is a rectangle or a ring, and
+        // a hill drawn as one more outline reads as another fenced rectangle
+        // instead of as the only place on the homestead that goes up. Sampled
+        // from the field rather than handed the shape, so re-authoring the
+        // hill never leaves a stale drawing of the old one here. It is also
+        // the only reason the prototype is findable: nothing else in the game
+        // points 90m north.
+        {
+          const cells = 22;
+          const step = (DOWNS.half * 2) / cells;
+          for (let i = 0; i < cells; i++) {
+            for (let j = 0; j < cells; j++) {
+              const wx = DOWNS.x - DOWNS.half + (i + 0.5) * step;
+              const wz = DOWNS.z - DOWNS.half + (j + 0.5) * step;
+              const h = downsSurfaceY(wx, wz);
+              if (h <= 0) continue; // still buried under the meadow — not ground you can see
+              ctx.fillStyle = `rgba(122, 98, 56, ${(0.22 + (h / DOWNS_PEAK) * 0.5).toFixed(3)})`;
+              ctx.fillRect(px(wx - step / 2), pz(wz - step / 2), step * k + 1, step * k + 1);
+            }
+          }
+        }
         // homestead dressing only ever draws on the homestead's own map
         ctx.strokeStyle = 'rgba(232, 193, 65, 0.6)';
         ctx.lineWidth = 1;
@@ -85,6 +109,13 @@ export default function Minimap() {
         ctx.beginPath();
         ctx.arc(px(POND.x), pz(POND.z), POND.radius * k, 0, Math.PI * 2);
         ctx.fill();
+        // Wave 12 · the player's own waterways, in the pond's own blue — a
+        // moat you cannot see on the map is a moat you will walk into. Read
+        // from the store copy rather than the leaf module because this whole
+        // draw already runs off one `getState()`.
+        for (const w of st.waterworks) {
+          ctx.fillRect(px(w.x - w.halfX), pz(w.z - w.halfZ), w.halfX * 2 * k, w.halfZ * 2 * k);
+        }
         // resources — colorblind palette swaps green/green-ish pairs (tree vs
         // herb) for tones that stay distinct under deuteranopia/protanopia
         for (const n of st.nodes) {

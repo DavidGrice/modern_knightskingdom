@@ -34,7 +34,8 @@ import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '@/game
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
-import { destinationGroundY } from '../world/TemplateWorld';
+import { pushOutOfWater } from '@/game/waterworks';
+import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
 import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labIsLadder, labOccupyMode } from '@/game/data/labCapabilities';
 import { aimState, resolveAim } from '@/game/targeting';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
@@ -79,6 +80,10 @@ const _camLookDirV = new THREE.Vector3();
 const _camPosV = new THREE.Vector3();
 const _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _lookAtV = new THREE.Vector3();
+/** Wave 12 · floorHeightAt's terrain out-param (see its signature). Same
+ *  never-stored-past-the-statement-that-reads-it contract as the vectors
+ *  above, and safe for the same reason: PlayerController is a singleton. */
+const _terrainOut = { y: 0 };
 
 /** J49 · the most hammer swings any one piece can ask for. At the hold
  *  duration below that is a bit over half a minute for the Grand Keep, and
@@ -179,8 +184,28 @@ function floorHeightAt(
   x: number,
   z: number,
   feetY: number,
+  // Wave 12 · optional out-param for the bare-ground height this resolved
+  // against, so the caller can tell "standing on the earth" from "standing on
+  // something someone built" without paying for a second terrain probe. Same
+  // shape as climbTargetFor's own `info` out-param, and for the same reason:
+  // one extra fact for one caller, without changing the return type every
+  // other call site would then have to unpack.
+  terrain?: { y: number },
 ): number {
-  let floor = 0;
+  // Wave 12 · the ground itself, at last. This used to be a literal `let
+  // floor = 0` — the single line that made the homestead flat by construction
+  // rather than by convention, since nothing below it ever looked at terrain.
+  // `homeGroundY` is 0 everywhere except inside the North Downs prototype
+  // (game/data/downs.ts), so this is exactly the old behaviour with one 68m
+  // square carved out of it.
+  //
+  // Terrain is the BASELINE, not a candidate: a building top has to be within
+  // STEP_UP to be climbed onto, but you cannot fail to step onto the earth.
+  // Everything below still compares against `floor`, so a crate standing on
+  // the hillside is measured from the hillside, and a crate at the bottom of
+  // it is correctly ignored while you are on top.
+  let floor = homeGroundY(x, z);
+  if (terrain) terrain.y = floor;
   for (const b of st.buildings) {
     if (!isBuilt(b)) continue; // a construction-site ghost holds no one's weight
     // the rig lab checked, per asset, whether a minifig can actually stand on
@@ -315,6 +340,10 @@ export default function PlayerController() {
   const keys = useRef<Record<string, boolean>>({});
   const pad = useRef<Record<string, boolean>>({});
   const grounded = useRef(true);
+  // Wave 12 · was the player standing on bare ground last frame, rather than on
+  // something built? The ledge test in the frame loop needs the PREVIOUS
+  // answer, not just this one — see it for why.
+  const wasOnOpenGround = useRef(true);
   // requested 2026-08-03: the lava arena's own ambient chip damage — a
   // once-per-second tick through the normal damagePlayer() path (so armor/
   // block still apply), not a per-frame call, which would spam the hit
@@ -1463,6 +1492,17 @@ export default function PlayerController() {
           }
         }
         {
+          // Wave 12 · and out of any waterway you have had cut. Direct
+          // rectangle math in the movement resolver, deliberately alongside
+          // the pond's circle above rather than routed through navBlocked():
+          // the player is not a nav-grid walker, and the pond has always
+          // stopped them here, so the water they dug themselves must stop them
+          // in exactly the same place and in exactly the same way.
+          const out = pushOutOfWater(nx, nz, PLAYER_RADIUS);
+          nx = out.x;
+          nz = out.z;
+        }
+        {
           // the keep's great hall is a permanent sealed fixture — bump into
           // it from outside like any other solid structure (no walk-in door)
           const hx = KEEP_INTERIOR.halfX + 0.4 + PLAYER_RADIUS;
@@ -1508,11 +1548,27 @@ export default function PlayerController() {
       }
 
       // gravity / jump, standing on whatever structure is underfoot
-      const floorY = riding
-        ? (st.destination ? destinationGroundY(p.x, p.z) : 0)
-        : st.destination ? destinationGroundY(p.x, p.z)
-        : floorHeightAt(st, p.x, p.z, p.y - eyeOff);
+      // Wave 12 · the mounted branch reads the ground too. A rider is
+      // deliberately NOT put through floorHeightAt (a horse does not step onto
+      // a barrel), but "no structures" is not "no terrain" — leaving this at 0
+      // would have ridden the player straight through the hillside.
+      let floorY: number;
+      if (st.destination) {
+        floorY = destinationGroundY(p.x, p.z);
+      } else if (riding) {
+        floorY = _terrainOut.y = homeGroundY(p.x, p.z);
+      } else {
+        floorY = floorHeightAt(st, p.x, p.z, p.y - eyeOff, _terrainOut);
+      }
       const groundEye = floorY + eyeOff;
+      // Wave 12 · is the thing holding us up the GROUND, or something standing
+      // on it? Only the ledge test below cares, and only at home — a
+      // destination bake is all terrain and keeps its existing behaviour
+      // untouched. Two frames of it, because the answer alone is not enough:
+      // see where it is read.
+      const onOpenGround = !st.destination && floorY <= _terrainOut.y + 1e-6;
+      const slopeUnderfoot = onOpenGround && wasOnOpenGround.current;
+      wasOnOpenGround.current = onOpenGround;
       if (grounded.current && isDown(kb.jump) && !riding) {
         vel.current.y = 5;
         grounded.current = false;
@@ -1525,8 +1581,20 @@ export default function PlayerController() {
           vel.current.y = 0;
           grounded.current = true;
         }
-      } else if (p.y > groundEye + 0.08) {
-        // walked off an edge
+      } else if (p.y > groundEye + 0.08 && !slopeUnderfoot) {
+        // walked off an edge — Wave 12: unless the GROUND is what dropped, and
+        // it was ground last frame too. This is a LEDGE test, and terrain has
+        // no ledges; it slopes. The follow-lerp below trails a descent by
+        // roughly (vertical speed / 12), which is 0.11m at nothing more than a
+        // walk down the North Downs — unqualified, the test fired on every
+        // single frame of the descent and the player bounced down the hill in
+        // a stutter of little falls instead of running down it. A slope now
+        // falls through to that lerp and stays grounded. BOTH frames have to be
+        // open ground: stepping down off a crate is a real step down (that
+        // floor genuinely ended one frame ago) and a battlement must still drop
+        // you. The one thing it also smooths is dismounting — same ground
+        // before and after, only the eye height changed — which used to be a
+        // short involuntary fall and is now the ease that mounting always was.
         grounded.current = false;
         vel.current.y = 0;
       } else if (Math.abs(p.y - groundEye) > 0.005) {
@@ -1707,7 +1775,14 @@ export default function PlayerController() {
       _camLookDirV.set(0, 0, -1).applyEuler(_camEuler);
       _camPosV.copy(_eyeV).addScaledVector(_camLookDirV, -4.6);
       _camPosV.y += 0.9;
-      if (_camPosV.y < 0.35) _camPosV.y = 0.35;
+      // Wave 12 · the chase camera's own "don't sink into the floor" clamp was
+      // a bare 0.35 — a flat-world assumption, and a visible one the moment
+      // there is a hill: looking down the slope swings the camera behind and
+      // BELOW the player, and 0.35 above sea level is several metres inside the
+      // North Downs. Clamped against the ground under the CAMERA rather than
+      // under the player, which is where it is actually trying not to be.
+      const camFloor = homeGroundY(_camPosV.x, _camPosV.z) + 0.35;
+      if (_camPosV.y < camFloor) _camPosV.y = camFloor;
       camera.position.copy(_camPosV);
       _lookAtV.copy(_eyeV).addScaledVector(_camLookDirV, 2.5);
       camera.lookAt(_lookAtV);

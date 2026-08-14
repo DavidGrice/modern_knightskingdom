@@ -26,11 +26,12 @@ import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD, POND, WORLD_HALF } from
 import { sizeFor } from '@/game/data/buildables';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { roadEntry } from '@/game/data/road';
+import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
 import { defenderState } from '@/game/defenders';
 import { dungeonState } from '@/game/dungeon';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
-import { destinationGroundY } from '../world/TemplateWorld';
+import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
 
 const CONFIGS: Record<string, CharacterConfig> = {
   skeleton: {
@@ -219,7 +220,7 @@ function Enemy({ data }: { data: EnemyData }) {
               m.z += (sz / sd) * (1.1 - sd) * 0.5;
             }
           }
-          g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : 0, m.z);
+          g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : homeGroundY(m.x, m.z), m.z);
           g.rotation.y = m.yaw + Math.PI;
           if (clip !== 'anim_c_run') setClip('anim_c_run');
           return;
@@ -251,7 +252,7 @@ function Enemy({ data }: { data: EnemyData }) {
         m.z += nz * 3.0 * dt;
         m.yaw = Math.atan2(-nx, -nz);
         if (away > 44) { remove(data.id); return; }
-        g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : 0, m.z);
+        g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : homeGroundY(m.x, m.z), m.z);
         g.rotation.y = m.yaw + Math.PI;
         if (clip !== 'anim_c_run') setClip('anim_c_run');
         return;
@@ -450,6 +451,13 @@ function Enemy({ data }: { data: EnemyData }) {
           m.x = POND.x + ((m.x - POND.x) / pd) * (POND.radius + 1);
           m.z = POND.z + ((m.z - POND.z) / pd) * (POND.radius + 1);
         }
+        // Wave 12 · and out of the player's own waterways, inside the same
+        // home-only guard for the same reason. This is what makes a moat a
+        // moat: raiders walk in by the road (roadEntry) and a cut across their
+        // approach genuinely turns them, rather than being scenery they wade.
+        const out = pushOutOfWater(m.x, m.z, 0.6);
+        m.x = out.x;
+        m.z = out.z;
         m.x = THREE.MathUtils.clamp(m.x, -WORLD_HALF + 2, WORLD_HALF - 2);
         m.z = THREE.MathUtils.clamp(m.z, -WORLD_HALF + 2, WORLD_HALF - 2);
       }
@@ -474,7 +482,18 @@ function Enemy({ data }: { data: EnemyData }) {
     // Phase 20: away from the flat homestead, enemies stand on the bake's
     // real terrain (Storm's Sister Keep duel ring, Cedric's Rival Castle
     // camp, the dungeon's own floor all raycast against the mounted root)
-    g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : 0, m.z);
+    //
+    // Wave 12 · and the home branch is no longer a literal 0. This is the ONE
+    // NPC-side y=0 the elevation prototype touches, and only because raiders
+    // are the one kind of walker that can actually get to the North Downs:
+    // they chase whatever is within 26m of them, so a player who pulls a raid
+    // and runs north takes the whole pack up the hill with them. Villagers,
+    // court NPCs and defenders are all anchored inside the holding, ~90m short
+    // of the box and outside the nav grid entirely — their hardcoded 0 is out
+    // of reach rather than merely unlikely, and is deliberately left alone.
+    // `homeGroundY` is 0 everywhere but the prototype's own square, so this
+    // changes nothing anywhere else in the world.
+    g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : homeGroundY(m.x, m.z), m.z);
     g.rotation.y = m.yaw + Math.PI;
 
     const want =

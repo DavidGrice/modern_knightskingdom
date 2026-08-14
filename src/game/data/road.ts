@@ -2,6 +2,14 @@
 //
 // Kept out of the component so the node seeder and the ground layout can both
 // reason about where the road runs without pulling three.js into the store.
+//
+// Wave 12 · this went from one lane with a stub branch to a NETWORK reaching
+// all six resource grounds. It is worth being clear that the road was never
+// decoration even before that: `onRoad()` below feeds the player's
+// ROAD_SPEED_MULT (PlayerController) and navgrid.ts discounts road cells for
+// A* (ROAD_STEP_MULT), so laying a leg toward a ground makes walking to that
+// ground genuinely faster and makes NPCs genuinely prefer it — no new pathing
+// concept was needed for the extension, only new cells.
 import { SIGNPOST } from './world';
 
 /** 256mm at the wall family's unified k=0.05 */
@@ -45,7 +53,20 @@ export const PIECES: { id: string; mask: number }[] = [
 export { N, E, So, W };
 
 /** how much of a plate's width the printed road takes — sampled off spr164,
- *  whose sand runs from 27% to 72% across the tile */
+ *  whose sand runs from 27% to 72% across the tile.
+ *
+ *  Worth knowing, because it surprises anyone who measures it: two fixed props
+ *  stand INSIDE this width and therefore report `onRoad()` true — SIGNPOST
+ *  (-16, 36) at 2.40m off the centreline and MERCHANT_SPOT (-37.5, 40) at
+ *  1.60m, against a half width of 2.88. Both predate Wave 12's network: the
+ *  old seven-cell route already laid the same plates under them (verified
+ *  against git HEAD, identical distances). Left alone deliberately — a
+ *  roadside sign and a pedlar's cart parked on the road are where those two
+ *  belong, SIGNPOST is what the whole network is anchored to (moving it slides
+ *  every leg), and Merchant.tsx's walk-in timing is tuned to the distance from
+ *  `roadEntry()` to MERCHANT_SPOT. The one real consequence is that standing
+ *  at either grants ROAD_SPEED_MULT, and that a dig over the signpost is
+ *  refused as road rather than as signpost (see waterworks.ts). */
 export const ROAD_HALF_WIDTH = ROAD_TILE * 0.45 / 2;
 
 /**
@@ -61,24 +82,80 @@ export function rotMask(mask: number, quarters: number): number {
   return m;
 }
 
-/** the cells the road runs through, in tile coordinates */
-const CELLS: [number, number][] = (() => {
-  const sx = Math.round(SIGNPOST.x / ROAD_TILE);
-  const sz = Math.round(SIGNPOST.z / ROAD_TILE);
-  return [
-    // the run out of the homestead, north past the signpost
-    [0, sz - 1],
-    [0, sz],
-    // west along the signpost's own row, to the edge of the map
-    [sx, sz],
-    [sx - 1, sz],
-    [sx - 2, sz],
-    // and a branch running north from the junction, so the T and the corner
-    // both appear where the set intends them to
-    [sx, sz + 1],
-    [sx, sz + 2],
-  ];
-})();
+/** The signpost's own tile. Every leg below is anchored to it, so moving
+ *  SIGNPOST slides the whole network as one piece instead of tearing a leg
+ *  off the junction. Where a leg ENDS is a separate question: those cells are
+ *  chosen against the resource grounds, which do not move with the signpost —
+ *  Grounds.tsx asserts that pairing rather than trusting it. */
+const SX = Math.round(SIGNPOST.x / ROAD_TILE); // -1
+const SZ = Math.round(SIGNPOST.z / ROAD_TILE); //  3
+
+/**
+ * Wave 12 · the road as LEGS — one polyline of waypoints per run of road,
+ * where this was a single flat waypoint list through Wave 11.
+ *
+ * A flat list can only describe an unbranched walk, so a branch had to be
+ * written as an out-and-back detour, and the waypoints that walk BACK to the
+ * junction are real entries both consumers below then have to absorb
+ * (`routeCells()` de-duplicates the repeat; `roadSegments()` emits a harmless
+ * overlapping duplicate). With one lane and one branch that was a footnote.
+ * With six resource grounds to reach, half the array would have been retrace.
+ *
+ * Nothing declares "this is a T": a leg that starts on a cell another leg
+ * already lays IS the junction, because Road.tsx works every piece out from
+ * whatever neighbours a cell turns out to have.
+ *
+ * Each leg stops at the closest cell to its ground that does not put a 12.8m
+ * plate across the ground's own fenced rectangle — Grounds.tsx checks both
+ * halves of that (no crossing, and still within ROAD_REACH of the gate),
+ * because the grounds are edited live at /secret/worldeditor while these legs
+ * are hand-written here, which is exactly the pairing that comes silently
+ * apart.
+ *
+ * Worth knowing about the outer legs: the AI's road preference is a mask on
+ * the HOME nav grid, which is only ±56m (src/ai/config/navgrid.json), so
+ * beyond that the new legs buy the player's own ROAD_SPEED_MULT and the
+ * legibility of a road that visibly goes somewhere, not NPC path preference.
+ */
+const LEGS: [number, number][][] = [
+  // 1 · the run out of the homestead, past the signpost.
+  [[0, SZ - 1], [0, SZ]],
+
+  // 2 · the signpost's own row, running west past the starter village, under
+  // Northwood Stand's southern fence (its gate is 9.2m off the pavement — a
+  // plate one cell further north would sit ON the stand), then turning at
+  // x-cell -9 up to the Deepwood's gate. ONE trunk for both tree grounds
+  // rather than two independent spurs: they lie in the same direction and
+  // the Deepwood's own leg has to pass Northwood to get there anyway. The
+  // turn is at -9 and not -8 so the northward run stays 27m clear of
+  // Northwood's west fence — at -8 that fence, not the southern one the
+  // trunk already serves, would have been the nearest road to it, and the
+  // boundary stone would have jumped to the far side of the stand.
+  [[0, SZ], [SX - 8, SZ], [SX - 8, SZ + 3]],
+
+  // 3 · the short branch off the junction to the Herb Meadow's gate. Kept
+  // exactly as long as it was (it already ended within reach of the meadow),
+  // and still the cell every newcomer walks in from — see ENTRY_CELL.
+  [[SX, SZ], [SX, SZ + 2]],
+
+  // 4 · the east road: along the homestead's southern edge, past the pond's
+  // south shore, then north past the Old Quarry to the Iron Seam. Both rock
+  // grounds hang off one trunk rather than getting ~150m of road each.
+  //
+  // This row is the ONLY eastward corridor there is. The pond (52,42 r8 — a
+  // nav-blocking terrain exclusion, not just scenery) and the Home Grove's
+  // fenced rectangle together wall off every row from z-cell 3 to z-cell 6,
+  // and a plate at (3,3) would put its east edge inside the pond's own sand
+  // ring. The price is its first three cells lying inside BUILD_REGION's
+  // widest (Barony) extent: accepted, because road plates are scenery and not
+  // `buildings` — they occupy no build square and refuse no placement — and
+  // the road already ran to (0, 25.6) before this.
+  [[0, SZ - 1], [10, SZ - 1], [10, SZ + 4]],
+
+  // 5 · the Home Grove's turn-off, one plate north off the east road. Dead
+  // ends (Road.tsx lays a straight through it) pointing at the grove's gate.
+  [[2, SZ - 1], [2, SZ]],
+];
 
 /** de-duplicated, and filled in so a jump of more than one cell still joins up */
 export function routeCells(): [number, number][] {
@@ -90,29 +167,100 @@ export function routeCells(): [number, number][] {
     seen.add(k);
     out.push([x, z]);
   };
-  for (let i = 0; i < CELLS.length; i++) {
-    const [x, z] = CELLS[i];
-    const prev = out.length ? out[out.length - 1] : null;
-    if (prev && (prev[0] !== x || prev[1] !== z)) {
-      // walk in a straight line from the last cell to this one, x first
-      let [cx, cz] = prev;
-      while (cx !== x) { cx += Math.sign(x - cx); push(cx, cz); }
-      while (cz !== z) { cz += Math.sign(z - cz); push(cx, cz); }
+  for (const leg of LEGS) {
+    // `prev` is the previous WAYPOINT, not `out`'s last entry: where a leg
+    // starts on cells an earlier leg already laid, every fill step and the
+    // waypoint itself de-duplicate away, and `out`'s tail is then some
+    // unrelated cell a whole leg away — which the fill would happily draw a
+    // line to. (Latent before Wave 12 only because there was one leg.)
+    let prev: [number, number] | null = null;
+    for (const [x, z] of leg) {
+      if (prev && (prev[0] !== x || prev[1] !== z)) {
+        // walk in a straight line from the last waypoint to this one, x first
+        let cx: number = prev[0];
+        let cz: number = prev[1];
+        while (cx !== x) { cx += Math.sign(x - cx); push(cx, cz); }
+        while (cz !== z) { cz += Math.sign(z - cz); push(cx, cz); }
+      }
+      push(x, z);
+      prev = [x, z];
     }
-    push(x, z);
   }
   return out;
 }
 
 /**
- * Where someone coming to the homestead steps onto the map: the far end of
- * the road, the last cell the route reaches. Newcomers walk in from here
- * (see villagerMobs.arriveByRoad) rather than appearing on the doorstep.
+ * Where someone coming to the homestead steps onto the map. Newcomers walk in
+ * from here (see villagerMobs.arriveByRoad) rather than appearing on the
+ * doorstep.
+ *
+ * PINNED to the herb-meadow branch's own end rather than "whatever cell
+ * `routeCells()` happens to return last", which is what this was through Wave
+ * 11. The road is a network now, so there is no single far end, and array
+ * order would have quietly relocated every arrival the moment a leg was
+ * appended — the villager walk-in, Merchant.tsx's OFF_STAGE (its whole
+ * walk-in/walk-out timing is tuned against the distance from here to
+ * MERCHANT_SPOT) and CedricSiege.tsx's muster all read this. This is the
+ * exact cell all three were tuned around.
  */
+const ENTRY_CELL: [number, number] = [SX, SZ + 2];
 export function roadEntry(): { x: number; z: number } {
-  const cells = routeCells();
-  const [cx, cz] = cells[cells.length - 1] ?? [0, 0];
-  return { x: cx * ROAD_TILE, z: cz * ROAD_TILE };
+  return { x: ENTRY_CELL[0] * ROAD_TILE, z: ENTRY_CELL[1] * ROAD_TILE };
+}
+
+/** How close a ground's gate has to be to the carriageway to count as
+ *  "the road reaches it" — a plate's own half width plus one plate of grass,
+ *  i.e. a field gate you can see the road from. Asserted in Grounds.tsx. */
+export const ROAD_REACH = ROAD_TILE * 1.5;
+
+/**
+ * Where the road meets a fenced section (a Ground, a cultivated plot): the
+ * point on the section's own boundary nearest the road, which is where its
+ * boundary stone belongs — the road arriving at one edge and the stone
+ * standing on another is the whole "does this road go anywhere" question
+ * answered wrong.
+ *
+ * Takes the rectangle structurally rather than importing grounds.ts, for the
+ * same reason this file exists at all: the store's seedNodes has to be able
+ * to pull the road in without dragging the ground tables (or React) behind
+ * it, and this way a cultivated plot works too without inheriting the deed.
+ *
+ * Ties break toward the section's centre. The east road passes the Old
+ * Quarry's west fence at two cells that are both exactly 8m off it; the one
+ * level with the quarry reads as its gate, the corner one as an accident.
+ */
+export function roadGateFor(s: { x: number; z: number; halfX: number; halfZ: number }): { x: number; z: number } {
+  let best = { x: s.x, z: s.z - s.halfZ };
+  let bestD = Infinity;
+  let bestToCentre = Infinity;
+  for (const [cx, cz] of routeCells()) {
+    const px = cx * ROAD_TILE, pz = cz * ROAD_TILE;
+    // no plate ever lies inside a section (Grounds.tsx asserts it), so
+    // clamping the plate's centre onto the rectangle IS the nearest point of
+    // its boundary
+    const qx = Math.max(s.x - s.halfX, Math.min(s.x + s.halfX, px));
+    const qz = Math.max(s.z - s.halfZ, Math.min(s.z + s.halfZ, pz));
+    const d = Math.hypot(px - qx, pz - qz);
+    const toCentre = Math.hypot(px - s.x, pz - s.z);
+    if (d < bestD - 1e-6 || (d < bestD + 1e-6 && toCentre < bestToCentre)) {
+      bestD = d;
+      bestToCentre = toCentre;
+      best = { x: qx, z: qz };
+    }
+  }
+  return best;
+}
+
+/** How far out the road's verge trees are planted (see gameStore's seedNodes).
+ *  The verge pass was written when the road was seven plates by the homestead;
+ *  run over the whole Wave 12 network it would line 128m of the east road and
+ *  the trunk out to the Deepwood with free, deedless timber — hundreds of
+ *  metres from anything a deed gates, which is the opposite of what the
+ *  grounds are for. Trees line the homestead's own lane; the roads out to the
+ *  grounds run through open country, as roads out to somewhere do. */
+export const ROAD_VERGE_RANGE = 68;
+export function vergeCells(): [number, number][] {
+  return routeCells().filter(([cx, cz]) => Math.hypot(cx * ROAD_TILE, cz * ROAD_TILE) <= ROAD_VERGE_RANGE);
 }
 
 /** Requested 2026-07-30: "NPCs should use roads first, then grass" plus a
@@ -122,37 +270,43 @@ export function roadEntry(): { x: number; z: number } {
  *  in gameStore.ts just above this file's own routeCells()).
  *
  *  NOT built from `routeCells()`'s own return value: that array is
- *  DEDUPLICATED (`seen`, above) — where the branch north from the junction
- *  reuses a cell the westward run already visited, `routeCells()` silently
- *  drops the repeat, so two of its "consecutive" entries can land a full
- *  diagonal jump apart (confirmed live: (-3,3)→(-1,4), not a shared edge).
- *  Segments built from consecutive pairs of THAT array would insert a phantom
- *  diagonal shortcut across open grass. This walks the same raw `CELLS`
- *  waypoints with the identical x-then-z gap-fill `routeCells()` uses, but
- *  emits one true unit-step segment per step instead of collapsing into a
- *  deduplicated point list — a revisited cell just means an overlapping
- *  (harmless) duplicate segment, not a dropped one. */
+ *  DEDUPLICATED (`seen`, above) — where one leg starts on cells another leg
+ *  already laid, `routeCells()` silently drops the repeats, so two of its
+ *  "consecutive" entries can land a long jump apart (confirmed live even
+ *  before Wave 12's legs: (-3,3)→(-1,4), not a shared edge). Segments built
+ *  from consecutive pairs of THAT array would insert phantom diagonal
+ *  shortcuts across open grass. This walks the same raw `LEGS` waypoints with
+ *  the identical x-then-z gap-fill `routeCells()` uses, but emits one true
+ *  unit-step segment per step instead of collapsing into a deduplicated point
+ *  list — a revisited cell just means an overlapping (harmless) duplicate
+ *  segment, not a dropped one.
+ *
+ *  `prev` resets PER LEG for the same reason it does in `routeCells()`:
+ *  carrying it across the seam would draw one long segment from wherever the
+ *  last leg ended to wherever the next one starts, straight across country. */
 let segmentsCache: { x0: number; z0: number; x1: number; z1: number }[] | null = null;
 function roadSegments() {
   if (!segmentsCache) {
     const segs: { x0: number; z0: number; x1: number; z1: number }[] = [];
-    let prev: [number, number] | null = null;
-    for (const [x, z] of CELLS) {
-      if (prev) {
-        let cx: number = prev[0];
-        let cz: number = prev[1];
-        while (cx !== x) {
-          const nx: number = cx + Math.sign(x - cx);
-          segs.push({ x0: cx * ROAD_TILE, z0: cz * ROAD_TILE, x1: nx * ROAD_TILE, z1: cz * ROAD_TILE });
-          cx = nx;
+    for (const leg of LEGS) {
+      let prev: [number, number] | null = null;
+      for (const [x, z] of leg) {
+        if (prev) {
+          let cx: number = prev[0];
+          let cz: number = prev[1];
+          while (cx !== x) {
+            const nx: number = cx + Math.sign(x - cx);
+            segs.push({ x0: cx * ROAD_TILE, z0: cz * ROAD_TILE, x1: nx * ROAD_TILE, z1: cz * ROAD_TILE });
+            cx = nx;
+          }
+          while (cz !== z) {
+            const nz: number = cz + Math.sign(z - cz);
+            segs.push({ x0: cx * ROAD_TILE, z0: cz * ROAD_TILE, x1: cx * ROAD_TILE, z1: nz * ROAD_TILE });
+            cz = nz;
+          }
         }
-        while (cz !== z) {
-          const nz: number = cz + Math.sign(z - cz);
-          segs.push({ x0: cx * ROAD_TILE, z0: cz * ROAD_TILE, x1: cx * ROAD_TILE, z1: nz * ROAD_TILE });
-          cz = nz;
-        }
+        prev = [x, z];
       }
-      prev = [x, z];
     }
     segmentsCache = segs;
   }

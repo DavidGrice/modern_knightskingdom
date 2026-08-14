@@ -68,6 +68,60 @@ function DemolishConfirm() {
   );
 }
 
+// Wave 12 · the spade's own confirmation, deliberately the same arm-then-fire
+// shape as the wrecking tool above rather than a new interaction: cutting a
+// waterway spends gold and takes ground out of use permanently-until-filled,
+// which is the same "one gesture, large consequence" class of action.
+//
+// One panel serves both halves of the tool because the rectangle decides which
+// half it is: a patch over water fills it in and hands gold back, a patch of
+// dry ground is a cut. What it cannot do, it says here, live.
+function DigConfirm() {
+  const digRect = useGameStore((s) => s.digRect);
+  const digPreview = useGameStore((s) => s.digPreview);
+  const digArea = useGameStore((s) => s.digArea);
+  const setDigRect = useGameStore((s) => s.setDigRect);
+  // subscribed for the same reason DemolishConfirm subscribes to buildings: an
+  // armed patch survives panning about, and the gold it needs can be spent (or
+  // a tree felled off it) in the meantime
+  const inventory = useGameStore((s) => s.inventory);
+  const buildings = useGameStore((s) => s.buildings);
+  const view = useMemo(
+    () => digPreview(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [digRect, buildings, inventory, digPreview],
+  );
+  if (!digRect) return null;
+  const w = Math.round(digRect.maxX - digRect.minX);
+  const d = Math.round(digRect.maxZ - digRect.minZ);
+  return (
+    <div className="build-hint clickable" style={{ borderColor: view.problem ? '#e04434' : '#3fa8d8' }}>
+      <b>{w}×{d}m</b>
+      {view.mode === 'fill'
+        ? <> of water — filling it in returns <b>{view.refund}g</b> of what it cost</>
+        : <> of ground — <b>{view.cost}g</b> to your diggers</>}
+      {view.problem && <> · <span style={{ color: '#ffb0a4' }}>{view.problem}</span></>}
+      {' '}
+      <button
+        className="menu-btn small"
+        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        disabled={!!view.problem}
+        onClick={digArea}
+      >
+        {view.mode === 'fill' ? '✓ Fill it in' : '✓ Dig it out'}
+      </button>
+      {' '}
+      <button
+        className="menu-btn small"
+        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        onClick={() => setDigRect(null)}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 type Tab = Buildable['category'] | 'blueprints';
 type BuildSort = 'default' | 'az' | 'affordable';
 
@@ -150,6 +204,7 @@ export default function BuildBar() {
   const villagers = useGameStore((s) => s.villagers);
   const buildTool = useGameStore((s) => s.buildTool);
   const setBuildTool = useGameStore((s) => s.setBuildTool);
+  const destination = useGameStore((s) => s.destination);
   const freeform = useGameStore((s) => s.freeformBuild);
   const setFreeformBuild = useGameStore((s) => s.setFreeformBuild);
   const [tab, setTab] = useState<Tab>('essentials');
@@ -198,6 +253,12 @@ export default function BuildBar() {
             <b>Wrecking Tool</b> — drag a patch over what you want gone, then confirm ·{' '}
             <b>X</b> or the tool row below puts it away
           </>
+        ) : buildTool === 'dig' ? (
+          <>
+            <b>Diggers</b> — drag out a patch of ground and they will cut it to water: one patch is a
+            pond, a long thin one a canal, four round your wall a moat · drag over water to fill it
+            back in · <b>G</b> puts the spade away
+          </>
         ) : (
           <>
             <b>Aerial Build View</b> — hold click to place · <b>shift-drag</b> lays a wall run ·
@@ -207,6 +268,7 @@ export default function BuildBar() {
         )}
       </div>
       <DemolishConfirm />
+      <DigConfirm />
       <div className="build-menu clickable">
         {/* Wave 9 · the two things that change what the LEFT BUTTON does, kept
             together above the catalogue: which tool is in hand, and whether
@@ -227,6 +289,20 @@ export default function BuildBar() {
           >
             🧹 Demolish Area
           </button>
+          {/* Wave 12 · the spade sits with the other two things that change
+              what the left button does. Home only: a waterway is cut into the
+              homestead's own flat ground, and there is nothing sensible for it
+              to mean on a claimed plot halfway up a template bake's hillside
+              (the store refuses it there too — this just does not offer it). */}
+          {!destination && (
+            <button
+              className={buildTool === 'dig' ? 'selected' : ''}
+              onClick={() => setBuildTool(buildTool === 'dig' ? 'build' : 'dig')}
+              title="Drag a patch, then confirm — your diggers cut it to water (G). Drag over water to fill it back in."
+            >
+              🌊 Dig Water
+            </button>
+          )}
           <button
             className={freeform ? 'selected' : ''}
             onClick={() => setFreeformBuild(!freeform)}

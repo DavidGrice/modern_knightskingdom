@@ -1,14 +1,16 @@
 'use client';
-import { Suspense, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { WORLD_HALF, POND, BROOK } from '@/game/data/world';
+import { BANK_Y, WATER_BANK, WATER_Y } from '@/game/waterworks';
 import { BUILD_REGION, landHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, sampleEnv, seasonOf } from '@/game/env';
-import { normalizeTemplateBake, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
+import { DOWNS, downsSurfaceY } from '@/game/data/downs';
+import { normalizeTemplateBake, registerHomeGroundRoot, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
 
 /** Spring/Summer/Autumn/Winter grass tints — winter reads pale/frost-dusted
  *  rather than switching to a wholly separate snow-covered ground state. */
@@ -280,6 +282,194 @@ function Stream() {
   );
 }
 
+/**
+ * Wave 12 · the waterways the player has cut (game/waterworks.ts).
+ *
+ * Drawn exactly the way the natural POND below is drawn — a sandy bank plate
+ * with a rippling water plate a few centimetres above it, both lying ON the
+ * flat meadow — because the home ground is one GLB bake and nothing in this
+ * project performs runtime geometry surgery on it. What is genuinely real
+ * about a dug waterway is everything except the hole: it blocks pathing, it
+ * stops the player and the raiders, it refuses buildings, it costs gold and it
+ * saves. The visible sinking of it waits on the terrain-height work.
+ *
+ * The ripple is loaded ONCE and cloned per cut, rather than shared outright:
+ * `repeat` lives on the texture, so one shared instance would stretch a single
+ * 256px tile the length of a 60m canal — a painted stripe, not water. A clone
+ * carries its own repeat/offset over the same decoded image, and all of them
+ * are drifted from the one `useFrame` here, at the pond's own rate, so a
+ * four-sided moat reads as one body of water rather than four independently
+ * flowing ones.
+ */
+const WATER_TILE = 4; // metres of surface per ripple tile — matches the brook's
+
+function DugWater() {
+  const waterworks = useGameStore((s) => s.waterworks);
+  const { gl } = useThree();
+  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
+  const base = useMemo(() => {
+    const t = new THREE.TextureLoader().load('/assets/textures/water/spr199_256x256.png');
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = anisotropy;
+    return t;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // rebuilt only when the LIST changes (a cut, a fill, a load), which is also
+  // where the previous clones are released — a moat dug and filled twenty times
+  // over a long session would otherwise leave every one of its textures on the
+  // GPU
+  const patches = useMemo(() => {
+    const made = waterworks.map((w) => {
+      const t = base.clone();
+      t.needsUpdate = true;
+      t.repeat.set(Math.max(1, Math.round(w.halfX * 2 / WATER_TILE)), Math.max(1, Math.round(w.halfZ * 2 / WATER_TILE)));
+      return { w, tex: t };
+    });
+    return made;
+  }, [waterworks, base]);
+  useEffect(() => () => { for (const p of patches) p.tex.dispose(); }, [patches]);
+  useFrame((_, dt) => {
+    for (const p of patches) {
+      p.tex.offset.x += dt * 0.012;
+      p.tex.offset.y += dt * 0.005;
+    }
+  });
+  if (patches.length === 0) return null;
+  return (
+    <group>
+      {patches.map(({ w, tex }) => (
+        <group key={w.id} position={[w.x, 0, w.z]}>
+          {/* the dug earth thrown up round the cut, exactly the pond's own sand
+              ring generalised from a circle to a rectangle */}
+          <mesh rotation-x={-Math.PI / 2} position-y={BANK_Y} receiveShadow>
+            <planeGeometry args={[(w.halfX + WATER_BANK) * 2, (w.halfZ + WATER_BANK) * 2]} />
+            <meshStandardMaterial color="#c9b878" roughness={1} />
+          </mesh>
+          <mesh rotation-x={-Math.PI / 2} position-y={WATER_Y}>
+            <planeGeometry args={[w.halfX * 2, w.halfZ * 2]} />
+            <meshStandardMaterial
+              map={tex} color="#7fd0dd" roughness={0.3} metalness={0.1} transparent opacity={0.92}
+            />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// 1.42m cells (4608 triangles). Measured, not guessed: the triangulated
+// surface never strays more than 2.3cm from the field it was built from, and
+// the error is quadratic in the cell size — doubling the segments would buy a
+// centimetre nobody can see and double what every per-frame probe has to walk.
+const DOWNS_SEGMENTS = 48;
+
+/**
+ * Wave 12 · The North Downs — the homestead's one piece of real terrain
+ * (game/data/downs.ts owns the field, the box and the reasoning behind both).
+ *
+ * A displaced plane rather than another bake, and that is the decision the rest
+ * of the pass hangs off: because the field is authored, the mesh can be
+ * generated from it exactly, and then this geometry is the ONE surface anyone
+ * reads. The player's floor, the third-person camera and a raider chasing you
+ * up the slope all raycast these triangles through TemplateWorld's shared
+ * probe — the same mechanism every destination bake already uses for actor Y.
+ * Nothing consults the authoring function at runtime, so the ground you stand
+ * on cannot drift from the ground you can see, which is precisely the failure
+ * a parallel "and here is the height, cheaply" query would invite.
+ *
+ * The whole mesh sits DOWNS_SINK below the meadow, so its flat outer margin is
+ * buried and the hill's visible foot is the line where it climbs out — see that
+ * constant for why a hill cannot simply be laid on top of the bake instead.
+ */
+function HomesteadDowns() {
+  const surface = useRef<THREE.Mesh>(null);
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
+  const geometry = useMemo(() => {
+    const g = new THREE.PlaneGeometry(DOWNS.half * 2, DOWNS.half * 2, DOWNS_SEGMENTS, DOWNS_SEGMENTS);
+    // lay it flat FIRST: a PlaneGeometry is authored in XY, and rotating the
+    // geometry (not the mesh) means the displacement below is a plain world-Y
+    // write and the raycast hits real world-space triangles with no transform
+    // between them and the height they are supposed to represent
+    g.rotateX(-Math.PI / 2);
+    const pos = g.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      pos.setY(i, downsSurfaceY(DOWNS.x + pos.getX(i), DOWNS.z + pos.getZ(i)));
+    }
+    pos.needsUpdate = true;
+    g.computeVertexNormals();
+    // explicitly, not left to Mesh.raycast's lazy path: the bounds are what
+    // every ray tests before it touches a triangle, and a sphere computed
+    // while the plane was still flat would be a quietly wrong one
+    g.computeBoundingSphere();
+    return g;
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  // the SURFACE, not the group around it. Everything a probe hits under this
+  // root is treated as the ground you are standing on, so the cairn below must
+  // not be inside it — walking into a rock heap would otherwise lift the player
+  // silently onto its top with no slope to have climbed.
+  useEffect(() => {
+    registerHomeGroundRoot(surface.current);
+    return () => registerHomeGroundRoot(null);
+  }, []);
+  // the same seasonal lerp the meadow's own materials get, off the same table —
+  // a hill that stayed high summer while the field around it went to frost
+  // would read as a hole in the season rather than as ground
+  useFrame((_, dt) => {
+    const m = mat.current;
+    if (!m) return;
+    const target = SEASON_GRASS[seasonOf(worldEnv.dayCount)];
+    const k = Math.min(1, dt * 0.15);
+    m.color.r += (target[0] - m.color.r) * k;
+    m.color.g += (target[1] - m.color.g) * k;
+    m.color.b += (target[2] - m.color.b) * k;
+  });
+  return (
+    <group position={[DOWNS.x, 0, DOWNS.z]}>
+      <mesh ref={surface} geometry={geometry} receiveShadow castShadow>
+        <meshStandardMaterial ref={mat} color="#4d8138" roughness={1} />
+      </mesh>
+      <Cairn />
+    </group>
+  );
+}
+
+/** A weathered cairn on the crown — the same procedural dodecahedron rocks the
+ *  brook's spring is dressed with, so it costs no asset and reads as the same
+ *  world.
+ *
+ *  It earns its place twice. It gives the walk north somewhere to be walking
+ *  TO, which a bare hill in an empty quadrant does not; and each stone sits on
+ *  `downsSurfaceY` rather than on y=0, which is the whole thing a raised
+ *  quadrant has to be able to do for anything to ever stand on it. Static
+ *  scenery placed once may read the authoring field directly — the mesh is
+ *  generated from that same field and never differs from it by more than 2.3cm,
+ *  which is less than one of these pebbles. Anything that MOVES must go through
+ *  the raycast instead; see homeGroundY. */
+function Cairn() {
+  const stones: [number, number, number][] = [
+    [0, 0, 1.5], [1.3, 0.5, 1.0], [-1.1, -0.7, 1.15], [0.4, -1.4, 0.85], [-0.5, 1.2, 0.7],
+  ];
+  return (
+    <group>
+      {stones.map(([lx, lz, s], i) => (
+        <mesh
+          key={i}
+          position={[lx, downsSurfaceY(DOWNS.x + lx, DOWNS.z + lz) + s * 0.34, lz]}
+          rotation={[i * 0.7, i * 1.3, i * 0.4]}
+          castShadow
+          receiveShadow
+        >
+          <dodecahedronGeometry args={[s * 0.6, 0]} />
+          <meshStandardMaterial color="#8b8b90" roughness={1} flatShading />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 export default function Terrain() {
   const buildMode = useGameStore((s) => s.buildMode);
   const landTier = useGameStore((s) => s.landTier);
@@ -340,6 +530,12 @@ export default function Terrain() {
       >
         <HomeMeadow />
       </Suspense>
+      {/* Wave 12 · and the one corner of it that is not flat. Outside the
+          Suspense above deliberately: it is generated, not loaded, so it is
+          ready the instant Terrain mounts — and the player's floor reads it
+          through a raycast, which would silently answer "flat" for as long as
+          it was suspended. */}
+      <HomesteadDowns />
       <Stream />
       {/* homestead dirt patch */}
       <mesh rotation-x={-Math.PI / 2} position={[regionCx, 0.01, regionCz]} receiveShadow>
@@ -357,6 +553,8 @@ export default function Terrain() {
           map={waterTexture} color="#7fd0dd" roughness={0.3} metalness={0.1} transparent opacity={0.92}
         />
       </mesh>
+      {/* Wave 12 · and every waterway the player has cut for themselves */}
+      <DugWater />
       {/* build region overlay (aerial mode only) */}
       {buildMode && (
         <group position={[regionCx, 0, regionCz]}>

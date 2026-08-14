@@ -110,8 +110,10 @@ export interface Buildable {
   buildXp: number;
 }
 
-/** Wave 9 · which tool the aerial build view's left button is holding. */
-export type BuildTool = 'build' | 'demolish';
+/** Wave 9 · which tool the aerial build view's left button is holding.
+ *  Wave 12 added 'dig' — the same drag-a-rectangle gesture as 'demolish', but
+ *  it cuts a waterway instead of taking pieces down (see WaterFeature). */
+export type BuildTool = 'build' | 'demolish' | 'dig';
 
 /** Wave 9 · an axis-aligned patch of ground in world metres, dragged out in
  *  build mode. Used by the area-demolish marquee; deliberately plain data so
@@ -345,6 +347,45 @@ export interface SaveGame {
    *  this record is the real state, and the cluster is re-derived from its
    *  `stage` each time. */
   cultivatedPlots?: Record<string, CultivatedPlot>;
+  /** Wave 12: waterways the player dug themselves (see WaterFeature). Absent
+   *  on every save written before digging existed, which reads identically to
+   *  an empty list — the static POND is not in here and never will be, it
+   *  stays a hand-authored `terrainExclusions` entry. */
+  waterworks?: WaterFeature[];
+}
+
+/**
+ * Wave 12 · a body of water the PLAYER cut into the homestead — a pond, a
+ * stretch of river, or one side of a moat. Persisted; the static POND is not
+ * one of these (it is world geography, declared in data/world.ts).
+ *
+ * An axis-aligned rectangle, not a circle, and that is the load-bearing
+ * decision of the whole feature. `TerrainExclusion` already supports both
+ * shapes at no schema cost, and the one water body in the game before this was
+ * a circle — but a circle can only ever be a pond. A rectangle is all three
+ * things the request asked for: one is a pond, a long thin one is a river or a
+ * canal, and four round a keep are a moat. One drag gesture, one shape, and
+ * the shape composes, which is what makes freeform unnecessary here rather
+ * than merely out of budget.
+ *
+ * Home only today (there is no `world` field on purpose): the homestead is the
+ * one region whose ground is genuinely flat at y=0, and a flat basin cut into
+ * a template bake's real slope would hang in the air at one end. The refusal
+ * lives in the store's `digPreview`, alongside the rest of the checks that need
+ * to know which world you are standing in; `terrainConflict`
+ * (game/waterworks.ts) holds the ones that are pure geometry.
+ */
+export interface WaterFeature {
+  id: string;
+  /** centre, world metres — always on the build grid (GRID = 2) */
+  x: number;
+  z: number;
+  /** half-extents, world metres — always a whole number of grid cells */
+  halfX: number;
+  halfZ: number;
+  /** gold paid to cut it, kept so filling it in can hand half of that back
+   *  without re-deriving a price that may since have been rebalanced */
+  paid: number;
 }
 
 /** a claimed template-world building plot: centered wherever the player

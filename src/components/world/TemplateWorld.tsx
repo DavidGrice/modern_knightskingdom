@@ -37,6 +37,7 @@ import { useGLTF } from '@react-three/drei';
 import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { BATTLE_DOME } from '@/game/data/world';
+import { inDowns } from '@/game/data/downs';
 import { arenaState } from '@/game/arena';
 import DungeonScene from './DungeonScene';
 import ArenaScene from './ArenaScene';
@@ -53,6 +54,15 @@ const mountedRoot: { current: THREE.Object3D | null } = { current: null };
 // geometry. mountedRoot is a single global ref; only one destination is ever
 // mounted at a time.
 const mountedRegion: { current: string | null } = { current: null };
+// Wave 12 · the homestead's own elevated ground (Terrain.tsx's HomesteadDowns)
+// registers HERE rather than in mountedRoot, and the reason is structural, not
+// tidiness: Terrain is mounted the ENTIRE time, destination visit included (see
+// GameWorld.tsx — the home meadow is never unmounted when you travel), so the
+// one-at-a-time slot above genuinely cannot hold both. Two roots, one probe:
+// raycastGroundY below is the single implementation both go through, which is
+// the whole point of putting the home terrain here instead of growing a second
+// height query somewhere else.
+const homeGroundRoot: { current: THREE.Object3D | null } = { current: null };
 const raycaster = new THREE.Raycaster();
 const rayOrigin = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -64,18 +74,58 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 // world-origin sea level, which read as falling through the bottom of the map.
 let lastGroundY: number | null = null;
 
-export function sampleTemplateGroundY(x: number, z: number, fallback = lastGroundY ?? 0): number {
-  const root = mountedRoot.current;
-  if (!root) return fallback;
+/** Drop a ray from well above (x, z) onto a mounted piece of ground and report
+ *  where it lands — the one height probe in the project, shared by the
+ *  destination sampler below and the homestead's own (Wave 12). Returns null on
+ *  a miss rather than choosing a fallback, because the two callers want
+ *  genuinely different answers to "nothing there": a destination holds the last
+ *  height it knew (a hillside bake's own edge is not sea level), the homestead
+ *  falls back to the flat meadow it actually has. */
+function raycastGroundY(root: THREE.Object3D, x: number, z: number): number | null {
   rayOrigin.set(x, 400, z);
   raycaster.set(rayOrigin, DOWN);
   raycaster.far = 500;
   const hits = raycaster.intersectObject(root, true);
-  if (hits.length) {
-    lastGroundY = hits[0].point.y;
-    return lastGroundY;
-  }
-  return fallback;
+  return hits.length ? hits[0].point.y : null;
+}
+
+export function sampleTemplateGroundY(x: number, z: number, fallback = lastGroundY ?? 0): number {
+  const root = mountedRoot.current;
+  if (!root) return fallback;
+  const y = raycastGroundY(root, x, z);
+  if (y === null) return fallback;
+  lastGroundY = y;
+  return y;
+}
+
+/** Wave 12 · Terrain.tsx hands its North Downs mesh over here on mount, and
+ *  takes it back on unmount. Same "register the geometry, then everyone
+ *  raycasts it" contract TemplateWorldRoot has always had with mountedRoot. */
+export function registerHomeGroundRoot(root: THREE.Object3D | null): void {
+  homeGroundRoot.current = root;
+}
+
+/**
+ * Wave 12 · Ground height on the HOMESTEAD, which is 0 everywhere except
+ * inside the North Downs prototype (game/data/downs.ts) — the one patch of home
+ * that is not flat.
+ *
+ * The bounds test comes FIRST and is the load-bearing line. It is what keeps
+ * this affordable (a raycast against several thousand triangles, otherwise
+ * paid by every actor every frame, everywhere in the world), and it is also the
+ * prototype's contract stated in one place: outside the box, home is flat, and
+ * this function says so without consulting anything.
+ *
+ * Sub-zero hits floor at 0 because the knoll mesh is deliberately sunk into the
+ * meadow (DOWNS_SINK): below y=0 it is buried, and the bake above it is the
+ * ground you would actually be standing on.
+ */
+export function homeGroundY(x: number, z: number): number {
+  if (!inDowns(x, z, 1)) return 0;
+  const root = homeGroundRoot.current;
+  if (!root) return 0; // the knoll has not mounted yet — flat meadow, correctly
+  const y = raycastGroundY(root, x, z);
+  return y === null || y < 0 ? 0 : y;
 }
 
 /** reset the held-ground fallback whenever a fresh destination mounts, so a
@@ -287,7 +337,10 @@ if (typeof window !== 'undefined') {
   // rasterized heightAt() against this module's already-trusted raycast
   // sampler (iteration 2.5's own verification).
   (window as unknown as Record<string, unknown>).__kkworld = {
-    sampleTemplateGroundY, destinationGroundY, getMountedRegion, getBakeOffset,
+    // Wave 12 adds homeGroundY, for the same reason: a smoke test can now
+    // cross-check the North Downs mesh's real triangles against the field
+    // game/data/downs.ts authored them from, without a build step.
+    sampleTemplateGroundY, destinationGroundY, getMountedRegion, getBakeOffset, homeGroundY,
   };
 }
 
