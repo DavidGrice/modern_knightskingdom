@@ -3,15 +3,16 @@ import { create } from 'zustand';
 import type {
   ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
   LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
+  WaterFeature,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
 import { GROUNDS, groundAt, type RectSection } from '../data/grounds';
 import { MAX_PLOT_STAGE, PLOT_BY_ID, plotNodeCount } from '../data/cultivatedPlots';
-import { ROAD_HALF_WIDTH, ROAD_TILE, roadEntry, routeCells } from '../data/road';
+import { ROAD_HALF_WIDTH, ROAD_TILE, roadEntry, routeCells, vergeCells } from '../data/road';
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
 import { arriveByRoad, villagerMobs } from '../villagerMobs';
 import { npcMobs } from '../npcMobs';
-import { KEEP_PART_BY_ID, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, maxHpForPart, type KeepState } from '../data/keep';
+import { KEEP_PART_BY_ID, KEEP_SIZE, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, maxHpForPart, type KeepState } from '../data/keep';
 import { brickLabel } from '../data/brickResources';
 import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
 import { stabledHorses } from '../riding';
@@ -58,6 +59,10 @@ import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HA
 import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN } from '../data/worlds';
 import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
+import {
+  FILL_REFUND, MAX_WATERWORKS, digCost, setWaterworks, shapeConflict,
+  snapDigRect, terrainConflict, waterAt, waterworks, waterworksInRect,
+} from '../waterworks';
 import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST } from '../dungeon';
 import { resetArenaRun, endArenaRun, type ArenaEnvId } from '../arena';
 
@@ -127,6 +132,12 @@ interface GameState {
    *  awaiting confirmation. Non-null = a rectangle is armed and BuildBar is
    *  showing what it would cost. Transient. */
   demolishRect: BuildRect | null;
+  /** Wave 12 · the DIG marquee, the exact same arm-then-confirm shape as
+   *  `demolishRect` above and separate from it on purpose: both tools can have
+   *  a patch parked on the rail, and one confirm button firing the other tool's
+   *  rectangle is the worst possible way to find out they were sharing a field.
+   *  Already snapped to the dig lattice when it lands here. Transient. */
+  digRect: BuildRect | null;
   cameraMode: CameraMode;
   targetKind: string | null;     // what the interact ray is aimed at (drives viewmodel tool)
   emote: { clip: string; seq: number } | null;
@@ -196,6 +207,13 @@ interface GameState {
   /** Empire arc, Wave 5: plot id -> the plot you actually broke and planted,
    *  absent = still wild grass. See SaveGame.cultivatedPlots. */
   cultivatedPlots: Record<string, CultivatedPlot>;
+  /** Wave 12 · the waterways the player has cut (see WaterFeature). Mirrored
+   *  into game/waterworks.ts's leaf module on every change, exactly as
+   *  `stabled`/`mounts` are mirrored into riding.ts and for the same reason:
+   *  nav rebuilds, per-frame collision and the water mesh all have to read this
+   *  without importing the store. The store copy is what saves and what React
+   *  re-renders on; the leaf module is what the frame loop reads. */
+  waterworks: WaterFeature[];
   villagers: Villager[];
   villagerProgress: Record<string, number>; // villagerId -> seconds until next delivery
   /** the homestead Armory: spare gear held for the garrison, separate from
@@ -456,6 +474,41 @@ interface GameState {
   /** tear down everything the armed marquee covers, piece by piece through the
    *  ordinary removeBuilding path, then clear the marquee */
   demolishArea: () => void;
+
+  // ---- Wave 12 · digging ---------------------------------------------
+  /** arm (or clear, with null) the dig marquee. Snaps the rectangle to the dig
+   *  lattice on the way in, so nothing downstream has to remember to. */
+  setDigRect: (rect: BuildRect | null) => void;
+  /**
+   * What the armed dig marquee would actually do, without doing it. One call
+   * answers BOTH of the tool's jobs, because which one it is doing is a fact
+   * about the ground rather than a mode the player picks: a patch that covers
+   * water FILLS it in, a patch of dry ground is a CUT. (A separate fill tool
+   * would need its own button, its own key and its own marquee to say the one
+   * thing the rectangle already says.)
+   *
+   * `problem` is the refusal sentence, or null when the patch is good — the
+   * rail shows it live so a 40m drag never ends in a bare "you can't do that".
+   *
+   * Takes an OPTIONAL rectangle, defaulting to the armed `digRect`, so the
+   * ghost still being dragged is judged by exactly the code that will judge it
+   * on release. The alternative — a cheap "looks fine" test for the drag and
+   * the real one for the confirm — is precisely how a marquee ends up green
+   * right up to the moment it refuses.
+   */
+  digPreview: (rect?: BuildRect | null) => {
+    mode: 'dig' | 'fill';
+    /** gold it costs to cut (mode 'dig') */
+    cost: number;
+    /** gold handed back for filling in (mode 'fill') */
+    refund: number;
+    /** the waterways a fill would remove */
+    fills: WaterFeature[];
+    area: number;
+    problem: string | null;
+  };
+  /** cut the armed patch (or fill in the water it covers), then clear it */
+  digArea: () => void;
 }
 
 /**
@@ -538,6 +591,11 @@ let notifSeq = 1;
 let buildSeq = 1;
 let villagerSeq = 1;
 let blueprintSeq = 1;
+/** Wave 12 · dug-waterway ids, carried past a loaded save exactly like the
+ *  three above. Two live features sharing an id would give React two identical
+ *  keys and give `fillWater` two candidates to remove — cheap to prevent, not
+ *  cheap to debug. */
+let waterSeq = 1;
 let lastJoustAt = 0;
 /** buildings placed this session, newest last (undo stack). Wave 9 widened
  *  each entry from one id to a GROUP of ids so a row-fill drag — which lays a
@@ -642,6 +700,12 @@ export function scatterNodesInRect(
     // zeroing out node seeding again). `pondShore` sections are exempt: the
     // Home Grove is deliberately pond-adjacent by design.
     if (!section.pondShore && Math.hypot(x - POND.x, z - POND.z) < POND.radius + 20) continue;
+    // Wave 12 · and out of any water the player has cut. Nothing re-scatters
+    // on its own, but `buyLand` re-runs seedNodes over the widened holding, so
+    // without this a deed bought after digging could stand a fresh boulder in
+    // the middle of your own moat. `waterAt` is home-only by construction, so
+    // a destination section is never affected.
+    if (!world && waterAt(x, z, 1.2)) continue;
     if (inBuildRegion(x, z)) continue;
     if (inStarterVillage(x, z)) continue;
     if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < sep)) continue;
@@ -795,6 +859,7 @@ function createGameStore() {
     buildTool: 'build',
     freeformBuild: false,
     demolishRect: null,
+    digRect: null,
     cameraMode: 'fps',
     targetKind: null,
     emote: null,
@@ -839,6 +904,7 @@ function createGameStore() {
     claimedWorlds: {},
     settlements: {},
     cultivatedPlots: {},
+    waterworks: [],
     customBlueprints: [],
     lastTaxAt: 0,
     villagers: [],
@@ -861,6 +927,10 @@ function createGameStore() {
       resetPlayerState();
       stabledHorses.ids = [];
       stabledHorses.assigned = {};
+      // Wave 12 · module state, same class of thing as the stable above: a new
+      // character must not inherit the last one's moat. Bumping the revision is
+      // also what makes the next nav rebuild forget the old water.
+      setWaterworks([]);
       // the AI registry is module state, like the two above: a new character
       // must not inherit the last one's agents, clock or half-drained needs
       agentManager.clear();
@@ -892,7 +962,7 @@ function createGameStore() {
         gateOpen: {}, buildingHp: {}, reputation: {},
         destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, guild: null, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
-        claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, customBlueprints: [], lastTaxAt: 0,
+        claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
         interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
         cedricSieges: 0, cedricRouted: false,
@@ -916,6 +986,11 @@ function createGameStore() {
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];
       stabledHorses.assigned = { ...(s.mounts ?? {}) };
+      // Wave 12 · same treatment for the player's waterways: nav, collision and
+      // the water mesh read the leaf module, so loading a save that has none
+      // must CLEAR it rather than leave the previous session's water standing.
+      const loadedWater = s.waterworks ?? [];
+      setWaterworks(loadedWater);
       set({
         character: s.character,
         inventory: s.inventory,
@@ -956,6 +1031,7 @@ function createGameStore() {
         durability: s.durability ?? {}, perks: s.perks ?? [],
         stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
         claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
+        waterworks: loadedWater,
         customBlueprints: s.customBlueprints ?? [],
         lastTaxAt: s.lastTaxAt ?? 0,
         villagers: s.villagers ?? [],
@@ -970,6 +1046,7 @@ function createGameStore() {
       buildSeq = s.buildings.reduce((m, b) => Math.max(m, parseInt(b.id.slice(1)) + 1 || m), 1);
       villagerSeq = (s.villagers ?? []).reduce((m, v) => Math.max(m, parseInt(v.id.slice(1)) + 1 || m), 1);
       blueprintSeq = (s.customBlueprints ?? []).reduce((m, b) => Math.max(m, parseInt(b.id.slice(2)) + 1 || m), 1);
+      waterSeq = loadedWater.reduce((m, w) => Math.max(m, parseInt(w.id.slice(1)) + 1 || m), 1);
       get().seedNodes();
     },
 
@@ -1016,6 +1093,10 @@ function createGameStore() {
         durability: s.durability, perks: s.perks,
         stats: s.stats,
         claimedWorlds: s.claimedWorlds, settlements: s.settlements, cultivatedPlots: s.cultivatedPlots,
+        // saved from the leaf module for the same reason `stabled` is: it is
+        // the copy every consumer actually reads, so it is the one that can
+        // never be a stale mirror
+        waterworks: [...waterworks.list],
         customBlueprints: s.customBlueprints,
         lastTaxAt: s.lastTaxAt,
         villagers: s.villagers,
@@ -1049,11 +1130,17 @@ function createGameStore() {
       // lined with timber it reads as a road. They are ordinary tree nodes,
       // so they can be felled like any other, but they belong to no ground
       // and so need no deed.
+      //
+      // Wave 12 · planted along `vergeCells()`, the homestead's own lane,
+      // rather than the whole road — see ROAD_VERGE_RANGE for why a network
+      // reaching six grounds must not line every leg with deedless timber.
+      // The neighbour lookup still uses the FULL route: which way the road
+      // runs through a cell, and whether it is a junction, is a fact about
+      // the road, not about which cells happen to be planted.
       {
-        const cells = routeCells();
-        const onRoad = new Set(cells.map(([cx, cz]) => `${cx},${cz}`));
+        const onRoad = new Set(routeCells().map(([cx, cz]) => `${cx},${cz}`));
         let vi = 0;
-        for (const [cx, cz] of cells) {
+        for (const [cx, cz] of vergeCells()) {
           // which way does the road run through this cell? A cell with a
           // neighbour north or south runs N-S; otherwise E-W. Junction cells
           // are skipped entirely — every side of them is carriageway.
@@ -1161,27 +1248,29 @@ function createGameStore() {
       // in holding the wrecking tool by surprise is the same class of mistake.
       // Freeform is a mode you chose, so it rides along with the tool reset for
       // the same reason — the grid is the default the view opens in.
-      set({ buildMode, panel: 'none', buildSelection: null, buildTool: 'build', demolishRect: null, freeformBuild: false });
+      set({ buildMode, panel: 'none', buildSelection: null, buildTool: 'build', demolishRect: null, digRect: null, freeformBuild: false });
     },
     setBuildSelection: (buildSelection) => set({
       buildSelection,
       // picking a piece is unambiguously "I want to build" — it puts the
       // wrecking tool down rather than leaving a selected piece that the left
       // button would not actually place
-      ...(buildSelection ? { buildTool: 'build' as BuildTool, demolishRect: null } : {}),
+      ...(buildSelection ? { buildTool: 'build' as BuildTool, demolishRect: null, digRect: null } : {}),
     }),
     setBlueprintSelection: (blueprintSelection) => set({
       blueprintSelection,
-      ...(blueprintSelection ? { buildTool: 'build' as BuildTool, demolishRect: null } : {}),
+      ...(blueprintSelection ? { buildTool: 'build' as BuildTool, demolishRect: null, digRect: null } : {}),
     }),
 
     // ---- Wave 9 · build-view tools ------------------------------------
     setBuildTool: (buildTool) => set({
       buildTool,
       demolishRect: null,
+      digRect: null,
       // the wrecking tool owns the left button, so a piece still selected
-      // underneath it would only be a lie about what a click does
-      ...(buildTool === 'demolish' ? { buildSelection: null, blueprintSelection: null } : {}),
+      // underneath it would only be a lie about what a click does — and Wave
+      // 12's spade owns it exactly the same way
+      ...(buildTool !== 'build' ? { buildSelection: null, blueprintSelection: null } : {}),
     }),
     setFreeformBuild: (freeformBuild) => set({ freeformBuild }),
     setDemolishRect: (demolishRect) => set({ demolishRect }),
@@ -1220,6 +1309,117 @@ function createGameStore() {
       set({ demolishRect: null });
       audio.play('brick_collide', 0.7);
       st.notify(`Cleared ${ids.length} ${ids.length === 1 ? 'piece' : 'pieces'} (half materials refunded)`, true);
+    },
+
+    // ---- Wave 12 · digging --------------------------------------------
+    setDigRect: (rect) => set({ digRect: rect ? snapDigRect(rect) : null }),
+
+    digPreview: (rect) => {
+      const st = get();
+      const r = rect === undefined ? st.digRect : rect;
+      const none = { mode: 'dig' as const, cost: 0, refund: 0, fills: [] as WaterFeature[], area: 0, problem: null };
+      if (!r) return none;
+      const area = (r.maxX - r.minX) * (r.maxZ - r.minZ);
+      // home only, and checked before anything else so the refusal is the real
+      // reason rather than whatever the homestead's own geography says about a
+      // rectangle two thousand metres away. Away from home the ground is a
+      // template bake's real sloped geometry, and a flat basin cut into it
+      // would hang in the air at one end — see WaterFeature's own note.
+      const away = st.destination ? 'Your diggers work your homestead, not this place.' : null;
+      const fills = waterworksInRect(r);
+      // FILL, whenever the patch touches water at all. The alternative reading
+      // — "dig the dry part of it too" — would have one gesture both cut and
+      // fill, and there is no honest way to price or explain that.
+      if (fills.length > 0) {
+        const refund = Math.round(fills.reduce((n, w) => n + w.paid, 0) * FILL_REFUND);
+        return { mode: 'fill' as const, cost: 0, refund, fills, area, problem: away };
+      }
+      const cost = digCost(r);
+      // shape first: "keep dragging, it is not a waterway yet" has to win over
+      // "there is a tree in the way", or the very first pixel of every drag
+      // reports the wrong problem
+      let problem = shapeConflict(r) ?? away;
+      if (!problem) problem = terrainConflict(r, st.landTier);
+      if (!problem && st.waterworks.length >= MAX_WATERWORKS) {
+        problem = `You already keep ${MAX_WATERWORKS} waterways — fill one in before cutting another.`;
+      }
+      if (!problem && buildingsInRect(st.buildings, null, r).length > 0) {
+        problem = 'Something of yours stands there — pull it down first.';
+      }
+      if (!problem && st.keep
+        && Math.abs(st.keep.x - (r.minX + r.maxX) / 2) < KEEP_SIZE / 2 + (r.maxX - r.minX) / 2
+        && Math.abs(st.keep.z - (r.minZ + r.maxZ) / 2) < KEEP_SIZE / 2 + (r.maxZ - r.minZ) / 2) {
+        // checked separately because `buildingsInRect` deliberately skips the
+        // keep (it is picked up whole, never area-demolished) — and a moat is
+        // exactly the thing a player will try to draw round their castle, so
+        // "over the foundation" is the likeliest mistake there is here
+        problem = 'Your keep stands on that ground — draw the moat around it.';
+      }
+      if (!problem) {
+        // Resource nodes hold their spot for the life of the world — a felled
+        // one is not gone, it is `respawnAt`, and it comes back exactly where
+        // it stood. So this ignores respawn state on purpose: cutting over a
+        // stump would put a tree back in the middle of the water a minute
+        // later, standing on it, harvestable. Refusing costs the player one
+        // more swing of the axe and a walk to somewhere else.
+        //
+        // This is also, at today's numbers, the ONLY thing standing between a
+        // cut and the fenced sections: every GROUND and both CULTIVATED_PLOTS
+        // lie beyond the widest legal reach (Barony's 32 + DIG_OUTSKIRT = 48;
+        // the nearest, the orchard, starts at z=56), so their own rectangles
+        // need no check here — but their nodes would be caught by this one if
+        // the bound ever moved out to them.
+        const node = st.nodes.find((n) => (n.world ?? null) === null
+          && n.x > r.minX - 0.8 && n.x < r.maxX + 0.8 && n.z > r.minZ - 0.8 && n.z < r.maxZ + 0.8);
+        if (node) problem = 'Clear the trees and rocks off that ground first.';
+      }
+      if (!problem && (st.inventory.gold ?? 0) < cost) {
+        problem = `Your diggers want ${cost} gold for that — you have ${st.inventory.gold ?? 0}.`;
+      }
+      return { mode: 'dig' as const, cost, refund: 0, fills, area, problem };
+    },
+
+    digArea: () => {
+      const st = get();
+      const r = st.digRect;
+      if (!r) return;
+      const pre = st.digPreview();
+      if (pre.problem) {
+        st.notify(pre.problem);
+        audio.play('brick_collide', 0.5);
+        return;
+      }
+      if (pre.mode === 'fill') {
+        const gone = new Set(pre.fills.map((w) => w.id));
+        const list = st.waterworks.filter((w) => !gone.has(w.id));
+        setWaterworks(list);
+        set({ waterworks: list, digRect: null, dirty: true });
+        if (pre.refund > 0) st.addItems({ gold: pre.refund });
+        st.notify(
+          `Filled in ${pre.fills.length} ${pre.fills.length === 1 ? 'waterway' : 'waterways'}`
+          + (pre.refund > 0 ? ` — ${pre.refund} gold back from the spoil.` : '.'),
+          true,
+        );
+        return;
+      }
+      const w: WaterFeature = {
+        id: `w${waterSeq++}`,
+        x: (r.minX + r.maxX) / 2,
+        z: (r.minZ + r.maxZ) / 2,
+        halfX: (r.maxX - r.minX) / 2,
+        halfZ: (r.maxZ - r.minZ) / 2,
+        paid: pre.cost,
+      };
+      const list = [...st.waterworks, w];
+      setWaterworks(list);
+      set({ waterworks: list, digRect: null, dirty: true });
+      st.addItems({ gold: -pre.cost });
+      // no nav call here on purpose: NavGrid.rebuild() is polled at 1Hz from
+      // Enemies.tsx and now watches `waterworks.rev` as a second input beside
+      // the buildings array's identity, so the water is in the grid within the
+      // second without this action reaching into the pathfinder.
+      audio.play('treasure', 0.55);
+      st.notify(`Dug ${Math.round(pre.area)}m² of waterway for ${pre.cost} gold.`, true);
     },
 
     collectTaxes: () => {
@@ -3144,6 +3344,16 @@ function createGameStore() {
       const region = activeBuildRegion(st.destination ? st.claimedWorlds[st.destination] : null, st.landTier);
       if (x - hx < region.minX || x + hx > region.maxX) return invalid;
       if (z - hz < region.minZ || z + hz > region.maxZ) return invalid;
+      // Wave 12 · nothing stands in the player's own water. A plain footprint
+      // test rather than a nav-grid question: placement is asked about this one
+      // rectangle, live, long before the 1Hz rebuild has seen a fresh cut. Home
+      // only, because that is the only place a waterway can be cut at all.
+      // (A bridge piece that could legitimately span one is the obvious
+      // follow-up; there isn't one yet, which is also why terrainConflict
+      // refuses to cut the road.)
+      if (!st.destination && waterworksInRect({ minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz }).length > 0) {
+        return invalid;
+      }
 
       const overlapsXZ = (b: PlacedBuilding) => {
         const [bsx, bsz] = sizeFor(b.type, b.rot);

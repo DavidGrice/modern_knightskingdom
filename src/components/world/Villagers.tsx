@@ -17,6 +17,7 @@ import { tripSpeedMult } from '@/game/data/attributes';
 import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
 import { navSteer } from '@/game/navgrid';
+import { waterAt } from '@/game/waterworks';
 import { bestStore } from '@/game/storage';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
@@ -376,8 +377,16 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         s.pause = 5 + Math.random() * 9;
         const a = Math.random() * Math.PI * 2;
         const r = 2 + Math.random() * (WANDER_RADIUS - 2);
-        s.tx = THREE.MathUtils.clamp(home[0] + Math.cos(a) * r, BUILD_REGION.minX + 2, BUILD_REGION.maxX - 2);
-        s.tz = THREE.MathUtils.clamp(home[1] + Math.sin(a) * r, BUILD_REGION.minZ + 2, BUILD_REGION.maxZ - 2);
+        const tx = THREE.MathUtils.clamp(home[0] + Math.cos(a) * r, BUILD_REGION.minX + 2, BUILD_REGION.maxX - 2);
+        const tz = THREE.MathUtils.clamp(home[1] + Math.sin(a) * r, BUILD_REGION.minZ + 2, BUILD_REGION.maxZ - 2);
+        // Wave 12 · never idle INTO the water. navSteer routes round a dug
+        // waterway like any other blocked ground, but a target that is itself
+        // in the water has no route at all, and navSteer's documented fallback
+        // for "no route" is to steer straight at it — which would walk a
+        // villager into a moat cut inside their own holding and hold them
+        // there. Skipping the roll simply leaves them where they are for
+        // another few seconds; the next one lands on dry ground.
+        if (!waterAt(tx, tz, 0.6)) { s.tx = tx; s.tz = tz; }
       } else {
         const speed = 0.85;
         s.x += nx * speed * dt;

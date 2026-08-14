@@ -15,7 +15,8 @@
 import * as THREE from 'three';
 import { collisionBoxesFor } from './data/buildables';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from './types';
-import { terrainBlocks, terrainExclusions } from './navTerrain';
+import { activeTerrainExclusions, terrainBlocks } from './navTerrain';
+import { waterworks } from './waterworks';
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWorld';
 import { dungeonState, type DungeonLayout } from './dungeon';
@@ -123,6 +124,12 @@ export class NavGrid {
 
   private blocked: Uint8Array;
   private builtFrom: PlacedBuilding[] | null = null;
+  // Wave 12 · the second real input to rebuild(). Digging a waterway changes no
+  // building at all, so the `builtFrom === buildings` identity check below would
+  // otherwise no-op forever and villagers would keep walking over the new water.
+  // -1 can never be a live revision (waterworks.rev starts at 0), so the first
+  // rebuild always runs.
+  private builtWaterRev = -1;
 
   // Phase 2, iteration 2.5 — ground-height field, window-mode grids only.
   // null means "no height data yet" (nothing mounted, or nothing mounted
@@ -376,11 +383,13 @@ export class NavGrid {
   /**
    * Rebuild the obstacle grid from the current buildings. Cheap enough to
    * call whenever the building list changes identity; a no-op if the array
-   * is the same one last consumed.
+   * is the same one last consumed AND no waterway has been dug or filled in
+   * since (Wave 12 — see `builtWaterRev`).
    */
   rebuild(buildings: PlacedBuilding[]): void {
-    if (this.builtFrom === buildings) return;
+    if (this.builtFrom === buildings && this.builtWaterRev === waterworks.rev) return;
     this.builtFrom = buildings;
+    this.builtWaterRev = waterworks.rev;
     this.blocked = new Uint8Array(this.dim * this.dim);
 
     for (const b of buildings) {
@@ -421,8 +430,10 @@ export class NavGrid {
     }
 
     // Phase 2, iteration 2.1 — stamp terrain exclusions (water) in AFTER
-    // building obstacles, on top of them.
-    for (const ex of terrainExclusions) {
+    // building obstacles, on top of them. Wave 12: the list is now the static
+    // table PLUS whatever the player has dug, which is why this reads
+    // activeTerrainExclusions() rather than the raw array.
+    for (const ex of activeTerrainExclusions()) {
       if (ex.traversal !== 'blocked' || ex.region !== this.region) continue;
       const [ex0, ex1, ez0, ez1] = ex.shape.kind === 'circle'
         ? [ex.shape.x - ex.shape.r, ex.shape.x + ex.shape.r, ex.shape.z - ex.shape.r, ex.shape.z + ex.shape.r]

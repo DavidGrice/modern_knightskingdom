@@ -21,6 +21,7 @@
 // convention road.ts/carts.ts already use for exactly this reason.
 
 import { POND } from './data/world';
+import { waterworks } from './waterworks';
 
 export interface TerrainExclusion {
   id: string;
@@ -46,13 +47,45 @@ if (process.env.NODE_ENV !== 'production' && terrainExclusions.length === 0) {
   console.warn('[navTerrain] terrainExclusions is empty — water (and any other traversal-only feature) will be pathable.');
 }
 
+/**
+ * Wave 12 · the static table above PLUS whatever the player has dug
+ * (game/waterworks.ts). This is the "runtime-growable exclusion list" a
+ * player-diggable waterway needs, and it is deliberately a DERIVED view rather
+ * than pushes into `terrainExclusions` itself: that array is hand-authored
+ * world geography, it must survive a save being loaded over the top of another
+ * one, and a `.push()` on load with no matching removal is exactly how a list
+ * like this ends up holding the last three characters' moats.
+ *
+ * Memoised on `waterworks.rev` because `terrainBlocks` below is called once per
+ * candidate cell of a nav rebuild — thousands of times in a burst — and
+ * rebuilding a merged array inside that loop would be the one genuinely hot
+ * allocation in the whole feature.
+ */
+let mergedCache: TerrainExclusion[] = terrainExclusions;
+let mergedRev = -1;
+export function activeTerrainExclusions(): TerrainExclusion[] {
+  if (mergedRev === waterworks.rev) return mergedCache;
+  mergedRev = waterworks.rev;
+  mergedCache = waterworks.list.length === 0 ? terrainExclusions : [
+    ...terrainExclusions,
+    ...waterworks.list.map((w): TerrainExclusion => ({
+      // `dug:` prefixed so an id can never collide with a hand-authored entry
+      id: `dug:${w.id}`,
+      region: null, // home only — see WaterFeature's own note on why
+      shape: { kind: 'aabb', x: w.x, z: w.z, hx: w.halfX, hz: w.halfZ },
+      traversal: 'blocked',
+    })),
+  ];
+  return mergedCache;
+}
+
 /** True if (x, z) falls inside a 'blocked' exclusion for `region`. Grid
  *  construction stamps this in after building obstacles (navgrid.ts). Not
  *  hot-path-critical today (called once per obstacle cell during a rebuild,
  *  not per frame), so a plain loop over a short list is fine — this is not
  *  the place to reach for a spatial index. */
 export function terrainBlocks(x: number, z: number, region: string | null): boolean {
-  for (const ex of terrainExclusions) {
+  for (const ex of activeTerrainExclusions()) {
     if (ex.traversal !== 'blocked' || ex.region !== region) continue;
     if (ex.shape.kind === 'circle') {
       const dx = x - ex.shape.x;

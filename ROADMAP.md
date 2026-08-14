@@ -4453,8 +4453,29 @@ was forgotten.
   only its README. Send one `.mpd` and the seam can be proved against it.
 
 ## Blocked on a decision or a pointer [TODO]
-- [TODO] **The road's route vs. southward expansion.** Small change, but it wants one
-  pass over the whole southern layout rather than a nudge.
+[COMPLETE] **The road's route vs. southward expansion.** Closed 2026-08-12 (Wave 12) as already
+  resolved, with no code change — re-verified entry by entry against the live files rather than taken
+  on trust, because the entry outlived the pass that fixed it: `SPAWN` `(0,0,26)`, `SIGNPOST`
+  `(-16,36)`, `MERCHANT_SPOT` `(-37.5,40)`, both starter-village huts `(-41.5,36.5)`/`(-34,44)`, the
+  road's own trunk (`x∈[-38.4,0]`, `z∈[25.6,64]` as it then stood), `KEEP_INTERIOR` `(85,85)` and all
+  six grounds (`z` 19→112) are already in the south half — the 2026-08-03 layout pass moved them and
+  this entry was never struck. The "guard posts facing a now-empty north" half of the ask has no
+  referent in code at all: there is no `GuardPost` component or constant anywhere in `src/`, the two
+  "guard posts" are Alric's and Beda's `mc001` huts (`StarterVillage.tsx`, and `trade.ts`'s own L68
+  note says so), and nothing reads their yaw — no line-of-sight, no watch direction, nothing that
+  could face anywhere. Wave 12's road extension is what the entry actually wanted next, and that
+  shipped alongside this (below). If a real watch-post that orients toward likely raid approaches is
+  wanted, that is a new feature with its own design, not this stale gap.
+  - **One measured oddity in the layout, checked and deliberately not "fixed"** (raised by the Wave 12
+    verification pass, now recorded next to `ROAD_HALF_WIDTH` in `road.ts`): both `SIGNPOST` `(-16,36)`
+    and `MERCHANT_SPOT` `(-37.5,40)` stand INSIDE the printed carriageway — 2.40m and 1.60m off the
+    centreline against a half width of 2.88 — so `onRoad()` is true at both and standing there grants
+    `ROAD_SPEED_MULT`. Not introduced by the road extension: HEAD's own seven-cell route was compiled
+    and measured, and the distances are identical to the metre. Left as it is on purpose — a roadside
+    sign and a pedlar's cart parked on the road are where those two belong, `SIGNPOST` is the anchor
+    the whole network's legs are derived from (`SX`/`SZ`), and `Merchant.tsx`'s walk-in/walk-out timing
+    is tuned against the distance from `roadEntry()` to `MERCHANT_SPOT`. Its one knock-on is recorded
+    in the dig entry above: a cut over the signpost is refused as *road*, never as *signpost*.
 
 ## Unblocked, large, and not started [TODO]
 These need no external data — they are simply big enough to want their own
@@ -5495,49 +5516,174 @@ at the target) rather than a bare early return.
   layout only helps if the road actually reaches the new positions (see below) — doing one without the
   other leaves 2026-07-30's own road-preference pathing (PR #110) routing raiders/villagers toward
   grounds the road doesn't go near.
-- [TODO] **Extend the road network so it actually reaches each resource ground, not just the signpost.**
-  Requested 2026-07-31, continuous with the layout redesign above ("we can continue using the roads to
-  guide the npcs/user to each meadow/fenced area"). Today's road is ONE fixed, hand-authored route
-  (`road.ts`'s `CELLS`, a short run from the homestead to `SIGNPOST` plus one branch) — it has never
-  reached any of the six named grounds and wasn't designed to; the nav-cost preference shipped
-  2026-07-30 (PR #110, `navgrid.ts`'s `roadMask`/`ROAD_STEP_MULT`) makes AI actors prefer whatever road
-  exists, but there is nothing for it to prefer on the way to a ground today. A real fix branches `CELLS`
-  (or generalizes it — the T-junction/corner/cross piece selection in `Road.tsx` already reads a 4-bit
-  N/E/S/W mask per cell, `PIECES` in `road.ts`, so the piece-choosing logic doesn't need to change, only
-  the route data) out to each ground's own entrance, and re-derives `distanceToRoad()`/`onRoad()`
-  (`road.ts`, shipped 2026-07-30) from the same connected-segment walk once the route is bigger. Real
-  design question raised but not answered by the request: does every ground get its own spur, or do
-  spurs share trunk segments (cheaper to build/render, reads more like a real road network)? Worth
-  deciding before implementation, not guessing at.
-- [TODO] **A buildable, player-diggable pond/river/moat.** Requested 2026-07-31 ("we should be able to
-  dig and make our own pond/river later on for waterway in our kingdom... like real kingdoms had with
-  moats"). Confirmed there is currently NO terrain-modification mechanic of any kind — the only water
-  body in the game is the single hardcoded `POND` (`world.ts`), declared as one static circle in
-  `navTerrain.ts`'s `terrainExclusions` (`{id:'pond', shape:{kind:'circle',...}, traversal:'blocked'}`),
-  read once by `navgrid.ts`'s obstacle-grid build and by `Terrain.tsx`'s pond mesh — nothing about it is
-  data-driven from player action, and no buildable/placeable water piece exists in `buildables.ts`. A
-  real fix needs, at minimum: a new placeable "dig water" tool or buildable category, a way to grow
-  `terrainExclusions` (or a parallel player-water list navgrid also blocks/costs against) at runtime
-  instead of a fixed array evaluated once, and real mesh rendering for an arbitrary player-shaped water
-  body (today's pond is one fixed, hand-modeled circle — a general one needs either a flexible shape
-  (circle/rect per placement, matching how `Ground`/terrain exclusions already support both shapes) or a
-  full freeform system, a much bigger scope). Worth scoping as its own feature, not a quick add.
-- [TODO] **Elevation/terrain height, per map quadrant.** Requested 2026-07-31 ("adding some elevation to
-  our maps... elevating our map in quadrants"). The home world is flat by design today — confirmed
-  (`Terrain.tsx`'s own comment: "Its ground sits at y=0... and the field is flat... so the flat-ground
-  movement/collision assumptions hold unchanged") — every player-movement, building-placement, and
-  nav-grid calculation on the home grid assumes `y=0` ground. A REAL height-field system already exists
-  in the codebase, just not wired to the home grid: `NavGrid`'s `heights`/`rasterizeHeights`/`heightAt`
-  (`navgrid.ts`, iteration 2.5) rasterizes real per-cell ground height from a mounted template's own
-  geometry — but only for `mode: 'window'` (destination-world) grids; the home grid is `mode: 'fixed'`
-  with no height field ever built (`this.heights` stays `null`, `ensureHeights()` no-ops for it). Making
-  the home world non-flat is a large, cross-cutting change — collision/step-height logic
-  (`PlayerController.tsx`'s `WALK_LOW`/`WALK_HIGH`/`STEP_UP`), every ground-position assumption in
-  `gameStore.ts`'s node scatter and building placement, `navgrid.ts`'s own `maxStep` climb-check (already
-  built for window grids, would need enabling for home), and NPC movement's own `y=0` assumptions
-  (`Villagers.tsx`/`Defenders.tsx`/`Enemies.tsx` all `g.position.set(x, 0, z)` or a small fixed offset)
-  would all need auditing — not a small follow-up, a real terrain overhaul. Worth prototyping on one
-  quadrant before committing to all four, given the blast radius.
+[COMPLETE] ✅ **Extend the road network so it actually reaches each resource ground, not just the
+  signpost — SHIPPED 2026-08-12 (Wave 12).** 7 plates became 32; all six grounds are now reached.
+  - **`CELLS` → `LEGS`** (`road.ts`): a flat waypoint list can only describe an unbranched walk, so a
+    branch had to be an out-and-back detour whose retrace both consumers then absorb. Fine for one
+    branch, half the array for six. It is now one polyline per run of road, and a leg starting on a
+    cell another leg already lays IS the junction — `Road.tsx`'s 4-bit N/E/S/W piece selection needed
+    no change at all, as predicted, and the network resolves to 26 straights, 4 corners and 2 T's with
+    nothing unmatched.
+  - **The spur-vs-shared-trunk question, answered: shared trunks, and geometry made the call, not
+    taste.** The pond (a nav-blocking exclusion) and the Home Grove's fenced rectangle between them
+    wall off every eastward row from z-cell 3 to z-cell 6, so there is exactly ONE eastward corridor —
+    both rock grounds hang off it rather than getting ~150m of road each. Westward, the Deepwood's leg
+    has to pass Northwood Stand to get anywhere, so they share a trunk too. Only the Home Grove gets a
+    spur of its own, and it is one plate long. Net: 4 legs plus a turn-off, not 6 spurs.
+  - **The plate grid, not taste, also decides where a leg stops.** A leg ends at the closest cell whose
+    12.8m plate does not lie across the ground's own fence, which puts pavement 1.6-9.2m off each gate.
+  - **Boundary stones now stand at the gate** (`Grounds.tsx`, `roadGateFor()`): the point of a ground's
+    fence nearest the road, not the middle of whichever edge faces the homestead. The two agreed while
+    the road ran south of everything; a leg reaching the Old Quarry's WEST fence made a stone on its
+    south edge a sign pointing away from the only road that goes there.
+  - **No new pathing concept, as instructed** — `onRoad()`/`distanceToRoad()` already fed the player's
+    `ROAD_SPEED_MULT` and `navgrid.ts`'s `roadMask`/`ROAD_STEP_MULT`, so new cells extend both for
+    free. Worth knowing: the AI half is a mask on the ±56m HOME grid, so the outer legs buy the
+    player's speed bonus and legibility, not NPC preference.
+  - **`roadEntry()` is now pinned** to the herb-meadow branch's end instead of "whatever cell
+    `routeCells()` returns last" — a network has no single far end, and array order would otherwise
+    have silently relocated every villager arrival, `Merchant.tsx`'s `OFF_STAGE` and `CedricSiege.tsx`'s
+    muster. Verified unchanged at `(-12.8, 64)`.
+  - **Verge trees are now bounded** (`ROAD_VERGE_RANGE`, 13 of 32 cells): that pass was written for a
+    seven-plate lane and would otherwise have lined 128m of the east road and the Deepwood trunk with
+    free deedless timber — the opposite of what the grounds are for.
+  - **Two live checks, because grounds move and legs don't**: `Grounds.tsx` (dev) and
+    `/secret/worldeditor` (live, while you drag) now warn when a ground's gate is further than
+    `ROAD_REACH` from the carriageway. The pre-existing crossing check only says the road MISSES a
+    ground; a ground dragged clean away from its own leg passes it happily.
+  - Original ask, kept for the record: requested 2026-07-31, continuous with the layout redesign above
+    ("we can continue using the roads to guide the npcs/user to each meadow/fenced area").
+  - Known and accepted: the east road's first three plates lie inside `BUILD_REGION`'s widest (Barony)
+    extent. Road plates are scenery, not `buildings` — they occupy no build square and refuse no
+    placement — and the road already ran to `(0, 25.6)` before this. Every other corridor is walled
+    off by the pond and the grove.
+[COMPLETE] ✅ **A buildable, player-diggable pond/river/moat — SHIPPED 2026-08-13 (Wave 12).** The
+  homestead's second body of water, and the first that is data: a list the player grows with a tool,
+  saved with the game, read back by nav, collision, placement, the node scatter and the minimap.
+  Requested 2026-07-31 ("we should be able to dig and make our own pond/river later on for waterway in
+  our kingdom... like real kingdoms had with moats").
+  - **One shape: an axis-aligned rectangle on the 2m build lattice** (`WaterFeature`, `game/types.ts`).
+    This is the load-bearing call of the whole feature, and it is what made freeform unnecessary rather
+    than merely out of budget: a circle can only ever be a pond, whereas ONE rectangle is a pond, a long
+    thin one is a river or a canal, and four round a keep are a moat. `TerrainExclusion` already
+    supported `aabb` at no schema cost. Composition does the work a freeform editor would have done.
+  - **The tool is a third `BuildTool`, not a new buildable category** (`'build' | 'demolish' | 'dig'`).
+    Water is a hole, not a `[w,h,d]` box on a snap pitch, so the whole `BUILDABLES`/`evalPlacement`/
+    `sizeFor` pipeline was the wrong shape for it — but Wave 9's area-demolish marquee was exactly the
+    right one. Drag a patch, release to arm, the rail says what it costs and confirms. **G** toggles the
+    spade (X stays "wrecking tool on/off" — making it a three-way cycle would have turned the muscle
+    memory for putting the wrecker away into digging).
+  - **One tool, both directions**: a patch over water FILLS it in and hands back half of what was
+    actually paid (`WaterFeature.paid`, not a re-derived price — the same rule `removeBuilding`'s
+    half-materials refund follows). Which job it is doing is a fact about the ground, not a mode.
+  - **Nav-blocking is real, and rides the existing mechanism.** `terrainExclusions` stays the
+    hand-authored world geography it always was; `activeTerrainExclusions()` is a derived,
+    revision-memoised merge of it with `waterworks.list` (pushing into the static array would have
+    survived a save being loaded over another one — that is exactly how such a list ends up holding the
+    last three characters' moats). `NavGrid.rebuild()` gained a SECOND real input beside the buildings
+    array's identity — `waterworks.rev` — because digging changes no building at all, so the 1Hz poll
+    would otherwise have handed back a grid that never heard of the water. (`toggleGate` solves the same
+    problem by re-spreading `buildings`; that works, but it is a side channel.)
+  - **Collision parity with `POND`, deliberately, not deferred**: the player (`PlayerController`) and
+    raiders (`Enemies.tsx`) are pushed out by direct rectangle math in their own movement resolvers,
+    right beside the pond's circle, because that is where the pond has always stopped them. Villagers
+    route round it via `navSteer` like any other blocked ground, and their idle wander no longer rolls a
+    target INTO water (navSteer's documented "no route" fallback is to steer straight at the target,
+    which would have parked a villager in a moat cut inside their own holding).
+  - **`evalPlacement` refuses to build in it**, and `scatterNodesInRect` refuses to seed in it (which
+    matters because `buyLand` re-runs `seedNodes` over the widened holding).
+  - **Honestly scoped down, and this is the one real limitation**: it is an OVERLAY, not a carve. The
+    home ground is one GLB bake (`Terrain.tsx`'s `HomeMeadow`) and nothing here performs runtime
+    geometry surgery on it, so a dug waterway is drawn the way `POND` has always been drawn — a sandy
+    bank plate with a rippling water plate a few centimetres above the flat meadow, generalised from one
+    hardcoded circle to a list. Everything about it is mechanically real (blocks pathing, stops bodies,
+    refuses buildings, costs gold, persists); what it is not is a visible hole in the ground. That needs
+    the terrain-height work the next entry is scoped around, and is the honest follow-up.
+  - **The road is the causeway.** A cut may not take a road plate ("you have no bridge to put back over
+    it" — there is no bridge piece, and Wave 12's own road network is the thing that just made every
+    ground reachable). A moat therefore leaves a gap where the road crosses it, which is what a real one
+    does. Also refused: the natural pond and its dock, the signpost, the neighbours' doorstep, standing
+    buildings, the keep foundation (`buildingsInRect` deliberately skips it), resource nodes (ignoring
+    respawn state — a stump comes back, in the water, standing on it), and anything past your own fence
+    plus `DIG_OUTSKIRT` (16m). That last bound is mechanical, not thematic: nav-blocking only exists on
+    the ±56m home grid, and Barony's 32 + 16 = 48 keeps every legal cut inside the grid that makes it
+    real. Verified against the real compiled modules: every ground and both cultivated plots lie beyond
+    that reach, so their rectangles need no check of their own.
+  - **Correction to the above, from the verification pass, and now written into `terrainConflict`'s own
+    doc comment rather than left as folklore: only THREE of those refusals can ever be seen by a
+    player.** Every legal rectangle on the 2m lattice was enumerated at all five land tiers (418,981
+    shapes at Barony) and the first refusal each one hits recorded: the holding bound, the road, and —
+    from Estate up, once the fence reaches toward it — the pond. The dock is shadowed by the pond's
+    9.4m exclusion on the water side and the east road's plate row on the land side; the keep (85,85)
+    by the ±48 bound; the signpost by the road plate it stands on (see the layout entry below); the
+    starter village by that same plate row, its huts' clearance circles reaching exactly z=32. All four
+    are KEPT — every number that shadows them (`DIG_OUTSKIRT`, a land tier, a road leg, `POND`) is a
+    number that moves — but they are belt and braces, not gameplay, and the code now says so.
+  - Sizes: 6m minimum side (below that the blocked footprint is smaller than the walkers it should
+    stop), 72m maximum side (one side of a Barony moat is one drag), 600m² per cut, 24 waterways per
+    homestead (every consumer is a linear scan — that is the number that keeps that the right shape).
+    0.5g/m², floor 20g: a 20×20 pond is 200g against a 120g Freehold deed.
+  - Save: `SaveGame.waterworks?` — optional, absent on every older save, which reads identically to an
+    empty list. The static `POND` is not in it and never will be.
+  - Known gap, deliberately left at parity rather than widened into Wave 8's system: **homestead
+    defenders can stand in it.** `Defenders.tsx` moves them by direct straight-line steps toward a post
+    or target with no nav grid and no water check of any kind — they can already walk into the natural
+    `POND` today. Giving dug water a push-back they do not give the pond would have meant reworking six
+    separate position writes and their `postY` post-standing logic, which is a defender-movement change,
+    not a water one. Worth doing once, for both bodies of water, if it ever reads badly in play.
+- [PROTOTYPED 2026-08-13, Wave 12 · one quadrant only] **Elevation/terrain height, per map quadrant.**
+  Requested 2026-07-31 ("adding some elevation to our maps... elevating our map in quadrants"). The
+  original entry called this "not a small follow-up, a real terrain overhaul" and said to prototype one
+  quadrant before committing to four. That is exactly what shipped, and the bounded area is stated in
+  code rather than in prose: **the North Downs**, `game/data/downs.ts`, a 68m square at
+  x ∈ [-34, 34], z ∈ [-128, -60], crown 5.5m above the meadow. The rest of the homestead is still, and
+  deliberately, flat.
+  - **Why the homestead was flat was never "by convention".** Verified rather than assumed: the player's
+    own `floorHeightAt` opened with a literal `let floor = 0` and only ever raised it from placed
+    buildings; `HomeMeadow` never registered itself as anything gameplay could sample (only a mounted
+    DESTINATION did); `activeBuildRegion` hands out one scalar `groundY: 0` for the entire holding; and
+    `Villagers.tsx`/`Npc.tsx` write `position.set(x, 0, z)` in twelve places between them.
+  - **The mechanism is reused, not reinvented.** The knoll registers itself with `TemplateWorld.tsx`'s
+    mounted-root machinery and everything reads its height through the SAME downward raycast every
+    destination bake already uses for actor Y — factored into one `raycastGroundY`, with a second root
+    slot beside `mountedRoot` because Terrain stays mounted while you travel and one slot cannot hold
+    both. `homeGroundY(x, z)` is 0 everywhere outside the box, tested first, which is both what keeps it
+    affordable and where the prototype's contract is written down.
+  - **One source of truth for the ground.** `downsSurfaceY` is the authoring field; it builds the mesh
+    and is then never consulted at runtime. What the player stands on is the mesh's own triangles —
+    measured never more than 2.3cm from the field at 48 segments — so the ground you see and the ground
+    you stand on cannot drift apart.
+  - **Two real bugs found by simulating the actual movement resolver against the real field**, not by
+    eye. (1) `p.y > groundEye + 0.08` is a LEDGE test, and the follow-lerp trails a descent by roughly
+    (vertical speed / 12) — 0.11m at a WALK down a 0.335 gradient. Unqualified it fired on every frame of
+    every descent: the player bounced down the hill in a stutter of little falls. Now gated on
+    `slopeUnderfoot` (open ground this frame AND last), so terrain slopes fall through to the lerp and
+    stay grounded, while stepping off a crate and walking off a battlement keep the old behaviour
+    exactly. (2) Flattening the crown with a `min()` cost a slope discontinuity the 1.42m mesh missed by
+    8.5cm — the player standing visibly proud of their own hilltop. The cap is gone; a raised cosine is
+    already level at its centre.
+  - **The box's position is four numbers, not taste**, and all four are asserted in dev (`downs.ts`, the
+    same treatment `FIXED_WORLD_PROPS` gets): outside the widest fence (32) so no deed ever puts a
+    building on it; outside fence + `DIG_OUTSKIRT` (48) so the spade cannot cut a moat into a hillside;
+    outside the ±56m home nav grid, which is the strong one — **a walker with no cells cannot route onto
+    it**, so villagers, carriers, defenders and pathing raiders are out of reach rather than merely
+    unlikely; and clear of every road plate, ground, plot, the pond, the keep and the starter village.
+    North was already empty on purpose (`grounds.ts`'s own header).
+  - **Exactly one NPC-side `y=0` was touched**: `Enemies.tsx`'s three position writes, because raiders
+    chase anything within 26m and a player who pulls a raid and runs north takes the pack up the hill.
+    Villagers/court NPCs/defenders were left alone on purpose — they are anchored inside the holding,
+    ~90m short of the box and outside the nav grid.
+  - **Still flat-only-assumed, and known**: `evalPlacement`'s single `groundY: 0`; the node scatter;
+    `navgrid.ts` (untouched — the box is outside the home grid, so `maxStep`/`rasterizeHeights` had
+    nothing to do); `Villagers.tsx`/`Npc.tsx`/`Defenders.tsx`; Pass B's dug water (an overlay drawn at a
+    fixed y); road plates at y=0.02; and the rain field, which recycles between y=0 and its own ceiling
+    so a hilltop gets a slightly shorter column of it. Every one of those becomes real work the moment
+    elevation leaves this box — which is the point of having drawn the box.
+  - Residual, inherited rather than introduced: the eye trails a climb by (climb rate / 12) — 9cm at a
+    walk, 24cm at a gallop — because the follow-lerp was left exactly as it is. That is the same lag
+    every destination hillside has had since Phase 20. Destination worlds also still bounce downhill;
+    the `slopeUnderfoot` fix is deliberately gated to the homestead rather than applied to fourteen bakes
+    that cannot be tested here.
 - [TODO] **Buildings/walls should stop enemies from spawning inside the kingdom, not just block their
   movement afterward.** Requested 2026-07-31 ("some sort of building placement that prohibits enemies
   from spawning... wouldn't have enemy npcs spawning in the heart of our kingdom, if we had walls").

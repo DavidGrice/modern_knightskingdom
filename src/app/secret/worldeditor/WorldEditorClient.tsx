@@ -10,7 +10,7 @@
 // human replaying the scatter by hand (see cultivatedPlots.ts's own history).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RectSection } from '@/game/data/grounds';
-import { ROAD_TILE, routeCells } from '@/game/data/road';
+import { distanceToRoad, ROAD_REACH, ROAD_TILE, roadGateFor, routeCells } from '@/game/data/road';
 import { POND, BROOK, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '@/game/data/world';
 
 type Kind = 'tree' | 'rock' | 'herb';
@@ -72,6 +72,15 @@ function crossesRoad(s: RectSection): boolean {
     return Math.abs(s.x - rx) < s.halfX + half && Math.abs(s.z - rz) < s.halfZ + half;
   });
 }
+// Wave 12 · how far the ground you are dragging has ended up from the leg of
+// road that was laid to serve it. `crossesRoad` above only says the road
+// misses it — a ground dragged clean away from its own spur passes that check
+// happily, leaving the leg pointing at empty grass. Returns the distance so
+// the warning can say how far, since "move it back a bit" is the fix.
+function offRoad(s: RectSection): number {
+  const gate = roadGateFor(s);
+  return distanceToRoad(gate.x, gate.z);
+}
 
 const KIND_COLOR: Record<Kind, string> = { tree: '#3f8f5b', rock: '#8b8378', herb: '#8b5fa8' };
 const WARN_COLOR = '#c0392b';
@@ -116,6 +125,14 @@ export default function WorldEditorClient() {
         out.push(`${s.name} sits within 20m of the world edge — node seeding will silently starve here`);
       }
     }
+    // grounds only: a cultivated plot is ground you broke yourself, not
+    // somewhere the kingdom built a road to
+    for (const g of tables.grounds) {
+      const d = offRoad(g);
+      if (d > ROAD_REACH) {
+        out.push(`${g.name} is ${d.toFixed(0)}m off the carriageway — no leg of the road reaches its gate (road.ts's LEGS)`);
+      }
+    }
     for (let i = 0; i < sections.length; i++) {
       for (let j = i + 1; j < sections.length; j++) {
         if (sectionsOverlapLive(sections[i], sections[j])) {
@@ -136,6 +153,7 @@ export default function WorldEditorClient() {
     for (const s of sections) {
       if (!clearsHomesteadLive(s, tables.landTiers) || crossesRoad(s)) set.add(s.id);
     }
+    for (const g of tables.grounds) if (offRoad(g) > ROAD_REACH) set.add(g.id);
     for (let i = 0; i < sections.length; i++) {
       for (let j = i + 1; j < sections.length; j++) {
         if (sectionsOverlapLive(sections[i], sections[j])) { set.add(sections[i].id); set.add(sections[j].id); }

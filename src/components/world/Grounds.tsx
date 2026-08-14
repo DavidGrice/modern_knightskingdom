@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { Billboard, Text } from '@react-three/drei';
 import { GROUNDS, groundOpen, type RectSection } from '@/game/data/grounds';
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
-import { ROAD_TILE, routeCells } from '@/game/data/road';
+import { distanceToRoad, ROAD_REACH, ROAD_TILE, roadGateFor, routeCells } from '@/game/data/road';
 import { useGameStore } from '@/game/store/gameStore';
 import { deedName } from '@/game/data/grounds';
 import { InstancedProp, type InstancedNode } from './InstancedProps';
@@ -42,6 +42,24 @@ if (process.env.NODE_ENV !== 'production') {
         // eslint-disable-next-line no-console
         console.warn(`[grounds] ${g.id} lies across the road at tile ${cx},${cz}`);
       }
+    }
+  }
+  // Wave 12 · and the other half of the same pairing: the road has to REACH
+  // each ground, not merely miss it. The legs are hand-written in road.ts
+  // while the grounds are dragged around live at /secret/worldeditor, so a
+  // ground that quietly walks away from its own spur is the failure mode
+  // here — the check above would stay perfectly happy about it. Grounds only:
+  // a cultivated plot is ground you broke yourself, not somewhere the
+  // kingdom built a road to.
+  for (const g of GROUNDS) {
+    const gate = roadGateFor(g);
+    const d = distanceToRoad(gate.x, gate.z);
+    if (d > ROAD_REACH) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[grounds] ${g.id}'s gate (${gate.x.toFixed(1)}, ${gate.z.toFixed(1)}) is ${d.toFixed(1)}m off the `
+        + `carriageway — no leg of road.ts's LEGS reaches it`,
+      );
     }
   }
 }
@@ -77,7 +95,18 @@ export default function Grounds() {
   const destination = useGameStore((s) => s.destination);
   const cultivatedPlots = useGameStore((s) => s.cultivatedPlots);
   // grounds belong to the homestead map; a template world has its own country
-  const rings = useMemo(() => GROUNDS.map((g) => ({ g, open: groundOpen(g, landTier) })), [landTier]);
+  // Wave 12 · the boundary stone stands at the ground's GATE — the point on
+  // its fence nearest the road (road.ts's roadGateFor) — rather than at the
+  // middle of whichever edge happens to face the homestead. The two agreed
+  // while the road was one lane running south of everything; once a leg
+  // reaches the Old Quarry's west fence, a stone still planted on the
+  // quarry's south edge is a signpost pointing away from the only road that
+  // goes there. Derived, not hand-placed, so a ground moved in the world
+  // editor takes its stone with it.
+  const rings = useMemo(
+    () => GROUNDS.map((g) => ({ g, open: groundOpen(g, landTier), gate: roadGateFor(g) })),
+    [landTier],
+  );
 
   // one shared InstancedProp call for every ground's fence, rather than one
   // per ground — same reasoning as ResourceNodes.tsx's TreeGroup: a single
@@ -107,10 +136,10 @@ export default function Grounds() {
   return (
     <group>
       <InstancedProp url={FENCE_URL} height={FENCE_HEIGHT} nodes={fenceNodes} />
-      {rings.map(({ g, open }) => (
-        // a boundary stone on the homestead-facing edge, with the ground's
-        // name and — while it is beyond your deed — what buys it
-        <group key={g.id} position={[g.x, 0, g.z + (g.z > 0 ? -g.halfZ : g.halfZ)]}>
+      {rings.map(({ g, open, gate }) => (
+        // a boundary stone at the ground's gate, with the ground's name
+        // and — while it is beyond your deed — what buys it
+        <group key={g.id} position={[gate.x, 0, gate.z]}>
           <mesh position-y={0.6} castShadow>
             <boxGeometry args={[0.55, 1.2, 0.4]} />
             <meshStandardMaterial color={open ? '#9a9287' : '#6f747c'} roughness={0.95} />

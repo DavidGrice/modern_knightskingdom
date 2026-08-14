@@ -18,6 +18,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { BUILDABLE_BY_ID, BUILD_REGION, GRID, buildingsInRect, labAssetId, sizeFor } from '@/game/data/buildables';
 import { labIsCorner } from '@/game/data/labCapabilities';
 import { snapsAsWall, wallSnap } from '@/game/walls';
+import { WATER_BANK, snapDigRect } from '@/game/waterworks';
 import { WORLD_HALF } from '@/game/data/world';
 import { buildCamState } from '@/game/buildCam';
 import { playerState } from '@/game/playerState';
@@ -133,6 +134,12 @@ export default function BuildController() {
   const freeform = useGameStore((s) => s.freeformBuild);
   const demolishRect = useGameStore((s) => s.demolishRect);
   const setDemolishRect = useGameStore((s) => s.setDemolishRect);
+  const digRect = useGameStore((s) => s.digRect);
+  const setDigRect = useGameStore((s) => s.setDigRect);
+  const digPreview = useGameStore((s) => s.digPreview);
+  // Wave 12 · both marquee tools drag the same way, so everything below asks
+  // "is a rectangle tool in hand" rather than naming one of them twice
+  const marqueeTool = buildTool === 'demolish' || buildTool === 'dig';
   const evalPlacement = useGameStore((s) => s.evalPlacement);
   const evalBlueprintPlacement = useGameStore((s) => s.evalBlueprintPlacement);
   const canAfford = useGameStore((s) => s.canAfford);
@@ -211,6 +218,14 @@ export default function BuildController() {
       if (e.code === 'KeyX') {
         const st = useGameStore.getState();
         st.setBuildTool(st.buildTool === 'demolish' ? 'build' : 'demolish');
+      }
+      // Wave 12 · the spade. Its own key rather than a third stop on X's
+      // cycle: X has meant "wrecking tool on/off" since Wave 9, and turning it
+      // into a three-way rotation would make the muscle memory for putting the
+      // wrecking tool away start digging instead.
+      if (e.code === 'KeyG') {
+        const st = useGameStore.getState();
+        st.setBuildTool(st.buildTool === 'dig' ? 'build' : 'dig');
       }
     };
     const up = (e: KeyboardEvent) => { keys.current[e.code] = false; };
@@ -498,10 +513,23 @@ export default function BuildController() {
   // Wave 9 · what the marquee currently covers, live while dragging and again
   // once armed. Same shared footprint test the store's demolishPreview uses, so
   // the outline and the confirmation can never disagree about what is inside.
-  const marquee = dragRect ?? demolishRect;
+  // The two tools never both have a rectangle (setBuildTool clears both on any
+  // switch), so which one the live `dragRect` belongs to is decided by which
+  // tool is in hand, and each armed rect is simply drawn by its own tool.
+  const marquee = buildTool === 'dig' ? demolishRect : (dragRect ?? demolishRect);
   const marqueeHits = useMemo(
     () => (marquee ? buildingsInRect(buildings, destination ?? null, marquee) : []),
     [marquee, buildings, destination],
+  );
+
+  // Wave 12 · the dig patch, and the SAME verdict the rail and the confirm
+  // button will give it — a drag that cannot be cut has to say so while the
+  // button is still down, not after.
+  const waterRect = buildTool === 'dig' ? (dragRect ?? digRect) : digRect;
+  const waterEval = useMemo(
+    () => digPreview(waterRect),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [waterRect, digPreview, buildings],
   );
 
   // sizeFor's swapped [sx,sz] is for grid-snap math only (snapPoint above) —
@@ -564,12 +592,18 @@ export default function BuildController() {
             setRowCells(rowCellsFrom(rowAnchor.current, raw));
             return;
           }
-          if (dragRaw.current && buildTool === 'demolish') {
+          if (dragRaw.current && marqueeTool) {
             const s = dragRaw.current;
-            setDragRect({
+            const swept = {
               minX: Math.min(s.x, raw.x), maxX: Math.max(s.x, raw.x),
               minZ: Math.min(s.z, raw.z), maxZ: Math.max(s.z, raw.z),
-            });
+            };
+            // the spade's patch shows GRID-SNAPPED while you drag, because that
+            // is the rectangle it will actually cut — a preview that grew by a
+            // metre at the moment you let go would be the one thing you cannot
+            // check before committing. The wrecking tool stays raw: it selects
+            // pieces, it does not lay ground.
+            setDragRect(buildTool === 'dig' ? snapDigRect(swept) : swept);
             return;
           }
           setGhost(snapPoint(e.point));
@@ -582,10 +616,11 @@ export default function BuildController() {
           // release to arm it, confirm on the rail (see BuildBar). Nothing is
           // torn down by the drag itself — one gesture can cover an entire
           // wall run, and this is the game's only action that can.
-          if (buildTool === 'demolish') {
+          if (marqueeTool) {
             dragRaw.current = raw;
             setDragRect(null);
             setDemolishRect(null);
+            setDigRect(null);
             return;
           }
           // relocating an already-built piece has no "pop into being" moment
@@ -625,7 +660,7 @@ export default function BuildController() {
             else if (activeType && cells.length === 1) placeBuilding(activeType, cells[0].x, cells[0].z, useRot, useYaw);
             return;
           }
-          if (dragRaw.current && buildTool === 'demolish') {
+          if (dragRaw.current && marqueeTool) {
             const r = dragRect;
             dragRaw.current = null;
             setDragRect(null);
@@ -633,7 +668,10 @@ export default function BuildController() {
             // keeps a stray click from parking a confirmation on the rail.
             // EITHER axis is enough: sweeping a thin line down a wall run is
             // the most natural way to ask for exactly that wall run.
-            if (r && (r.maxX - r.minX >= MIN_MARQUEE || r.maxZ - r.minZ >= MIN_MARQUEE)) setDemolishRect(r);
+            if (r && (r.maxX - r.minX >= MIN_MARQUEE || r.maxZ - r.minZ >= MIN_MARQUEE)) {
+              if (buildTool === 'dig') setDigRect(r);
+              else setDemolishRect(r);
+            }
           }
         }}
         onPointerLeave={() => { mouseDown.current = false; }}
@@ -766,6 +804,32 @@ export default function BuildController() {
               </mesh>
             );
           })}
+        </group>
+      )}
+      {/* Wave 12 · the dig patch: the bank it would throw up (the outer, sandy
+          rectangle) and the water itself inside it, so what you are dragging
+          out is the shape that will actually be there — and red the moment the
+          patch is refused, with the rail carrying the reason. A `fill` patch
+          reads sandy throughout: it is ground coming back, not water. */}
+      {waterRect && (
+        <group position={[(waterRect.minX + waterRect.maxX) / 2, 0, (waterRect.minZ + waterRect.maxZ) / 2]}>
+          <mesh rotation-x={-Math.PI / 2} position-y={0.05}>
+            <planeGeometry args={[
+              waterRect.maxX - waterRect.minX + WATER_BANK * 2,
+              waterRect.maxZ - waterRect.minZ + WATER_BANK * 2,
+            ]} />
+            <meshBasicMaterial
+              color={waterEval.problem ? '#e04434' : '#c9b878'}
+              transparent opacity={0.42} depthWrite={false}
+            />
+          </mesh>
+          <mesh rotation-x={-Math.PI / 2} position-y={0.09}>
+            <planeGeometry args={[waterRect.maxX - waterRect.minX, waterRect.maxZ - waterRect.minZ]} />
+            <meshBasicMaterial
+              color={waterEval.problem ? '#8a2a20' : waterEval.mode === 'fill' ? '#a08a50' : '#3fa8d8'}
+              transparent opacity={0.6} depthWrite={false}
+            />
+          </mesh>
         </group>
       )}
       {/* blueprint ghost — one box+footprint per piece, each individually
