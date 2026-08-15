@@ -23,7 +23,9 @@ import { touchState } from '@/game/touchInput';
 import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer } from '@/game/combat';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { fishingState, startFishing, tickFishing } from '@/game/fishing';
+import { tickBuildChallenge } from '@/game/buildChallenge';
 import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
+import { falconPos, FALCON_CALL_RANGE } from '@/game/falcon';
 import { atJoustPass } from '@/game/joust';
 import { detonate, fireCannon, quintainHit, ramCheck } from '@/game/siege';
 import { cartState, cartLivePos } from '@/game/carts';
@@ -52,7 +54,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic';
   station?: string;
 }
 
@@ -592,6 +594,26 @@ export default function PlayerController() {
           label: st.guild === hall.id ? `${hall.name} (your banner)` : `Enter the ${hall.name}`,
         };
       }
+      // Wave 13 fix (2026-08-14) · a 'retrieve' room's Sealed Reliquary
+      // (dungeon.ts's DungeonRoom.objective) used to be considered only in
+      // the general facing-scored sweep far below findTarget — but THIS
+      // block (every branch above) always returns first whenever
+      // st.destination is set, which it always is while visiting the
+      // dungeon ('dungeon' is set by enterDungeon() and never cleared until
+      // the player leaves). That made the relic permanently unreachable.
+      // Checked here instead, same distance-only test the NPC/horse checks
+      // above already use (no facing requirement needed for those either).
+      if (st.destination === 'dungeon' && dungeonState.layout) {
+        for (const room of dungeonState.layout.rooms) {
+          if (room.objective === 'retrieve' && !room.relicTaken
+            && Math.hypot(room.cx - pos.current.x, room.cz - pos.current.z) < INTERACT_RANGE) {
+            return {
+              id: String(room.index), kind: 'dungeon_relic', duration: 1.0, actionable: true,
+              label: 'Take the Sealed Reliquary',
+            };
+          }
+        }
+      }
       return { id: 'travel_return', kind: 'travel_return', duration: 0, actionable: true, label: 'Return Home' };
     }
     // already pushing/hitched: E always lets go, regardless of which way
@@ -705,6 +727,24 @@ export default function PlayerController() {
         id: h.id, kind: 'horse', duration: 0, actionable: true, label: 'Ride Horse',
       });
     }
+    // Wave 13 · the untamed falcon can be called down and kept. A walk-up
+    // range doesn't mean anything for something that never lands and is
+    // never at ground level, so this feeds the SAME scored consider() the
+    // rest of the interact system runs on the bird's own live position
+    // (game/falcon.ts, written every frame by Wildlife.tsx) at a wider
+    // range instead of a fixed spot — you have to actually be near it, and
+    // looking up at it, on whatever part of its circling path it is
+    // currently flying. Hidden at night to match the bird's own visibility
+    // rule (Wildlife.tsx). No skill check, no minigame, same as mounting a
+    // wild horse: in range and holding E is the whole of it.
+    if (!st.falconTamed && worldEnv.night < 0.6) {
+      consider(falconPos.x, falconPos.z, falconPos.y, {
+        id: 'falcon', kind: 'call_falcon', duration: 0, actionable: true, label: 'Whistle for the Falcon',
+      }, FALCON_CALL_RANGE);
+    }
+    // (the dungeon relic's own interact check lives up in the st.destination
+    // branch above — this sweep never runs while destination is set, since
+    // that branch always returns first; see the Wave 13 fix comment there.)
     // L69 · the deed ladder used to live entirely in a build-menu button, so
     // the only way to learn that a ground could be bought was to find that
     // button. Every ground's boundary stone is now an interaction: walk up to
@@ -1020,6 +1060,39 @@ export default function PlayerController() {
       // no longer touches it; the viewmodel renders while mounted regardless
       // of it (Viewmodel.tsx), matching what the camera actually does.
       st.notify('You mount the horse. Hold Shift to gallop!');
+    } else if (t.kind === 'call_falcon') {
+      st.tameFalcon();
+    } else if (t.kind === 'dungeon_relic') {
+      // Wave 13 · direct mutation on the shared dungeonState leaf module,
+      // same convention Enemies.tsx already uses for room.cleared/spawned —
+      // there is no store-side copy of dungeon room state to keep in sync.
+      const layout = dungeonState.layout;
+      const room = layout?.rooms.find((r) => String(r.index) === t.id);
+      if (room && !room.relicTaken) {
+        room.relicTaken = true;
+        room.cleared = true;
+        const bonus = 10 + layout!.rooms.length * 3;
+        st.addItems({ gold: bonus }, 'grant');
+        st.notify(`You lift the Sealed Reliquary from its cradle — +${bonus} gold.`, true);
+        // Bugfix (2026-08-14, found while live-reverifying the reachability
+        // fix above): dungeon_relic is the FIRST duration>0 hold action ever
+        // reachable inside findTarget()'s `if (st.destination)` block —
+        // every other target there (NPC/horse/Cedric/guild hall/the
+        // 'Return Home' fallback itself) is duration:0 and fires instantly,
+        // so there was never a frame gap between "this hold finished" and
+        // "what's the next target" while the SAME key-press was still down.
+        // Taking the relic removes it from consideration, so the very next
+        // frame's findTarget() falls through to that same block's
+        // 'travel_return' fallback — and since it is duration:0 and
+        // talkCooldown is otherwise already elapsed, it fires the instant a
+        // real player's E-release lags the completion by even one frame,
+        // silently ejecting them from the dungeon (and any unclear rooms,
+        // including the full-clear reward) the moment they pick up a relic.
+        // Reusing the same talkCooldown gate every duration:0 action already
+        // respects buys the player a real beat to let go of E first.
+        talkCooldown.current = 0.6;
+        audio.play('treasure', 0.8);
+      }
     } else if (t.kind === 'dismount') {
       const fx = -Math.sin(yaw.current);
       const fz = -Math.cos(yaw.current);
@@ -1390,8 +1463,12 @@ export default function PlayerController() {
         // the Sealed Crypt (Phase 17) is the one destination with real walls
         // to actually bump into — a generated maze should feel like one
         if (st.destination === 'dungeon' && dungeonState.layout) {
-          for (const w of dungeonState.layout.walls) {
-            const [sx, sz] = sizeFor('stonewall', w.rot);
+          const layout = dungeonState.layout;
+          for (const w of layout.walls) {
+            // Wave 13 · a layout can roll a second wall mesh (wallStyle) —
+            // both real WALL_STYLES entries share the same 8m-wide/2.x-deep
+            // footprint family, so this stays correct for either.
+            const [sx, sz] = sizeFor(layout.wallStyle, w.rot);
             const hx = sx / 2 + PLAYER_RADIUS;
             const hz = sz / 2 + PLAYER_RADIUS;
             const dx2 = nx - w.x;
@@ -1624,6 +1701,10 @@ export default function PlayerController() {
         const dist = fishNode ? Math.hypot(fishNode.x - pos.current.x, fishNode.z - pos.current.z) : Infinity;
         tickFishing(fishNode, dist, st.notify);
       }
+      // Wave 13 · Timed Build Challenge countdown (game/buildChallenge.ts) —
+      // the loss/abandon path only; a WIN is resolved from gameStore.ts's
+      // constructBuilding, the moment a piece actually finishes.
+      tickBuildChallenge(st.destination, st.notify);
 
       // interaction targeting + hold-E (construction sites AND gathering —
       // 'tree'/'rock'/'fishing'/'herb', requested 2026-07-30 "for mechanical

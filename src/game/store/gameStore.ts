@@ -65,6 +65,7 @@ import {
 } from '../waterworks';
 import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST } from '../dungeon';
 import { resetArenaRun, endArenaRun, type ArenaEnvId } from '../arena';
+import { buildChallengeState, BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET } from '../buildChallenge';
 
 const ZERO_XP: Record<SkillId, number> = {
   woodcutting: 0, mining: 0, smithing: 0, fishing: 0, building: 0, combat: 0, farming: 0,
@@ -187,6 +188,16 @@ interface GameState {
    *  patrol AI reads it every frame and must not go through the store. */
   stabled: string[];
   mounts: Record<string, string>;
+  /** Wave 13 · the falcon companion (game/falcon.ts) has been tamed. See
+   *  SaveGame.falconTamed for why this is one flag, not a roster like the
+   *  horses above. */
+  falconTamed: boolean;
+  /** Wave 13 · turned on Cedric's own war council once already sworn to him
+   *  (see betrayCedric). A permanent burnt bridge, not a cooldown: once
+   *  true, `pledgeAlliance('cedric')` refuses forever — the one thing that
+   *  keeps a one-time defection from becoming a free way to ping-pong
+   *  between the two pledges. */
+  betrayedCedric: boolean;
   buyLand: () => void;
   /** shift the axis and tell the player why it moved */
   shiftAllegiance: (delta: number, reason: string) => void;
@@ -301,6 +312,9 @@ interface GameState {
   sellItem: (item: ItemId, qty: number) => void;
   buyOffer: (item: ItemId, qty: number, price: number) => void;
   checkDeeds: () => void;
+  /** Wave 13 · tame the falcon companion — a no-op once already tamed,
+   *  mirroring markDragonSeen/openTreasureChest's own one-way guard. */
+  tameFalcon: () => void;
   markDragonSeen: () => void;
   recordDragonSiege: (routed: boolean) => void;
   /** Cedric's Siege: a homestead siege ended — routed before the timer, or
@@ -322,6 +336,15 @@ interface GameState {
   markLoreSeen: (npcId: string) => void;
   markCedricDefeated: () => void;
   pledgeAlliance: (side: Alliance) => void;
+  /** Wave 13 · the one turncoat move this wave ships: a knight already
+   *  sworn to Cedric can turn on his own camp and return to unsworn ground,
+   *  free to pledge Leo properly afterwards. One-directional and permanent
+   *  — see `betrayedCedric`'s own doc comment for why Leo->Cedric is NOT
+   *  the mirror of this (the interact branch that greets a Leo-sworn knight
+   *  at Cedric's camp is a duel, not a parley, so there is no symmetric
+   *  "ask to defect" moment to hang this off without redesigning that
+   *  branch — left out of scope, see ROADMAP). */
+  betrayCedric: () => void;
   joinGuild: (guildId: string) => void;
   buyTalent: (talentId: string) => void;
   spendAttrPoint: (id: AttrId) => void;
@@ -759,13 +782,22 @@ function createGameStore() {
     const sq = get().sideQuest;
     if (!sq) return;
     const def = sideQuestsOf(sq.npcId).find((q) => q.id === sq.questId);
-    if (!def || def.kind !== kind) return;
+    if (!def) return;
+    // Wave 13 · a 'deliver' errand is gathered exactly like a 'gather' one —
+    // the only thing that makes it a delivery is WHERE it gets turned in
+    // (see turnInSideQuest's deliverTo check below) — so a gather-kind
+    // action bump also advances a deliver-kind errand's progress.
+    const matchesKind = def.kind === kind || (def.kind === 'deliver' && kind === 'gather');
+    if (!matchesKind) return;
     if (def.target !== 'any' && def.target !== target) return;
     if (sq.have >= def.need) return;
     const have = Math.min(def.need, sq.have + amount);
     set({ sideQuest: { ...sq, have }, dirty: true });
     if (have >= def.need) {
-      get().notify(`Errand ready to turn in: see ${sideQuestGiverName(sq.npcId)}!`, true);
+      const msg = def.kind === 'deliver'
+        ? `Loaded up — now carry it to ${WORLD_DESTINATION_BY_ID[def.deliverTo ?? '']?.name ?? 'its destination'}.`
+        : `Errand ready to turn in: see ${sideQuestGiverName(sq.npcId)}!`;
+      get().notify(msg, true);
     }
   }
 
@@ -894,6 +926,8 @@ function createGameStore() {
     builtSets: [],
     stabled: [],
     mounts: {},
+    falconTamed: false,
+    betrayedCedric: false,
     guild: null,
     skillTree: [],
     attrSpent: {},
@@ -960,7 +994,7 @@ function createGameStore() {
         notifications: [], prompt: null, actionProgress: null, dirty: true,
         timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
         gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, guild: null, skillTree: [], attrSpent: {}, dyes: [],
+        destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, betrayedCedric: false, guild: null, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
@@ -1024,6 +1058,8 @@ function createGameStore() {
         builtSets: s.builtSets ?? [],
         stabled: s.stabled ?? [],
         mounts: s.mounts ?? {},
+        falconTamed: s.falconTamed ?? false,
+        betrayedCedric: s.betrayedCedric ?? false,
         guild: s.guild ?? null,
         skillTree: s.skillTree ?? [],
         attrSpent: s.attrSpent ?? {},
@@ -1086,6 +1122,8 @@ function createGameStore() {
         // store mirror that only updates on load
         stabled: [...stabledHorses.ids],
         mounts: { ...stabledHorses.assigned },
+        falconTamed: s.falconTamed,
+        betrayedCedric: s.betrayedCedric,
         guild: s.guild,
         skillTree: s.skillTree,
         attrSpent: s.attrSpent,
@@ -1939,14 +1977,21 @@ function createGameStore() {
       st.notify(`🏛 You now carry the banner of the ${def.name}!`, true);
     },
 
-    // Phase 19 alliance branch: a one-way pledge (no re-swearing sides — a
-    // turncoat's tale is a future-phase idea, not this one). The raid system
-    // reads this to decide WHO attacks the homestead: pledge to Cedric and
-    // the crown's knights come for you; pledge to Leo (or stay unsworn) and
-    // the bandit/Cedric raids continue as before.
+    // Phase 19 alliance branch: a one-way pledge — no CASUAL re-swearing
+    // (Wave 13 adds exactly one deliberate exception: betrayCedric below).
+    // The raid system reads this to decide WHO attacks the homestead:
+    // pledge to Cedric and the crown's knights come for you; pledge to Leo
+    // (or stay unsworn) and the bandit/Cedric raids continue as before.
     pledgeAlliance: (side) => {
       const st = get();
       if (st.alliance) return;
+      // Wave 13 · a knight who already turned on Cedric once (betrayCedric)
+      // can never clasp arms with him again — otherwise defecting would be
+      // a free way to ping-pong between both pledges' exclusive rewards.
+      if (side === 'cedric' && st.betrayedCedric) {
+        st.notify("Cedric's camp wants nothing to do with a known turncoat.");
+        return;
+      }
       set({ alliance: side, panel: 'none', dirty: true });
       audio.play('horn', 0.9);
       if (side === 'leo') {
@@ -1954,16 +1999,45 @@ function createGameStore() {
       } else {
         audio.playVoice('greeting_cedric', 0.85);
         st.notify('🐂 You clasp arms with Cedric the Bull. The crown will name you traitor!', true);
+        // Wave 13 alliance follow-up: pledging Cedric used to cost nothing
+        // against the OTHER side — the raid AI flips (a strict benefit) but
+        // Richard and the Queen's opinion of you never moved, even though
+        // you just swore to the man raiding their kingdom. A real dip, not
+        // a cosmetic one — see addReputation's own tier-crossing guard for
+        // why a negative amount is safe to pass here.
+        st.addReputation('richard', -20);
+        st.addReputation('queen', -20);
+        st.notify("Word reaches Richard and the Queen — your standing with the crown's household has soured.");
       }
+    },
+
+    // Wave 13 · the one turncoat move this wave ships — see this action's
+    // own interface doc comment for why it is one-directional. Only ever
+    // reachable from ParleyPanel's War Council branch, which only renders
+    // at Cedric's own camp with alliance === 'cedric' already true, so no
+    // extra location/state guard is needed here beyond the alliance check.
+    betrayCedric: () => {
+      const st = get();
+      if (st.alliance !== 'cedric') return;
+      set({
+        alliance: null, betrayedCedric: true, panel: 'none', dirty: true,
+        // burn the rebellion errand you were carrying too, if any — you
+        // don't get to finish a job for a war council you just turned on
+        sideQuest: st.sideQuest?.npcId === 'cedric' ? null : st.sideQuest,
+      });
+      audio.play('horn', 0.9);
+      st.notify("🗡 You turn on Cedric's rebellion — the Bull will never trust you again, but the crown might.", true);
+      st.shiftAllegiance(20, "You turned your blade on the Bull's own camp");
     },
 
     acceptSideQuest: (npcId, questId) => {
       const st = get();
       const def = sideQuestsOf(npcId).find((q) => q.id === questId);
       if (!def || st.sideQuest) return;
-      // precursor chains and allegiance gates are enforced HERE as well as in
-      // the UI, so a stale panel can never hand out work you have not earned
-      const blocked = sideQuestBlocker(def, st.completedSideQuests, st.allegiance);
+      // precursor chains and allegiance/alliance gates are enforced HERE as
+      // well as in the UI, so a stale panel can never hand out work you have
+      // not earned
+      const blocked = sideQuestBlocker(def, st.completedSideQuests, st.allegiance, st.alliance);
       if (blocked) { st.notify(blocked); return; }
       set({ sideQuest: { npcId, questId, have: 0 }, dirty: true });
       st.notify(`Errand accepted: ${def.label}`);
@@ -1975,8 +2049,16 @@ function createGameStore() {
       if (!sq) return;
       const def = sideQuestsOf(sq.npcId).find((q) => q.id === sq.questId);
       if (!def || sq.have < def.need) return;
-      // gather errands hand the goods over
-      if (def.kind === 'gather') {
+      // Wave 13 · a delivery errand is only "done" once you're standing
+      // where the goods were asked for — not back with whoever handed it to
+      // you (see npcs.ts's own doc comment on `deliverTo`)
+      if (def.kind === 'deliver' && st.destination !== def.deliverTo) {
+        const distName = WORLD_DESTINATION_BY_ID[def.deliverTo ?? '']?.name ?? 'its destination';
+        st.notify(`Not delivered yet — carry it to ${distName} first.`);
+        return;
+      }
+      // gather AND deliver errands hand the physical goods over
+      if (def.kind === 'gather' || def.kind === 'deliver') {
         const inv = { ...st.inventory };
         const held = inv[def.target as ItemId] ?? 0;
         if (held < def.need) {
@@ -1990,7 +2072,11 @@ function createGameStore() {
       st.addXp(def.xpSkill, def.xp);
       if (def.rewardItems) st.addItems(def.rewardItems, 'grant');
       audio.play('treasure', 0.8);
-      st.notify(`${sideQuestGiverName(sq.npcId)} thanks you for your service!`, true);
+      // a delivery hands off to whoever's actually standing here, not the
+      // (physically absent) giver back home
+      st.notify(def.kind === 'deliver'
+        ? 'The load is handed over — word of it will get back to ' + sideQuestGiverName(sq.npcId) + '.'
+        : `${sideQuestGiverName(sq.npcId)} thanks you for your service!`, true);
       st.addReputation(sq.npcId, 15);
       // remember it, so chains can require it and it never re-offers as new
       if (!st.completedSideQuests.includes(def.id)) {
@@ -2197,7 +2283,14 @@ function createGameStore() {
       const tierAt = (rep: number) => [...npc.repTitles!].reverse().find((t) => rep >= t.min);
       const tierBefore = tierAt(before);
       const tierAfter = tierAt(after);
-      if (tierAfter && tierAfter !== tierBefore) {
+      // Wave 13 · only a genuine step UP is an "achievement" worth a cheer
+      // and a purse. Every call site before this wave only ever passed a
+      // positive amount, so this guard was never exercised — but the
+      // alliance reputation fallout (pledgeAlliance) is the first caller to
+      // pass a negative one, and without the `.min` comparison a downward
+      // dip that still lands on a real (lower) tier boundary would fire the
+      // same "now sees you as" toast and hand out gold for LOSING standing.
+      if (tierAfter && (!tierBefore || tierAfter.min > tierBefore.min)) {
         audio.play('villager', 0.7);
         st.notify(`${npc.name} now sees you as: ${tierAfter.title}!`, true);
         st.addItems({ gold: 10 }, 'grant');
@@ -2880,6 +2973,14 @@ function createGameStore() {
       }
     },
 
+    tameFalcon: () => {
+      const st = get();
+      if (st.falconTamed) return;
+      set({ falconTamed: true, dirty: true });
+      audio.play('falcon', 0.8);
+      st.notify('The falcon lands and stays — it will watch the land for you now.', true);
+    },
+
     markDragonSeen: () => {
       if (get().dragonSeen) return;
       set({ dragonSeen: true, dirty: true });
@@ -3019,14 +3120,22 @@ function createGameStore() {
       const goldGained = accepted.gold ?? 0;
       let gathered = 0;
       if (source === 'gather') {
-        for (const [id, n] of Object.entries(accepted)) {
-          // quest counters and lifetime stats track what reached the stores,
-          // not what was swung at — an objective must not tick on a log that
-          // was turned away at a full storehouse
-          bumpQuestCounters('gather', id, n as number);
-          gathered += n as number;
-        }
+        for (const n of Object.values(accepted)) gathered += n as number;
       }
+      // Bugfix (2026-08-14, found by Wave 13's verify pass): commit THIS
+      // call's own inventory/stats BEFORE bumping quest counters below, not
+      // after. bumpQuestCounters can synchronously complete a main quest —
+      // every main quest carries grantItems now — and completeQuest() makes
+      // its own NESTED st.addItems(grantItems, 'grant') call for the gold
+      // reward. That nested call reads a fresh get().inventory and commits
+      // its own set() immediately. If OUR set() ran after (as it used to),
+      // our snapshot taken before the nested call would overwrite the
+      // store's inventory right back over what the nested call just
+      // committed — silently discarding the quest's gold every time the
+      // LAST objective a gather completed was itself the quest's final
+      // objective (guaranteed on first_steps, the game's first quest).
+      // Setting first means the nested call always layers its own grant on
+      // top of what we just wrote, instead of racing it.
       set({
         inventory: inv,
         stats: {
@@ -3036,6 +3145,14 @@ function createGameStore() {
         },
         dirty: true,
       });
+      if (source === 'gather') {
+        for (const [id, n] of Object.entries(accepted)) {
+          // quest counters track what reached the stores, not what was
+          // swung at — an objective must not tick on a log that was turned
+          // away at a full storehouse
+          bumpQuestCounters('gather', id, n as number);
+        }
+      }
       // Refusal is LOUD (silently eating a haul is indistinguishable from a
       // bug) but throttled — a full store refuses on every villager trip and
       // every axe swing, and five identical toasts is its own kind of noise.
@@ -3731,6 +3848,25 @@ function createGameStore() {
         audio.play('brick_connect', 0.85);
         bumpQuestCounters('build', b.type, 1);
         st.notify(`${def.name} construction complete!`);
+        // Wave 13 · Timed Build Challenge (see game/buildChallenge.ts) — a
+        // finished piece raised at the challenge ground, while a run is
+        // live, counts toward it. `b.world` is the tag placeBuilding stamped
+        // at placement time (st.destination then), so this can only ever
+        // fire for a piece actually standing at BUILD_CHALLENGE_ID — the
+        // homestead-villager auto-build pass (below, this same file) never
+        // touches a building tagged that way, since no villager is ever
+        // assigned to a challenge ground.
+        if (b.world === BUILD_CHALLENGE_ID && buildChallengeState.active) {
+          buildChallengeState.built += 1;
+          if (buildChallengeState.built >= BUILD_CHALLENGE_TARGET) {
+            buildChallengeState.active = false;
+            const bonus = 40;
+            st.addItems({ gold: bonus }, 'grant');
+            st.addXp('building', 60);
+            st.notify(`Challenge complete! ${BUILD_CHALLENGE_TARGET} pieces raised before the bell — +${bonus} gold.`, true);
+            audio.play('treasure', 0.85);
+          }
+        }
       } else {
         audio.play('thud', 0.6);
       }

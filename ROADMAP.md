@@ -508,9 +508,58 @@ granting the unlock + materials and seeing all 26 pieces appear.
 
 **World & locations**
 - [TODO] Streams/rivers/waterfalls using the already-copied `spr203` cascade strip (natural fit for Phase 20 step 1).
-- [TODO] Sealed Crypt follow-ups: branching layouts, new objective types (escort/retrieve/survive), visual reskins
-  via other piece categories. ✅ *Cosmetic-unlock loot shipped 2026-07-19* — full clears #1/#2 award the
-  Broken Axe / Horned Sigil crests (see the crest-unlock entry under Homestead & economy).
+- [COMPLETE] ✅ **Sealed Crypt follow-ups** (2026-08-14, Wave 13). *Cosmetic-unlock loot shipped
+  2026-07-19* — full clears #1/#2 award the Broken Axe / Horned Sigil crests (see the crest-unlock entry
+  under Homestead & economy) — carried forward unchanged. Three sub-asks, each checked against the real
+  code before touching anything:
+  - **Branching layouts**: already shipped 2026-07-27 (`dungeon.ts`'s own header comment: "replaces the
+    linear chain with a branching tree"), just never retagged — the exact same bookkeeping gap N80-82 had.
+    `tryGenerate()` picks a parent uniformly from every room placed so far, not just the most recent, and
+    attaches via a random free wall slot on a random side — a real randomized tree, not a re-rolled
+    straight line. No code work needed this wave; retagged here.
+  - **One new objective type — retrieve**: `DungeonRoom` gained an `objective: 'none'|'combat'|'retrieve'`
+    field (replacing the old enemyCount-inference the entry room's "no fight" state used to lean on).
+    ~30% of non-entry, non-boss rooms roll `'retrieve'` instead of combat: no enemies, a real prop (the
+    same verified `chest` `RealPropPart` the Grand Keep's own treasure chest uses — no new asset) sits at
+    the room's centre, and `cleared` flips the moment the player holds E on it
+    (`PlayerController.tsx`'s new `'dungeon_relic'` interact) instead of the last enemy dying. Pays a
+    smaller gold bonus than a full clear, scaled the same way (`10 + rooms*3` vs. the full-clear
+    `20 + rooms*8`). Escort/survive are real too but explicitly deferred: escort needs a follow-the-player
+    NPC with its own pathing, survive needs a wave/timer system — neither exists in the dungeon today, and
+    building either alongside retrieve in one wave was exactly the overreach the task brief warned against.
+  - **One visual reskin variant**: `DungeonLayout.wallStyle` rolls once per descent between `stonewall`
+    (mc007, the original) and `mc006` ("Castle Wall (Plain)") — a real second mesh from the same verified,
+    correctly-scaled mc-series family, not a new asset. Deliberately NOT `mc009`/`mc010`
+    (Breached/Ruined) despite also being 8m-wide: both are flagged `hasHole` and read as walk-through
+    breaches everywhere else they're placed, while the Crypt's own collision (`PlayerController.tsx`,
+    `navgrid.ts`) always resolves a wall slot as one solid box regardless of mesh — a visibly-breached wall
+    that still stopped you cold would have been a real, confusing bug, not a cosmetic swap. Collision sizing
+    in both `PlayerController.tsx` and `navgrid.ts` now reads the layout's own `wallStyle` instead of a
+    hardcoded `'stonewall'` string, a genuine correctness fix (both styles share an identical `WALL_CORE`
+    collision entry, so this was previously harmless, but would not have stayed that way if a third,
+    differently-proportioned style were ever added).
+  - **Two live bugs found by Wave 13's own verify pass, fixed 2026-08-14**: (1) the new `dungeon_relic`
+    interact target was appended to the END of `findTarget()`'s general facing-scored sweep, but the
+    pre-existing `if (st.destination) {...}` block earlier in the same function unconditionally returns
+    an NPC/horse/Cedric/guild-hall match or else `'Return Home'` whenever ANY destination is set —
+    including `'dungeon'` — so the sweep never ran and the relic was unreachable by any input, which also
+    permanently blocked the dungeon's full-clear reward (the ONLY source of the halberd) on any layout
+    that rolled a retrieve room. Fixed by moving the retrieve-room check into that earlier block instead
+    (a plain distance test, matching the NPC/horse checks already there — no facing requirement needed
+    for those either) and deleting the now-dead duplicate. (2) Fixing #1 exposed a second, related issue
+    found live while re-verifying: `dungeon_relic` is the first `duration > 0` hold action ever reachable
+    inside that same block, and every other target there fires instantly (`duration: 0`) — so there was
+    never previously a frame gap between "this hold just finished" and "what's the next target" while the
+    same key-press was still down. Taking the relic removes it from consideration, so the very next frame
+    fell through to that block's own `'Return Home'` fallback and fired it immediately if the player's
+    E-release lagged completion by even one frame — silently ejecting them from the dungeon (forfeiting
+    any unclear rooms) the instant they picked up a relic. Fixed by setting the same `talkCooldown` gate
+    every other instant action already respects, buying a real beat to let go of E first. Both confirmed
+    live via real Playwright: the real targeting prompt now appears near a retrieve room, a real held
+    E-press grants the relic bonus, `destination` stays `'dungeon'` through a full extra second of E held
+    past completion, and — clearing every other room via the leaf module and taking the last relic for
+    real — the full-clear reward (gold, materials, XP, and the halberd into the Armory) fires exactly as
+    designed.
 - [COMPLETE] The 4 `Road` models — no longer unused: they pave the real road network newcomers/NPCs now
   walk in on (`Road.tsx`). The "marketplace square" half of the original idea specifically wasn't built.
 - [TODO] Unused-asset audit completion: `Destructor` (4), second `Cannon`, 2 unused `Animal` models.
@@ -642,10 +691,108 @@ granting the unlock + materials and seeing all 26 pieces appear.
   fix confirmed by intercepting `audio.play` directly: Catapult and both Stone Throwers played
   `['sword_swish','thud']` (the whoosh+THUD pair), Wall Cannon kept `['cannon']`, Crossbow Station played
   `['crossbow']` — exactly the `siegeRole` keying described above.
-- [TODO] Timed build challenges recreating the original game's six challenges (their full voiced texts survive in
-  the extraction).
-- [TODO] Delivery quests — haul goods by cart between instances (perfect fit after Phase 20).
-- [TODO] Alliance follow-ups: reputation fallout with the court, alliance-exclusive quests/rewards, a turncoat path.
+- [COMPLETE] ✅ **Timed build challenges** (2026-08-14, Wave 13). **Corrected claim, same pattern as the
+  catapult-sound line above**: no voiced text for these six challenges could be found anywhere in this repo
+  — not in `public/assets/sounds/` (40 named WAVs + an 11-line `lore/` set, none challenge-named), not in
+  `kk_research_folder/research/`, not referenced by any `scripts/*.mjs`. Either that source material lives
+  outside what was ever pulled into this project, or the claim was stale — either way, shipping "voiced"
+  intros against an asset that cannot be located here would mean inventing fake paths, so this uses plain
+  `notify()` toasts instead, exactly how the game already delivers its other one-shot lines.
+  Scoped to ONE of the six `challenge-N` destinations end to end (`challenge-1`,
+  `game/buildChallenge.ts`'s `BUILD_CHALLENGE_ID`), not all six spread thin, per the task brief's own
+  "prototype one, then extend" precedent (Wave 4's settlement, Wave 12's elevation quadrant). Building
+  itself needed **zero new plumbing** — a challenge ground is an ordinary `WorldDestination`, so
+  `ClaimBanner.tsx` already offers "Claim this Land" there (it only excludes `dungeon`/`arena`), and once
+  claimed, `placeBuilding`/`constructBuilding`/`evalPlacement` already worked there exactly as they do at
+  any of the nine templates — confirmed by reading `evalPlacement`'s region fallback, not assumed. What
+  this wave adds is the timer layer on top: a "🔔 Ring the Bell" HUD button (`BuildChallengePanel.tsx`,
+  shown once the ground is claimed, same gating convention as `ClaimBanner`) starts a 90-second run;
+  fully-constructing 6 pieces (any buildable — a deliberate choice so the player picks their own fastest
+  cheap option, e.g. a farm plot's 4-swing build, rather than being forced through one specific structure)
+  wins gold + building XP, credited from `gameStore.ts`'s `constructBuilding` at the exact moment a piece
+  actually finishes (not at ghost-placement); running out the clock or leaving the ground loses/abandons
+  the run silently, ready to retry.
+  **Deliberately NOT built, and why**: a specific-structure/set objective ("build exactly this recipe") —
+  the six diorama layouts weren't individually inspected for what such an objective should even look like
+  per-map, and the generic "N pieces" version the task brief explicitly allows is enough for a first slice;
+  no persisted best-time/win record — this is a repeatable minigame in the same family as jousting Richard
+  or the Endless Arena, neither of which persist a completion flag either, so this doesn't invent one.
+  **To extend to the other five**: `BUILD_CHALLENGE_ID` is a single constant (currently
+  `CHALLENGE_DESTINATIONS[0].id`) with nothing challenge-1-specific hung off it — promoting it to a small
+  per-destination table (target count / time limit / reward, keyed by destination id) and having
+  `BuildChallengePanel.tsx`/`constructBuilding`'s check read from that table instead of one constant is
+  the whole job; the six dioramas themselves need no further work, they already travel and already allow
+  building once claimed.
+  - **A live bug found by Wave 13's own verify pass, fixed 2026-08-14**: `BuildChallengePanel`'s "Ring
+    the Bell" button — and `ClaimBanner`'s pre-existing "Claim this Land" button it copied the pattern
+    from — were both plain, unwrapped children of `HUD`'s outer `.hud` div. `globals.css` sets
+    `.hud > * { pointer-events: none }`, only re-enabled via the `.clickable` class every other clickable
+    HUD element (`DialoguePanel`, `Panels.tsx`'s `game-panel clickable`) already carries; neither button
+    had it, so a real mouse click hit-tested straight through to the WebGL canvas underneath and could
+    never reach either button — the entire Timed Build Challenge feature, and land-claiming in general,
+    had zero reachable entry point for a real player. Fixed by wrapping each button's container in
+    `className="clickable"`. Confirmed live: `getComputedStyle` now reads `pointer-events: auto`,
+    `document.elementFromPoint()` at each button's own center now resolves to the `<button>` itself
+    (previously `<canvas>`), and a real, unassisted `page.click()` on each — not a store bypass — now
+    claims the ground and starts the challenge.
+[COMPLETE] ✅ **Delivery quests — haul goods by cart between instances** (2026-08-14, Wave 13).
+`carts.ts` turned out to be siege equipment (a battering ram / blade-cart, both `category: 'defense'`) —
+reusing it for a supply run would misuse combat props as a delivery vehicle, so it is untouched. There
+is also no engine concept of an entity surviving a `travelTo()` scene-swap (confirmed by reading
+`travelTo` itself: it only moves the player and mutates `destination`/`visitedWorlds`). What DOES
+already cross a scene-swap is the player's own inventory — one flat, global field, never partitioned per
+world — so this is built the honest way that fact actually supports: gather the goods, carry them, walk
+or travel to the other place, hand them over. New `SideQuestDef.kind: 'deliver'` (`npcs.ts`) makes this a
+real, distinct quest type rather than a relabeled 'gather': accepted from an ORIGIN giver but only
+turnable-in at a `deliverTo` destination — a different `WorldDestination` entirely, and DialoguePanel
+now recognizes an active delivery errand as "yours to turn in" at whichever NPC lives there, even though
+that NPC didn't hand it to you. Two errands (`data/deliveryQuests.ts`): Alric hauls 10 wheat and Beda
+hauls 8 planks out to Fenwick's settlement at template-08 (The Old Ruins — Wave 4's empire-arc
+prototype, already a real endpoint with resident villagers and a yield loop), both gated behind
+`settle_clear` so the order reads right — clear the ruins out before anyone trusts a cart through them.
+Pays gold on N76's own pipeline (24 / 22).
+**A real, separate gap found and fixed along the way**: `DialoguePanel.tsx`'s offer/accept logic read
+`npc.sideQuests` directly, never `sideQuestsOf(npc.id)` — the exact dead-code trap logged in this file's
+own N76 writeup and Wave 4's settlement-quest section, left open in both. Fixed here (the last of four
+consumers — QuestLogPanel/HUD/ParleyPanel already all read through `sideQuestsOf()`), which brings BACK
+TO LIFE everything that was silently unreachable before: the king/queen/richard allegiance chains
+(`k_muster`→`k_patrol`→`k_oath`, `q_relief`→`q_ledger`, `r_drill`) and Alric's/Beda's own village work
+(`al_fence`→`al_scarecrow`→`al_wolves`, `bd_timber`→`bd_stone`→`bd_road`) — real, complete data that
+existed for waves with nobody able to ever actually accept it through ordinary dialogue. Verified this
+wasn't a regression risk by tracing every other reader first: `bumpSideQuest`/`turnInSideQuest`/
+`acceptSideQuest` already worked purely off `sideQuestsOf()`, so nothing about progress tracking or
+turn-in changed — only which quests the "talk to them" panel was willing to SHOW. `npx tsc --noEmit`:
+exit 0.
+[COMPLETE] ✅ **Alliance follow-ups: reputation fallout, alliance-exclusive quests/rewards, a turncoat
+path** (2026-08-14, Wave 13). Scoped honestly smaller than a full narrative arc, per the task brief:
+- **Reputation fallout**: pledging Cedric used to cost nothing against the OTHER side — the raid AI
+  flips (a strict *benefit*) but Richard's and the Queen's opinion of you never moved, even swearing to
+  the man raiding their kingdom. Now it does: `pledgeAlliance('cedric')` docks both -20. Pledging Leo
+  gets no invented mirror — there is no NpcDef for Cedric to dock reputation against, and the REAL,
+  already-existing cost for that direction is structural and substantial: `PlayerController`'s own
+  `challenge_cedric` branch skips the parley entirely and starts a duel on sight once `alliance==='leo'`,
+  permanently locking out his whole quest line (nothing new needed, just documented here for the record).
+  **A latent bug fixed along the way**: `addReputation` fired its tier-up cheer-and-10-gold reward on ANY
+  tier boundary crossing, not just upward ones — every call site before this wave only ever passed a
+  positive amount, so a negative delta (this feature's whole point) would have handed the player free
+  gold for LOSING standing on a downward dip that still landed on a real tier. Fixed with a `.min`
+  comparison guard; every existing positive call site is unaffected.
+- **Alliance-exclusive quests/rewards**: one true capstone per house (`data/allegianceQuests.ts`),
+  gated on a NEW `needsAlliance` field — distinct from the existing `needsAllegiance` (the continuous
+  -100..100 score, which ordinary errands nudge even for someone unsworn). `needsAlliance` reads the
+  one-way PLEDGE itself, so these are only ever offered to a knight who actually knelt. `k_champion`
+  (Leo's, requires `k_oath`) and `ced_warlord` (Cedric's, requires `ced_banner`) both reward a
+  `chestplate_crested` — the top armor tier, otherwise only reachable through the Forge's two-step
+  re-forge chain — plus a large gold purse, a real, immediate, visible reward (the player has no armor
+  equip slot; owning a plate IS wearing it, so this is not cosmetic).
+- **Turncoat bones**: one direction only — `betrayCedric`, reachable from the War Council once already
+  sworn to him, resets `alliance` to unsworn (free to then pledge Leo through the normal flow) and
+  permanently burns the bridge (`betrayedCedric`, checked by `pledgeAlliance` so defecting can never
+  become a free way to ping-pong between both pledges' exclusive rewards). **Leo→Cedric is explicitly
+  NOT built**: the interact branch that greets a Leo-sworn knight at Cedric's camp is an on-sight duel,
+  not a parley, so there is no symmetric "ask to defect" moment to hang a mirror action off without
+  redesigning that branch — a real, separate piece of work, left for a future pass rather than forced in.
+`npx tsc --noEmit`: exit 0.
 [COMPLETE] **Cedric's siege — an epic, unlockable set-piece battle** (requested 2026-07-28, shipped
 2026-07-30). Two distinct encounters, per the design given: Cedric can now be fought everywhere he
 always could, but only the SECOND of these two ever permanently ends him —
@@ -820,7 +967,20 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   confirmed by screenshot from both sides. Also: his arrival/departure now walks from the real road
   entry point (`roadEntry()`, the same one every newcomer uses) instead of an arbitrary point 18m
   behind `MERCHANT_SPOT` that had nothing to do with the actual road.
-- [TODO] Taming: falcon companion (`snd054`).
+- [COMPLETE] ✅ **Taming: falcon companion** (2026-08-13, Wave 13). The sky falcon
+  (`Wildlife.tsx`) was pure decoration before this — a fixed loop round the world origin, no id, no
+  ground state, nothing to walk up to. Scoped deliberately smaller than the horse-capture precedent
+  it's closest to: one always-on companion, not a roster (`SaveGame.falconTamed`, a single boolean —
+  see `game/falcon.ts`'s header for why it isn't a `HorseMob`-style registry). A walk-up range doesn't
+  mean anything for something that never lands, so "Whistle for the Falcon" feeds the same scored
+  `consider()` the rest of the interact system runs on with the bird's own live position instead of a
+  fixed spot (`game/falcon.ts`'s `falconPos`, written every frame by `Wildlife.tsx`) — same no-skill-
+  check, instant-on-E capture `mountHorse` already established, just aimed at a moving target. Once
+  tamed it circles the player instead of the world origin, stays visible after dark (unlike the wild
+  bird), and pings the nearest un-worked, already-deeded resource node within 50m every 45-75s — real
+  value away from home, where `Minimap.tsx` draws no resource nodes at all. Deliberately NOT shipped:
+  no rideable/mount behavior, no hunting minigame, no way to dismiss/re-summon (taming is one-way, like
+  `dragonSeen`/`treasureOpened`) — all explicitly out of scope for a v1 companion, per the task brief.
 - [COMPLETE] ✅ **Cooking depth beyond bread/cooked fish** (2026-08-10, Wave 9 pass C): three new campfire
   dishes above the two that existed — **Herb Pottage** (2 herb + 1 wheat), **Fisherman's Stew** (2 fish +
   1 herb + 1 wheat, behind the same `fishing` gate Cook Fish uses) and **Blossom Tart** (3 wheat + 2
@@ -4589,9 +4749,45 @@ should be the game's own wooden fence pieces run around each section — the
 fence buildable already exists, and a run of instanced fence is likely cheaper
 than the plane strips as well as looking like something a holding would put up.
 
-[TODO] **N76 · Quests and errands should pay GOLD as well as resources.** Right now
-they pay materials only, which makes the deed ladder (and now village
-purchase) hard to feed.
+[COMPLETE] ✅ **N76 · Quests and errands should pay GOLD as well as resources** (2026-08-13,
+Wave 13). This turned out to already be a working, exercised pattern — `Quest.grantItems`/
+`SideQuestDef.rewardItems` both already accept a `gold` line and `gameStore.ts` already deposits it via
+`addItems` on completion — just inconsistently applied: 8 of 11 main quests and 9 of the reachable
+side errands (the ones actually offered through `DialoguePanel`/`ParleyPanel`, not
+`allegianceQuests.ts`'s `EXTRA_SIDE_QUESTS` pool, which is separately dead code for every giver except
+Cedric — see `settlementQuests.ts`'s own header comment, a pre-existing gap, not fixed here) paid
+materials only. Pure data change, no plumbing: added a `gold` line to all 8 no-gold main quests
+(`quests.ts`, 8-60 scaled roughly to xp/position in the chain, ~0.2-0.3 gold per xp, matching the
+existing travel-quest gold curve) and to the 9 reachable no-gold side errands (`npcs.ts` — Queen's
+baked `q_flowers`/`q_decor`/`q_barrels`, Richard's `r_slay2`/`r_slay4`, John's `j_wood`/`j_fish`/
+`j_planks`, and Cedric's `ced_stone`), added alongside their existing material rewards rather than
+replacing them, sized against `data/trade.ts`'s `SELL_PRICES` (e.g. `q_flowers`'s existing `plank: 4`
+already sold for ~8g, so its added gold sits at a comparable 8) and against already-gold-paying peers
+of similar `xp`/kind (`ced_stone`'s 20 gold mirrors `miller_beda`'s near-identical `bd_stone` errand —
+same target/need/xp, different giver). `allegianceQuests.ts` and `settlementQuests.ts` needed no
+changes: both were already fully gold-paying (`settlementQuests.ts`'s Fenwick errands, 15/20 gold, and
+every `EXTRA_SIDE_QUESTS` entry except the deliberate `q_ledger` gold-sink quest).
+
+**A live bug found by Wave 13's own verify pass, fixed 2026-08-14**: `gameStore.ts`'s `addItems()`
+computed its own local inventory snapshot at function entry, then — only for `source: 'gather'` — called
+`bumpQuestCounters()` for each accepted item BEFORE its own trailing `set({inventory: ...})`. Now that
+every main quest carries `grantItems` (this wave's own change, directly above), `bumpQuestCounters` can
+synchronously complete a quest, whose `completeQuest()` makes its own NESTED `addItems(grantItems,
+'grant')` call for the gold reward — that nested call reads a fresh `get().inventory` and commits its
+own `set()` immediately. The OUTER call's trailing `set()` then ran anyway, using ITS OWN pre-nested-call
+snapshot, silently overwriting the store's inventory right back over what the nested call just committed
+— discarding the quest's gold every time a `'gather'` action's last accepted item completed the quest's
+final objective. `first_steps`, the game's very first quest (a single gather objective), hit this on
+every single playthrough with no error and no visible sign — the "Quest complete" toast and XP still
+fired normally, only the promised gold silently vanished. Every other quest-progressing action
+(`craft()`, `constructBuilding()`, `travelTo()`, `openDialogue()`) already commits its own inventory
+change BEFORE calling `bumpQuestCounters`, so only the `addItems('gather')` path — `harvestNode()`,
+farming harvest, villager haul-to-deposit — was affected. Fixed by reordering `addItems()` to commit its
+own `set()` first, so a nested grant always layers its own gold on top of what was just written instead
+of racing it. Confirmed live via real Playwright: `first_steps` (2 real `harvestNode()` calls) now pays
+its full +8 gold, `stone_age` (craft-then-gather-last, the second repro) now pays its full +16, and
+`squires_errand` (a build-only quest with no gather objectives at all — the positive control proving
+this was never a general "gold grants are broken" bug) continues to pay its +26 exactly as before.
 
 [COMPLETE] **N77 · The merchant's hands float.** Same fault Alric and Beda had when they
 first spawned — arms and hands from a donor whose body type does not match
@@ -4612,20 +4808,22 @@ the nav-grid, tagged `approaching`. [TODO] the "day or night, not just after dar
 still genuinely open (`Enemies.tsx`'s raid trigger is gated to `worldEnv.time > 0.7 && < 0.78`, dusk
 only); this is what N80's guard-shift item below is actually waiting on.
 
-[TODO] **N80 · Guard shifts.** If raids can come by day, the watch cannot all sleep
-by day. A per-defender shift setting — day watch, night watch — so the
-garrison covers the whole clock. Supersedes L67's blanket "all defenders keep
-the night shift".
+[COMPLETE] ✅ **N80 · Guard shifts** — shipped 2026-08-04 in commit `6aed460` (Wave 0+1), never
+retagged until Wave 13's research pass caught the gap while auditing this same section. A per-defender
+`Villager.shift?: 'day'|'night'` field (`types.ts:502`) is a real behavioral branch, not dead data:
+`Defenders.tsx:203` — `const onWatch = villager.shift === 'day' ? isWorkingHours(worldEnv.time) :
+isWatchHours(worldEnv.time);` — and `VillagersPanel.tsx` has the actual toggle UI wired to it.
+Supersedes L67's blanket "all defenders keep the night shift".
 
-[TODO] **N81 · The FPS hands are gesturing backwards.** Chopping bare-handed moves the
-ARMS while the hands stay still; it should be the other way round — arms
-relatively constant, hands doing the work. (L73's own remainder — the held
-weapon poses — is done; this is the separate bare-handed/tool gesture.)
+[COMPLETE] ✅ **N81 · The FPS hands are gesturing backwards** — shipped 2026-08-04 in `6aed460`
+(Wave 0+1), same retag gap as N80. `Viewmodel.tsx:491-508`: `if (tool === 'fist' && playerState.acting)`
+applies a pivot-compensation shift back toward the elbow along `-ARM_DIR`, scoped only to the bare-fist
+case so held-tool/weapon alignment (L73's own remainder) is untouched.
 
-[TODO] **N82 · One readout for a target, not two.** There is a health bar AND a card
-that repeats the health bar plus friend/foe plus distance. It should be a
-single thing over the target's head. This is my own doing — K61 moved the card
-to the head but left the older bar in place instead of folding them together.
+[COMPLETE] ✅ **N82 · One readout for a target, not two** — shipped 2026-08-04 in `6aed460`
+(Wave 0+1), same retag gap. `HealthBillboard.tsx:64-65`: `const isAimTarget = aimState.target?.key ===
+\`enemy:${data.id}\`; g.visible = fade > 0.02 && hurt && !isAimTarget;` — the world-space bar suppresses
+itself exactly for the crosshair's current target, leaving every other hurt enemy's own ambient bar alone.
 
 ## Order [TODO]
 

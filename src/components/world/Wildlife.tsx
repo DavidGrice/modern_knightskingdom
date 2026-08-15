@@ -10,7 +10,9 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { playerState } from '../fps/PlayerController';
 import { riddenByAlly, registerHorse } from '@/game/riding';
+import { falconPos, falconSpotLabel, FALCON_SPOT_RANGE } from '@/game/falcon';
 import { useGameStore } from '@/game/store/gameStore';
+import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
 import { sampleTemplateGroundY } from './TemplateWorld';
 
 const C = '/assets/props/creatures';
@@ -133,25 +135,86 @@ function Falcon() {
   const group = useRef<THREE.Group>(null);
   const t = useRef(Math.random() * 100);
   const soundIn = useRef(15);
+  // Wave 13 · once tamed (PlayerController's 'call_falcon' interact, in range
+  // of game/falcon.ts's own live position and offered only while untamed)
+  // the bird stops circling the world origin and circles the PLAYER instead
+  // — the only behavior change taming makes. See game/falcon.ts's header for
+  // why the tamed flag itself is read straight from the store rather than
+  // mirrored into a leaf module the way ridingState.active is.
+  const tamed = useGameStore((s) => s.falconTamed);
+  const pingIn = useRef(30 + Math.random() * 20);
+  const lastPinged = useRef<string | null>(null);
 
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
-    // day bird: fades out at night by dropping below the horizon... simpler: hide
-    g.visible = worldEnv.night < 0.6;
+    // day bird: fades out at night by dropping below the horizon... simpler:
+    // hide. A tamed companion stays with you regardless of the hour — beyond
+    // the flight path itself, the one other visible sign this is no longer
+    // the ambient bird.
+    g.visible = tamed || worldEnv.night < 0.6;
     if (!g.visible) return;
-    t.current += dt * 0.14;
-    const r = 34;
-    const x = Math.cos(t.current) * r;
-    const z = Math.sin(t.current) * r + 8;
-    const y = 24 + Math.sin(t.current * 2.3) * 3;
-    g.position.set(x, y, z);
-    g.rotation.y = -t.current - Math.PI / 2;
-    g.rotation.z = 0.25; // bank into the circle
+    if (tamed) {
+      // a tight, quick orbit a couple of metres over your head, distinct
+      // from the wild bird's slow wide loop
+      t.current += dt * 0.55;
+      const r = 4.4;
+      const x = playerState.x + Math.cos(t.current) * r;
+      const z = playerState.z + Math.sin(t.current) * r;
+      const y = playerState.y + 3.4 + Math.sin(t.current * 2.1) * 0.5;
+      g.position.set(x, y, z);
+      g.rotation.y = -t.current - Math.PI / 2;
+      g.rotation.z = 0.22;
+      falconPos.x = x; falconPos.y = y; falconPos.z = z;
+    } else {
+      t.current += dt * 0.14;
+      const r = 34;
+      const x = Math.cos(t.current) * r;
+      const z = Math.sin(t.current) * r + 8;
+      const y = 24 + Math.sin(t.current * 2.3) * 3;
+      g.position.set(x, y, z);
+      g.rotation.y = -t.current - Math.PI / 2;
+      g.rotation.z = 0.25; // bank into the circle
+      falconPos.x = x; falconPos.y = y; falconPos.z = z;
+    }
     soundIn.current -= dt;
     if (soundIn.current <= 0) {
       soundIn.current = 18 + Math.random() * 25;
       audio.play('falcon', 0.3);
+    }
+    // Wave 13 · the one real benefit of taming: every 45-75s it calls out
+    // over the nearest un-worked resource node within range that it hasn't
+    // just pointed at — genuinely useful away from home, where Minimap.tsx
+    // draws no resource nodes at all, and ambient flavor at the homestead,
+    // where it already does. A one-off imperative getState() read, not a
+    // subscription — this runs every frame and st.nodes changes on every
+    // respawn, which would otherwise re-render the whole component for
+    // nothing (the same reason PlayerController's own frame loop reads the
+    // store this way instead of via a hook).
+    if (tamed) {
+      pingIn.current -= dt;
+      if (pingIn.current <= 0) {
+        pingIn.current = 45 + Math.random() * 30;
+        const st = useGameStore.getState();
+        const world = st.destination ?? null;
+        let best: (typeof st.nodes)[number] | null = null;
+        let bestD = FALCON_SPOT_RANGE;
+        for (const n of st.nodes) {
+          if (n.respawnAt !== null) continue;
+          if ((n.world ?? null) !== world) continue;
+          if (n.id === lastPinged.current) continue;
+          // don't point at a ground beyond the player's own deed — a find
+          // they can look at but not touch reads as a tease, not a gift
+          const gr = n.ground ? GROUND_BY_ID[n.ground] : null;
+          if (gr && !groundOpen(gr, st.landTier)) continue;
+          const d = Math.hypot(n.x - playerState.x, n.z - playerState.z);
+          if (d < bestD) { bestD = d; best = n; }
+        }
+        if (best) {
+          lastPinged.current = best.id;
+          st.notify(`Your falcon circles over ${falconSpotLabel(best)}, ${Math.round(bestD)}m off.`);
+        }
+      }
     }
   });
 

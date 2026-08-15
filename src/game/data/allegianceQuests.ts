@@ -12,6 +12,15 @@
 //     to someone who has already committed — and the lock NAMES its reason
 //     rather than sitting greyed and silent.
 //
+// Wave 13 adds one true capstone per house — `k_champion`/`ced_warlord`,
+// gated on `needsAlliance` rather than `needsAllegiance`. The difference
+// matters: `needsAllegiance` reads the continuous -100..100 SCORE, which
+// ordinary errands nudge even for someone who never swore to anyone —
+// `needsAlliance` reads the one-way PLEDGE (`gameStore.alliance`) instead,
+// so these two are only ever offered to a knight who actually knelt. That
+// is what makes them genuinely alliance-EXCLUSIVE rather than just
+// allegiance-deep.
+//
 // The neutral pool matters as much as the other two. Alric and Beda ask for
 // honest village work that neither house has an opinion about, which is what
 // keeps "unsworn" a playable stance instead of a gap you pass through.
@@ -83,6 +92,18 @@ export const EXTRA_SIDE_QUESTS: Record<string, SideQuestDef[]> = {
       requires: ['k_patrol'],
       needsAllegiance: 25,
     },
+    // Wave 13 · the crown's own capstone — see this file's header for why
+    // `needsAlliance` (not `needsAllegiance`) is the real gate here: only a
+    // knight who has actually sworn to Leo, not merely one who leans his
+    // way, ever hears this offer.
+    {
+      id: 'k_champion', kind: 'kill', target: 'bandit', need: 6,
+      label: "Break the last of Cedric's raiders for good — 6 bandits, no quarter",
+      xpSkill: 'combat', xp: 150, rewardItems: { gold: 120, chestplate_crested: 1 },
+      allegiance: 20,
+      requires: ['k_oath'],
+      needsAlliance: 'leo',
+    },
   ],
   queen: [
     {
@@ -131,6 +152,20 @@ export const EXTRA_SIDE_QUESTS: Record<string, SideQuestDef[]> = {
       allegiance: -20,
       requires: ['ced_road', 'ced_forge'],
       needsAllegiance: -25,
+    },
+    // Wave 13 · the rebellion's own capstone, mirroring k_champion above —
+    // `needsAlliance: 'cedric'` is redundant with ParleyPanel only ever
+    // showing this pool to a sworn bannerman in the first place, but it is
+    // real defense-in-depth (acceptSideQuest checks the same blocker
+    // regardless of which panel called it) and keeps the two houses' final
+    // errands built the same way.
+    {
+      id: 'ced_warlord', kind: 'kill', target: 'royal', need: 5,
+      label: "Break the crown's own guard — 5 royal knights, and let Leo hear of it",
+      xpSkill: 'combat', xp: 160, rewardItems: { gold: 130, chestplate_crested: 1 },
+      allegiance: -24,
+      requires: ['ced_banner'],
+      needsAlliance: 'cedric',
     },
   ],
 };

@@ -33,7 +33,7 @@ import { RECIPES, STATION_LABELS, STATION_TABS, UNLOCK_HINTS } from '@/game/data
 import { SKILLS, levelFromXp, perkSlotsEarned, xpForLevel } from '@/game/data/ranks';
 import { DEEDS } from '@/game/data/achievements';
 import { PERKS, PERK_BY_ID } from '@/game/data/perks';
-import { sideQuestsOf } from '@/game/data/npcs';
+import { sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
 import { CHALLENGES, challengeProgress } from '@/game/data/challenges';
 import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, SWITCH_TITHE } from '@/game/data/guilds';
 import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable } from '@/game/data/skillTree';
@@ -511,6 +511,7 @@ function CraftingPanel() {
 function ParleyPanel() {
   const setPanel = useGameStore((s) => s.setPanel);
   const pledgeAlliance = useGameStore((s) => s.pledgeAlliance);
+  const betrayedCedric = useGameStore((s) => s.betrayedCedric);
   const finalStandReady = useGameStore((s) => cedricFinalStandReady(s));
   const challenge = () => {
     setPanel('none');
@@ -530,14 +531,34 @@ function ParleyPanel() {
   const alliance = useGameStore((s) => s.alliance);
   const sideQuest = useGameStore((s) => s.sideQuest);
   const completedQuests = useGameStore((s) => s.completedQuests);
+  const completedSideQuests = useGameStore((s) => s.completedSideQuests);
+  const allegiance = useGameStore((s) => s.allegiance);
   const acceptSideQuest = useGameStore((s) => s.acceptSideQuest);
   const turnInSideQuest = useGameStore((s) => s.turnInSideQuest);
   const abandonSideQuest = useGameStore((s) => s.abandonSideQuest);
+  const betrayCedric = useGameStore((s) => s.betrayCedric);
   if (alliance === 'cedric') {
     const pool = sideQuestsOf('cedric');
-    const offer = pool[(completedQuests.length + pool.length) % pool.length];
+    // Wave 13 · skip anything currently blocked (e.g. ced_warlord before
+    // ced_banner is done) instead of offering a job that would just bounce
+    // off acceptSideQuest's own guard — same fix DialoguePanel's own offer
+    // rotation got, applied here for Cedric's separate panel
+    const offer = (() => {
+      if (pool.length === 0) return null;
+      const start = (completedQuests.length + pool.length) % pool.length;
+      for (let i = 0; i < pool.length; i++) {
+        const q = pool[(start + i) % pool.length];
+        if (!sideQuestBlocker(q, completedSideQuests, allegiance, 'cedric')) return q;
+      }
+      return null;
+    })();
     const mine = sideQuest?.npcId === 'cedric' ? sideQuest : null;
     const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
+    const rewardText = (def: NonNullable<typeof offer>) =>
+      [
+        `${def.xp} ${def.xpSkill} XP`,
+        ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
+      ].join(' · ');
     return (
       <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
         <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
@@ -549,7 +570,7 @@ function ParleyPanel() {
         {mine && mineDef && (
           <div className="quest-item">
             <div className="q-name">🐂 {mineDef.label}</div>
-            <div className="q-desc">Progress: {mine.have}/{mineDef.need} · Reward: {mineDef.xp} {mineDef.xpSkill} XP</div>
+            <div className="q-desc">Progress: {mine.have}/{mineDef.need} · Reward: {rewardText(mineDef)}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <button
                 className="menu-btn small"
@@ -568,7 +589,7 @@ function ParleyPanel() {
         {!sideQuest && offer && (
           <div className="quest-item">
             <div className="q-name">⚔ {offer.label}</div>
-            <div className="q-desc">Reward: {offer.xp} {offer.xpSkill} XP</div>
+            <div className="q-desc">Reward: {rewardText(offer)}</div>
             <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest('cedric', offer.id)}>
               Take the Job
             </button>
@@ -579,6 +600,23 @@ function ParleyPanel() {
             You already carry an errand for someone else. Finish it first.
           </div>
         )}
+        {/* Wave 13 turncoat bones: the one deliberate exception to the
+            one-way pledge — see gameStore's betrayCedric for why this is
+            permanent and one-directional. */}
+        <div className="quest-item" style={{ marginTop: 10 }}>
+          <div className="q-name">🗡 Turn on the Bull</div>
+          <div className="q-desc">
+            Betray the rebellion and walk away unsworn — free to kneel to Leo properly, if the
+            crown will still have you. Cedric will never trust you again.
+          </div>
+          <button
+            className="menu-btn small danger"
+            style={{ margin: '8px 0 0' }}
+            onClick={betrayCedric}
+          >
+            Turn on the Bull
+          </button>
+        </div>
         <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
           Leave the council
         </button>
@@ -596,13 +634,21 @@ function ParleyPanel() {
       </div>
       <div className="quest-item">
         <div className="q-name">🐂 Join Cedric&apos;s Rebellion</div>
-        <div className="q-desc">
-          Pledge to the Bull. His raiders will never again touch your homestead — but the
-          crown&apos;s knights will come for you instead, and the King will not forget.
-        </div>
-        <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => pledgeAlliance('cedric')}>
-          Clasp arms with Cedric
-        </button>
+        {betrayedCedric ? (
+          <div className="q-desc">
+            You already turned on this camp once. He is not fool enough to trust you a second time.
+          </div>
+        ) : (
+          <>
+            <div className="q-desc">
+              Pledge to the Bull. His raiders will never again touch your homestead — but the
+              crown&apos;s knights will come for you instead, and the King will not forget.
+            </div>
+            <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => pledgeAlliance('cedric')}>
+              Clasp arms with Cedric
+            </button>
+          </>
+        )}
       </div>
       <div className="quest-item">
         <div className="q-name">⚔ Challenge Him to Battle</div>
