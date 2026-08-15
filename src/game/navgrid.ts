@@ -740,16 +740,21 @@ function ensureDungeonGrid(): NavGrid | null {
   });
   dungeonGridSeed = layout.seed;
 
-  // The Crypt's walls are real `stonewall` pieces (DungeonScene.tsx renders
-  // them with the same model the build menu uses) placed directly by
-  // generation rather than through the player's build economy, so there is
-  // no PlacedBuilding for rebuild() to read. Synthesize minimal ones —
-  // collisionBoxesFor('stonewall', rot) and DungeonWall.rot use the exact
-  // same quarter-turn convention (DungeonScene.tsx's own `w.rot === 1 ?
-  // Math.PI / 2 : 0` yaw confirms it), so rebuild()'s existing per-piece
+  // The Crypt's walls are real wall pieces (DungeonScene.tsx renders them
+  // with the same models the build menu uses) placed directly by generation
+  // rather than through the player's build economy, so there is no
+  // PlacedBuilding for rebuild() to read. Synthesize minimal ones —
+  // collisionBoxesFor(layout.wallStyle, rot) and DungeonWall.rot use the
+  // exact same quarter-turn convention (DungeonScene.tsx's own `w.rot === 1
+  // ? Math.PI / 2 : 0` yaw confirms it), so rebuild()'s existing per-piece
   // collision logic needs no changes at all to consume them correctly.
+  // Wave 13 · `type` now follows the layout's own rolled wallStyle instead
+  // of a hardcoded 'stonewall' — both WALL_STYLES entries (dungeon.ts) share
+  // an identical WALL_CORE collision entry (data/buildables.ts), so this is
+  // a correctness fix (the synthesized box now matches whichever mesh
+  // actually rendered), not a behavior change for the pre-existing style.
   dungeonWallBuildings = layout.walls.map((w, i) => ({
-    id: `crypt-wall-${i}`, type: 'stonewall', x: w.x, z: w.z, rot: w.rot, world: 'dungeon',
+    id: `crypt-wall-${i}`, type: layout.wallStyle, x: w.x, z: w.z, rot: w.rot, world: 'dungeon',
   }));
   dungeonGrid.rebuild(dungeonWallBuildings);
   return dungeonGrid;

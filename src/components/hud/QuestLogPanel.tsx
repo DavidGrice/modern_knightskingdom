@@ -27,8 +27,7 @@ interface QuestRegion {
 }
 
 // derived once from the NPC roster: one region per world that actually has
-// a side-quest giver in it (Alric/Beda give none, so the homestead never
-// gets a spurious region of its own — its quests are the Main Chronicle)
+// a side-quest giver in it
 const NPC_REGIONS: QuestRegion[] = (() => {
   const byWorld = new Map<string, string[]>();
   for (const n of NPCS) {
@@ -43,6 +42,16 @@ const CEDRIC_REGION: QuestRegion = {
   id: CEDRIC_WORLD, label: WORLD_DESTINATION_BY_ID[CEDRIC_WORLD]?.name ?? 'The Rival Castle',
   icon: '🐂', npcIds: ['cedric'],
 };
+// Wave 13 · Alric/Beda used to give no errands at all, so the homestead
+// deliberately got no region of its own here. Now that deliveryQuests.ts
+// gives them one each, a world-less giver with real work needs SOME region
+// to live in — `!n.world` alone can't reuse the loop above (it groups BY
+// world, and these two have none). Only appears at all once one of them
+// actually has something to offer.
+const HOMESTEAD_REGION: QuestRegion | null = (() => {
+  const npcIds = NPCS.filter((n) => !n.world && n.sideQuests.length > 0).map((n) => n.id);
+  return npcIds.length ? { id: 'homestead', label: 'The Homestead', icon: '🏡', npcIds } : null;
+})();
 
 function RewardLine({ q }: { q: SideQuestDef }) {
   const items = q.rewardItems
@@ -59,6 +68,7 @@ function GiverBlock({ npcId }: { npcId: string }) {
   const setTrackedQuest = useGameStore((s) => s.setTrackedQuest);
   const completedSideQuests = useGameStore((s) => s.completedSideQuests);
   const allegiance = useGameStore((s) => s.allegiance);
+  const alliance = useGameStore((s) => s.alliance);
   const npc = npcId === 'cedric' ? null : NPC_BY_ID[npcId];
   const revealed = npc ? isNpcRevealed(npc, completedQuests) : true; // cedric gated by alliance, not reveal
   const name = sideQuestGiverName(npcId);
@@ -105,14 +115,20 @@ function GiverBlock({ npcId }: { npcId: string }) {
         </div>
       )}
       {others.map((q) => {
-        // a locked errand NAMES its blocker: which errand comes first, or how
-        // far toward which house you have to stand before this is offered
-        const blocked = sideQuestBlocker(q, completedSideQuests, allegiance);
+        // a locked errand NAMES its blocker: which errand comes first, how
+        // far toward which house you have to stand, or whose banner you
+        // have to actually be sworn to (Wave 13's needsAlliance) before
+        // this is offered
+        const blocked = sideQuestBlocker(q, completedSideQuests, allegiance, alliance);
         const done = completedSideQuests.includes(q.id);
+        const dest = q.kind === 'deliver' ? WORLD_DESTINATION_BY_ID[q.deliverTo ?? ''] : null;
         return (
           <div key={q.id} className={`quest-entry ${blocked ? 'locked' : done ? 'done' : 'available'}`}>
             <div className="quest-entry-name">
               {blocked ? <><Ico e="🔒" /> {q.label}</> : q.label}
+              {dest && (
+                <span className="quest-entry-tag" title="Where this must be delivered">→ {dest.name}</span>
+              )}
               {q.allegiance ? (
                 <span
                   className="quest-entry-tag"
@@ -129,6 +145,7 @@ function GiverBlock({ npcId }: { npcId: string }) {
             <div className="quest-entry-hint">
               {blocked ?? (done ? 'Already done for them.'
                 : sideQuest ? 'You already carry an errand — finish it first.'
+                : dest ? `Available — accept from ${name}, then carry it to ${dest.name}.`
                 : `Available — visit ${name} in person to accept.`)}
             </div>
           </div>
@@ -168,8 +185,11 @@ export default function QuestLogPanel() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [openRegions, setOpenRegions] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = { main: true };
+    const giver = sideQuest && sideQuest.npcId !== 'cedric' ? NPC_BY_ID[sideQuest.npcId] : null;
+    // Wave 13 · a world-less giver (Alric/Beda) files under 'homestead' now
+    // that they can actually hand out an errand — see HOMESTEAD_REGION
     const giverWorld = sideQuest
-      ? (sideQuest.npcId === 'cedric' ? CEDRIC_WORLD : NPC_BY_ID[sideQuest.npcId]?.world)
+      ? (sideQuest.npcId === 'cedric' ? CEDRIC_WORLD : (giver ? giver.world ?? 'homestead' : null))
       : null;
     if (giverWorld) init[giverWorld] = true;
     return init;
@@ -177,7 +197,8 @@ export default function QuestLogPanel() {
   const toggleRegion = (id: string) => setOpenRegions((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const activeQuestId = QUESTS.find((q) => !completedQuests.includes(q.id))?.id;
-  const regions = alliance === 'cedric' ? [...NPC_REGIONS, CEDRIC_REGION] : NPC_REGIONS;
+  const baseRegions = HOMESTEAD_REGION ? [HOMESTEAD_REGION, ...NPC_REGIONS] : NPC_REGIONS;
+  const regions = alliance === 'cedric' ? [...baseRegions, CEDRIC_REGION] : baseRegions;
 
   return (
     <div className="game-panel clickable menu-family">

@@ -278,6 +278,15 @@ export interface SaveGame {
   /** caught-and-stabled horse ids, and villagerId -> horseId assignments */
   stabled?: string[];
   mounts?: Record<string, string>;
+  /** Wave 13 · the falcon companion has been tamed (see game/falcon.ts and
+   *  PlayerController's 'call_falcon' interact). Unlike a horse this is a
+   *  single always-on companion, not a roster, so one boolean is the whole
+   *  of its saved state. Absent/false = still the wild, decorative bird. */
+  falconTamed?: boolean;
+  /** Wave 13 · turned on Cedric's own camp after already pledging to him
+   *  (gameStore's betrayCedric) — permanent, so `pledgeAlliance('cedric')`
+   *  can refuse a known turncoat forever. Absent/false = never happened. */
+  betrayedCedric?: boolean;
   /** highest CHALLENGES tier index already notified, per challenge id */
   challengeTiers?: Record<string, number>;
   /** farm plot growth: buildingId -> seconds of growth remaining (-1 = untilled) */

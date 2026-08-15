@@ -86,10 +86,28 @@ export interface DungeonRoom {
   parent: number | null;
   isEntry: boolean;
   isBoss: boolean;
+  /** Wave 13 · what this room actually asks of the player. 'none' (the entry
+   *  room only) needs nothing — a safe room to get your bearings, unchanged.
+   *  'combat' is the original and, until now, only objective this dungeon
+   *  has ever had: spawn enemyCount of enemyKind, cleared flips when the
+   *  last one dies (Enemies.tsx). 'retrieve' is the first alternative: no
+   *  enemies at all, a Sealed Reliquary sits at the room's centre
+   *  (DungeonScene.tsx), and cleared flips the moment the player takes it
+   *  (PlayerController.tsx's 'dungeon_relic' interact) instead of the last
+   *  enemy dying. Escort/survive are real too but need a follow-the-player
+   *  NPC or a wave/timer system this dungeon doesn't have — deferred, see
+   *  ROADMAP.md rather than attempted alongside this one. */
+  objective: 'none' | 'combat' | 'retrieve';
   enemyKind: EnemyKind;
   enemyCount: number;
   spawned: boolean;
   cleared: boolean;
+  /** only meaningful for objective:'retrieve' — true once the relic prop has
+   *  been taken. Kept distinct from `cleared` (even though the two always
+   *  flip together) so DungeonScene.tsx has an explicit "should I still be
+   *  drawing the prop" flag, rather than overloading `cleared`, which
+   *  DungeonStatus.tsx/Enemies.tsx already read as a pure completion flag. */
+  relicTaken: boolean;
 }
 
 export interface DungeonCorridor {
@@ -107,7 +125,29 @@ export interface DungeonLayout {
   corridors: DungeonCorridor[];
   entryPos: { x: number; z: number };
   rewarded: boolean;
+  /** Wave 13 · which real buildable mesh DungeonScene.tsx renders every wall
+   *  slot with, rolled once per layout (see WALL_STYLES below) — so a
+   *  descent doesn't always look like the identical crenellated fortress. */
+  wallStyle: WallStyle;
 }
+
+/** Wave 13 · a second wall palette the generator can roll per layout, so not
+ *  every descent reads as the same crenellated fortress. `mc006` is a real,
+ *  solid 8m-wide wall piece from the same verified mc-series family as
+ *  `stonewall` (mc007) — same SEGMENT width, same WALL_CORE collision entry
+ *  (data/buildables.ts), just a plainer mold.
+ *
+ *  Deliberately NOT `mc009`/`mc010` (Breached/Ruined) even though they are
+ *  also 8m-wide and would read as a striking "ancient, crumbling crypt"
+ *  theme: both are flagged `hasHole` (WALL_HOLE in data/buildables.ts) and
+ *  read as walk-through breaches everywhere else they're placed. The
+ *  Crypt's own collision (below, and PlayerController.tsx / navgrid.ts)
+ *  always resolves a wall slot as one full solid box regardless of which
+ *  mesh is drawn there — a visibly-breached wall that still stops you cold
+ *  would be a real, confusing bug, not just a cosmetic swap. `mc006` has no
+ *  such trait: solid mesh, solid collision, no mismatch. */
+export const WALL_STYLES = ['stonewall', 'mc006'] as const;
+export type WallStyle = (typeof WALL_STYLES)[number];
 
 export const dungeonState: { layout: DungeonLayout | null } = { layout: null };
 
@@ -262,8 +302,14 @@ function shuffledSides(rnd: () => number): Side[] {
   return a;
 }
 
+/** chance any given non-entry, non-boss room becomes a 'retrieve' objective
+ *  instead of 'combat' — high enough that most 5-8 room descents see at
+ *  least one, low enough that combat stays the dungeon's main character. */
+const RETRIEVE_CHANCE = 0.3;
+
 function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
   const totalRooms = 5 + Math.floor(rnd() * 4); // 5..8
+  const wallStyle: WallStyle = WALL_STYLES[Math.floor(rnd() * WALL_STYLES.length)];
 
   const rooms: GenRoom[] = [{
     index: 0, cx: DUNGEON_ORIGIN.x, cz: DUNGEON_ORIGIN.z,
@@ -364,18 +410,22 @@ function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
     const isBoss = r.index === bossIdx;
     let enemyKind: EnemyKind = 'skeleton';
     let enemyCount = 0;
+    let objective: DungeonRoom['objective'] = 'combat';
     if (isEntry) {
-      enemyCount = 0; // a safe room to get your bearings
+      objective = 'none'; // a safe room to get your bearings
     } else if (isBoss) {
       enemyKind = 'gilbert';
       enemyCount = 1;
+    } else if (rnd() < RETRIEVE_CHANCE) {
+      objective = 'retrieve'; // no enemies — a relic to find instead
     } else {
       enemyKind = rnd() < 0.55 ? 'skeleton' : 'bandit';
       enemyCount = 1 + Math.floor(rnd() * 2);
     }
     return {
       index: r.index, cx: r.cx, cz: r.cz, halfX: r.halfX, halfZ: r.halfZ, parent: r.parent,
-      isEntry, isBoss, enemyKind, enemyCount, spawned: false, cleared: enemyCount === 0,
+      isEntry, isBoss, objective, enemyKind, enemyCount, spawned: false,
+      cleared: objective === 'none', relicTaken: false,
     };
   });
 
@@ -398,7 +448,7 @@ function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
 
   return {
     seed, origin: { ...DUNGEON_ORIGIN }, rooms: finalRooms, walls, corridors,
-    entryPos: { x: finalRooms[0].cx, z: finalRooms[0].cz }, rewarded: false,
+    entryPos: { x: finalRooms[0].cx, z: finalRooms[0].cz }, rewarded: false, wallStyle,
   };
 }
 
@@ -447,18 +497,22 @@ function generateFallbackLayout(): DungeonLayout {
     const isBoss = r.index === totalRooms - 1;
     let enemyKind: EnemyKind = 'skeleton';
     let enemyCount = 0;
-    if (isEntry) {
-      enemyCount = 0;
-    } else if (isBoss) {
+    // deliberately no 'retrieve' rooms here — this fallback exists purely as
+    // a can-never-softlock safety net (see the doc comment above), so it
+    // stays maximally simple rather than rolling the same variety the real
+    // generator does
+    const objective: DungeonRoom['objective'] = isEntry ? 'none' : 'combat';
+    if (isBoss) {
       enemyKind = 'gilbert';
       enemyCount = 1;
-    } else {
+    } else if (!isEntry) {
       enemyKind = rnd() < 0.55 ? 'skeleton' : 'bandit';
       enemyCount = 1 + Math.floor(rnd() * 2);
     }
     return {
       index: r.index, cx: r.cx, cz: r.cz, halfX: r.halfX, halfZ: r.halfZ, parent: r.parent,
-      isEntry, isBoss, enemyKind, enemyCount, spawned: false, cleared: enemyCount === 0,
+      isEntry, isBoss, objective, enemyKind, enemyCount, spawned: false,
+      cleared: objective === 'none', relicTaken: false,
     };
   });
 
@@ -482,6 +536,7 @@ function generateFallbackLayout(): DungeonLayout {
   return {
     seed, origin: { ...DUNGEON_ORIGIN }, rooms: finalRooms, walls, corridors,
     entryPos: { x: finalRooms[0].cx, z: finalRooms[0].cz }, rewarded: false,
+    wallStyle: 'stonewall',
   };
 }
 

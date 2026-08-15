@@ -584,23 +584,29 @@ export default function Enemies() {
       const layout = dungeonState.layout;
       let allCleared = true;
       for (const room of layout.rooms) {
-        if (room.enemyCount === 0) continue;
-        if (!room.spawned) {
-          room.spawned = true;
-          for (let i = 0; i < room.enemyCount; i++) {
-            const a = (i / room.enemyCount) * Math.PI * 2;
-            useEnemyStore.getState().spawn(
-              room.enemyKind, room.cx + Math.cos(a) * 2.5, room.cz + Math.sin(a) * 2.5, false, room.index,
-            );
+        if (room.objective === 'none') continue;
+        // Wave 13 · 'retrieve' rooms have no enemies at all — they're
+        // cleared by PlayerController's relic pickup instead, so this
+        // spawn/watch block only applies to 'combat' rooms. Their state
+        // still folds into the allCleared check below either way.
+        if (room.objective === 'combat') {
+          if (!room.spawned) {
+            room.spawned = true;
+            for (let i = 0; i < room.enemyCount; i++) {
+              const a = (i / room.enemyCount) * Math.PI * 2;
+              useEnemyStore.getState().spawn(
+                room.enemyKind, room.cx + Math.cos(a) * 2.5, room.cz + Math.sin(a) * 2.5, false, room.index,
+              );
+            }
           }
-        }
-        if (!room.cleared) {
-          const alive = useEnemyStore.getState().enemies.some(
-            (e) => e.dungeonRoom === room.index && e.mob.state !== 'dying',
-          );
-          if (!alive) {
-            room.cleared = true;
-            st.notify(room.isBoss ? 'The crypt falls silent — the guardian is defeated!' : 'The chamber is cleared.');
+          if (!room.cleared) {
+            const alive = useEnemyStore.getState().enemies.some(
+              (e) => e.dungeonRoom === room.index && e.mob.state !== 'dying',
+            );
+            if (!alive) {
+              room.cleared = true;
+              st.notify(room.isBoss ? 'The crypt falls silent — the guardian is defeated!' : 'The chamber is cleared.');
+            }
           }
         }
         if (!room.cleared) allCleared = false;

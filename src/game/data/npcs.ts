@@ -1,9 +1,10 @@
-import type { CharacterConfig, ItemId, SkillId } from '../types';
+import type { Alliance, CharacterConfig, ItemId, SkillId } from '../types';
 import { EXISTING_QUEST_ALLEGIANCE, EXTRA_SIDE_QUESTS } from './allegianceQuests';
 import { allegianceGateHint, meetsAllegiance } from './allegiance';
 import type { SoundName } from '@/lib/audio';
 import { BATTLE_DOME } from './world';
 import { SETTLEMENT_QUESTS } from './settlementQuests';
+import { DELIVERY_QUESTS } from './deliveryQuests';
 
 // The royal court, stationed around the realm. Each NPC greets with their
 // original voice line and offers repeatable side quests from a themed pool.
@@ -21,17 +22,36 @@ export interface SideQuestDef {
   /** standing this errand demands before anyone will trust you with it.
    *  Positive = at least this far toward Leo, negative = toward Cedric. */
   needsAllegiance?: number;
+  /** Wave 13 · unlike `needsAllegiance` (the continuous -100..100 score),
+   *  this checks the one-way PLEDGE (gameStore's `alliance`) — a real
+   *  "you must actually be sworn" gate, not just "you've been leaning this
+   *  way." True alliance-exclusive content (a capstone errand/reward each
+   *  house holds back for its own sworn knight) uses this instead. */
+  needsAlliance?: Alliance;
   // 'joust' and 'duel' (Phase 20 step 4b) are location-bound by nature —
   // jousting only happens at Richard's Tourney Grounds, first-blood duels
   // only at Storm's Battle Dome — so errands using them can only be
-  // advanced in their giver's own world.
-  kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel';
+  // advanced in their giver's own world. 'deliver' (Wave 13) is
+  // location-bound the other way: it behaves exactly like 'gather' while
+  // you carry it (see gameStore's bumpSideQuest, which treats a gather-kind
+  // action bump as advancing a deliver-kind errand too) but can only be
+  // turned in at `deliverTo`, not back with whoever handed it to you — see
+  // that field's own doc comment.
+  kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'deliver';
   target: string;       // itemId / recipeId / buildableId / enemy kind or 'any' for kills
   need: number;
   label: string;
   xpSkill: SkillId;
   xp: number;
   rewardItems?: Partial<Record<ItemId, number>>;
+  /** 'deliver' errands only: the destination id (data/worlds.ts) you must
+   *  be physically standing in — not the giver's own location — before
+   *  `turnInSideQuest` will accept it. The whole point is hauling goods
+   *  across a `travelTo()`, so the giver and the turn-in place are
+   *  deliberately different; DialoguePanel recognizes an active errand as
+   *  "yours to turn in" at whichever NPC lives at `deliverTo`, even if that
+   *  NPC didn't hand it to you (see its `mySideQuest` derivation). */
+  deliverTo?: string;
 }
 
 export interface NpcDef {
@@ -180,17 +200,17 @@ export const NPCS: NpcDef[] = [
       {
         id: 'q_flowers', kind: 'gather', target: 'flowers', need: 2,
         label: 'Gather 2 bundles of wildflowers for the court',
-        xpSkill: 'woodcutting', xp: 30, rewardItems: { plank: 4 },
+        xpSkill: 'woodcutting', xp: 30, rewardItems: { plank: 4, gold: 8 },
       },
       {
         id: 'q_decor', kind: 'build', target: 'flowerbed', need: 2,
         label: 'Plant 2 flower beds around the homestead',
-        xpSkill: 'building', xp: 45, rewardItems: { stone: 4 },
+        xpSkill: 'building', xp: 45, rewardItems: { stone: 4, gold: 16 },
       },
       {
         id: 'q_barrels', kind: 'build', target: 'barrel', need: 2,
         label: 'Set out 2 storage barrels for the pantry',
-        xpSkill: 'building', xp: 40, rewardItems: { flowers: 2 },
+        xpSkill: 'building', xp: 40, rewardItems: { flowers: 2, gold: 14 },
       },
     ],
   },
@@ -233,12 +253,12 @@ export const NPCS: NpcDef[] = [
       {
         id: 'r_slay2', kind: 'kill', target: 'any', need: 2,
         label: 'Defeat 2 of the creatures that stalk the night',
-        xpSkill: 'combat', xp: 60, rewardItems: { iron_bar: 1 },
+        xpSkill: 'combat', xp: 60, rewardItems: { iron_bar: 1, gold: 14 },
       },
       {
         id: 'r_slay4', kind: 'kill', target: 'any', need: 4,
         label: 'Drive back 4 raiders or skeletons',
-        xpSkill: 'combat', xp: 120, rewardItems: { iron_bar: 2 },
+        xpSkill: 'combat', xp: 120, rewardItems: { iron_bar: 2, gold: 24 },
       },
       // location-bound (Phase 20 4b): landing a joust pass is only possible
       // here at his own Tourney Grounds
@@ -278,17 +298,17 @@ export const NPCS: NpcDef[] = [
       {
         id: 'j_wood', kind: 'gather', target: 'wood', need: 6,
         label: 'Deliver 6 wood logs to the stores',
-        xpSkill: 'woodcutting', xp: 40, rewardItems: { stone: 3 },
+        xpSkill: 'woodcutting', xp: 40, rewardItems: { stone: 3, gold: 10 },
       },
       {
         id: 'j_fish', kind: 'gather', target: 'fish', need: 3,
         label: 'Catch 3 fish for the kitchens',
-        xpSkill: 'fishing', xp: 50, rewardItems: { plank: 5 },
+        xpSkill: 'fishing', xp: 50, rewardItems: { plank: 5, gold: 14 },
       },
       {
         id: 'j_planks', kind: 'craft', target: 'plank', need: 6,
         label: 'Mill 6 planks for the carpenters',
-        xpSkill: 'woodcutting', xp: 40, rewardItems: { flowers: 1 },
+        xpSkill: 'woodcutting', xp: 40, rewardItems: { flowers: 1, gold: 12 },
       },
     ],
   },
@@ -357,7 +377,9 @@ export const NPCS: NpcDef[] = [
       "The King and his court? Keep to the castle, mostly. Folk like us tend the land.",
       'Chop, gather, build — a homestead grows one day at a time.',
     ],
-    sideQuests: [],
+    // Wave 13: his one delivery errand, out to Fenwick's new settlement —
+    // see deliveryQuests.ts's own header for why it lives in its own file.
+    sideQuests: DELIVERY_QUESTS.farmer_alric,
   },
   {
     id: 'miller_beda',
@@ -381,7 +403,8 @@ export const NPCS: NpcDef[] = [
       "Bring us wood and stone and I'll not say no.",
       "Prove yourself and word travels — even to the castle, they say.",
     ],
-    sideQuests: [],
+    // Wave 13: her one delivery errand, out to Fenwick's new settlement.
+    sideQuests: DELIVERY_QUESTS.miller_beda,
   },
   // Empire arc, Wave 4: the settlement prototype's own quest-giver, living
   // among The Old Ruins (template-08) — the one real away-destination with
@@ -436,7 +459,7 @@ export const CEDRIC_WAR_QUESTS: SideQuestDef[] = [
   {
     id: 'ced_stone', kind: 'gather', target: 'stone', need: 8,
     label: 'Quarry 8 stone for the siege works',
-    xpSkill: 'mining', xp: 40, rewardItems: { iron_ore: 3 },
+    xpSkill: 'mining', xp: 40, rewardItems: { iron_ore: 3, gold: 20 },
   },
 ];
 
@@ -454,9 +477,13 @@ export function sideQuestsOf(npcId: string): SideQuestDef[] {
 }
 
 /** Why this errand is not on offer yet, or null when it is available.
- *  Never disable without naming the blocker (UI handoff pack §2). */
+ *  Never disable without naming the blocker (UI handoff pack §2).
+ *  `alliance` is optional only so call sites written before Wave 13's
+ *  `needsAlliance` gate keep compiling untouched — every real caller now
+ *  passes it (see gameStore's acceptSideQuest, QuestLogPanel, DialoguePanel,
+ *  ParleyPanel). */
 export function sideQuestBlocker(
-  q: SideQuestDef, completed: string[], allegiance: number,
+  q: SideQuestDef, completed: string[], allegiance: number, alliance?: Alliance | null,
 ): string | null {
   if (q.requires?.length) {
     const missing = q.requires.filter((r) => !completed.includes(r));
@@ -467,6 +494,11 @@ export function sideQuestBlocker(
   }
   if (q.needsAllegiance !== undefined && !meetsAllegiance(allegiance, q.needsAllegiance)) {
     return allegianceGateHint(q.needsAllegiance);
+  }
+  if (q.needsAlliance && alliance !== q.needsAlliance) {
+    return q.needsAlliance === 'leo'
+      ? 'Only for a knight sworn to the crown'
+      : "Only for one sworn to Cedric's rebellion";
   }
   return null;
 }

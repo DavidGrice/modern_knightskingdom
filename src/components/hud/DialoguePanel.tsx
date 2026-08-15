@@ -5,13 +5,14 @@
 // side-quest offer / progress / turn-in, and the main quest hint from Leo.
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
-import { NPC_BY_ID } from '@/game/data/npcs';
+import { NPC_BY_ID, sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
 import { ITEMS } from '@/game/data/items';
 import { audio } from '@/lib/audio';
 import { useEnemyStore, canChallengeStorm } from '@/game/combat';
 import type { ItemId } from '@/game/types';
 import { playerState } from '@/game/playerState';
 import { sampleTemplateGroundY } from '../world/TemplateWorld';
+import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 
 export default function DialoguePanel() {
   const npcId = useGameStore((s) => s.dialogueNpc);
@@ -31,6 +32,7 @@ export default function DialoguePanel() {
   const recruitVillageFolk = useGameStore((s) => s.recruitVillageFolk);
   const villagers = useGameStore((s) => s.villagers);
   const completedSideQuests = useGameStore((s) => s.completedSideQuests);
+  const allegiance = useGameStore((s) => s.allegiance);
   const settlements = useGameStore((s) => s.settlements);
   const foundSettlement = useGameStore((s) => s.foundSettlement);
   const collectSettlementYield = useGameStore((s) => s.collectSettlementYield);
@@ -76,11 +78,28 @@ export default function DialoguePanel() {
     () => (npc ? npc.lines[Math.floor(Math.random() * npc.lines.length)] : ''),
     [npc],
   );
-  // offer rotates daily-ish: pick by completed-quest count so it varies
+  // Wave 13 · every court NPC's FULL errand pool — baked `sideQuests` plus
+  // whatever allegianceQuests.ts/deliveryQuests.ts merges in via
+  // `sideQuestsOf()`. This used to read `npc.sideQuests` directly, which
+  // silently left every merged-in errand dead: real, complete data (the
+  // king/queen/richard/cedric allegiance chains, Alric's and Beda's own
+  // village work) that nobody could ever actually be offered through the
+  // ordinary "talk to them" flow — logged in ROADMAP.md, left open.
+  // QuestLogPanel/HUD/ParleyPanel already all read through sideQuestsOf();
+  // this brings the last holdout into line with them.
+  const pool = useMemo(() => (npc ? sideQuestsOf(npc.id) : []), [npc]);
+  // offer rotates daily-ish: pick by completed-quest count so it varies,
+  // skipping anything currently blocked so the panel never shows a quest
+  // that would just bounce off acceptSideQuest's own guard
   const offer = useMemo(() => {
-    if (!npc || npc.sideQuests.length === 0) return null;
-    return npc.sideQuests[(completedQuests.length + npc.sideQuests.length) % npc.sideQuests.length];
-  }, [npc, completedQuests.length]);
+    if (!npc || pool.length === 0) return null;
+    const start = (completedQuests.length + pool.length) % pool.length;
+    for (let i = 0; i < pool.length; i++) {
+      const q = pool[(start + i) % pool.length];
+      if (!sideQuestBlocker(q, completedSideQuests, allegiance, alliance)) return q;
+    }
+    return null; // every candidate is blocked right now
+  }, [npc, pool, completedQuests.length, completedSideQuests, allegiance, alliance]);
 
   if (!npc) return null;
 
@@ -88,8 +107,18 @@ export default function DialoguePanel() {
   const repTier = npc.repTitles ? [...npc.repTitles].reverse().find((t) => rep >= t.min) : null;
   const nextTier = npc.repTitles?.find((t) => t.min > rep);
   const mainQuest = activeQuestOf(completedQuests);
-  const mySideQuest = sideQuest?.npcId === npc.id ? sideQuest : null;
-  const mySideDef = mySideQuest ? npc.sideQuests.find((q) => q.id === mySideQuest.questId) : null;
+  // the ACTIVE errand's own def, from ITS giver's pool — not necessarily
+  // this npc's, see the delivery-quest cross-match right below
+  const activeDef = sideQuest ? sideQuestsOf(sideQuest.npcId).find((q) => q.id === sideQuest.questId) : null;
+  // Wave 13 · a 'deliver' errand is accepted from its origin giver but can
+  // only be turned in at the paired destination (deliverTo) — so "mine" also
+  // matches while standing at THAT destination's own resident, even though
+  // they didn't hand it to you (see npcs.ts's `deliverTo` doc comment).
+  const mySideQuest = sideQuest && (
+    sideQuest.npcId === npc.id
+    || (activeDef?.kind === 'deliver' && activeDef.deliverTo === npc.world)
+  ) ? sideQuest : null;
+  const mySideDef = mySideQuest ? activeDef : null;
   const rewardText = (def: NonNullable<typeof offer>) =>
     [
       `${def.xp} ${def.xpSkill} XP`,
@@ -269,30 +298,46 @@ export default function DialoguePanel() {
             </div>
           )}
 
-          {mySideQuest && mySideDef && (
-            <div className="quest-item">
-              <div className="q-name">📜 {mySideDef.label}</div>
-              <div className="q-desc">Progress: {mySideQuest.have}/{mySideDef.need} · Reward: {rewardText(mySideDef)}</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button
-                  className="menu-btn small"
-                  style={{ margin: 0 }}
-                  disabled={mySideQuest.have < mySideDef.need}
-                  onClick={turnInSideQuest}
-                >
-                  {mySideQuest.have >= mySideDef.need ? 'Turn In' : 'Not finished yet'}
-                </button>
-                <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
-                  Abandon
-                </button>
+          {mySideQuest && mySideDef && (() => {
+            const notHere = mySideDef.kind === 'deliver' && npc.world !== mySideDef.deliverTo;
+            const ready = mySideQuest.have >= mySideDef.need;
+            return (
+              <div className="quest-item">
+                <div className="q-name">📜 {mySideDef.label}</div>
+                <div className="q-desc">Progress: {mySideQuest.have}/{mySideDef.need} · Reward: {rewardText(mySideDef)}</div>
+                {mySideDef.kind === 'deliver' && (
+                  <div className="q-desc" style={{ fontStyle: 'italic' }}>
+                    {notHere
+                      ? `Carry it to ${WORLD_DESTINATION_BY_ID[mySideDef.deliverTo ?? '']?.name ?? 'its destination'}.`
+                      : `Hand it to ${npc.name} here.`}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    className="menu-btn small"
+                    style={{ margin: 0 }}
+                    disabled={!ready || notHere}
+                    onClick={turnInSideQuest}
+                  >
+                    {!ready ? 'Not finished yet' : notHere ? 'Not delivered here' : 'Turn In'}
+                  </button>
+                  <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
+                    Abandon
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {!sideQuest && offer && (
             <div className="quest-item">
               <div className="q-name">❓ {offer.label}</div>
               <div className="q-desc">Reward: {rewardText(offer)}</div>
+              {offer.kind === 'deliver' && (
+                <div className="q-desc" style={{ fontStyle: 'italic' }}>
+                  Deliver to {WORLD_DESTINATION_BY_ID[offer.deliverTo ?? '']?.name ?? 'its destination'}.
+                </div>
+              )}
               <button
                 className="menu-btn small"
                 style={{ margin: '8px 0 0' }}
@@ -303,7 +348,7 @@ export default function DialoguePanel() {
             </div>
           )}
 
-          {sideQuest && sideQuest.npcId !== npc.id && (
+          {sideQuest && !mySideQuest && (
             <div style={{ fontSize: 13, color: 'var(--parchment-dark)' }}>
               You already carry an errand for {NPC_BY_ID[sideQuest.npcId]?.name}. Finish it first.
             </div>

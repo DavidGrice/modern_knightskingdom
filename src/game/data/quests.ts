@@ -7,8 +7,9 @@ export const QUESTS: Quest[] = [
     name: 'First Steps',
     description: 'Every legend starts small. Take your axe into the woods and gather timber.',
     objectives: [{ id: 'chop', label: 'Chop 5 wood logs', kind: 'gather', target: 'wood', count: 5 }],
-    rewardText: 'Woodcutting XP',
+    rewardText: 'Woodcutting XP and a few coins to start your purse',
     xp: { woodcutting: 40 },
+    grantItems: { gold: 8 },
   },
   {
     id: 'cozy_beginnings',
@@ -22,6 +23,7 @@ export const QUESTS: Quest[] = [
     rewardText: 'Unlocks Fishing and sturdier walls',
     xp: { building: 60 },
     unlocks: ['fishing', 'building2'],
+    grantItems: { gold: 14 },
   },
   {
     // Phase 20 travel beat: the reveal toast said John "will receive you at
@@ -48,6 +50,7 @@ export const QUESTS: Quest[] = [
     rewardText: 'Unlocks Mining',
     xp: { mining: 50 },
     unlocks: ['mining'],
+    grantItems: { gold: 16 },
   },
   {
     id: 'forge_ahead',
@@ -60,6 +63,7 @@ export const QUESTS: Quest[] = [
     rewardText: 'Unlocks Smithing',
     xp: { smithing: 70 },
     unlocks: ['smithing'],
+    grantItems: { gold: 20 },
   },
   {
     // Phase 20 travel beat: iron freshly smelted, Richard summons you to
@@ -86,6 +90,7 @@ export const QUESTS: Quest[] = [
     ],
     rewardText: 'Fishing XP feast',
     xp: { fishing: 80 },
+    grantItems: { gold: 22 },
   },
   {
     id: 'squires_errand',
@@ -96,6 +101,7 @@ export const QUESTS: Quest[] = [
     ],
     rewardText: 'Building XP',
     xp: { building: 90 },
+    grantItems: { gold: 26 },
   },
   {
     id: 'knights_arms',
@@ -108,6 +114,7 @@ export const QUESTS: Quest[] = [
     rewardText: 'Knighthood & the right to raise a Keep',
     xp: { smithing: 120 },
     unlocks: ['keep'],
+    grantItems: { gold: 34 },
   },
   {
     // Phase 20 travel beat: knighted at last — the King himself will
@@ -128,8 +135,9 @@ export const QUESTS: Quest[] = [
     name: "Paladin's Keep",
     description: 'Raise the Grand Keep and take your place among the paladins of the realm.',
     objectives: [{ id: 'keep', label: 'Build the Grand Keep', kind: 'build', target: 'keep', count: 1 }],
-    rewardText: 'The rank of Paladin',
+    rewardText: 'The rank of Paladin, and the crown’s own purse for it',
     xp: { building: 200 },
+    grantItems: { gold: 60 },
   },
 ];
 

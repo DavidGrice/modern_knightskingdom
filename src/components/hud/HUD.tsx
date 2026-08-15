@@ -15,6 +15,7 @@ import { activeMelee, combatState, type MeleeWeaponId } from '@/game/combat';
 import { aimState, type AimTarget, type Standing } from '@/game/targeting';
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
+import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import Minimap from './Minimap';
 import Vitals from './Vitals';
 import Compass from './Compass';
@@ -22,6 +23,7 @@ import FpsReadout from './FpsReadout';
 import FishingMeter from './FishingMeter';
 import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
+import BuildChallengePanel from './BuildChallengePanel';
 import FortStatus from './FortStatus';
 import ArenaHud from './ArenaHud';
 import OrderRadial from './OrderRadial';
@@ -168,6 +170,12 @@ function ObjectiveCard() {
                 For {sideQuestGiverName(sideQuest.npcId)}
                 <span className="num">{cur}/{def.need}</span>
               </div>
+              {def.kind === 'deliver' && (
+                <div className={`kk-step ${cur >= def.need ? 'active' : ''}`}>
+                  <span className="dot" />
+                  Carry it to {WORLD_DESTINATION_BY_ID[def.deliverTo ?? '']?.name ?? 'its destination'}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -362,6 +370,7 @@ export default function HUD() {
       {!buildMode && panel === 'none' && <FishingMeter />}
       <OrderRadial />
       <ClaimBanner />
+      <BuildChallengePanel />
       <CeremonyBanner />
 
       <div className="kk-toasts">
