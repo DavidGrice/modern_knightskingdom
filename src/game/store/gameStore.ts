@@ -23,7 +23,7 @@ import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
-import { NPC_BY_ID, NPCS, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
+import { NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SELL_PRICES } from '../data/trade';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress } from '../data/challenges';
@@ -159,6 +159,10 @@ interface GameState {
   reputation: Record<string, number>; // per-NPC standing (see data/npcs repTitles), absent = 0
   destination: string | null;    // template-world id being visited; null = home
   visitedWorlds: string[];       // template-world ids visited (one-time loot already granted)
+  /** Wave 14 · POI ids (resident NPC ids, see data/npcs.ts's
+   *  poisForDestination) reached at least once via a waypoint travel —
+   *  display-only, exactly like visitedWorlds; never gates travel itself. */
+  discoveredPois: string[];
   loreSeen: string[];            // NPC ids whose one-time voiced lore intro has played
   defeatedCedric: boolean;       // Cedric the Bull's capstone boss fight has been won
   alliance: Alliance | null;     // Phase 19: who the player pledged to; null = unsworn
@@ -328,7 +332,12 @@ interface GameState {
   damageBuilding: (id: string, amount: number, cause?: string) => void;
   settleCart: (id: string) => void;
   addReputation: (npcId: string, amount: number) => void;
-  travelTo: (id: string) => void;
+  /** Wave 14 · `poiId` optionally waypoints straight to a resident POI's own
+   *  x/z/yaw (data/npcs.ts's poisForDestination) instead of the
+   *  destination's generic `origin`. Absent = unchanged pre-Wave-14
+   *  behavior. An unrecognized/unrevealed poiId is silently ignored and
+   *  falls back to a plain destination-level travel. */
+  travelTo: (id: string, poiId?: string) => void;
   returnHome: () => void;
   enterDungeon: () => void;
   enterArena: (envId: ArenaEnvId) => void;
@@ -913,6 +922,7 @@ function createGameStore() {
     reputation: {},
     destination: null,
     visitedWorlds: [],
+    discoveredPois: [],
     loreSeen: [],
     defeatedCedric: false,
     alliance: null,
@@ -994,7 +1004,7 @@ function createGameStore() {
         notifications: [], prompt: null, actionProgress: null, dirty: true,
         timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
         gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, betrayedCedric: false, guild: null, skillTree: [], attrSpent: {}, dyes: [],
+        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, betrayedCedric: false, guild: null, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
@@ -1044,7 +1054,7 @@ function createGameStore() {
         gateOpen: s.gateOpen ?? {},
         buildingHp: s.buildingHp ?? {},
         reputation: s.reputation ?? {},
-        destination: null, visitedWorlds: s.visitedWorlds ?? [], loreSeen: s.loreSeen ?? [],
+        destination: null, visitedWorlds: s.visitedWorlds ?? [], discoveredPois: s.discoveredPois ?? [], loreSeen: s.loreSeen ?? [],
         defeatedCedric: s.defeatedCedric ?? false,
         alliance: s.alliance ?? null,
         allegiance: s.allegiance ?? 0,
@@ -1108,7 +1118,7 @@ function createGameStore() {
         gateOpen: s.gateOpen,
         buildingHp: s.buildingHp,
         reputation: s.reputation,
-        destination: null, visitedWorlds: s.visitedWorlds, loreSeen: s.loreSeen,
+        destination: null, visitedWorlds: s.visitedWorlds, discoveredPois: s.discoveredPois, loreSeen: s.loreSeen,
         defeatedCedric: s.defeatedCedric,
         alliance: s.alliance,
         allegiance: s.allegiance,
@@ -2297,25 +2307,41 @@ function createGameStore() {
       }
     },
 
-    travelTo: (id) => {
+    travelTo: (id, poiId) => {
       const st = get();
-      if (st.destination === id) return;
       const dest = WORLD_DESTINATION_BY_ID[id];
       if (!dest) return;
+      // Wave 14 · an unrecognized/unrevealed poiId (stale save, a POI hidden
+      // behind a reveal quest not yet done) just falls back to a plain
+      // destination-level travel rather than silently no-op'ing the whole
+      // call — see poisForDestination's own isNpcRevealed gate.
+      const poi = poiId ? poisForDestination(id, st.completedQuests).find((p) => p.id === poiId) : undefined;
+      // Re-clicking the same destination with no waypoint target stays a
+      // no-op, unchanged from before poiId existed. A waypoint always
+      // re-teleports even to a destination you're already standing in —
+      // "jump straight to this resident" is the whole point of a waypoint.
+      if (st.destination === id && !poi) return;
       const firstVisit = !st.visitedWorlds.includes(id);
+      const firstPoiVisit = !!poi && !st.discoveredPois.includes(poi.id);
       set({
         destination: id,
         visitedWorlds: firstVisit ? [...st.visitedWorlds, id] : st.visitedWorlds,
+        discoveredPois: firstPoiVisit ? [...st.discoveredPois, poi!.id] : st.discoveredPois,
         panel: 'none',
         dirty: true,
       });
-      playerState.pendingTeleport = { x: dest.origin.x, z: dest.origin.z - dest.radius * 0.5, yaw: Math.PI };
+      // a waypoint lands right in front of its resident (same -2.4 offset
+      // beginCeremony already uses to stand the player before the King)
+      // rather than the destination's generic origin landing spot.
+      playerState.pendingTeleport = poi
+        ? { x: poi.x, z: poi.z - 2.4, yaw: poi.yaw }
+        : { x: dest.origin.x, z: dest.origin.z - dest.radius * 0.5, yaw: Math.PI };
       audio.play('canter', 0.8);
       if (firstVisit && dest.loot) {
         st.addItems(dest.loot, 'grant');
         st.notify(dest.lootText ?? 'You find something of value.', true);
       }
-      st.notify(`You travel to ${dest.name}.`);
+      st.notify(poi ? `You travel to ${poi.name} at ${dest.name}.` : `You travel to ${dest.name}.`);
       // main-quest travel beats credit the journey itself
       bumpQuestCounters('visit', id, 1);
     },

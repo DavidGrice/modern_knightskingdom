@@ -124,6 +124,46 @@ export function scheduledCourtNpcs(
     && !villagers.some((v) => v.id === n.id));
 }
 
+/** Wave 14 · a Point of Interest a traveler can waypoint straight to inside
+ *  a destination, instead of only ever landing at that destination's generic
+ *  `origin` (see gameStore's `travelTo`). v1 POI data is deliberately NOT a
+ *  new hand-authored table — it's derived live from the resident court NPCs
+ *  already defined above, each of which already has a real name/title/
+ *  portrait and a world-absolute x/z/yaw, so a POI and its resident can
+ *  never drift out of sync with each other. `mapPopulation.generated.json`
+ *  (the Grok lab's set-dressing prop placement) was considered and rejected
+ *  as a POI source for this wave: it's sparse (rows for only 7 of 9
+ *  templates), and the `set`-kind rows that make up most of it carry only an
+ *  opaque catalogue `assetRef` (e.g. "oc6095b3") with no human-readable name
+ *  anywhere in the data — turning that into POIs would mean hand-authoring
+ *  landmark labels destination by destination, well past this wave's
+ *  "waypoint to something real" scope. A destination with no resident NPC
+ *  (04/05/07/09, all 6 challenge grounds, the dungeon, the arena) simply has
+ *  no POI in v1 — `travelTo(id)` alone still lands at `dest.origin` exactly
+ *  as it always has. */
+export interface Poi {
+  /** the resident NPC's own id — also the `discoveredPois` save key */
+  id: string;
+  name: string;
+  title: string;
+  portrait: string;
+  world: string;
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** Every POI inside one destination, in roster order. Gated by the SAME
+ *  `isNpcRevealed` quest gate the resident already uses everywhere else (the
+ *  Travel Map must not spoil a character before their reveal quest) — a
+ *  stricter gate than a save's `discoveredPois`, which only tracks whether an
+ *  already-revealed POI has actually been waypointed to yet. */
+export function poisForDestination(destId: string, completedQuests: string[]): Poi[] {
+  return NPCS
+    .filter((n) => n.world === destId && isNpcRevealed(n, completedQuests))
+    .map((n) => ({ id: n.id, name: n.name, title: n.title, portrait: n.portrait, world: n.world!, x: n.x, z: n.z, yaw: n.yaw }));
+}
+
 export const NPCS: NpcDef[] = [
   {
     id: 'king',

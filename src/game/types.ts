@@ -313,6 +313,13 @@ export interface SaveGame {
   destination?: string | null;
   /** template-world ids visited at least once (one-time loot already granted) */
   visitedWorlds?: string[];
+  /** Wave 14 · POI ids (a resident NPC's own id — see data/npcs.ts's
+   *  `poisForDestination`) reached at least once via a waypoint travel. Only
+   *  gates what the Travel Map SHOWS (name/portrait vs a "???" placeholder)
+   *  — never gates travel itself, exactly like `visitedWorlds` above. Absent
+   *  = nothing discovered yet, same optional-array convention as every other
+   *  "seen it before" field on this interface. */
+  discoveredPois?: string[];
   /** NPC ids whose one-time voiced lore introduction has already played */
   loreSeen?: string[];
   /** Cedric the Bull's capstone boss fight has been won (see CedricCamp.tsx) */

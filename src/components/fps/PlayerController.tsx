@@ -1604,16 +1604,7 @@ export default function PlayerController() {
       if (cartState.pushingId || cartState.hitchedId) {
         const fx = -Math.sin(yaw.current);
         const fz = -Math.cos(yaw.current);
-        // crewing an engine: E always steps down (firing is the attack button,
-    // see the crew block in the frame loop), so nothing else competes for it
-    if (crewState.engineId) {
-      const eb = st.buildings.find((x) => x.id === crewState.engineId);
-      return {
-        id: crewState.engineId, kind: 'leave_engine', duration: 0, actionable: true,
-        label: `Step down from the ${eb ? BUILDABLE_BY_ID[eb.type]?.name ?? 'engine' : 'engine'}`,
-      };
-    }
-    if (cartState.pushingId) {
+        if (cartState.pushingId) {
           const cx = p.x + fx * 1.8;
           const cz = p.z + fz * 1.8;
           cartLivePos[cartState.pushingId] = { x: cx, z: cz };
