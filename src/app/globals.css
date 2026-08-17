@@ -719,6 +719,107 @@ input:focus { border-color: var(--gold); }
 .ai-debug-score .c { color: #7f9a8b; margin-right: 4px; }
 .ai-debug-score .g { color: #ffb060; }
 
+/* ---------- Wave 14 · Travel Map (parchment) ----------
+   Redesigned from a flat dark-HUD card grid into an illustrated parchment
+   surface. The gradient/ink-color pairing below is lifted from
+   kk-tokens.css's authored-but-unused `.kk-d-parchment` recipe (a genuine
+   light worn-paper look already on-brand for this project) rather than
+   invented from scratch — but applied directly here, NOT by adding that
+   class, since the Travel Map deliberately does not route through the
+   player's chosen kk-lanes.css HUD skin (glass/metal/chrome/leather): a map
+   should look like a map regardless of which lane a player picked, the same
+   way an in-world object would. --gold/--chrome-2/--parchment-dark (the
+   game's own active palette) are still used for every border/accent so nothing
+   here clashes with the rest of the HUD chrome around it. */
+.travel-map-panel { width: min(920px, 95vw); }
+.tm-intro { font-size: 13px; color: var(--parchment-dark); margin-bottom: 12px; }
+.tm-body { display: flex; gap: 16px; align-items: flex-start; }
+
+.tm-surface {
+  flex: 1 1 62%; min-width: 0; position: relative;
+  background: linear-gradient(160deg, #efe3c4, #ded0a8 55%, #cfbf95);
+  color: #2e2007; border-radius: 10px; border: 1px solid #8a7748;
+  box-shadow:
+    inset 0 0 46px rgba(120, 95, 55, 0.34),
+    inset 0 2px 6px rgba(90, 70, 40, 0.35),
+    0 8px 20px rgba(0, 0, 0, 0.4);
+  padding: 16px;
+  display: grid; grid-template-columns: 2fr 1fr;
+  grid-template-areas: "roads roads" "frontier landmarks";
+  gap: 16px;
+}
+.tm-compass { position: absolute; top: 10px; right: 14px; font-size: 20px; opacity: 0.6; }
+.tm-region-roads { grid-area: roads; }
+.tm-region-frontier { grid-area: frontier; min-width: 0; }
+.tm-region-landmarks { grid-area: landmarks; min-width: 0; }
+.tm-region-title {
+  font-variant: small-caps; letter-spacing: 1.5px; font-size: 13px; color: #5c4a22;
+  border-bottom: 1px dashed #8a7748; padding-bottom: 4px; margin-bottom: 10px;
+}
+.tm-pins { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.tm-pin { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.tm-pin-main {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 84px; padding: 7px 4px; background: rgba(255, 255, 255, 0.28);
+  border: 1px solid #8a7748; border-radius: 8px; color: #2e2007;
+}
+.tm-pin-main:hover { background: rgba(255, 255, 255, 0.5); border-color: #5c4a22; }
+.tm-pin.selected .tm-pin-main { border-color: var(--gold); background: rgba(255, 255, 255, 0.58); }
+.tm-pin.here .tm-pin-main { border-color: var(--gold); box-shadow: 0 0 0 2px var(--chrome-glow); }
+.tm-pin.locked .tm-pin-main { opacity: 0.6; }
+.tm-pin-badge { position: relative; font-size: 22px; line-height: 1; }
+.tm-pin-yours, .tm-pin-visited, .tm-pin-locked {
+  position: absolute; top: -8px; font-size: 9.5px; background: #2e2007; color: var(--gold);
+  border: 1px solid var(--gold); border-radius: 50%; width: 15px; height: 15px;
+  display: flex; align-items: center; justify-content: center;
+}
+.tm-pin-yours { left: -11px; }
+.tm-pin-visited { right: -11px; }
+.tm-pin-locked { right: -11px; }
+.tm-pin-label { font-size: 10.5px; text-align: center; line-height: 1.15; }
+
+.tm-pin-pois { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.tm-poi-dot {
+  width: 20px; height: 20px; border-radius: 50%; border: 1px solid #5c4a22;
+  background-color: #cfbf95; background-position: center; background-size: cover;
+  color: #2e2007; font-size: 10px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+}
+.tm-poi-dot.found { border-color: var(--gold); }
+.tm-poi-dot:hover { border-color: #2e2007; }
+
+.tm-detail {
+  flex: 1 1 34%; min-width: 220px; align-self: stretch;
+  background: rgba(11, 13, 18, 0.55); border: 1px solid var(--chrome-2); border-radius: 8px;
+  padding: 14px;
+}
+.tm-detail-thumb { width: 100%; border-radius: 6px; display: block; margin-bottom: 8px; }
+.tm-detail-name { font-weight: bold; color: var(--gold); font-size: 16px; }
+.tm-detail-yours { font-size: 11.5px; color: var(--gold); font-weight: bold; margin: 2px 0; }
+.tm-detail-blurb { font-size: 12.5px; color: var(--parchment-dark); margin: 6px 0 12px; }
+.tm-detail-pois { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.tm-poi-btn {
+  font-size: 11px; padding: 3px 9px; border-radius: 10px; border: 1px solid var(--gold-dim);
+  background: rgba(0, 0, 0, 0.3); color: var(--gold);
+}
+.tm-poi-btn:hover { border-color: var(--gold); }
+.tm-detail-action {
+  width: 100%; padding: 8px 14px; font-size: 13.5px; border-radius: 5px;
+  background: var(--wood-light); color: var(--parchment); border: 1px solid var(--gold-dim);
+}
+.tm-detail-action:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+.tm-detail-action:disabled { opacity: 0.5; cursor: default; }
+.tm-ring-row { border: 1px solid var(--chrome-2); border-radius: 6px; padding: 8px; margin-bottom: 8px; background: rgba(0, 0, 0, 0.25); }
+.tm-ring-name { font-weight: bold; color: var(--gold); font-size: 13px; margin-bottom: 2px; }
+.tm-ring-blurb { font-size: 11px; color: var(--parchment-dark); margin-bottom: 8px; }
+
+@media (max-width: 720px) {
+  .tm-body { flex-direction: column; }
+  .tm-surface { grid-template-columns: 1fr; grid-template-areas: "roads" "frontier" "landmarks"; }
+  .tm-detail { width: 100%; }
+}
+
 /* ---------- mobile-only class hooks (audit 2026-08-03, in-game HUD panels) ----------
    A dozen game-panel call-sites set `style={{ minWidth: N }}` inline, which
    always outranks the `.game-panel { min-width: 0 }` rule in the breakpoint
@@ -730,9 +831,6 @@ input:focus { border-color: var(--gold); }
    className instead, so the breakpoint below can reach them the same way
    it already reaches .inv-grid/.build-grid. Base rules here reproduce
    exactly what used to be inline, so desktop is unchanged. */
-.travel-dest-grid { grid-template-columns: repeat(3, 1fr); }
-.travel-arena-grid { grid-template-columns: repeat(4, 1fr); }
-.travel-challenge-grid { grid-template-columns: repeat(3, 1fr); }
 .talent-grid { grid-template-columns: repeat(7, 1fr); }
 .inv-grid.emote-grid { grid-template-columns: repeat(3, 110px); }
 
@@ -758,11 +856,12 @@ input:focus { border-color: var(--gold); }
   .hud-topright { transform-origin: top right; }
   .controls-ref, .controls-toggle { display: none; } /* keyboard reference is meaningless on touch */
   .quest-journal { padding: 12px 10px; }
-  /* audit 2026-08-03: TravelPanel's three inline grids and the Talent Tree's
-     7-column grid had no mobile reflow at all; the Emote wheel's inline grid
-     bypassed the .inv-grid reflow above outright. ShopPanel's Sell/Buy pair
-     had no wrap, so both columns would squeeze to near-zero. */
-  .travel-dest-grid, .travel-challenge-grid, .travel-arena-grid { grid-template-columns: repeat(2, 1fr); }
+  /* audit 2026-08-03: the Talent Tree's 7-column grid had no mobile reflow
+     at all; the Emote wheel's inline grid bypassed the .inv-grid reflow
+     above outright. ShopPanel's Sell/Buy pair had no wrap, so both columns
+     would squeeze to near-zero. (TravelPanel's own three inline grids, also
+     fixed by this same audit, were superseded by Wave 14's parchment map —
+     see that section's own dedicated media query below.) */
   .talent-grid { grid-template-columns: repeat(4, 1fr); }
   .inv-grid.emote-grid { grid-template-columns: repeat(3, 1fr); }
   .shop-columns { flex-direction: column; }

@@ -6050,41 +6050,82 @@ layout — were accidentally duplicated verbatim in an earlier edit; the duplica
 
 ## Travel & world-map overhaul — requested 2026-08-04, scoped only, not started [TODO]
 Three related but separable asks from the same message, logged per the user's own "just add it to
-the roadmap" pattern for major-overhaul-scale work. None of these are designed in detail yet — each
-needs its own pass before implementation.
+the roadmap" pattern for major-overhaul-scale work.
 
-- [TODO] **A waypoint/fast-travel system, plus Points of Interest and undiscovered/fog-of-war
-  locations.** Today's entire travel system is `TravelPanel.tsx` (`src/components/hud/`): a flat grid
-  of cards, one per `WorldDestination` (`worlds.ts`), each an instant teleport via `travelTo(id)` —
-  there is no concept of a POI smaller than a whole destination, no "discovered vs. undiscovered"
-  state at all (`visitedWorlds` only tracks whole destinations, checked once on first arrival for the
-  loot reward), and no waypoint you place or unlock independent of the fixed 9 templates + 6
-  challenges + dungeon + arena list. Real design questions, not yet answered: what counts as a POI —
-  something inside a destination's own bake (a specific building/landmark, using the same
-  `TemplatePopulation.tsx`/lab-classification data Wave 3 already spawns), or a new lightweight
-  marker layer independent of it? Does "undiscovered" gate travel entirely, or just hide detail on
-  the map (blurb/thumbnail/resident list) until visited? Does a waypoint let you skip stright to a
-  POI inside a destination (needs a per-POI spawn point, not just `dest.origin`) or only to the
-  destination's existing single entry point?
+- [COMPLETE] ✅ **A waypoint/fast-travel system, plus Points of Interest and undiscovered/fog-of-war
+  locations — SHIPPED 2026-08-17 (Wave 14).** Real, closed answers to this entry's own open design
+  questions, decided against the live code rather than guessed at:
+  - **What counts as a POI, v1:** the 6 resident court NPCs (`data/npcs.ts`'s `NpcDef.world`/`x`/`z`/
+    `yaw`), not `TemplatePopulation.tsx`'s lab-classification prop data. Checked and rejected: that
+    JSON has rows for only 7 of 9 templates, and its `set`-kind rows (the bulk of it) carry nothing but
+    an opaque catalogue `assetRef` (e.g. `"oc6095b3"`) with no human-readable name anywhere in the
+    data — turning that into POIs would have meant hand-authoring landmark labels destination by
+    destination, well past a v1. The 6 residents already have real names/titles/portraits and are
+    already the thing the old flat card grid surfaced as a plain-text line; a POI is now a first-class,
+    independently-waypointable `Poi` (`poisForDestination(destId, completedQuests)`, `data/npcs.ts`),
+    gated by the same `isNpcRevealed` quest gate the resident already used everywhere else. Destinations
+    with no resident (04/05/07/09, all 6 challenge grounds, the dungeon, the arena) simply have no POI
+    in v1 — plain destination-level travel is unchanged for them.
+  - **Undiscovered gates DISPLAY, never travel:** a `"???"` placeholder (detail-card button and map pin
+    dot alike) rather than hiding the POI outright or blocking the waypoint — the same non-punitive
+    convention `visitedWorlds` already set for whole destinations. New `SaveGame.discoveredPois?:
+    string[]` (identical optional-array convention to `visitedWorlds`/`waterworks`/`falconTamed` etc.),
+    set the moment a POI is actually waypointed to.
+  - **A waypoint jumps straight to the POI**, not just `dest.origin`: `travelTo(id, poiId?)` — an
+    optional second argument, defaulting to the old destination-only behavior when absent, so no
+    existing call site anywhere in the codebase needed to change. Lands the player at `poi.x, poi.z -
+    2.4, poi.yaw` (the same "-2.4, face the resident" offset `beginCeremony` already hand-tunes for
+    standing before King Leo — verified their two `yaw: Math.PI` values are identical, not a
+    coincidence: every one of the 6 residents is posed the same way). An unrecognized/unrevealed
+    `poiId` (a stale save, a POI hidden behind an unmet reveal quest) silently falls back to a plain
+    destination-level travel rather than erroring.
+  - **Explicitly deferred, correctly**: the third ask below (per-scene rendering) — a waypoint stays a
+    `pendingTeleport`-style position jump inside the existing single shared scene, exactly like
+    `travelTo` always has, never a scene load/unload, so this wave does not silently grow a dependency
+    on the deferred item.
+  - Verified live: fresh save starts with `discoveredPois: []`; a POI is correctly invisible before its
+    resident's reveal quest and shows exactly the right count after; waypointing lands the player at
+    the exact `poi.x`/`poi.z - 2.4`/`poi.yaw` coordinates (confirmed for two different residents, via
+    both the detail-card button and the map pin's own satellite dot); `discoveredPois` flips and
+    persists through the real save/reload path.
 
-- [TODO] **The Travel Map's look — replace the current dark HUD-panel grid with an illustrated,
-  parchment-style map (worn brown paper, hand-drawn "knights-era" feel).** Confirmed current state:
-  `TravelPanel.tsx` renders through the same `.game-panel` dark-chrome styling every other HUD panel
-  uses (Inventory, Crafting, Quests, …) — image thumbnail + name + blurb + button, in a CSS grid, no
-  illustrated map surface, no drawn roads connecting locations, nothing parchment-like at all despite
-  `var(--parchment-dark)` already existing as a text-color token elsewhere in this same file (used for
-  blurb text color only, not any actual parchment surface treatment). A real redesign needs: a
-  parchment background treatment (texture/gradient, consistent with `--gold`/`--chrome-2`'s existing
-  medieval-HUD palette rather than clashing with it), destination markers positioned on an actual
-  illustrated map surface instead of a card grid (needs real or approximate relative positions between
-  the 9 templates + 6 challenges — none of the current `origin.x/z` values are meant to represent
-  real-world relative geography, they're just non-overlapping render-space slots), and probably ties
-  directly into the waypoint/POI system above rather than being a pure visual reskin of the same flat
-  list.
+- [COMPLETE] ✅ **The Travel Map's look — replace the current dark HUD-panel grid with an illustrated,
+  parchment-style map — SHIPPED 2026-08-17 (Wave 14).** `TravelPanel.tsx` no longer renders the old
+  three-grid `.game-panel` card layout at all — a real illustrated parchment surface (`.tm-surface`,
+  `globals.css`), gradient/ink-color lifted from `kk-tokens.css`'s authored-but-until-now-unused
+  `.kk-d-parchment` recipe and applied directly (not via that class: a map should look like a map
+  regardless of which `kk-lanes.css` HUD skin lane the player picked, the same way an in-world object
+  would), with `--gold`/`--chrome-2`/`--parchment-dark` — the game's own active palette — still driving
+  every border/accent so nothing clashes with the surrounding chrome. Destinations group into three
+  legible regions (**The Eight Roads**, **Challenge Grounds**, **Sealed Away**) rather than a literal
+  plot of each `origin.x/z` — confirmed meaningless geography, per `worlds.ts`'s own header comment,
+  same finding the waypoint entry above independently reached. Each destination is a real pin (its own
+  icon, a visited ✓/settlement 👑/locked 🔒 badge); each resident POI from the entry above is a small
+  satellite dot attached to its destination's pin — a portrait once discovered, a plain **?** before —
+  independently clickable to waypoint straight there. Clicking a pin only ever selects it into a side
+  detail card; the real `travelTo()`/`enterDungeon()`/`enterArena()` calls still fire exclusively from
+  an explicit button there, exactly like the old cards did, so browsing the map never travels you by
+  accident. Every other real behavior is preserved exactly, including one pre-existing display quirk
+  ported faithfully rather than silently "fixed" out of scope (the Sealed Crypt's ✓ badge has always
+  meant "you are currently there," not "you have ever been there" — unchanged): `template-09` filtered
+  from the roads region (it's the homestead), `visitedWorlds` checkmarks, the `settlements[id]` YOURS
+  badge, the dungeon/arena unlock gate and its exact original conditional text/disabled-button logic,
+  and all 4 Endless Arena rings. Verified live: the parchment surface really renders (16 real pins,
+  `.travel-dest-grid` gone from the DOM and the whole `src/` tree); `travelTo()` still lands correctly
+  at 4 different destinations tested via both direct calls and a real clicked button; the map reflows
+  correctly at a 375px mobile viewport (stacks to one column, no horizontal overflow) and stays
+  side-by-side at 1440px, matching the project's established 720px breakpoint convention.
+  **Not attempted, correctly**: real or approximate cross-destination geography (the three-region
+  grouping is a legible, guaranteed-non-overlapping simplification, not a hand-tuned road-drawn map) —
+  a reasonable v1 trade of a fancier layout for one that can never overlap at any viewport width.
 
 - [TODO] **Each travel destination rendered in its own scene instead of every destination's bake
   sitting inside one shared Canvas/scene graph, plus some kind of CMS to pass data between scenes.**
-  Confirmed current architecture: `GameWorld.tsx` mounts exactly one `<TemplateWorld />` (and one
+  Deliberately still untouched by Wave 14 (2026-08-17), same judgment as when this entry was first
+  scoped: the single largest, riskiest item in the whole 16-wave plan, and both items above were
+  designed specifically to NOT depend on it (a waypoint stays a `pendingTeleport` position jump inside
+  today's one shared scene). Belongs in its own future design-and-plan cycle. Confirmed current
+  architecture: `GameWorld.tsx` mounts exactly one `<TemplateWorld />` (and one
   `<TemplatePopulation />`, one `<GameSky />`, etc.) for the player's whole session — every
   destination is the SAME React Three Fiber `<Canvas>`/scene graph, just offset into its own
   non-overlapping quadrant via `dest.origin` (templates at x:1000-3400 z:1000, the dungeon at
@@ -6109,21 +6150,17 @@ needs its own pass before implementation.
 
 ## Found during Wave 5 verification (2026-08-05), pre-existing and out of that wave's scope
 
-- [TODO] **A duplicated `leave_engine` block is spliced into `PlayerController.tsx`'s `useFrame` cart
-  branch and can silently abort a frame's update.** `PlayerController.tsx` ~lines 1309-1317: a second
-  copy of `if (crewState.engineId) { ... return { id, kind: 'leave_engine', ... } }` sits inside the
-  `useFrame` callback's cart-position branch (between the `fz = -Math.cos(yaw.current)` line and the
-  `if (cartState.pushingId)` check) — `return`ing a `Target`-shaped object out of a `void` frame
-  callback, which just discards it and skips the rest of that frame's update. The legitimate copy of
-  this exact block lives at `findTarget()` (~line 470-471), where returning a `Target` is correct.
-  Confirmed pre-existing and unrelated to Wave 5: it is byte-identical at HEAD before that wave's
-  diff, and Wave 5's only `PlayerController.tsx` hunks are at lines 12, 40, 52, 608-644 and 949-957
-  — nowhere near it. Practical effect: any frame where the player is crewing a siege engine (a
-  cannon/ram) while also mid-push/hitch on a cart aborts that frame's remaining update early. Narrow
-  overlap (both states have to be true at once), which is likely why it's gone unnoticed. Fix is
-  probably just deleting the stray spliced copy, but that needs its own verification pass, not a
-  drive-by edit inside an unrelated wave.
-  **Independently re-confirmed twice since**: Wave 7's own verification found it again (still
-  byte-identical, still outside that wave's diff) and Wave 8's implementation pass found it a third
-  time (`git log -L` traces it to the file's original commit). Still open, still nobody's touched it —
-  it keeps surviving unrelated waves specifically because it's this narrow.
+- [COMPLETE] ✅ **A duplicated `leave_engine` block spliced into `PlayerController.tsx`'s `useFrame`
+  cart branch, silently aborting a frame's update — FIXED 2026-08-17 (Wave 14).** Confirmed still
+  present, byte-identical, exactly where this entry always said it was (immediately inside the
+  `if (cartState.pushingId || cartState.hitchedId)` branch, between the `fz = -Math.cos(yaw.current)`
+  line and the `if (cartState.pushingId)` check) — a fourth independent confirmation, after Waves 5, 7
+  and 8 each rediscovered it and moved on. The fix this entry always predicted was correct: the stray
+  spliced `return { id, kind: 'leave_engine', ... }` (discarded by the `void` `useFrame` callback,
+  silently skipping the rest of that frame whenever a player was both crewing a siege engine and
+  mid-push/hitch on a cart) is deleted outright; the legitimate copy at `findTarget()` was never
+  touched. Verified live rather than just re-read: manned a real placed catapult (`E` → real
+  "Step down from the Catapult" prompt), stepped down, then held `W` for 700ms and moved 0.40m —
+  confirming the surrounding `useFrame` code the dead code used to abort out of now runs to completion
+  every frame. Folded into Wave 14 as a trivial, isolated, already-4×-verified one-block deletion
+  rather than its own wave.
