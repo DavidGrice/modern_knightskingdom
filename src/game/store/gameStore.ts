@@ -6,6 +6,7 @@ import type {
   WaterFeature,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
+import type { InputDevice } from '../inputMode';
 import { GROUNDS, groundAt, type RectSection } from '../data/grounds';
 import { MAX_PLOT_STAGE, PLOT_BY_ID, plotNodeCount } from '../data/cultivatedPlots';
 import { ROAD_HALF_WIDTH, ROAD_TILE, roadEntry, routeCells, vergeCells } from '../data/road';
@@ -114,6 +115,11 @@ interface GameState {
   photoMode: boolean;
   notifications: Notification[];
   prompt: string | null;
+  /** Wave 15: live "what did the player's hands touch most recently" fact —
+   *  NOT persisted (game/inputMode.ts owns the split vs Settings.inputMode,
+   *  which IS persisted). Read by HUD.tsx/Panels.tsx via resolveInputDevice()
+   *  whenever that setting is 'auto'. */
+  activeInputDevice: InputDevice;
   actionProgress: number | null; // 0..1 while gathering
   nearStations: string[];
   buildSelection: string | null; // buildable id chosen in the aerial build bar
@@ -266,6 +272,7 @@ interface GameState {
   setBuildMode: (v: boolean) => void;
   setPhotoMode: (v: boolean) => void;
   setPrompt: (p: string | null) => void;
+  setActiveInputDevice: (d: InputDevice) => void;
   setActionProgress: (v: number | null) => void;
   setNearStations: (s: string[]) => void;
   setBuildSelection: (id: string | null) => void;
@@ -892,6 +899,7 @@ function createGameStore() {
     photoMode: false,
     notifications: [],
     prompt: null,
+    activeInputDevice: 'keyboard',
     actionProgress: null,
     nearStations: [],
     buildSelection: null,
@@ -3095,6 +3103,9 @@ function createGameStore() {
     markSaved: () => set({ dirty: false }),
     setPrompt: (prompt) => {
       if (get().prompt !== prompt) set({ prompt });
+    },
+    setActiveInputDevice: (activeInputDevice) => {
+      if (get().activeInputDevice !== activeInputDevice) set({ activeInputDevice });
     },
     setActionProgress: (actionProgress) => set({ actionProgress }),
     setNearStations: (s) => {

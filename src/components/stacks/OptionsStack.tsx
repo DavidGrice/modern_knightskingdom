@@ -243,6 +243,18 @@ export default function OptionsStack() {
                 onChange={(v) => update({ minimapDefaultSize: v })}
               />
               <div className="kk-opt-note">M still toggles the minimap size live in-game — this just picks what you start with.</div>
+              <Segmented
+                label="Prompt style"
+                options={[
+                  { id: 'auto' as const, label: 'Auto' },
+                  { id: 'keyboard' as const, label: 'Keyboard' },
+                  { id: 'gamepad' as const, label: 'Gamepad' },
+                  { id: 'touch' as const, label: 'Touch' },
+                ]}
+                value={settings.inputMode}
+                onChange={(v) => update({ inputMode: v })}
+              />
+              <div className="kk-opt-note">Auto follows whatever you actually pick up last (keyboard, a controller, or the touch controls) — pin it if you'd rather the on-screen prompts stayed put.</div>
             </div>
           )}
 

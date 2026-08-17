@@ -520,6 +520,50 @@ export function activeMelee(): MeleeWeaponId {
   return 'sword';
 }
 
+/** what Q (keyboard) or Y (gamepad) says when a weapon is readied. Each line
+ *  names the thing THIS weapon does DIFFERENTLY from the last one, since
+ *  that is the only part a player can't see from the viewmodel itself. */
+export const SWAP_HINT: Record<WeaponSlot, string> = {
+  sword: '⚔️ Sword readied',
+  halberd: '🔱 Halberd readied (slow, long reach — one swing sweeps the whole line in front of you)',
+  spear: '🗡️ Spear readied (longest reach; couch it at a gallop for a charging blow)',
+  crossbow: '🏹 Crossbow readied (RMB to aim)',
+  longbow: '🏹 Longbow readied (hold LMB to draw, release to loose)',
+};
+
+/** Cycle to the next OWNED weapon in WEAPON_SLOTS order and toast what
+ *  changed. Wave 15 · moved here from GameScreen.tsx (verbatim logic) so it
+ *  is the ONE place both the keyboard's Q switch (GameScreen.tsx) and the
+ *  gamepad's Y edge (CombatController.tsx) call, instead of two copies
+ *  drifting apart. Doesn't re-check paused/buildMode/panel itself — same
+ *  contract as playerAttack()/fireBolt() above, the caller already knows its
+ *  own gating. */
+export function cycleWeapon(): void {
+  const st = useGameStore.getState();
+  const ownsSlot = (k: WeaponSlot) => k === 'sword' || (st.inventory[k] ?? 0) > 0;
+  if (!WEAPON_SLOTS.some((k) => k !== 'sword' && ownsSlot(k))) return;
+  const current: WeaponSlot = combatState.weapon === 'melee' ? combatState.meleeWeapon : combatState.rangedWeapon;
+  let idx = WEAPON_SLOTS.indexOf(current);
+  let next: WeaponSlot = current;
+  for (let i = 0; i < WEAPON_SLOTS.length; i++) {
+    idx = (idx + 1) % WEAPON_SLOTS.length;
+    if (ownsSlot(WEAPON_SLOTS[idx])) {
+      next = WEAPON_SLOTS[idx];
+      break;
+    }
+  }
+  if (isMeleeSlot(next)) {
+    combatState.weapon = 'melee';
+    combatState.meleeWeapon = next;
+  } else {
+    combatState.weapon = 'ranged';
+    combatState.rangedWeapon = next;
+  }
+  combatState.aiming = false;
+  combatState.drawStart = 0;
+  st.notify(SWAP_HINT[next]);
+}
+
 /** Resolve ONE landed melee blow: damage, the camp's rally, knockback, and
  *  the kill/loot/notify path if it fell. Split out of playerAttack when the
  *  halberd's sweep made "the single best target" no longer the only shape a

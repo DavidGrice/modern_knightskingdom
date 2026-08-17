@@ -103,7 +103,18 @@ input:focus { border-color: var(--gold); }
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     inset 0 -3px 12px rgba(0, 0, 0, 0.65);
   padding: 32px 40px;
-  min-width: 380px;
+  /* Wave 15 responsive residual (2026-08-17): a bare 380px floor fights
+     max-width(92vw) the instant a viewport drops under ~413px — CSS gives
+     min-width priority over max-width when the two conflict, so without
+     this the panel would be forced wider than 92vw and overflow. The
+     720px breakpoint below already re-zeroes min-width for every viewport
+     that size or smaller, which happens to mask this in practice today —
+     but that makes the base rule correct only BECAUSE of that one
+     threshold, not on its own. min(380px, 92vw) is the same fluid pattern
+     .game-panel.menu-family and the audited inline call-sites already use
+     a few hundred lines down — same fix, same shape, applied here too so
+     the base rule holds regardless of what the breakpoint value is. */
+  min-width: min(380px, 92vw);
   max-width: 92vw;
   max-height: 90vh;
   overflow: auto;
@@ -369,7 +380,9 @@ input:focus { border-color: var(--gold); }
     0 0 50px rgba(0, 0, 0, 0.8),
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     inset 0 -3px 12px rgba(0, 0, 0, 0.6);
-  min-width: 460px; max-width: 86vw; max-height: 82vh; overflow-y: auto; z-index: 15;
+  /* same fluid-floor fix as .panel above, same reason (min-width otherwise
+     outranks max-width(86vw) under ~535px, breakpoint-mask notwithstanding) */
+  min-width: min(460px, 86vw); max-width: 86vw; max-height: 82vh; overflow-y: auto; z-index: 15;
 }
 /* the six MenuTabs-family panels (Satchel/Crafting/Quests/Abilities/Roster/
    Lore, plus the Equip-villager sub-panel) share one tab bar, so switching
@@ -653,28 +666,61 @@ input:focus { border-color: var(--gold); }
    collision reproduces at any viewport width (it's two corner-anchored
    fixed-px layouts, not an overflow), so the fix is a fixed offset rather
    than a breakpoint: raised clear of the minimap, the tallest thing in that
-   row (148px + the 22px inset it sits at, kk-tokens.css --kk-hud-inset). */
+   row (148px + the 22px inset it sits at, kk-tokens.css --kk-hud-inset).
+   Positions (left/right/bottom) stay fixed px, unrelated to this section —
+   only the SIZES below are viewport-relative. */
+/* Wave 15 responsive residual (2026-08-17): these used to be flat px, the
+   same regardless of a 320px phone or a 1200px tablet — fine for the
+   original three buttons, but the Wave 15 combat pair (Attack/Block, added
+   just below) pushed the row to five circles wide enough to crowd the
+   joystick under ~400px. `clamp(min, Nvmin, desktop-max)` keeps every old
+   viewport's rendered size EXACTLY the same (the max is the old fixed
+   value, and vmin only undercuts it once the screen is small enough to
+   need it) while giving small phones real headroom — vmin rather than vw
+   so portrait/landscape both shrink off the same, smaller dimension. Mins
+   are kept at or above the ~44px touch-target floor (Apple HIG / WCAG
+   2.5.5) even on the narrowest real phones. TouchControls.tsx's JS no
+   longer hardcodes a matching JOYSTICK_RADIUS px figure to keep in sync
+   with these — it measures the joystick base's own live rendered size at
+   touch-start instead, so CSS and JS can never drift apart again. */
 .touch-joystick-base {
-  position: absolute; left: 26px; bottom: 196px; width: 120px; height: 120px;
+  position: absolute; left: 26px; bottom: 196px;
+  --kk-joy-base: clamp(84px, 22vmin, 120px);
+  width: var(--kk-joy-base); height: var(--kk-joy-base);
   border-radius: 50%; background: rgba(0,0,0,0.35); border: 2px solid var(--chrome-2);
   touch-action: none;
 }
 .touch-joystick-knob {
-  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  position: absolute; left: 50%; top: 50%;
+  --kk-joy-knob: clamp(40px, 10.3vmin, 56px);
+  width: var(--kk-joy-knob); height: var(--kk-joy-knob);
+  margin: calc(var(--kk-joy-knob) / -2) 0 0 calc(var(--kk-joy-knob) / -2);
   border-radius: 50%; background: rgba(216,183,74,0.35); border: 2px solid var(--gold);
   pointer-events: none; will-change: transform;
 }
 .touch-buttons {
-  position: absolute; right: 22px; bottom: 192px; display: flex; align-items: flex-end; gap: 14px;
+  position: absolute; right: 22px; bottom: 192px; display: flex; align-items: flex-end;
+  gap: clamp(8px, 3vmin, 14px);
 }
 .touch-btn {
   border-radius: 50%; background: rgba(0,0,0,0.4); border: 2px solid var(--gold-dim);
-  color: var(--parchment); font-size: 20px; touch-action: none; -webkit-user-select: none; user-select: none;
+  color: var(--parchment); font-size: clamp(16px, 4.2vmin, 20px);
+  touch-action: none; -webkit-user-select: none; user-select: none;
 }
 .touch-btn:active { background: rgba(232,193,65,0.25); border-color: var(--gold); }
-.touch-btn-interact { width: 76px; height: 76px; font-size: 24px; color: var(--gold); }
-.touch-btn-jump { width: 60px; height: 60px; margin-bottom: 8px; }
-.touch-btn-sprint { width: 56px; height: 56px; margin-bottom: 20px; }
+.touch-btn-interact { width: clamp(56px, 14vmin, 76px); height: clamp(56px, 14vmin, 76px); font-size: clamp(18px, 4.8vmin, 24px); color: var(--gold); }
+.touch-btn-jump { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }
+.touch-btn-sprint { width: clamp(44px, 10.5vmin, 56px); height: clamp(44px, 10.5vmin, 56px); margin-bottom: 20px; }
+/* Wave 15 touch combat (2026-08-17): same row, same arc convention as the
+   three buttons above — Attack is sized/placed like Interact (the
+   "primary" size, no bottom margin) since it's now equally reached-for in a
+   fight; Block matches Jump's size. The crowding this used to risk on
+   narrow portrait viewports (five circles at full desktop px) is what the
+   clamp()s above fix — at the narrowest real phone widths this row now
+   floors around 270px instead of ~384px. */
+.touch-btn-attack { width: clamp(56px, 14vmin, 76px); height: clamp(56px, 14vmin, 76px); font-size: clamp(19px, 5vmin, 26px); color: var(--danger); border-color: var(--danger); }
+.touch-btn-attack:active { background: rgba(176,58,46,0.28); border-color: var(--danger); }
+.touch-btn-block { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }
 
 /* ---------- NPC AI debug overlay (NPC_AI_SPEC §9) ----------
    Deliberately NOT themed like the rest of the UI: a developer tool that

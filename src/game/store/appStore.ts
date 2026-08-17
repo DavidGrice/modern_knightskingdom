@@ -4,6 +4,7 @@ import type { ScreenName } from '../types';
 import { DEFAULT_KEYBINDS } from '../data/keybinds';
 import { suggestGraphicsQuality } from '../deviceProfile';
 import type { AaMode } from '../aaModes';
+import type { InputDevice } from '../inputMode';
 
 export interface SessionUser {
   id: string;
@@ -56,6 +57,13 @@ export interface Settings {
   minimapDefaultSize: 'small' | 'large';
   uiTheme: UiTheme;
   keybinds: Record<string, string>;
+  /** Wave 15: which device's prompt text/glyphs the HUD should show.
+   *  'auto' (default) follows whichever device actually produced the last
+   *  real input event (game/inputMode.ts's live, NOT persisted, tracker) —
+   *  this field only exists for a player who wants to pin it manually (e.g.
+   *  a gamepad plugged in but mostly used for combat while they still read
+   *  keyboard prompts). Same persistence convention as every field above. */
+  inputMode: 'auto' | InputDevice;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -85,6 +93,7 @@ const DEFAULT_SETTINGS: Settings = {
   minimapDefaultSize: 'small',
   uiTheme: 'glass',
   keybinds: DEFAULT_KEYBINDS,
+  inputMode: 'auto',
 };
 
 // Requested 2026-07-31: the old low/medium/high tiers are gone (see
