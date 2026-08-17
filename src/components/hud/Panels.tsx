@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
+import { useAppStore } from '@/game/store/appStore';
+import { resolveInputDevice } from '@/game/inputMode';
 import { brickFor, brickLabel } from '@/game/data/brickResources';
 import EmoteWheel from './EmoteWheel';
 import MenuTabs from './MenuTabs';
@@ -228,6 +230,14 @@ function InventoryPanel() {
   const buildings = useGameStore((s) => s.buildings);
   const entries = Object.entries(inventory).filter(([, n]) => (n ?? 0) > 0);
   const [showControls, setShowControls] = useState(false);
+  // Wave 15: the one representative cheat-sheet made device-aware (see
+  // game/inputMode.ts) — this WASD/keyboard block was already meaningless to
+  // a gamepad or touch player (and already hidden outright under 720px via
+  // .controls-ref's own media rule, which is a viewport check, not a device
+  // one — a gamepad on a full-size screen never hit that breakpoint).
+  const inputModeSetting = useAppStore((s) => s.settings.inputMode);
+  const activeDevice = useGameStore((s) => s.activeInputDevice);
+  const controlsDevice = resolveInputDevice(inputModeSetting, activeDevice);
   // Wave 9 · the storage ceiling has to be VISIBLE somewhere before it bites,
   // or the first refusal toast reads as a bug. This is the one screen that
   // already shows what you're holding, so it shows the room left too.
@@ -345,7 +355,22 @@ function InventoryPanel() {
       >
         🎮 Controls {showControls ? '▾' : '▸'}
       </button>
-      {showControls && (
+      {showControls && controlsDevice === 'gamepad' && (
+        <div className="controls-ref">
+          <b>L-Stick</b>/D-pad move · <b>RB</b> sprint · <b>A</b> jump · <b>X</b> interact<br />
+          <b>RT</b> attack/draw · <b>LT</b> block/aim · <b>Y</b> swap weapon<br />
+          <b>R-Stick</b> look · <b>LB</b> satchel · <b>Back</b> craft · <b>L-Stick click</b> quests<br />
+          <b>Start</b> pause/back · <b>B</b> cancel
+        </div>
+      )}
+      {showControls && controlsDevice === 'touch' && (
+        <div className="controls-ref">
+          Joystick to move · drag the screen to look<br />
+          <b>»</b> sprint · <b>⤒</b> jump · <b>🛡</b> block/aim · <b>E</b> interact · <b>⚔</b> attack/draw<br />
+          Tap a hotbar/menu button on screen for everything else
+        </div>
+      )}
+      {showControls && controlsDevice === 'keyboard' && (
         <div className="controls-ref">
           <b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>E</b> interact<br />
           <b>I</b> satchel · <b>C</b> craft · <b>J</b> quests · <b>K</b> abilities<br />

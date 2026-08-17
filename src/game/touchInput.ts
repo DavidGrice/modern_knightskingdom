@@ -17,6 +17,15 @@ export const touchState = {
   jump: false,
   interact: false,
   sprint: false,
+  // Wave 15 touch combat: held-state booleans, same convention as
+  // jump/interact/sprint above (TouchControls just flips these on
+  // touchstart/touchend, no edge logic here). CombatController.tsx is the
+  // one place that turns a held boolean into a discrete swing/block/draw —
+  // it hand-rolls the down/up edge itself (there's no native "touch down"
+  // event once this boolean is all that's left of the gesture), the same
+  // way a gamepad button has to be edge-detected against last frame.
+  attack: false,
+  block: false,
 };
 
 export function detectTouch(): boolean {
@@ -35,6 +44,8 @@ export function resetTouchState() {
   touchState.jump = false;
   touchState.interact = false;
   touchState.sprint = false;
+  touchState.attack = false;
+  touchState.block = false;
 }
 
 if (typeof window !== 'undefined') {

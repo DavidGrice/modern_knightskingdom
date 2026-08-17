@@ -7,7 +7,7 @@ import { DEFENDER_ORDER_COUNT, giveDefenderOrder } from '@/game/data/defenderOrd
 import { useGameStore } from '@/game/store/gameStore';
 import { persistSave } from '@/lib/save';
 import { audio } from '@/lib/audio';
-import { combatState, isMeleeSlot, WEAPON_SLOTS, type WeaponSlot } from '@/game/combat';
+import { cycleWeapon } from '@/game/combat';
 import { isRebindListening } from '@/game/data/keybinds';
 import { statsAccum } from '@/game/statsAccum';
 import { preloadCommonAssets } from '@/game/preload';
@@ -19,17 +19,6 @@ import FactionTheme from '../hud/FactionTheme';
 import Panels from '../hud/Panels';
 import BuildBar from '../hud/BuildBar';
 import AIDebugOverlay from '@/ai/debug/AIDebugOverlay';
-
-/** what Q's readied-weapon toast says. Each line names the thing the weapon
- *  does DIFFERENTLY from the last one, since that is the only part a player
- *  can't see from the viewmodel itself. */
-const SWAP_HINT: Record<WeaponSlot, string> = {
-  sword: '⚔️ Sword readied',
-  halberd: '🔱 Halberd readied (slow, long reach — one swing sweeps the whole line in front of you)',
-  spear: '🗡️ Spear readied (longest reach; couch it at a gallop for a charging blow)',
-  crossbow: '🏹 Crossbow readied (RMB to aim)',
-  longbow: '🏹 Longbow readied (hold LMB to draw, release to loose)',
-};
 
 function PauseMenu({ onQuit }: { onQuit: () => void }) {
   const setPaused = useGameStore((s) => s.setPaused);
@@ -141,37 +130,14 @@ export default function GameScreen() {
         case 'help':
           if (!st.paused && !st.buildMode && st.panel === 'none') push('help');
           break;
-        case 'swapWeapon': {
+        case 'swapWeapon':
+          // Wave 15 · the cycling logic itself now lives in combat.ts
+          // (cycleWeapon()) so a gamepad's Y button can call the exact same
+          // function instead of a second hand-copied cycle drifting apart
+          // from this one (see CombatController.tsx's gamepad block).
           if (st.paused || st.buildMode || st.panel !== 'none') break;
-          // Wave 7 · walks combat.ts's shared WEAPON_SLOTS instead of its own
-          // hardcoded triple. 'sword' is always a valid stop (it doubles as
-          // bare fists when none is owned — see activeMelee), everything else
-          // has to actually be in the Satchel; if NOTHING else is, there is
-          // no second stop to cycle to and Q stays a no-op as before.
-          const ownsSlot = (k: WeaponSlot) => k === 'sword' || (st.inventory[k] ?? 0) > 0;
-          if (!WEAPON_SLOTS.some((k) => k !== 'sword' && ownsSlot(k))) break;
-          const current: WeaponSlot = combatState.weapon === 'melee' ? combatState.meleeWeapon : combatState.rangedWeapon;
-          let idx = WEAPON_SLOTS.indexOf(current);
-          let next: WeaponSlot = current;
-          for (let i = 0; i < WEAPON_SLOTS.length; i++) {
-            idx = (idx + 1) % WEAPON_SLOTS.length;
-            if (ownsSlot(WEAPON_SLOTS[idx])) {
-              next = WEAPON_SLOTS[idx];
-              break;
-            }
-          }
-          if (isMeleeSlot(next)) {
-            combatState.weapon = 'melee';
-            combatState.meleeWeapon = next;
-          } else {
-            combatState.weapon = 'ranged';
-            combatState.rangedWeapon = next;
-          }
-          combatState.aiming = false;
-          combatState.drawStart = 0;
-          st.notify(SWAP_HINT[next]);
+          cycleWeapon();
           break;
-        }
       }
     };
     // releasing the order key commits whatever sector the pointer landed on

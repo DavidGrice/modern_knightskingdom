@@ -5993,44 +5993,112 @@ context — every loaded texture/geometry — not something this pass attempts),
 reasonable, common trade-off ("some settings need a restart") rather than something worth chasing further
 here.
 
-- [TODO] **Touch input can move/look/interact but cannot fight.** There's a real, working touch-control
-  pass already in the codebase (not absent, as might be assumed) — `TouchControls.tsx` (a virtual
-  joystick, a full-screen look-drag surface, Sprint/Jump/Interact buttons) feeding `touchState`
-  (`game/touchInput.ts`), consumed by `PlayerController.tsx`'s `pollTouch()`. But
-  `CombatController.tsx`'s attack/block/ranged-draw is strictly mouse-only (`mousedown`/`mouseup` on
-  `gl.domElement`, checking `document.pointerLockElement`) with zero touch equivalent — a phone/tablet
-  player today can walk around and interact with the world but cannot swing a sword, block, or draw a
-  bow/crossbow at all. For a "mobile-friendly" push this is probably the single highest-priority gap:
-  everything else is polish, this is a player who literally cannot fight.
-- [TODO] **Gamepad support is partial and lives outside the rebindable keybind system.** `pollGamepad()`
-  (`PlayerController.tsx`) covers move (stick/d-pad), look (right stick, analog), jump, interact (held),
-  and sprint — confirmed nothing maps attack, block, ranged aim/draw, weapon-swap, or ANY menu/panel
-  navigation (Inventory, Crafting, Quests, Build, Roster, etc. all stay keyboard-only per
-  `game/data/keybinds.ts`, which has no gamepad-button concept at all — this is a second, hardcoded input
-  path, not part of the same rebindable table keyboard uses). No `gamepadconnected`/`gamepaddisconnected`
-  handling anywhere either.
-- [TODO] **No input-mode-aware UI — every prompt assumes a keyboard.** Confirmed every on-screen prompt
-  is hardcoded keyboard text unconditionally: `PlayerController.tsx`'s interact prompt builds literal
-  strings like `"Hold E — {label}"`/`"Hold Click — {label}"`; `hud/Panels.tsx` hardcodes a
-  `WASD move · Shift sprint · Space jump · E interact …` cheat-sheet. Nothing tracks which input device
-  the player is actually using right now (no `inputMode`/`activeDevice` field anywhere in
-  `appStore.ts`'s `Settings`), so there is no gamepad button-glyph prompt and no touch-appropriate prompt
-  text — a controller or touch player sees keyboard instructions regardless.
-- [TODO] **No PWA / installability support.** Confirmed no `manifest.json`/`manifest.webmanifest`
-  anywhere in the repo, no service worker, no `apple-mobile-web-app-capable` meta tag — the game cannot
-  be "added to home screen" on iOS/Android for a full-screen, app-like launch, which matters directly for
-  the "iPhones, iPads, Androids" half of the request (a bookmarked browser tab reads very differently
-  from an installed icon on a phone's home screen).
-- [TODO] **Responsive layout is real but incomplete.** A genuine "mobile-friendly pass (2026-07-20)"
-  already exists — confirmed, not absent: a viewport meta with `viewportFit: 'cover'`/`userScalable:
-  false` (`app/layout.tsx`, explicitly to stop pinch-zoom fighting touch controls), one
-  `@media (max-width: 720px)` breakpoint (`globals.css`) that rescales panels to `94vw`, reflows grids,
-  and hides the keyboard cheat-sheet, and several panels already fluid outside that breakpoint
-  (`.game-panel.menu-family { width: min(760px, 92vw) }`, the shell `VillagersPanel`/most big panels
-  use). What's still missing: the touch joystick/button sizes are fixed px (`globals.css`, e.g. a 120px
-  joystick base, 76px interact button) rather than viewport-scaled, so they eat a much bigger fraction of
-  a small phone screen than a tablet; a couple of panels (`.panel`, base `.game-panel`) still carry a
-  fixed `min-width` that's only overridden inside the one 720px breakpoint, not fluid by default.
+- [COMPLETE] ✅ **Touch input can move/look/interact but cannot fight — SHIPPED 2026-08-17 (Wave 15).**
+  Real Attack (⚔) and Block (🛡) touch buttons, routed through the SAME combat implementation the mouse
+  path always has rather than a parallel touch-only system: `CombatController.tsx`'s four mousedown/
+  mouseup branch bodies (attack start/release, block start/end) were pulled into standalone functions
+  (`startAttack`/`releaseAttack`/`startBlock`/`endBlock`), and a new `touchState.attack`/`block` (held
+  booleans, same convention as `jump`/`interact`/`sprint`) is edge-detected against last frame and
+  funneled into those exact same functions. Deliberately does **not** check
+  `document.pointerLockElement` the way the mouse path's LMB branch does — touch devices generally never
+  acquire pointer lock at all (no click-driven lock cycle, and iOS Safari doesn't implement Pointer Lock
+  in the first place), so reusing that gate would have silently no-op'd every touch attack in the
+  default fps camera mode; touch look-drag already proved camera control works with zero pointer-lock
+  dependency, and that's the precedent this follows instead. One button does double duty for ranged
+  exactly like LMB already does on desktop (press starts a bow's draw or fires a bolt/melee swing,
+  release fires the arrow at the power accumulated) — no separate 4th/5th "draw" button needed. Verified
+  live via real simulated touch events, not store bypasses: a touch attack dealt real HP damage and
+  respected the weapon's own cooldown under rapid taps; block produced the real 75% damage reduction
+  through the shared `damagePlayer()` path; a held longbow draw-then-release fired a real arrow
+  (inventory count dropped, a real projectile spawned with nonzero velocity); a post-refactor regression
+  check confirmed real desktop mouse LMB/RMB combat is byte-identical to before.
+- [COMPLETE] ✅ **Gamepad support is partial and lives outside the rebindable keybind system — SHIPPED
+  2026-08-17 (Wave 15).** Real, closed answer to this entry's own open question: gamepad buttons do
+  **not** join `DEFAULT_KEYBINDS` — that table's values are literally `KeyboardEvent.code` strings,
+  consumed by both a discrete `keydown`-event switch (panel toggles) and a held-state poll (movement);
+  unifying gamepad buttons into it would mean either making every bind polymorphic or rewriting the
+  event-driven panel switch into a frame-polled one with hand-rolled edge detection for all 14 panel
+  actions — a real, separate project. A new, hardcoded `game/data/gamepadInput.ts` (`GAMEPAD_BUTTONS`,
+  not yet user-rebindable — a fair future `[TODO]`, not this wave's job) is the honest v1, picking
+  standard-mapping indices `pollGamepad()` doesn't already claim: **RT = attack/draw, LT = block/aim, Y
+  = swap weapon** — mirroring the mouse's own LMB/RMB double duty and keyboard's `Q`, all routed through
+  the exact same `CombatController.tsx` functions touch combat above already uses (one implementation,
+  three input methods) and a new shared `cycleWeapon()` (`game/combat.ts`, moved verbatim out of
+  `GameScreen.tsx`'s keyboard-only `Q` case so both inputs call the identical function instead of two
+  copies drifting apart). **Menu navigation, v1 scope**: OPEN/CLOSE only for Inventory/Crafting/Quests
+  (`Start` mirrors Escape's full close-panel/exit-build/pause cascade, `B` cancels, `LB`/`Back`/
+  `L-stick-click` toggle the three panels) via a new always-mounted `GamepadMenuController.tsx` —
+  deliberately **not** in-panel cursor/selection navigation: confirmed no `PanelId` panel has a
+  keyboard-navigable selection today either (the keybind "Panels" group only opens panels, never
+  navigates inside one), and a gamepad button press synthesizes no DOM event the way a touch tap does
+  (which is why touch panel interaction already works for free) — building a full virtual-cursor/
+  roving-focus system across ~18 panel components is a genuinely separate, much larger project. A
+  controller player still needs a mouse (or OS-level gamepad-to-mouse emulation, e.g. Steam Input) to
+  act *inside* a panel; this only gets them there and back. Real `gamepadconnected`/`gamepaddisconnected`
+  handling: a visible 🎮 toast on both events, and `pollGamepad()`'s own `if (!gp) return` — which used
+  to leave whatever movement/jump/sprint flags were true the frame before a disconnect stuck that way
+  forever — now explicitly zeroes them every frame there's no pad, so a mid-session disconnect self-heals
+  within one frame regardless of whether the event itself ever fires. **A real bug found during Claude's
+  own personal review, fixed before shipping** (not caught by the workflow's own live verify pass): the
+  three panel-toggle buttons' edge-detection was gated `if (!st.paused)`, unlike `Start`/`B` which were
+  always tracked — a button held through a pause/unpause cycle (e.g. holding `LB` while pressing `Start`
+  to unpause) went stale during the paused frames and read as a brand-new press the instant the game
+  unpaused, spuriously popping Inventory open. Reproduced with a standalone simulation before fixing,
+  then re-confirmed the fix with the same simulation. Fixed by tracking all five buttons' edges
+  unconditionally every frame (matching `Start`/`B`'s own pattern) and moving the `!paused` check to gate
+  only the resulting *action*, not the edge detection itself. Otherwise verified live: real simulated
+  gamepad button sequences correctly drove attack/block damage, a real weapon-swap toast, and correct
+  panel open/close/pause transitions with no double-fire on held frames.
+- [COMPLETE] ✅ **No input-mode-aware UI — every prompt assumes a keyboard — SHIPPED 2026-08-17 (Wave
+  15).** New `game/inputMode.ts`: a persisted manual override (`Settings.inputMode: 'auto'|'keyboard'|
+  'gamepad'|'touch'`, `appStore.ts`, a real "Prompt style" Segmented control in Options → Interface) plus
+  a live, **not** persisted `activeInputDevice` (`gameStore.ts`) — "what did the player's hands actually
+  touch most recently" — updated from real input events only (a keydown, a mousedown, a touchstart, a
+  gamepad button/stick actually moving past the deadzone), deliberately **not** from mere device
+  presence, so a gamepad sitting connected-but-untouched or a touch device paired with a keyboard never
+  falsely flips the mode. Wired into the two call-sites this entry itself named: `PlayerController.tsx`'s
+  interact prompt now reads `interactLabel()`/`clickHoldLabel()` instead of hardcoded `'E'`/`'Click'`
+  (HUD.tsx's existing regex extraction needed no changes — the string shape is unchanged, only its
+  content), and the Inventory panel's `🎮 Controls` cheat-sheet now renders one of three real, hotkey-
+  accurate blocks instead of always assuming WASD. `HelpStack.tsx`'s tutorial prose and `GameScreen.tsx`'s
+  one-off `SWAP_HINT`/aim-toast strings are correctly left as lower-priority, still-hardcoded copy — real
+  gaps, not silently claimed as fixed. Verified live: a real keydown/touchstart/gamepad-motion sequence
+  correctly flipped `activeInputDevice` through all three states (and correctly did *not* flip on a bare
+  `gamepadconnected` event with no real motion); the same interact-prompt target produced three genuinely
+  distinct real strings ("Hold Click", "Hold X", "Hold E") across the three devices; the Options toggle
+  was clicked as a real user gesture and correctly updated the persisted setting.
+- [COMPLETE] ✅ **No PWA / installability support — SHIPPED 2026-08-17 (Wave 15).** A real Next.js 15
+  `app/manifest.ts` (the typed `MetadataRoute.Manifest` convention, genuinely unused before this) —
+  name/short_name/description/`start_url`/`display:'standalone'`/background+theme colors, referencing
+  the existing `icon.svg` castle glyph (copied to `public/icons/icon.svg` for a stable, always-fetchable
+  path outside the favicon route's internals — no new art asset needed; modern Chromium/Android accept
+  an SVG manifest icon directly at any resolution). `app/layout.tsx` gained `metadata.appleWebApp`
+  (capable/title/status-bar-style, the apple-specific meta tags iOS wants since Safari ignores the real
+  manifest file entirely) and `viewport.themeColor`; deliberately did **not** hand-set `metadata.manifest`
+  — traced through Next's own `resolve-metadata.js` and confirmed it unconditionally overwrites that
+  field from `app/manifest.ts` whenever the file exists, so a hand-set value would be redundant. **No
+  service worker** — real offline caching for a 597+ binary-asset game is a materially bigger, separate
+  lift (cache strategy, versioning, an asset manifest); a manifest without one is still a legitimate,
+  spec-compliant "Add to Home Screen" target on both iOS and Android, and true offline support is a
+  documented follow-up rather than attempted here. Verified live: `/manifest.webmanifest` returns 200
+  with every real field correct (confirmed again by `npm run build`'s own route list, which now shows it
+  as a real generated static route); the real page head contains the manifest link and every apple/theme
+  meta tag.
+- [COMPLETE] ✅ **Responsive layout is real but incomplete — the two named gaps closed, SHIPPED
+  2026-08-17 (Wave 15).** Touch joystick/button sizes converted from flat px to `clamp(min, Nvmin,
+  desktop-max)` — the max *is* the old fixed value, so nothing changes for any viewport wide enough not
+  to need it, while small phones get real headroom; `vmin` rather than `vw` so portrait and landscape
+  both scale off the same, smaller dimension; every minimum held at or above the ~44px touch-target floor
+  (Apple HIG / WCAG 2.5.5) even on the narrowest real phones. `TouchControls.tsx`'s `JOYSTICK_RADIUS`
+  (a hardcoded 52px tuned by eye to the old fixed 120px base) is gone — the JS clamp radius is now
+  measured from the joystick base's own live rendered size at touch-start, so CSS and JS can never drift
+  out of sync again regardless of what the clamp resolves to. `.panel`/base `.game-panel`'s fixed
+  `min-width` changed to `min(Npx, Mvw)` (the same fluid pattern `.game-panel.menu-family` and the
+  already-audited inline call-sites use), so the floor can't outrank `max-width` on its own — previously
+  correct only because the one 720px breakpoint happened to re-zero it, not on the base rule's own terms.
+  Verified live at real 375px/1440px viewports: every touch control measurably reflows (e.g. the 76px
+  Attack/Interact buttons scale to 56px, the 120px joystick base to 84px) with zero horizontal page
+  overflow at either width, and the Inventory panel at 375px produces zero overflow too.
 
 *(The four items above — touch combat, gamepad, input-mode-aware UI, PWA/installability, responsive
 layout — were accidentally duplicated verbatim in an earlier edit; the duplicate copy was removed
@@ -6038,15 +6106,13 @@ layout — were accidentally duplicated verbatim in an earlier edit; the duplica
 
 ## 📋 Found while capturing How-To-Play screenshots (2026-08-04)
 
-- [TODO] **Crafting panel doubles the ×N suffix on multi-output recipes.** Confirmed live on a fresh
-  character at the Workbench tab: `RECIPES` entries whose `name` already bakes in the count (e.g.
-  `id: 'bolt', name: 'Bolts ×4'` and `id: 'arrow', name: 'Arrows ×4'` in `game/data/recipes.ts`) get the
-  count appended a second time by the row renderer — `Panels.tsx`'s `CraftingPanel`, the
-  `{r.name}{r.outputCount > 1 ? \` ×${r.outputCount}\` : ''}` line — producing "Bolts ×4 ×4" / "Arrows ×4
-  ×4" on screen instead of "Bolts ×4". Every other multi-output recipe is fine because its `name` field
-  has no count baked in (the row suffix is the only source), so this only bites the two recipes whose
-  authors pre-wrote the count into `name`. Fix is one of: drop " ×4" from those two `name` strings, or
-  make the row check `r.name.includes('×')` before appending its own suffix.
+- [COMPLETE] ✅ **Crafting panel doubles the ×N suffix on multi-output recipes** — already fixed back
+  in Wave 0+1 (commit `6aed460`, "Crafting panel doubled the 'x4' suffix on Bolts/Arrows"), this entry
+  just outlived the fix that closed it (a report logged the same day, never cross-referenced). Verified
+  directly against the live code rather than taken on trust: `game/data/recipes.ts`'s `bolt`/`arrow`
+  entries now read `name: 'Bolts'`/`name: 'Arrows'`, with no count baked in — `Panels.tsx`'s
+  `CraftingPanel` row suffix (`{r.name}{r.outputCount > 1 ? \` ×${r.outputCount}\` : ''}`) is now the
+  only source of the "×4," exactly as intended.
 
 ## Travel & world-map overhaul — requested 2026-08-04, scoped only, not started [TODO]
 Three related but separable asks from the same message, logged per the user's own "just add it to

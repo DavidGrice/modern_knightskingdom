@@ -20,6 +20,7 @@ import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
 import { touchState } from '@/game/touchInput';
+import { noteInputDevice, resolveInputDevice, interactLabel, clickHoldLabel } from '@/game/inputMode';
 import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer } from '@/game/combat';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { fishingState, startFishing, tickFishing } from '@/game/fishing';
@@ -110,12 +111,38 @@ function pollGamepad(
 ) {
   const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
   const gp = pads?.[0];
-  if (!gp) return;
+  if (!gp) {
+    // Wave 15: a mid-session disconnect (or simply no pad ever connected)
+    // must not leave whatever this SAME pad record wrote last frame stuck
+    // "held" — pad[...] is OR'd with the keyboard at read time (isDown(),
+    // below), so a stale true here would keep moving/jumping/sprinting the
+    // player with no controller attached at all. Cleared explicitly every
+    // frame there's no gamepad rather than relying solely on the
+    // 'gamepaddisconnected' event (see the connect/disconnect effect below)
+    // — this self-heals even if that event is ever delayed or missed.
+    pad[kb.moveForward] = false;
+    pad[kb.moveBack] = false;
+    pad[kb.moveLeft] = false;
+    pad[kb.moveRight] = false;
+    pad[kb.jump] = false;
+    pad[kb.interact] = false;
+    pad[kb.sprint] = false;
+    return;
+  }
   const [lx, ly, rx, ry] = gp.axes;
   const dpadUp = gp.buttons[12]?.pressed;
   const dpadDown = gp.buttons[13]?.pressed;
   const dpadLeft = gp.buttons[14]?.pressed;
   const dpadRight = gp.buttons[15]?.pressed;
+
+  // Wave 15: a gamepad merely being CONNECTED shouldn't flip the HUD into
+  // gamepad prompts — only the player actually touching it should. Checked
+  // against every button/axis (not just the ones this function itself
+  // consumes) so CombatController's RT/LT/Y and GamepadMenuController's
+  // Start/B/LB/Back/L-stick reads all count too, from this one place.
+  const anyAxis = [lx, ly, rx, ry].some((v) => Math.abs(v ?? 0) > STICK_DEADZONE);
+  const anyButton = gp.buttons.some((b) => b.pressed);
+  if (anyAxis || anyButton) noteInputDevice('gamepad');
 
   pad[kb.moveForward] = (ly ?? 0) < -STICK_DEADZONE || !!dpadUp;
   pad[kb.moveBack] = (ly ?? 0) > STICK_DEADZONE || !!dpadDown;
@@ -473,13 +500,39 @@ export default function PlayerController() {
 
   // ---- keyboard ----
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { keys.current[e.code] = true; };
+    const down = (e: KeyboardEvent) => { keys.current[e.code] = true; noteInputDevice('keyboard'); };
     const up = (e: KeyboardEvent) => { keys.current[e.code] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
+    };
+  }, []);
+
+  // ---- gamepad connect/disconnect ----
+  // Wave 15: navigator.getGamepads() is polled cold every frame elsewhere
+  // (pollGamepad above, and CombatController/GamepadMenuController's own
+  // reads) rather than cached from these events, so nothing here is load-
+  // bearing for correctness — pollGamepad's own `!gp` branch already self-
+  // heals a stale hold the frame after a disconnect regardless of whether
+  // this event ever fires. What these two listeners buy: a visible cue that
+  // a controller was recognised at all (nothing else in the UI shows
+  // connection state), and clearing `pad` immediately on disconnect instead
+  // of waiting up to one frame for the poll loop to notice.
+  useEffect(() => {
+    const onConnect = (e: GamepadEvent) => {
+      useGameStore.getState().notify(`🎮 Controller connected: ${e.gamepad.id}`);
+    };
+    const onDisconnect = (e: GamepadEvent) => {
+      pad.current = {};
+      useGameStore.getState().notify(`🎮 Controller disconnected: ${e.gamepad.id}`);
+    };
+    window.addEventListener('gamepadconnected', onConnect);
+    window.addEventListener('gamepaddisconnected', onDisconnect);
+    return () => {
+      window.removeEventListener('gamepadconnected', onConnect);
+      window.removeEventListener('gamepaddisconnected', onDisconnect);
     };
   }, []);
 
@@ -1706,11 +1759,20 @@ export default function PlayerController() {
       const target = findTarget(st);
       st.setTargetKind(target ? (target.kind === 'rock' ? 'rock' : target.kind === 'fishing' ? 'fishing' : target.kind) : null);
       const isClickHeld = !!target && CLICK_HELD_TARGET_KINDS.has(target.kind);
+      // Wave 15: the prompt has to name the control that ACTUALLY performs
+      // it on whatever device the player is currently on — see
+      // game/inputMode.ts's header for why "Click" is keyboard/mouse-only
+      // (gamepad/touch never got a separate hold-input for gathering; they
+      // still hold their ordinary Interact button, same as heldInput below
+      // reads). HUD.tsx's kk-prompt regex only needs a single \S+ token
+      // here, so any of these labels round-trips through it unchanged.
+      const promptDevice = resolveInputDevice(useAppStore.getState().settings.inputMode, st.activeInputDevice);
+      const eLabel = interactLabel(promptDevice);
       st.setPrompt(
         target
           ? target.duration > 0
-            ? target.actionable ? `${isClickHeld ? 'Hold Click' : 'Hold E'} — ${target.label}` : target.label
-            : `E — ${target.label}`
+            ? target.actionable ? `Hold ${isClickHeld ? clickHoldLabel(promptDevice) : eLabel} — ${target.label}` : target.label
+            : `${eLabel} — ${target.label}`
           : null,
       );
       talkCooldown.current = Math.max(0, talkCooldown.current - dt);

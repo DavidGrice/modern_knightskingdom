@@ -35,6 +35,7 @@ import TemplateWorld from './TemplateWorld';
 import PlayerController from '../fps/PlayerController';
 import PlayerAvatar from '../fps/PlayerAvatar';
 import Viewmodel from '../fps/Viewmodel';
+import GamepadMenuController from '../fps/GamepadMenuController';
 import BuildController from '../build/BuildController';
 import CombatController from '../combat/CombatController';
 import Enemies from '../combat/Enemies';
@@ -115,6 +116,13 @@ export default function GameWorld() {
       <Cannonballs />
       <Bolts />
       <ArenaSpawner />
+      {/* Wave 15 · always mounted (unlike CombatController above), same
+          reasoning as ArenaSpawner/AiRuntime here — Start/B need to keep
+          opening/closing panels and pausing even while BuildController (not
+          PlayerController) owns movement, exactly like the keyboard's own
+          Escape handler (GameScreen.tsx) already does regardless of
+          buildMode. See the component's own header for the full scope call. */}
+      <GamepadMenuController />
       {/* NPC_AI_SPEC §2 — steps the agent scheduler; renders nothing */}
       <AiRuntime />
       {/* §9's scene gizmos (phase 6): vision cones + belief markers. Always
