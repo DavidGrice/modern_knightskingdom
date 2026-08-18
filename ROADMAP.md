@@ -1301,6 +1301,40 @@ just coincidentally matching) and confirmed centering holds again on the default
   profiling with the r3f-perf-style overlay to find the actual hot spots before optimizing blind. True GPU
   occlusion queries aren't practical in three.js at this scale — visibility gating + instancing + LOD is
   where the real wins are.
+  - 2026-08-17: sub-item (e) shipped — hand-rolled frame-profiling overlay (`src/game/perfMeter.ts`,
+    `PerfMeter.tsx`, `PerfOverlay.tsx`, F3 to toggle), no r3f-perf dependency added. Reads FPS/frame ms
+    (reusing the existing `fpsMeter`), draw calls, triangles, geometries/textures/programs straight from
+    `gl.info`, correctly handling the composer's multi-pass-per-frame `autoReset` reset-on-every-render
+    gotcha. (a)-(d) remain `[TODO]`; this bullet stays open.
+  - 2026-08-17: used the new overlay to actually measure every real scenario (fresh homestead, full
+    built-out kingdom + live raid, Sealed Crypt, Endless Arena at 4x its design cap, template
+    destinations) — every one held 60fps/~16.6ms, so (a) *manual occlusion* and (c) *texture/material
+    dedup* are SKIPPED as not supported by the data (CedricCamp/BattleDome/StarterVillage are already
+    destination-gated; PropModel's clone-sharing already dedupes geometry/materials, verified by placing
+    30 identical buildings and watching geometry/texture counts barely move). (b) *instance more repeated
+    props* was real (rocks: plain JSX primitives, not instanced, ~6% of baseline draw calls; dungeon
+    walls: one `PropModel` per segment despite every wall in a descent sharing one url) — fixed both via
+    `InstancedProp`/the new shared `InstancedSubMeshes` (`InstancedProps.tsx`): rocks bake their
+    dodecahedron sub-parts into per-variant `SubMesh`s (`ResourceNodes.tsx`'s `RockGroup`), dungeon walls
+    go through `InstancedProp` directly (`DungeonScene.tsx`) since they already share one GLB url per
+    descent. (d) *geometry LOD* stays blocked on the D1–D3 asset-pipeline deliverable, untouched. This
+    bullet stays open only for (d).
+  - 2026-08-17: verify pass on the (b) fix above caught a real regression and it's now fixed — the new
+    rock/dungeon-wall `InstancedSubMeshes` batches had inherited `frustumCulled={false}` from the
+    tree/herb precedent, but unlike a compact tree/herb patch, a rock ground and a whole dungeon descent
+    are genuinely far from the camera much of the time, so this made every rock/wall render every frame
+    regardless of camera facing — the exact opposite of a real per-mesh `<Rock>`/`PropModel`'s old
+    culling, and it pushed the homestead baseline's draw calls/triangles UP, not down. `frustumCulled` is
+    now an explicit required prop on `InstancedSubMeshes` (`InstancedProps.tsx`) — real culling restored
+    for `RockGroup` and `DungeonScene`'s walls, `false` kept only for the two spots it was actually
+    validated for (`TreeGroup`/`HerbGroup`, still small compact patches). Confirmed three's own
+    `InstancedMesh#computeBoundingSphere` (this project's r176) already unions every live instance's real
+    transform rather than using the un-instanced geometry's own tiny origin sphere, so real culling no
+    longer risks the vanishing-instance bug the opt-out was originally written for. Left `Grounds.tsx`'s
+    fence batch (spans every ground at once — same "not compact" shape) on its pre-existing `false`
+    untouched: it predates Wave 16, wasn't part of what regressed, and flipping its default wasn't
+    verified live in this pass — a good candidate for the same real-culling treatment next time someone's
+    in this file.
 - [TODO] Geometry LOD (asset-pipeline task: export the D1–D3 variants), rapier physics when ragdolls/siege demand
   it, Web Workers for pathfinding if the AI rig needs it, save-slot management, and the long-game
   multiplayer-ready sim refactor (co-op castle building is still the dream).

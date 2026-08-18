@@ -1,7 +1,8 @@
 'use client';
 import { Suspense, useMemo } from 'react';
+import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
-import { InstancedProp, type InstancedNode } from './InstancedProps';
+import { InstancedProp, InstancedSubMeshes, type InstancedNode, type SubMesh } from './InstancedProps';
 import { FISHING_DOCK } from '@/game/data/world';
 import type { ResourceNodeState } from '@/game/types';
 
@@ -37,42 +38,91 @@ function TreeGroup({ url, nodes }: { url: string; nodes: ResourceNodeState[] }) 
       key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * health), color: tint,
     };
   });
-  return <InstancedProp url={url} height={4.8} nodes={instances} />;
+  // frustumCulled=false: one ground's living trees are a small, compact
+  // cluster (see InstancedProp's own doc) — the historical case this
+  // opt-out was validated for.
+  return <InstancedProp url={url} height={4.8} nodes={instances} frustumCulled={false} />;
 }
 
-function Rock({ node }: { node: ResourceNodeState }) {
-  if (node.respawnAt !== null) return null;
-  const s = node.scale * (0.7 + 0.3 * (node.hitsLeft / 4));
-  const iron = node.variant === 'iron';
-  return (
-    <group position={[node.x, 0, node.z]} rotation-y={node.yaw}>
-      <mesh position-y={0.55 * s} castShadow scale={s}>
-        <dodecahedronGeometry args={[0.9, 0]} />
-        <meshStandardMaterial color={iron ? '#4c4a52' : '#8b8b90'} roughness={0.95} flatShading />
-      </mesh>
-      <mesh position={[0.7 * s, 0.28 * s, 0.3 * s]} castShadow scale={s * 0.5}>
-        <dodecahedronGeometry args={[0.8, 0]} />
-        <meshStandardMaterial color={iron ? '#3f3d46' : '#77777c'} roughness={0.95} flatShading />
-      </mesh>
-      {iron && (
-        <>
-          {/* rust-colored ore flecks */}
-          <mesh position={[0.35 * s, 0.75 * s, 0.4 * s]} scale={s * 0.22}>
-            <dodecahedronGeometry args={[0.8, 0]} />
-            <meshStandardMaterial color="#b8622a" roughness={0.7} flatShading />
-          </mesh>
-          <mesh position={[-0.4 * s, 0.5 * s, -0.35 * s]} scale={s * 0.18}>
-            <dodecahedronGeometry args={[0.8, 0]} />
-            <meshStandardMaterial color="#a5551f" roughness={0.7} flatShading />
-          </mesh>
-          <mesh position={[-0.1 * s, 0.95 * s, 0.15 * s]} scale={s * 0.14}>
-            <dodecahedronGeometry args={[0.8, 0]} />
-            <meshStandardMaterial color="#c97434" roughness={0.7} flatShading />
-          </mesh>
-        </>
-      )}
-    </group>
+// Wave 16 · rocks were the one resource-node kind still built from inline
+// JSX primitives (see InstancedProps.tsx's own comment for why that's fine
+// for a one-off but adds up once there are dozens) instead of going through
+// the same instancing path trees/herbs already use — flagged in ROADMAP.md's
+// performance-pass item (b) and confirmed for real by Wave 16's profiling
+// pass (13 rocks / ~26 of the 411 baseline draw calls at the homestead).
+// There's no GLB here to hand InstancedProp (trees/herbs), so the two base
+// shapes are baked into SubMesh geometries by hand — same idea as
+// useInstancedSubMeshes in InstancedProps.tsx (each sub-part's local
+// position/scale gets baked into its own geometry at "instance scale 1", so
+// a single <Instance scale={n.scale}> at render time reproduces exactly what
+// the old per-rock `s` multiplier did to every position and radius) — then
+// handed to the same InstancedSubMeshes renderer GLB props use.
+const ROCK_MAIN_GEO = new THREE.DodecahedronGeometry(0.9, 0);
+const ROCK_CHIP_GEO = new THREE.DodecahedronGeometry(0.8, 0);
+
+function bakedRockPart(base: THREE.BufferGeometry, position: [number, number, number], scale: number): THREE.BufferGeometry {
+  const geometry = base.clone();
+  const m = new THREE.Matrix4().compose(
+    new THREE.Vector3(...position),
+    new THREE.Quaternion(),
+    new THREE.Vector3(scale, scale, scale),
   );
+  geometry.applyMatrix4(m);
+  return geometry;
+}
+
+// Same two colors (main body + chip) plain rocks always had; iron veins add
+// three small rust-colored ore flecks — identical positions/scales to the
+// original per-rock JSX, just baked once per variant instead of re-created
+// (and re-allocated to the GPU) per rock.
+function buildRockSubMeshes(iron: boolean): SubMesh[] {
+  const subMeshes: SubMesh[] = [
+    {
+      geometry: bakedRockPart(ROCK_MAIN_GEO, [0, 0.55, 0], 1),
+      material: new THREE.MeshStandardMaterial({ color: iron ? '#4c4a52' : '#8b8b90', roughness: 0.95, flatShading: true }),
+    },
+    {
+      geometry: bakedRockPart(ROCK_CHIP_GEO, [0.7, 0.28, 0.3], 0.5),
+      material: new THREE.MeshStandardMaterial({ color: iron ? '#3f3d46' : '#77777c', roughness: 0.95, flatShading: true }),
+    },
+  ];
+  if (iron) {
+    subMeshes.push(
+      {
+        geometry: bakedRockPart(ROCK_CHIP_GEO, [0.35, 0.75, 0.4], 0.22),
+        material: new THREE.MeshStandardMaterial({ color: '#b8622a', roughness: 0.7, flatShading: true }),
+      },
+      {
+        geometry: bakedRockPart(ROCK_CHIP_GEO, [-0.4, 0.5, -0.35], 0.18),
+        material: new THREE.MeshStandardMaterial({ color: '#a5551f', roughness: 0.7, flatShading: true }),
+      },
+      {
+        geometry: bakedRockPart(ROCK_CHIP_GEO, [-0.1, 0.95, 0.15], 0.14),
+        material: new THREE.MeshStandardMaterial({ color: '#c97434', roughness: 0.7, flatShading: true }),
+      },
+    );
+  }
+  return subMeshes;
+}
+
+// One instanced batch per variant (plain vs iron): the two variants need
+// different sub-mesh sets (iron adds ore flecks), but every rock within a
+// variant shares the exact same shape, exactly like TreeGroup below shares
+// one InstancedProp per model url.
+function RockGroup({ nodes, iron }: { nodes: ResourceNodeState[]; iron: boolean }) {
+  const subMeshes = useMemo(() => buildRockSubMeshes(iron), [iron]);
+  const instances: InstancedNode[] = useMemo(
+    () => nodes.map((n) => ({
+      key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * (n.hitsLeft / 4)),
+    })),
+    [nodes],
+  );
+  // frustumCulled=true (real culling): unlike TreeGroup/HerbGroup, a rock
+  // ground sits at a fixed spot the player is very often nowhere near or
+  // facing — this used to be individual per-mesh <Rock> meshes, each
+  // properly culled when off-screen, before this wave's instancing pass.
+  // See InstancedSubMeshes' own doc for why real culling is safe here too.
+  return <InstancedSubMeshes subMeshes={subMeshes} nodes={instances} frustumCulled />;
 }
 
 const HERB_URL = '/assets/props/scenery/l374100.glb';
@@ -88,7 +138,9 @@ function HerbGroup({ nodes }: { nodes: ResourceNodeState[] }) {
     () => nodes.map((n) => ({ key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale })),
     [nodes],
   );
-  return <InstancedProp url={HERB_URL} height={0.35} nodes={instances} selfLit />;
+  // frustumCulled=false: one meadow's herbs are a small, compact cluster —
+  // see TreeGroup's identical note above.
+  return <InstancedProp url={HERB_URL} height={0.35} nodes={instances} selfLit frustumCulled={false} />;
 }
 
 const DOCK_LENGTH = Math.hypot(
@@ -155,7 +207,18 @@ export default function ResourceNodes() {
     () => allNodes.filter((n) => (n.world ?? null) === (destination ?? null)),
     [allNodes, destination],
   );
-  const rocks = useMemo(() => nodes.filter((n) => n.kind === 'rock'), [nodes]);
+  // Split by variant (not just kind): plain and iron rocks bake different
+  // sub-mesh sets (RockGroup), so each variant is its own instanced batch —
+  // mirrors treesByUrl splitting by model below.
+  const { regularRocks, ironRocks } = useMemo(() => {
+    const regularRocks: ResourceNodeState[] = [];
+    const ironRocks: ResourceNodeState[] = [];
+    for (const n of nodes) {
+      if (n.kind !== 'rock' || n.respawnAt !== null) continue;
+      (n.variant === 'iron' ? ironRocks : regularRocks).push(n);
+    }
+    return { regularRocks, ironRocks };
+  }, [nodes]);
   const fishing = useMemo(() => nodes.filter((n) => n.kind === 'fishing'), [nodes]);
   const { treesByUrl, stumps, herbs } = useMemo(() => {
     const byUrl = new Map<string, ResourceNodeState[]>();
@@ -178,9 +241,10 @@ export default function ResourceNodes() {
       <Suspense fallback={null}>
         {treesByUrl.map(([url, list]) => <TreeGroup key={url} url={url} nodes={list} />)}
         <HerbGroup nodes={herbs} />
+        <RockGroup nodes={regularRocks} iron={false} />
+        <RockGroup nodes={ironRocks} iron />
       </Suspense>
       {stumps.map((n) => <TreeStump key={n.id} node={n} />)}
-      {rocks.map((n) => <Rock key={n.id} node={n} />)}
       {fishing.map((n) => <FishingSpot key={n.id} node={n} />)}
     </group>
   );

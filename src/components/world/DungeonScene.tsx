@@ -12,7 +12,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { dungeonState, type DungeonRoom } from '@/game/dungeon';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
-import PropModel from './PropModel';
+import { InstancedProp, type InstancedNode } from './InstancedProps';
 import { Torch } from './Buildings';
 import RealPropPart from '../character/RealPropPart';
 
@@ -52,14 +52,31 @@ function FloorTile({ x, z, w, d, color }: { x: number; z: number; w: number; d: 
 
 export default function DungeonScene() {
   const layout = useMemo(() => dungeonState.layout, []);
-  if (!layout) return null;
-  const ox = layout.origin.x;
-  const oz = layout.origin.z;
+  const ox = layout?.origin.x ?? 0;
+  const oz = layout?.origin.z ?? 0;
   // Wave 13 · which real wall mesh this descent rolled (dungeon.ts's
   // WALL_STYLES) — falls back to the always-real 'stonewall' entry if an
   // older in-memory layout somehow lacks the field (defensive only; every
   // fresh generateDungeonLayout() call sets it).
-  const wallDef = BUILDABLE_BY_ID[layout.wallStyle] ?? STONEWALL;
+  const wallDef = (layout && BUILDABLE_BY_ID[layout.wallStyle]) ?? STONEWALL;
+  // Wave 16 · every wall in one descent shares this same wallDef url+height —
+  // only position/yaw differ per segment — so this is the same
+  // "many nodes, one url" shape InstancedProp already exists for (see
+  // ResourceNodes.tsx's TreeGroup), rather than one PropModel-driven GLB
+  // clone+draw-call per wall segment. Flagged for real by Wave 16's
+  // profiling pass (dungeon.ts's own item (b) note). Collision is unaffected
+  // — navgrid.ts/PlayerController.tsx read `layout.walls` directly, not the
+  // rendered mesh. Real frustum culling stays ON (InstancedProp's default) —
+  // a whole descent's walls span multiple rooms out to the 96-unit reach
+  // limit, nothing like the small compact patches that opt out of it; see
+  // InstancedSubMeshes' own doc.
+  const wallNodes: InstancedNode[] = useMemo(
+    () => (layout ? layout.walls.map((w, i) => ({
+      key: `${i}`, x: w.x - ox, z: w.z - oz, yaw: w.rot === 1 ? Math.PI / 2 : 0, scale: 1,
+    })) : []),
+    [layout, ox, oz],
+  );
+  if (!layout) return null;
 
   return (
     <group>
@@ -107,15 +124,7 @@ export default function DungeonScene() {
       ))}
 
       <Suspense fallback={null}>
-        {layout.walls.map((w, i) => (
-          <PropModel
-            key={i}
-            url={wallDef.model!}
-            height={wallDef.size[1]}
-            position={[w.x - ox, 0, w.z - oz]}
-            yaw={w.rot === 1 ? Math.PI / 2 : 0}
-          />
-        ))}
+        <InstancedProp url={wallDef.model!} height={wallDef.size[1]} nodes={wallNodes} />
       </Suspense>
     </group>
   );

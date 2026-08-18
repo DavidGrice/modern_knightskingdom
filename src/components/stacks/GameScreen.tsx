@@ -19,6 +19,7 @@ import FactionTheme from '../hud/FactionTheme';
 import Panels from '../hud/Panels';
 import BuildBar from '../hud/BuildBar';
 import AIDebugOverlay from '@/ai/debug/AIDebugOverlay';
+import PerfOverlay from '@/components/hud/PerfOverlay';
 
 function PauseMenu({ onQuit }: { onQuit: () => void }) {
   const setPaused = useGameStore((s) => s.setPaused);
@@ -230,6 +231,7 @@ export default function GameScreen() {
       {/* outside .hud on purpose: that layer is pointer-events:none, and the
           overlay's agent tabs have to be clickable when the pointer is free */}
       <AIDebugOverlay />
+      <PerfOverlay />
       {paused && <PauseMenu onQuit={saveAndQuit} />}
     </div>
   );
