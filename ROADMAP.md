@@ -6291,3 +6291,41 @@ investigated directly against the live code before fixing; see the plan file's o
   belt-and-braces for the ramp-up window between "it became night" and "tiredness actually out-scored
   whatever else was running," not the sole line of defense). `npx tsc --noEmit` / `npm run build`: both
   clean.
+
+- [COMPLETE] ✅ **Build-mode facing arrow doesn't always show for a freshly-selected piece — FIXED
+  2026-08-18.** Root cause confirmed live, and it was bigger than "the arrow": the entire ghost preview
+  (box, footprint plane, wireframe, arrow, tick — all one gated unit in `BuildController.tsx`) depends on
+  `ghost`, a plain `useState` written **only** inside the invisible ground-plane's `onPointerMove` handler
+  — nothing seeds or resets it when a piece is freshly selected or move-armed. Live-reproduced for every
+  piece/category tried (walls, corners, towers, small props): immediately after selection, with zero mouse
+  movement, `ghost` was `null` every time, so nothing rendered at all — not just the arrow. The "moving an
+  existing piece" path turned out to have the *identical* gap (`{"activeType":"torch","ghost":null,...,
+  "moving":true}`), it just reads as reliable in play because "Move it" is reached by first hovering the
+  piece inside the canvas, so the very next incidental mouse jitter closes the gap almost instantly — not
+  because that path is actually exempt. Fixed with a `useEffect` that seeds `ghost` synchronously from the
+  build camera's own current focus point the instant a piece goes active and `ghost` is still null, so the
+  preview exists before the player has moved the mouse at all; the real `onPointerMove` still takes over
+  the moment they do. One change fixes both the fresh-selection and move cases, since both hit the same
+  root cause; the `isCorner` arrow-suppression logic (data-driven, correct) is untouched. Verified live
+  across 5 piece types plus a genuine corner piece (arrow present/absent correctly in each case,
+  screenshotted), and the move-tool path — the live re-verification also root-caused and worked around a
+  real test-environment quirk (this headless/SwiftShader setup runs at only ~2-3fps, causing flaky
+  same-frame reads during a 3D-model unmount that a plain `setTimeout` sampling approach resolved cleanly;
+  not a product defect).
+- [COMPLETE] ✅ **"Cast your line" prompt triggers near the east road, away from the real pond — FIXED
+  2026-08-18.** The original static estimate compared the wrong "road" — `ROAD_HALF_WIDTH` (2.88m) is the
+  road's logical speed-bonus corridor, not its real rendered footprint (`Road.tsx`'s 12.8m square
+  baseplate tiles, grass surround included). Live-measured exact geometry: the single `fishspot` node
+  `(47.44, 34.81)` sits **2.81m** from the east road tile's own rendered edge `(47.44, 32.0)` — inside the
+  old flat 3.4m `INTERACT_RANGE` — and grid-sweeping the real winning prompt confirmed `'fishing'` was
+  actually winning right at that tile edge, with zero fishing hits anywhere on the true pavement centerline
+  or its speed-bonus shoulder. The newer "cast from anywhere along the shore" ring check independently
+  reached the same territory for the same underlying reason: the pond's real south shore is only 2.0m past
+  that same road tile edge — the pond and road were simply placed close together. Fixed with a new,
+  fishing-specific `FISH_CAST_RANGE = 1.5m` (`game/data/world.ts`), replacing `INTERACT_RANGE` at both the
+  dock's fixed interact point and the shoreline ring check (`PlayerController.tsx`) — measured to sit
+  comfortably under both the 2.0m and 2.81m real gaps found live, while still reaching the real bank right
+  at the dock (zero distance there, no regression). Verified live: standing 1.0–1.4m from the fishspot
+  still shows the real prompt and completes a full real cast (fishing.ts's own cast/bite/catch mechanics,
+  entirely untouched, confirmed still working end to end); standing 1.6m away or at the measured 2.81m
+  road-edge distance now shows nothing.

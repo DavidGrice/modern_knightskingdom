@@ -40,6 +40,15 @@ export const NPC_KING = { x: 1000, z: 962, yaw: Math.PI };
 
 export const INTERACT_RANGE = 3.4;
 export const STATION_RANGE = 4.5;
+// Wave 17 #2 · fishing needs a tighter bubble than the general INTERACT_RANGE.
+// The pond's south shore sits only ~2m past the east road's rendered tile
+// footprint (Road.tsx's 12.8m baseplate squares, not the narrower logical
+// ROAD_HALF_WIDTH corridor), and the one fishspot node is only 2.81m from
+// that tile's own edge — under the full 3.4m range, so "Cast your line" was
+// winning while standing on the road. 1.5m keeps both the dock's fixed point
+// and the shoreline ring check (below) short of that gap on both sides while
+// still reaching the real bank right next to the dock.
+export const FISH_CAST_RANGE = 1.5;
 
 // The Grand Keep's great hall: a fixed, always-present interior fixture
 // tucked in an empty corner of the map (outside the tree ring, mining field,
