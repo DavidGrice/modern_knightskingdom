@@ -18,7 +18,7 @@ import { worldEnv } from '@/game/env';
  *  exists at all. */
 const SELF_LIT_INTENSITY = 0.18;
 
-interface SubMesh {
+export interface SubMesh {
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
 }
@@ -100,21 +100,16 @@ export interface InstancedNode {
   color?: string;
 }
 
-/** Renders every `node` as an instance of the same normalized GLB prop —
- *  drop-in replacement for mapping many <PropModel url={url} .../> when the
- *  nodes share one url and only their transform (and a per-node scale, e.g.
- *  a tree shrinking as it's chopped) differ. */
-export function InstancedProp({
-  url, height, nodes, selfLit = false,
-}: {
-  url: string;
-  height: number;
-  nodes: InstancedNode[];
-  /** O6 · give the instances a low, always-on emissive so they stay visibly
-   *  findable at night instead of depending entirely on scene lighting. */
-  selfLit?: boolean;
-}) {
-  const subMeshes = useInstancedSubMeshes(url, height, selfLit);
+/** Renders `nodes` as instances of an already-computed `subMeshes` list —
+ *  the shared plumbing behind InstancedProp (GLB-sourced sub-meshes) and any
+ *  procedurally-built prop that wants the same instancing treatment (see
+ *  ResourceNodes.tsx's rock groups: dodecahedron primitives baked into
+ *  SubMesh geometries the same way a GLB's are, then handed here). Callers
+ *  only need geometry+material pairs and instance transforms — the
+ *  capacity-bucket dance is identical either way. `frustumCulled` is NOT
+ *  defaulted (see its own doc below): every caller has a genuinely different
+ *  right answer depending on how its `nodes` are spatially shaped. */
+export function InstancedSubMeshes({ subMeshes, nodes, frustumCulled }: { subMeshes: SubMesh[]; nodes: InstancedNode[]; frustumCulled: boolean }) {
   // `limit` sizes drei's underlying InstancedBufferAttribute — it is NOT
   // meant to track the live count. Passing nodes.length directly means the
   // buffer shrinks every time a node harvests/depletes (fewer live nodes)
@@ -157,6 +152,81 @@ export function InstancedProp({
   const capacityRef = useRef(0);
   if (nodes.length > capacityRef.current) capacityRef.current = capacityFor(nodes.length);
   const capacity = capacityRef.current;
+  if (nodes.length === 0) return null;
+  return (
+    <>
+      {subMeshes.map((sm, i) => (
+        <Instances
+          // `capacity` is part of the key on purpose — see the capacity
+          // comment above. Growing it has to remount, because drei sizes its
+          // buffers from the mount-time `limit` and never again.
+          key={`${i}:${capacity}`}
+          geometry={sm.geometry}
+          material={sm.material}
+          castShadow
+          receiveShadow
+          limit={capacity}
+          // Whether to let three's real per-batch frustum test run. Every
+          // node in one <Instances> is ONE InstancedMesh with ONE bounding
+          // volume — three.js (this project's version, r176) computes that
+          // volume as the real union of every live instance's transformed
+          // geometry (THREE.InstancedMesh#computeBoundingSphere, called
+          // lazily the first time culling needs it), not just the single
+          // sub-mesh's own local-origin bounding sphere, so a correctly
+          // positioned instance does not vanish just because the un-instanced
+          // geometry's own tiny sphere crossed the frustum edge. That makes
+          // real culling safe and worthwhile for a batch that is actually far
+          // from the camera sometimes (a quarry's rocks while standing at the
+          // homestead, a whole dungeon descent's walls while standing outside
+          // it) — false was a Wave 16 regression here for exactly those two
+          // batches: dungeon walls and resource rocks used to be one real
+          // per-mesh draw each, individually culled, before this wave's
+          // instancing pass folded them into this component and copied the
+          // opt-out below without re-checking whether it still applied.
+          //
+          // Only pass false for a batch that's BOTH spatially tiny (so
+          // there's no meaningful "off-screen" case to skip) AND known-good
+          // against the historical bug this opt-out exists for (see
+          // InstancedProp's own callers) — tree/herb patches, not a whole
+          // dungeon or a distant quarry.
+          frustumCulled={frustumCulled}
+        >
+          {nodes.map((n) => (
+            <Instance
+              key={n.key}
+              position={[n.x, 0, n.z]}
+              rotation={[0, n.yaw, 0]}
+              scale={n.scale}
+              color={n.color ?? '#ffffff'}
+            />
+          ))}
+        </Instances>
+      ))}
+    </>
+  );
+}
+
+/** Renders every `node` as an instance of the same normalized GLB prop —
+ *  drop-in replacement for mapping many <PropModel url={url} .../> when the
+ *  nodes share one url and only their transform (and a per-node scale, e.g.
+ *  a tree shrinking as it's chopped) differ. */
+export function InstancedProp({
+  url, height, nodes, selfLit = false, frustumCulled = true,
+}: {
+  url: string;
+  height: number;
+  nodes: InstancedNode[];
+  /** O6 · give the instances a low, always-on emissive so they stay visibly
+   *  findable at night instead of depending entirely on scene lighting. */
+  selfLit?: boolean;
+  /** See InstancedSubMeshes' own doc. Defaults to real culling (three's own
+   *  default, and the right answer for anything spread further than one
+   *  small, always-close-enough-to-matter patch) — a caller opts OUT only
+   *  for a batch it has specifically confirmed is small and compact, the
+   *  same case the historical opt-out was written for (tree/herb patches). */
+  frustumCulled?: boolean;
+}) {
+  const subMeshes = useInstancedSubMeshes(url, height, selfLit);
   // Reported 2026-07-30: self-lit props (herb patches) stayed at full
   // brightness through dark, rainy weather — the fixed intensity above was
   // tuned to be subtle against FULL daylight ambient, but never dims back
@@ -173,48 +243,5 @@ export function InstancedProp({
       if (mat.emissive) mat.emissiveIntensity = SELF_LIT_INTENSITY * rainDim;
     }
   });
-  if (nodes.length === 0) return null;
-  return (
-    <>
-      {subMeshes.map((sm, i) => (
-        <Instances
-          // `capacity` is part of the key on purpose — see the capacity
-          // comment above. Growing it has to remount, because drei sizes its
-          // buffers from the mount-time `limit` and never again.
-          key={`${i}:${capacity}`}
-          geometry={sm.geometry}
-          material={sm.material}
-          castShadow
-          receiveShadow
-          limit={capacity}
-          // Requested 2026-08-03: three.js frustum-culls an InstancedMesh
-          // against its GEOMETRY's own bounding sphere — the single small
-          // prop's local size, positioned at this mesh's own origin — with
-          // no awareness that `nodes` below actually scatters instances
-          // across a whole ground section far from that origin. Herb
-          // patches (small geometry, spread across a whole meadow) hit this
-          // hardest: real, correctly-placed instances kept vanishing and
-          // reappearing as the camera turned, purely because that tiny,
-          // wrongly-positioned bounding sphere crossed in and out of the
-          // frustum, while gathering — driven by the node's real world
-          // position, not this mesh's culling check — worked the whole
-          // time. Disabling culling costs nothing extra here: the whole
-          // batch is already one draw call regardless, at counts (dozens,
-          // not thousands) far below where per-instance skipping would
-          // ever matter.
-          frustumCulled={false}
-        >
-          {nodes.map((n) => (
-            <Instance
-              key={n.key}
-              position={[n.x, 0, n.z]}
-              rotation={[0, n.yaw, 0]}
-              scale={n.scale}
-              color={n.color ?? '#ffffff'}
-            />
-          ))}
-        </Instances>
-      ))}
-    </>
-  );
+  return <InstancedSubMeshes subMeshes={subMeshes} nodes={nodes} frustumCulled={frustumCulled} />;
 }

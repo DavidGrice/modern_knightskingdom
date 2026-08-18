@@ -765,6 +765,31 @@ input:focus { border-color: var(--gold); }
 .ai-debug-score .c { color: #7f9a8b; margin-right: 4px; }
 .ai-debug-score .g { color: #ffb060; }
 
+/* ---------- Frame-profiling overlay (Wave 16 phase 1) ----------
+   Deliberately visually consistent with .ai-debug (same flat-black
+   monospace "developer tool" language) but pinned top-left rather than
+   top-right so both panels can be open at once without overlapping, and
+   pointer-events:none since this panel has no clickable rows (unlike the
+   AI panel's agent tabs). Toggled with F3 (see PerfOverlay.tsx). */
+.perf-debug {
+  position: absolute; top: 10px; left: 10px; z-index: 40;
+  width: 230px; max-width: 46vw;
+  padding: 8px 10px; border-radius: 4px;
+  background: #03060a; border: 1px solid #2f6f4f;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px; line-height: 1.55; color: #cfe8d8;
+  pointer-events: none; -webkit-user-select: none; user-select: none;
+}
+.perf-debug-head {
+  display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
+  border-bottom: 1px solid #2f6f4f; padding-bottom: 4px; margin-bottom: 4px;
+  color: #7dffb0; text-transform: uppercase; letter-spacing: 0.08em;
+}
+.perf-debug-head b { color: #7dffb0; }
+.perf-debug-head span { font-size: 10px; color: #7f9a8b; text-transform: none; letter-spacing: 0; }
+.perf-debug-row b { color: #ffffff; }
+.perf-debug-dim { color: #7f9a8b; }
+
 /* ---------- Wave 14 · Travel Map (parchment) ----------
    Redesigned from a flat dark-HUD card grid into an illustrated parchment
    surface. The gradient/ink-color pairing below is lifted from

@@ -135,7 +135,15 @@ export default function Grounds() {
 
   return (
     <group>
-      <InstancedProp url={FENCE_URL} height={FENCE_HEIGHT} nodes={fenceNodes} />
+      {/* frustumCulled=false: unchanged from before Wave 16's InstancedProp
+          default flip (see InstancedProps.tsx) — this batch spans every
+          ground's fence at once and is exactly the "far-flung, not compact"
+          shape real culling was restored for elsewhere, but that's a fresh
+          behavior change this pass hasn't verified live here, so it's
+          pinned to its long-standing, already-shipped behavior instead of
+          silently inheriting the new default. Worth the same treatment in
+          a future pass. */}
+      <InstancedProp url={FENCE_URL} height={FENCE_HEIGHT} nodes={fenceNodes} frustumCulled={false} />
       {rings.map(({ g, open, gate }) => (
         // a boundary stone at the ground's gate, with the ground's name
         // and — while it is beyond your deed — what buys it

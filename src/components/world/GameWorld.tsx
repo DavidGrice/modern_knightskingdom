@@ -6,6 +6,7 @@ import Terrain, { GameSky } from './Terrain';
 import DayNight from './DayNight';
 import PostProcessing from './PostProcessing';
 import FpsMeter from './FpsMeter';
+import PerfMeter from './PerfMeter';
 import Weather from './Weather';
 import Wildlife from './Wildlife';
 import ResourceNodes from './ResourceNodes';
@@ -58,6 +59,7 @@ export default function GameWorld() {
     <>
       <PostProcessing />
       <FpsMeter />
+      <PerfMeter />
       <DayNight />
       <Weather />
       <Wildlife />
