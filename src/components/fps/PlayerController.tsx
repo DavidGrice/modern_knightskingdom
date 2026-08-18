@@ -9,7 +9,7 @@ import { useGameStore, TAX_COOLDOWN_MS } from '@/game/store/gameStore';
 import { LAND_TIERS, BUILDABLE_BY_ID, heightOf, labAssetId, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
-  BROOK, EYE_HEIGHT, FISHING_DOCK, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
+  BROOK, EYE_HEIGHT, FISHING_DOCK, FISH_CAST_RANGE, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
   POND, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
 } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
@@ -754,8 +754,11 @@ export default function PlayerController() {
             : fishingState.phase === 'waiting'
               ? { id: n.id, kind: 'fishing', duration: 1, actionable: false, label: 'Watching the water…' }
               : { id: n.id, kind: 'fishing', duration: 0.06, actionable: true, label: 'Bite!' };
-        // the dock's own interact point, unchanged
-        consider(n.x, n.z, 0.9, target);
+        // the dock's own interact point — Wave 17 #2: tightened to
+        // FISH_CAST_RANGE (was the general INTERACT_RANGE), which was
+        // reaching 2.81m onto the east road tile's own rendered footprint
+        // right next to the fishspot node; see world.ts's FISH_CAST_RANGE.
+        consider(n.x, n.z, 0.9, target, FISH_CAST_RANGE);
         // Requested 2026-07-30: fishing shouldn't need the one specific dock
         // plank — cast from anywhere along the pond's edge instead. Reuses
         // the SAME `consider()` distance+facing check unchanged, just feeds
@@ -770,7 +773,7 @@ export default function PlayerController() {
         const distFromCenter = Math.hypot(toPondX, toPondZ) || 1;
         const edgeX = POND.x + (toPondX / distFromCenter) * POND.radius;
         const edgeZ = POND.z + (toPondZ / distFromCenter) * POND.radius;
-        consider(edgeX, edgeZ, 0.9, target, INTERACT_RANGE);
+        consider(edgeX, edgeZ, 0.9, target, FISH_CAST_RANGE);
       }
     }
     // wild horses can be ridden

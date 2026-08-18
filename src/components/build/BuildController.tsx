@@ -444,6 +444,20 @@ export default function BuildController() {
     };
   }
 
+  // Wave 17 #1 · ghost used to stay null (and with it the ENTIRE preview —
+  // box, footprint, wireframe, arrow, tick, all gated on `ghost` together at
+  // the render below) from the moment a piece was selected/move-armed until
+  // the mouse happened to cross the canvas and the ground-plane's
+  // onPointerMove wrote a value in. Seed it synchronously off the build
+  // camera's own current focus point the instant activeType goes truthy, so
+  // the preview is already there before the player has moved the mouse at
+  // all; the real onPointerMove still takes over the moment they do.
+  useEffect(() => {
+    if (!activeType || ghost) return;
+    setGhost(snapPoint(new THREE.Vector3(center.current.x, 0, center.current.z)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeType]);
+
   /**
    * Wave 9 · row-fill. From the anchor cell (already wall-snapped exactly as a
    * single placement would have been), the drag picks the cardinal direction it
