@@ -2877,7 +2877,16 @@ function createGameStore() {
         // builder pass (Phase 19 build-then-construct): every assigned builder
         // chips away at the oldest construction site, ~25s per piece per builder
         // Steady Hands companion trait: that builder counts for 1.25
-        const builderWeight = roster.reduce(
+        //
+        // Bugfix (2026-08-18, Wave 17 #3): gated on isWorkingHours, matching
+        // the AI reasoner's own gather.ts/farm.ts actions (both already check
+        // is_work_hours before running) — this legacy pre-reasoner pass never
+        // did. Real progress used to land at any hour as long as a builder
+        // happened to be standing at the site, which is exactly backwards
+        // from what the night bed-seek behavior (Villagers.tsx) implies is
+        // happening: a villager "asleep" in bed was still, mechanically,
+        // finishing your keep.
+        const builderWeight = !isWorkingHours(worldEnv.time) ? 0 : roster.reduce(
           (t, v) => (v.job === 'builder' ? t + (hasTrait(v, 'bui_steady') ? 1.25 : 1) : t), 0);
         if (builderWeight > 0) {
           const site = worldBuildings.find((b) => !isBuilt(b));

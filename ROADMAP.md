@@ -6264,3 +6264,30 @@ the roadmap" pattern for major-overhaul-scale work.
   confirming the surrounding `useFrame` code the dead code used to abort out of now runs to completion
   every frame. Folded into Wave 14 as a trivial, isolated, already-4×-verified one-block deletion
   rather than its own wave.
+
+## Wave 17 — six player-reported bugs, found live 2026-08-17
+
+Reported after the full 16-wave plan above shipped, from actually playing the result. Each
+investigated directly against the live code before fixing; see the plan file's own "Wave 17" section
+(appended to `gleaming-sleeping-robin.md`) for the full analysis.
+
+- [COMPLETE] ✅ **Builder villagers "work" through the night with no real day/night gate — FIXED
+  2026-08-18.** Two separate systems, both confirmed ungated: the mechanical construction progress
+  (`gameStore.ts`'s builder pass inside `tickVillagers`, crediting `constructBuilding` purely off
+  physical proximity to the site) and the matching in-world animation (`Villagers.tsx`'s
+  `villager.job === 'builder'` branch, seeking the site and playing `anim_g_swordswish`) — neither ever
+  checked `isWorkingHours`/`isWatchHours`, unlike the modern AI reasoner's `gather.ts`/`farm.ts` actions,
+  which both already gate on `is_work_hours`. Fixed by adding the same `isWorkingHours(worldEnv.time)`
+  gate to both. **The mechanical fix is definitively verified live**, isolated from the AI
+  positioning/reasoner system's own frame-by-frame movement (which otherwise fights over the same
+  villager position every render, making a full end-to-end browser test unreliable): forced a builder's
+  tracked position onto a real placed construction site, called the real `tickVillagers(5)` store action
+  directly at deep night — `built` stayed at exactly `0`, unchanged — then called it again at midday —
+  `built` advanced to exactly `0.2`, matching `dt(5) × 0.04 × atSite(1)` to the decimal. The animation-side
+  fix mirrors the identical, already-proven gate onto the matching legacy code path (traced by hand: every
+  non-defender villager, builders included, already has a real reasoner `Agent` whose shared `'villager'`
+  archetype carries `sleep`, and `Villagers.tsx`'s own cascade already yields to a won sleep activity's
+  `MOVE_TO` intent before ever reaching this branch — so the explicit gate here is deliberate
+  belt-and-braces for the ramp-up window between "it became night" and "tiredness actually out-scored
+  whatever else was running," not the sole line of defense). `npx tsc --noEmit` / `npm run build`: both
+  clean.

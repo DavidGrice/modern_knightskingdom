@@ -12,7 +12,7 @@ import { HeldHelmet, Chestplate, ResourceProp, WornCarrier } from '../character/
 import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
-import { HOME_X, HOME_Z, JOB_BY_ID, JOB_NODE_KIND, villagerHomeSpot } from '@/game/data/villagers';
+import { HOME_X, HOME_Z, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, villagerHomeSpot } from '@/game/data/villagers';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
@@ -291,7 +291,22 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     // actual progress lands in tickVillagers' builder pass; this is just the
     // matching in-world performance (same seek-and-act shape as the raid
     // flee and night bed-seek branches above)
-    if (villager.job === 'builder') {
+    //
+    // Bugfix (2026-08-18, Wave 17 #3): gated on isWorkingHours, matching the
+    // gate just added to tickVillagers' own builder pass. Every
+    // roster villager (builders included) has a real reasoner Agent whose
+    // 'villager' archetype already carries `sleep` (archetypes.json) — a
+    // won SLEEP activity issues a MOVE_TO intent that the branch at the top
+    // of this cascade (§3.3) already yields to before ever reaching here, so
+    // this legacy branch should mostly never even see a builder who has
+    // actually been sent to bed. This check is the same belt-and-braces the
+    // tickVillagers fix carries: it costs nothing when the reasoner has
+    // already redirected them, and it is what actually stops the visible
+    // hammering during the ramp-up between "it became night" and "tiredness
+    // rose enough for sleep to out-score whatever else is running" — a real
+    // window this legacy cascade has no other way to know about, since it
+    // does not read the reasoner's own scoring.
+    if (villager.job === 'builder' && isWorkingHours(worldEnv.time)) {
       const site = useGameStore.getState().buildings.find((b) => !isBuilt(b));
       if (site) {
         const { nx, nz, dist: d } = navSteer(s, site.x, site.z, dt);
