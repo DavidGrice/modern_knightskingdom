@@ -115,6 +115,28 @@ const FAMILY_COLORS: Record<string, { name: string; armColor: number; handColor:
  *  than one silently skipped for lack of a hand-picked palette. */
 const DEFAULT_FAMILY = FAMILY_COLORS.minifiggenericgood;
 
+/** Wave 17 #5: the six named court NpcDefs (npcs.ts) each already render as
+ *  a real, hand-placed, interactive figure near their destination's landing
+ *  point (Npc.tsx) — this data's own `actor`/`cast` rows for the SAME
+ *  donor family are a second, decorative, non-interactive copy of the same
+ *  identity. Investigated moving the live NpcDef TO this data's position
+ *  instead of deleting the copy (matching the plan's original ask more
+ *  literally): every matched row for every one of these five characters, on
+ *  every template it appears on, resolves (loaded the real .glb bakes and
+ *  replicated normalizeTemplateBake's transform to check) to a world
+ *  position thousands of units from `dest.origin` — deep in unreachable
+ *  background terrain (see this file's own King Leo procession-figure note
+ *  above), never a real "gameplay spot." Not usable for any of the six.
+ *  So: skip spawning the decorative copy outright rather than relocate the
+ *  live NPC to nowhere. `minifiggenericgood` is deliberately excluded — it's
+ *  the shared fallback family for anonymous background villagers/Alric/
+ *  Beda, not a specific named character, so it stays spawnable. Fenwick has
+ *  no equivalent row to filter: `mapPopulation.generated.json` has no
+ *  `template-08` key at all. */
+const NAMED_COURT_FAMILIES = new Set(
+  Object.keys(FAMILY_COLORS).filter((family) => family !== 'minifiggenericgood'),
+);
+
 function characterConfigFor(assetRef: string): CharacterConfig {
   const family = assetRef.replace(/\d+$/, '');
   const c = FAMILY_COLORS[family] ?? DEFAULT_FAMILY;
@@ -156,6 +178,12 @@ function PopulationInstance({ row, dest, scaleCompensation }: { row: PopulationR
   const z = dest.origin.z + row.position[2] * scaleCompensation;
   const isActor = row.kind === 'actor' || row.kind === 'cast';
   if (isActor) {
+    // Wave 17 #5: don't render a decorative duplicate of a named court NPC
+    // that already has a real, interactive figure elsewhere — see
+    // NAMED_COURT_FAMILIES's own comment for why this is a skip, not a
+    // reposition.
+    const family = row.assetRef.replace(/\d+$/, '');
+    if (NAMED_COURT_FAMILIES.has(family)) return null;
     return (
       <Grounded x={x} z={z} rotationY={row.rotationY}>
         <RiggedFigure config={characterConfigFor(row.assetRef)} height={1.75} clip="anim_r_restpose" />

@@ -26,6 +26,16 @@
 // fraction of each diorama this bump has always preserved (see the 2x
 // comment this replaces, and TEMPLATE_WORLD_SCALE's own 0.06->0.32 jump for
 // the same precedent).
+//
+// Wave 17 #5 (2026-08-18): still read as oversized after more live time —
+// scaled down again, this time by 0.75x on top of the 1.25x above (net
+// 0.9375x of the original 0.32 human-scale base). Radius values scaled down
+// by the same 0.75 for the same "keep the walkable fraction constant"
+// reason as every prior bump. This edit targets DEST_WORLD_SCALE below, NOT
+// TEMPLATE_WORLD_SCALE itself (TemplateWorld.tsx) — that constant also
+// backs template-09's homestead terrain and all 6 challenge maps, neither
+// of which were reported as wrong; rescaling the homestead in particular is
+// the "much bigger and riskier change" the comment below already warns off.
 import type { ItemId } from '../types';
 import { DUNGEON_ORIGIN, REACH_LIMIT } from '../dungeon';
 
@@ -69,63 +79,63 @@ export interface WorldDestination {
 // file already imports WORLD_DESTINATION_BY_ID from THIS one, so importing
 // the constant back would be circular. Keep the 0.32 base in sync by hand
 // if TEMPLATE_WORLD_SCALE itself ever changes.
-const DEST_WORLD_SCALE = 0.32 * 1.25;
+const DEST_WORLD_SCALE = 0.32 * 1.25 * 0.75;
 
 export const WORLD_DESTINATIONS: WorldDestination[] = [
   {
     id: 'template-01', name: "The King's Approach",
     blurb: 'A grand castle crowns the hill above a road still lined with a marching procession.',
     thumb: '/assets/worlds/thumbs/template-01.png', model: '/assets/worlds/template-01.glb',
-    origin: { x: 1000, z: 1000 }, radius: 280, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1000, z: 1000 }, radius: 210, worldScale: DEST_WORLD_SCALE,
     loot: { gold: 12 }, lootText: 'You gather coins dropped along the procession road (+12 gold).',
   },
   {
     id: 'template-02', name: 'The Tourney Grounds',
     blurb: 'An old tournament field where mounted knights once ran at each other in earnest.',
     thumb: '/assets/worlds/thumbs/template-02.png', model: '/assets/worlds/template-02.glb',
-    origin: { x: 1300, z: 1000 }, radius: 306, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1300, z: 1000 }, radius: 229.5, worldScale: DEST_WORLD_SCALE,
     loot: { plank: 4 }, lootText: 'You salvage sound timber from a broken lance rack (+4 planks).',
   },
   {
     id: 'template-03', name: 'The River Landing',
     blurb: 'A quiet river crossing with a loading dock, cart tracks, and a hint of trade.',
     thumb: '/assets/worlds/thumbs/template-03.png', model: '/assets/worlds/template-03.glb',
-    origin: { x: 1600, z: 1000 }, radius: 286, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1600, z: 1000 }, radius: 214.5, worldScale: DEST_WORLD_SCALE,
     loot: { wood: 6, stone: 4 }, lootText: 'Goods left on the dock are yours for the taking (+6 wood, +4 stone).',
   },
   {
     id: 'template-04', name: 'The Siege Camp',
     blurb: "A war machine still stands aimed at a keep it never breached.",
     thumb: '/assets/worlds/thumbs/template-04.png', model: '/assets/worlds/template-04.glb',
-    origin: { x: 1900, z: 1000 }, radius: 366, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1900, z: 1000 }, radius: 274.5, worldScale: DEST_WORLD_SCALE,
     loot: { iron_ore: 5 }, lootText: 'You pry loose iron fittings from the old siege engine (+5 iron ore).',
   },
   {
     id: 'template-05', name: 'The Rival Castle',
     blurb: "A neighboring lord's keep — banners raised, gates shut tight. Not one to besiege lightly. Yet.",
     thumb: '/assets/worlds/thumbs/template-05.png', model: '/assets/worlds/template-05.glb',
-    origin: { x: 2200, z: 1000 }, radius: 314, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 2200, z: 1000 }, radius: 235.5, worldScale: DEST_WORLD_SCALE,
     loot: { gold: 8 }, lootText: 'A merchant passing the gatehouse trades you a few coins for news (+8 gold).',
   },
   {
     id: 'template-06', name: 'The Sister Keep',
     blurb: 'A second stronghold watches over a green valley from a respectful distance.',
     thumb: '/assets/worlds/thumbs/template-06.png', model: '/assets/worlds/template-06.glb',
-    origin: { x: 2500, z: 1000 }, radius: 280, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 2500, z: 1000 }, radius: 210, worldScale: DEST_WORLD_SCALE,
     loot: { stone: 8 }, lootText: 'Loose quarried stone litters the roadside (+8 stone).',
   },
   {
     id: 'template-07', name: 'The Frozen Pass',
     blurb: 'Knights once held this icy mountain pass — the exposed rock looks promising for ore.',
     thumb: '/assets/worlds/thumbs/template-07.png', model: '/assets/worlds/template-07.glb',
-    origin: { x: 2800, z: 1000 }, radius: 314, worldScale: DEST_WORLD_SCALE, sky: 'mountains',
+    origin: { x: 2800, z: 1000 }, radius: 235.5, worldScale: DEST_WORLD_SCALE, sky: 'mountains',
     loot: { iron_ore: 8 }, lootText: 'The mountain pass is rich with ore (+8 iron ore — a mining bonus!).',
   },
   {
     id: 'template-08', name: 'The Old Ruins',
     blurb: 'Weathered hills hide old foundations — good ground for scavenging.',
     thumb: '/assets/worlds/thumbs/template-08.png', model: '/assets/worlds/template-08.glb',
-    origin: { x: 3100, z: 1000 }, radius: 266, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 3100, z: 1000 }, radius: 199.5, worldScale: DEST_WORLD_SCALE,
     loot: { stone: 6, iron_ore: 4 }, lootText: 'You dig a little loot out of the ruins (+6 stone, +4 iron ore).',
   },
   {
