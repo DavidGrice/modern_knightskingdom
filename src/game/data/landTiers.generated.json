@@ -2,30 +2,35 @@
  {
   "walls": 3,
   "half": 16,
+  "southHalf": 12,
   "cost": 0,
   "name": "Smallholding"
  },
  {
-  "walls": 4,
-  "half": 20,
+  "walls": 5,
+  "half": 24,
+  "southHalf": 12,
   "cost": 120,
   "name": "Freehold"
  },
  {
-  "walls": 5,
-  "half": 24,
+  "walls": 6,
+  "half": 28,
+  "southHalf": 12,
   "cost": 320,
   "name": "Manor"
  },
  {
-  "walls": 6,
-  "half": 28,
+  "walls": 8,
+  "half": 36,
+  "southHalf": 12,
   "cost": 700,
   "name": "Estate"
  },
  {
-  "walls": 7,
-  "half": 32,
+  "walls": 9,
+  "half": 40,
+  "southHalf": 12,
   "cost": 1400,
   "name": "Barony"
  }

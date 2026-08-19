@@ -24,6 +24,10 @@ interface GroundRow extends RectSection {
 interface LandTierRow {
   walls: number;
   half: number;
+  // Wave 17 #4 · the south fence no longer grows with the rest — `half`
+  // stays shared by north/east/west (see buildables.ts's LAND_TIERS note),
+  // `southHalf` is this table's own separate, normally-constant south bound.
+  southHalf: number;
   cost: number;
   name: string;
 }
@@ -62,8 +66,14 @@ function sectionsOverlapLive(a: RectSection, b: RectSection): boolean {
 }
 function clearsHomesteadLive(s: RectSection, landTiers: LandTierRow[]): boolean {
   const maxHalf = landTiers.reduce((m, t) => Math.max(m, t.half), 0);
-  const half = maxHalf + HOMESTEAD_CLEARANCE;
-  return Math.abs(s.x) - s.halfX >= half || Math.abs(s.z) - s.halfZ >= half;
+  // Wave 17 #4 · mirrors grounds.ts's own clearsHomestead(): the X bound is
+  // still the shared `half` (north/east/west), but the Z bound depends on
+  // which side of the homestead the section is actually on — `southHalf`
+  // south of it, `half` north of it — now that those two numbers can differ.
+  const maxSouthHalf = landTiers.reduce((m, t) => Math.max(m, t.southHalf), 0);
+  const xHalf = maxHalf + HOMESTEAD_CLEARANCE;
+  const zHalf = (s.z >= 0 ? maxSouthHalf : maxHalf) + HOMESTEAD_CLEARANCE;
+  return Math.abs(s.x) - s.halfX >= xHalf || Math.abs(s.z) - s.halfZ >= zHalf;
 }
 function crossesRoad(s: RectSection): boolean {
   const half = ROAD_TILE / 2;
@@ -272,9 +282,11 @@ function MapPreview({ tables, problemIds }: { tables: Tables; problemIds: Set<st
   return (
     <div style={{ flex: '0 0 auto' }}>
       <svg viewBox={`${-HALF} ${-HALF} ${HALF * 2} ${HALF * 2}`} width={560} height={560} style={{ background: '#232922', border: '1px solid #444', borderRadius: 4 }}>
-        {/* homestead tiers, nested, largest first */}
+        {/* homestead tiers, nested, largest first. Wave 17 #4: the rect is no
+            longer a square — `half` still bounds north/east/west, but the
+            south edge sits at `southHalf` instead of mirroring `half`. */}
         {[...tables.landTiers].sort((a, b) => b.half - a.half).map((t, i) => (
-          <rect key={i} x={-t.half} y={-t.half} width={t.half * 2} height={t.half * 2} fill="none" stroke="#5a5f6a" strokeWidth={0.6} />
+          <rect key={i} x={-t.half} y={-t.half} width={t.half * 2} height={t.half + t.southHalf} fill="none" stroke="#5a5f6a" strokeWidth={0.6} />
         ))}
         {/* road tiles */}
         {cells.map(([cx, cz], i) => (
@@ -434,15 +446,16 @@ function LandTiersForm({ rows, onChange }: { rows: LandTierRow[]; onChange: (r: 
     onChange(next);
   };
   const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
-  const add = () => onChange([...rows, { walls: 3, half: 16, cost: 0, name: 'New Tier' }]);
+  const add = () => onChange([...rows, { walls: 3, half: 16, southHalf: 12, cost: 0, name: 'New Tier' }]);
   return (
     <div>
       {rows.map((t, i) => (
         <RowCard key={i} problem={false}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
             <Field label="name"><input style={inputStyle} value={t.name} onChange={(e) => update(i, { name: e.target.value })} /></Field>
             <Field label="walls"><input style={inputStyle} type="number" value={t.walls} onChange={(e) => update(i, { walls: num(e.target.value) })} /></Field>
-            <Field label="half"><input style={inputStyle} type="number" value={t.half} onChange={(e) => update(i, { half: num(e.target.value) })} /></Field>
+            <Field label="half (N/E/W)"><input style={inputStyle} type="number" value={t.half} onChange={(e) => update(i, { half: num(e.target.value) })} /></Field>
+            <Field label="southHalf"><input style={inputStyle} type="number" value={t.southHalf} onChange={(e) => update(i, { southHalf: num(e.target.value) })} /></Field>
             <Field label="cost"><input style={inputStyle} type="number" value={t.cost} onChange={(e) => update(i, { cost: num(e.target.value) })} /></Field>
           </div>
           <button onClick={() => remove(i)} style={{ marginTop: 8, fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '3px 8px', cursor: 'pointer' }}>Remove</button>
@@ -451,7 +464,10 @@ function LandTiersForm({ rows, onChange }: { rows: LandTierRow[]; onChange: (r: 
       <button onClick={add} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}>+ Add Tier</button>
       <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
         Tiers must stay sorted smallest-to-largest `half` for the deed ladder to make sense — this isn&apos;t
-        enforced live yet, double-check order before saving.
+        enforced live yet, double-check order before saving. `southHalf` (Wave 17 #4) is the separate south
+        fence bound — it is meant to stay constant across every tier (12, today) so the south side never grows
+        back toward the real east road (Road.tsx's plates start at z=19.2); raising it for one tier without
+        checking the road's own position live here is how that bug comes back.
       </div>
     </div>
   );

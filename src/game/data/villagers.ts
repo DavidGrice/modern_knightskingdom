@@ -1,5 +1,4 @@
 import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeState, VillagerJob } from '../types';
-import { BUILD_REGION } from './buildables';
 import { hashId } from './villagerLooks';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
 
@@ -38,8 +37,19 @@ export function isWatchHours(time: number): boolean {
 // rather than reinventing it (§5.6's own explicit instruction). Villagers.
 // tsx's copies are deleted once both route through the reasoner — this is
 // the one remaining source, not a duplicate.
-export const HOME_X = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
-export const HOME_Z = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
+// Wave 17 #4 · was `(BUILD_REGION.min+max)/2` on each axis, which only ever
+// evaluated to (0, 0) because BUILD_REGION was a square centred on the
+// origin. Now that the south fence is pinned independently of the other
+// three sides (see buildables.ts's LAND_TIERS note), that same formula would
+// drift NORTH as the land tiers grow — up to 14 on Z at the max tier, a full
+// WANDER_RADIUS (Villagers.tsx) away from true origin — which is not a
+// change anything downstream asked for: every one of HOME_X/HOME_Z's
+// consumers (Defenders.tsx, RaiderRam.tsx, Enemies.tsx, ai/actions/flee.ts,
+// ai/actions/takeCover.ts, settlementAnchor/villagerHomeSpot below) wants the
+// homestead's own centre, not a byproduct of how wide the fence happens to be
+// this tier. Hardcoded to what the formula always meant historically.
+export const HOME_X = 0;
+export const HOME_Z = 0;
 
 /** Empire arc, Wave 3: the anchor a villager's labour/home-seeking logic
  *  should measure against — HOME_X/HOME_Z for the homestead (world absent/

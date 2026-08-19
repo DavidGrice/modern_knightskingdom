@@ -6329,3 +6329,44 @@ investigated directly against the live code before fixing; see the plan file's o
   still shows the real prompt and completes a full real cast (fishing.ts's own cast/bite/catch mechanics,
   entirely untouched, confirmed still working end to end); standing 1.6m away or at the measured 2.81m
   road-edge distance now shows nothing.
+- [COMPLETE] ✅ **Build region grows into the east road at higher land tiers — FIXED 2026-08-18.** Root
+  cause confirmed with real, independently-re-derived geometry (sign convention re-derived from
+  `Compass.tsx`'s own bearing math, not assumed: north = −Z, south = +Z): the real east road's westmost
+  plate (`road.ts`'s leg 4, `[0,2]`) has its near edge at `z=19.2` (a real 12.8m rendered tile, not the
+  narrower logical `ROAD_HALF_WIDTH` corridor), and the old symmetric `BUILD_REGION`/`LAND_TIERS` square
+  already overlapped it at every tier except the smallest — 21m² at Freehold, growing to 491.52m² (three
+  whole road tiles fully enclosed) at Barony. Fixed by giving `LAND_TIERS` a second, **constant** field,
+  `southHalf = 12` (every tier, `game/data/landTiers.generated.json`), separate from the shared `half`
+  that still governs north/east/west — so the south fence can never again grow to meet the road no matter
+  how wide the other three sides get. `landSouthHalf()` (`buildables.ts`), `BUILD_REGION.maxZ` and
+  `activeBuildRegion()`'s `maxZ` all updated accordingly. The other three sides grew (16→16, 20→24,
+  24→28, 28→36, 32→40) to keep each tier's total buildable area within about ±12% of its old value
+  (real area math, not eyeballed — table of exact old/new areas in the PR). Real companion fixes the
+  research pass flagged as required, not optional, closing the SAME complaint through two side doors it
+  would otherwise have reopened: (1) `waterworks.ts`'s dig-conflict check used one shared scalar for
+  every direction including south, which — left alone — would have let a player dig a moat right up
+  against the road in the exact buffer this fix exists to preserve; now direction-aware, with **no**
+  `DIG_OUTSKIRT` allowance added on the south side specifically. (2) `HOME_X`/`HOME_Z`
+  (`data/villagers.ts`) — the single "homestead centre" every AI/combat system (`Defenders.tsx`,
+  `RaiderRam.tsx`, `Enemies.tsx`, `flee.ts`, `takeCover.ts`) measures against — used to be derived from
+  `BUILD_REGION`'s own midpoint, which only ever evaluated to `(0,0)` because the region was square; left
+  unfixed, the new asymmetric shape would have silently dragged that anchor up to 14m north as tiers grew,
+  a real behavioral change nothing downstream asked for. Hardcoded to `(0,0)`, what the formula always
+  meant. Also updated: `grounds.ts`'s `clearsHomestead()` (and its `/secret/worldeditor` live mirror) now
+  check the correct directional bound instead of one shared scalar (not a live bug with today's data, but
+  was checking the wrong number for every real ground); the world editor's Land Tiers tab/map
+  preview/save-route validation all extended for the new field; copy in `BuildBar.tsx` and the `buyLand()`
+  toast corrected from "N walls a side" to "N walls per N/S side" now that the two axis wall-counts
+  genuinely differ. `downs.ts`'s own dev-mode clearance assertions were re-verified against the new
+  numbers rather than assumed safe — all three still hold with real 4m margins at the new
+  `landHalf(MAX)=40`, no code change needed there. **A real regression caught by the verify pass before
+  shipping**: the always-rendered homestead "dirt patch" decorative mesh shared a variable with the
+  build-mode-only region overlay that legitimately needed to become tier-dependent, so the dirt patch
+  silently drifted north with it (measured live: z=−2 at the smallest tier → z=−14 at Barony) — fixed by
+  pinning it to a fixed `(0,0)` centre, the same "true fixed centre, not a fence-width byproduct"
+  reasoning already used for `HOME_X`/`HOME_Z`. A leftover unguarded debug handle from live verification
+  was also caught and removed before shipping. Verified live end to end across all 5 tiers via the real
+  `buyLand()` action: `BUILD_REGION` bounds, minimap overlay, build-mode overlay, and `/secret/worldeditor`
+  all show the correct asymmetric shape with zero road-tile overlap at any tier; the dig-tool fix
+  confirmed via `digPreview()` — a rectangle in the old-formula-legal gap between the new fence and the
+  real road is now refused, one inside the fence is still allowed.
