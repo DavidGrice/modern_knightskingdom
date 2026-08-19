@@ -6411,3 +6411,51 @@ investigated directly against the live code before fixing; see the plan file's o
   (184m out) completed without stalling, correctly crossing onto the real road partway through; a close
   ground well inside the old grid showed zero behavior change (full gather→haul cycle, unaffected as
   expected); zero console/page errors across every session.
+- [COMPLETE] ✅ **Template-world scale (0.75x) + named court NPCs no longer duplicated by a frozen
+  background copy — FIXED 2026-08-19 (last of the six).** Two independent halves.
+  **(a) Scale:** the literal ask ("multiply `TEMPLATE_WORLD_SCALE` by 0.75") turned out to be the wrong
+  target — that constant (`TemplateWorld.tsx`) also backs template-09's homestead terrain and all 6
+  challenge maps, neither of which were reported as wrong, and the file's own comment already calls
+  rescaling the homestead "a much bigger and riskier change than what was actually asked for." The real
+  target is `worlds.ts`'s `DEST_WORLD_SCALE` — the separately-hand-copied literal that actually backs
+  only the 8 real travel destinations (template-01..08) — scaled `0.32 × 1.25` → `0.32 × 1.25 × 0.75`
+  (0.4 → 0.3), with each destination's `radius` scaled by the same 0.75 in lockstep (matching this exact
+  file's own precedent from its prior 2x→1.25x bump: "keep the walkable fraction of each diorama
+  constant"). Every other consumer checked and confirmed self-adjusting with no code change needed
+  (`PlayerController.tsx`'s wander clamp, `Minimap.tsx`, `gameStore.ts`'s arrival spawn point, and
+  `TemplatePopulation.tsx`'s own `scaleCompensation` ratio, which recomputes automatically). **Verified
+  live, not just by reading source**: independently recomputed `normalizeTemplateBake`'s real bbox/offset
+  math from the actual `.glb` bytes on disk at the new scale and matched it against
+  `window.__kkworld.getBakeOffset()` read live in-browser to 3+ decimal places on 4 separate destinations
+  — proof the running server truly applies the new scale end-to-end, not merely that the source changed;
+  separately, teleporting the player 600 units out and letting the real wander clamp run pulled them back
+  to exactly the new radius (210.00 on template-01), not the old one.
+  **(b) Named characters:** confirmed two systems already existed and didn't talk to each other — the six
+  interactive `NpcDef`s (`npcs.ts`, real dialogue/quests) at hand-picked coordinates, and
+  `TemplatePopulation.tsx`'s own decorative `actor`/`cast` rows rendering the same identities (by donor
+  family) from the categorized map data, frozen in one rest pose. The originally-confirmed design (see
+  Wave 17's own plan section) was to move the live NpcDef to that categorized-data position — **this
+  turned out not to be implementable as asked, confirmed by loading the real `.glb` bakes and computing
+  actual world positions, not estimated**: every matched row, for every one of the five identifiable
+  characters (King Leo, Queen Leonora, Richard, John, Storm), on every template it appears on, resolves
+  thousands of units from that destination's origin — deep in unreachable background terrain, corroborated
+  by this same file's own pre-existing comment about King Leo's procession-figure marker. Moving any live
+  NPC there would have made them permanently unreachable, a regression dressed as the requested fix.
+  Fenwick has no data row at all (`mapPopulation.generated.json` has no `template-08` key), so he was never
+  in scope for this half. **What actually shipped instead, delivering the same real intent** (one real,
+  animated character per identity, not a frozen embedded stand-in): all 6 `NpcDef` positions were left
+  exactly where they already sensibly stood, and a `NAMED_COURT_FAMILIES` skip filter was added to
+  `TemplatePopulation.tsx` so the decorative duplicate for each of the five is no longer spawned at all
+  (Fenwick needs no filter — no row exists to remove). Separately discovered mid-investigation: **the "give
+  them real ambient animation" half of the original ask was already shipped** on 2026-08-03, unrelated to
+  this wave — `courtAmbientSync.ts` already spawns a real `'court'`-archetype AI agent
+  (`idle_fidget`/`notice_player`) for exactly these five, so no animation wiring was needed here. **Verified
+  live across 4 of the 6 affected destinations**: all 5 tested NPCs' live positions matched their unchanged
+  `NpcDef` coordinates exactly (confirming they were correctly left in place, not moved into the ruled-out
+  coordinates); every named-family decorative row present in the real map data was confirmed skipped at
+  render time while every non-named row (generic villagers, Cedric, Weezil, Gilbert) on the same maps still
+  rendered, a clean partition with zero collateral regression; each NPC's live animation clip read off
+  `window.__kknpcs` showed a genuine non-default AI-driven pose (not a frozen rest pose) sustained across a
+  13-second sampling window; talking to each NPC still opened the correct dialogue; Wave 14's own POI
+  waypoint teleport still landed the player at the exact correct offset from each NPC's position. Zero
+  console/page errors across the full run. `npx tsc --noEmit` / `npm run build`: both clean.
