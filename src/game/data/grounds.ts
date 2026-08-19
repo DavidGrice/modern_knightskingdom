@@ -9,7 +9,7 @@
 // belongs to a deed. You can walk into a ground above your tier and see what
 // is in it — that is the point — but you cannot work it until the deed covers
 // it. Buying the Freehold hands you the quarry; the Manor, the iron seam.
-import { LAND_TIERS } from './buildables';
+import { LAND_TIERS, landHalf, landSouthHalf, MAX_LAND_TIER } from './buildables';
 import GROUNDS_DATA from './grounds.generated.json';
 
 /**
@@ -98,10 +98,23 @@ export function sectionsOverlap(a: RectSection, b: RectSection): boolean {
   return Math.abs(a.x - b.x) < a.halfX + b.halfX && Math.abs(a.z - b.z) < a.halfZ + b.halfZ;
 }
 
-/** does a section sit clear of the homestead at its widest bought extent? */
+/** does a section sit clear of the homestead at its widest bought extent?
+ *
+ *  Wave 17 #4 · the fence is no longer one shared number on every side (see
+ *  buildables.ts's LAND_TIERS note): north/east/west still share `half`, but
+ *  south is the separate, fixed `southHalf`. The X check stays against
+ *  `half` (both east and west really do still share it), but the Z check now
+ *  picks the bound for the side the section is actually ON — `southHalf` for
+ *  a section south of the homestead (the real case: every one of GROUNDS
+ *  sits south, per this file's own header), `half` for one to the north.
+ *  Every real ground clears by a huge margin on the X axis regardless (this
+ *  was checking the wrong number for six years and it never mattered), but a
+ *  future ground sited close to the now much tighter south edge needs the
+ *  real bound, not the north one, standing guard. */
 export function clearsHomestead(s: RectSection): boolean {
-  const half = LAND_TIERS[LAND_TIERS.length - 1].half + HOMESTEAD_CLEARANCE;
-  return Math.abs(s.x) - s.halfX >= half || Math.abs(s.z) - s.halfZ >= half;
+  const xHalf = landHalf(MAX_LAND_TIER) + HOMESTEAD_CLEARANCE;
+  const zHalf = (s.z >= 0 ? landSouthHalf(MAX_LAND_TIER) : landHalf(MAX_LAND_TIER)) + HOMESTEAD_CLEARANCE;
+  return Math.abs(s.x) - s.halfX >= xHalf || Math.abs(s.z) - s.halfZ >= zHalf;
 }
 
 if (process.env.NODE_ENV !== 'production') {

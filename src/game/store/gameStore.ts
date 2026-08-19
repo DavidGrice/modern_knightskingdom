@@ -1274,7 +1274,7 @@ function createGameStore() {
       st.addItems({ gold: -next.cost });
       set({ landTier: st.landTier + 1, dirty: true });
       audio.play('treasure', 0.8);
-      st.notify(`Land bought — your holding is now a ${next.name}, ${next.walls} walls to a side.`, true);
+      st.notify(`Land bought — your holding is now a ${next.name}, ${next.walls} walls per N/S side.`, true);
       // whatever was standing on the new ground is now yours to work
       st.seedNodes();
     },

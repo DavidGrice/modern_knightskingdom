@@ -414,9 +414,15 @@ export default function BuildBar() {
               </div>
               {/* F20 · the fence you own, and what the next deed costs. Every
                   tier is `corner + N walls + corner` to a side, so the grid
-                  always closes on a corner. */}
+                  always closes on a corner. Wave 17 #4: that's the north/
+                  south walls' own count (they share the X-span `walls` is
+                  derived from) — the east/west walls run a different length
+                  now that south is pinned independently of north, so "walls
+                  a side" is no longer literally true for all four; said as
+                  "per N/S wall" instead rather than implying one uniform
+                  fence all the way round. */}
               <div className="build-foot" style={{ borderTop: 0, paddingTop: 0 }}>
-                <span>{tier.name} — <b>{tier.walls}</b> walls a side</span>
+                <span>{tier.name} — <b>{tier.walls}</b> walls per N/S side</span>
                 {nextLand ? (
                   <button
                     className="menu-btn small"
@@ -424,7 +430,7 @@ export default function BuildBar() {
                     disabled={gold < nextLand.cost}
                     title={gold < nextLand.cost
                       ? `A ${nextLand.name} deed costs ${nextLand.cost} gold — you have ${gold}`
-                      : `Push the fence out to ${nextLand.walls} walls a side`}
+                      : `Push the fence out to ${nextLand.walls} walls per N/S side`}
                     onClick={buyLand}
                   >
                     Buy {nextLand.name} · {nextLand.cost}g

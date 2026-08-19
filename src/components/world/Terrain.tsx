@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { WORLD_HALF, POND, BROOK } from '@/game/data/world';
 import { BANK_Y, WATER_BANK, WATER_Y } from '@/game/waterworks';
-import { BUILD_REGION, landHalf } from '@/game/data/buildables';
+import { landHalf, landSouthHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, sampleEnv, seasonOf } from '@/game/env';
@@ -480,11 +480,20 @@ export default function Terrain() {
   // the fence you have actually bought, not the maximum it could ever reach
   // (F19/F20) — and every tier is an 8N+8 size, so the grid always closes on
   // a corner instead of leaving a strip no piece fits
+  //
+  // Wave 17 #4 · asymmetric on Z: `half` is still shared by the north/east/
+  // west sides, but south is the separate, fixed `landSouthHalf` (see
+  // buildables.ts's LAND_TIERS note) — so the overlay's own centre has to be
+  // derived from THIS tier's two numbers, not from BUILD_REGION (which is
+  // built off MAX_LAND_TIER and would put the overlay in the wrong place for
+  // every tier below the top one, the moment the two Z bounds stopped
+  // matching each other one-for-one).
   const regionHalf = landHalf(landTier);
+  const regionSouthHalf = landSouthHalf(landTier);
   const regionW = regionHalf * 2;
-  const regionD = regionHalf * 2;
-  const regionCx = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
-  const regionCz = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
+  const regionD = regionHalf + regionSouthHalf;
+  const regionCx = 0;
+  const regionCz = (regionSouthHalf - regionHalf) / 2;
 
   // the original draws water as a runtime plane using this greyscale
   // caustic-ripple sprite, tinted blue via material color rather than
@@ -537,8 +546,13 @@ export default function Terrain() {
           it was suspended. */}
       <HomesteadDowns />
       <Stream />
-      {/* homestead dirt patch */}
-      <mesh rotation-x={-Math.PI / 2} position={[regionCx, 0.01, regionCz]} receiveShadow>
+      {/* homestead dirt patch — pinned at the homestead's true (fixed) centre,
+          same reasoning as villagers.ts's HOME_X/HOME_Z: `regionCz` is the
+          build-region overlay's own centre, which is genuinely tier-
+          dependent now that the south fence no longer mirrors the other
+          three sides, but this decorative mesh has no reason to drift north
+          as the player buys land, so it does not read regionCz/regionCx. */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.01, 0]} receiveShadow>
         <circleGeometry args={[Math.min(regionW, regionD) * 0.2, 40]} />
         <meshStandardMaterial color="#7a6238" roughness={1} />
       </mesh>

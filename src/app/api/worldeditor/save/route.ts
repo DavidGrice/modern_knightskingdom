@@ -26,8 +26,13 @@ function validateRow(table: TableName, row: unknown): string | null {
   const str = (k: string) => typeof row[k] === 'string';
 
   if (table === 'landTiers') {
-    if (!num('walls') || !num('half') || !num('cost') || !str('name')) {
-      return 'a land tier needs numeric walls/half/cost and a string name';
+    // southHalf (Wave 17 #4): the separate, normally-constant south fence
+    // bound — see buildables.ts's LAND_TIERS note. Checked with the same
+    // `num()` as every other numeric field here, not a range check against
+    // the real road position — this route has no business knowing where the
+    // road is, that's what WorldEditorClient's own live preview is for.
+    if (!num('walls') || !num('half') || !num('southHalf') || !num('cost') || !str('name')) {
+      return 'a land tier needs numeric walls/half/southHalf/cost and a string name';
     }
     return null;
   }

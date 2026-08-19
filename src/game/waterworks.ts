@@ -28,7 +28,7 @@
 // no water check at all — they can walk into the natural POND today — so dug
 // water is left at exactly that parity rather than growing a special case only
 // half the water in the world obeys. See the ROADMAP entry.
-import { GRID, landHalf } from './data/buildables';
+import { GRID, landHalf, landSouthHalf } from './data/buildables';
 import { ROAD_TILE, routeCells } from './data/road';
 import {
   FISHING_DOCK, KEEP_INTERIOR, POND, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF,
@@ -58,14 +58,23 @@ export const MAX_DIG_AREA = 600;
  *  unbounded one — this is the number that keeps that true. */
 export const MAX_WATERWORKS = 24;
 
-/** How far past your own fence you may dig. A moat that cannot sit OUTSIDE the
- *  wall it protects is not a moat, so this is not zero — and it is not
- *  unbounded either, for a reason that is mechanical rather than thematic:
- *  nav-blocking only exists on the home grid, which is ±56m
+/** How far past your own fence you may dig — on the north/east/west sides,
+ *  where the fence still grows with the land tiers. A moat that cannot sit
+ *  OUTSIDE the wall it protects is not a moat, so this is not zero — and it
+ *  is not unbounded either, for a reason that is mechanical rather than
+ *  thematic: nav-blocking only exists on the home grid, which is ±56m
  *  (src/ai/config/navgrid.json). A cut beyond that would still stop the player
- *  and still refuse buildings, but villagers would path straight across it. The
- *  widest fence is 32m, so 32 + 16 = 48 keeps every legal cut comfortably
- *  inside the grid that makes it real. */
+ *  and still refuse buildings, but villagers would path straight across it.
+ *  The widest north/east/west fence is 40m (Wave 17 #4's `landHalf`, up from
+ *  32 — see buildables.ts's LAND_TIERS note), so 40 + 16 = 56 lands EXACTLY
+ *  on the nav grid's own edge rather than comfortably inside it as this used
+ *  to read: no margin left on those three sides, though still not past it.
+ *
+ *  The south side does NOT use this constant at all any more — see
+ *  `terrainConflict`'s own south-side bound, which is deliberately tighter
+ *  (the whole point of Wave 17 #4 was pinning the south fence well clear of
+ *  the real road, and 16m of outskirt on top of it would reach right back
+ *  into the gap this pass exists to keep clear). */
 export const DIG_OUTSKIRT = 16;
 
 /** Gold per square metre of cut ground — you are paying diggers, not spending
@@ -200,26 +209,44 @@ export function pushOutOfWater(x: number, z: number, margin = 0): { x: number; z
  *  WHICH OF THESE A PLAYER CAN ACTUALLY MEET, measured rather than assumed:
  *  every legal rectangle on the 2m lattice was enumerated at all five land
  *  tiers (418,981 shapes at Barony) and the first refusal each one hits
- *  recorded. Only THREE ever fire: the holding bound, the road, and — from
- *  Estate up, when the fence finally reaches toward it — the pond. The other
- *  four are shadowed, each by a check above it:
+ *  recorded — against the OLD symmetric holding bound, before Wave 17 #4 (see
+ *  below) pinned the south side. At that time only THREE ever fired: the
+ *  holding bound, the road, and — from Estate up, when the fence finally
+ *  reached toward it — the pond. The other four were shadowed, each by a
+ *  check above it:
  *    · the dock      — its own padded rectangle lies inside the pond's 9.4m
  *                      exclusion on the water side and behind the east road's
  *                      z-cell-2 plate row on the land side
- *    · the keep      — (85,85), far outside the widest bound (±48)
+ *    · the keep      — (85,85), far outside the widest bound (was ±48; the
+ *                      north/east/west bound alone, ±56, still clears it easily)
  *    · the signpost  — it stands ON the printed carriageway (2.40m off the
  *                      centreline against ROAD_HALF_WIDTH 2.88, true since
- *                      long before Wave 12), so its plate refuses first
+ *                      long before Wave 12), so its plate refused first
  *    · the village   — the huts' clearance circles reach exactly z=32, the
  *                      south edge of that same plate row
  *  They are kept, not deleted, for the reason the world-edge check above is
  *  kept: every number that shadows them (DIG_OUTSKIRT, the land tiers, a road
  *  leg, POND) is a number that moves, and the day one does, an unguarded
  *  landmark is a moat through the keep. What this note buys is that nobody
- *  goes hunting for a message the game cannot currently print. */
+ *  goes hunting for a message the game cannot currently print.
+ *
+ *  Wave 17 #4 · the south holding bound is now `landSouthHalf` alone — fixed
+ *  at 12 for every tier, no DIG_OUTSKIRT added (see that constant's own
+ *  updated note) — rather than `landHalf(tier) + DIG_OUTSKIRT`. That bound is
+ *  now so much tighter on that one side that the pond (z=42, r=8) and the
+ *  signpost (z=36) both sit well past it at EVERY tier: the holding-bound
+ *  refusal now fires for both before their own specific checks are ever
+ *  reached, on the south side, which the old enumeration above did not (and
+ *  could not) anticipate. Not re-run in full for the new asymmetric shape —
+ *  the reasoning above is what would need re-checking if this list drifts. */
 export function terrainConflict(r: BuildRect, landTier: number): string | null {
   const half = landHalf(landTier) + DIG_OUTSKIRT;
-  if (r.minX < -half || r.maxX > half || r.minZ < -half || r.maxZ > half) {
+  // south does NOT get DIG_OUTSKIRT's usual allowance — that fence is fixed
+  // deliberately clear of the real road (19.2m; landSouthHalf is 12), and
+  // 16m more of outskirt on top would reach right back into the gap this
+  // whole pass exists to keep clear. See DIG_OUTSKIRT's own note.
+  const southBound = landSouthHalf(landTier);
+  if (r.minX < -half || r.maxX > half || r.minZ < -half || r.maxZ > southBound) {
     return 'Your diggers work your own holding and a short way past its fence — buy more land to cut further out.';
   }
   // belt and braces: the land-tier bound above is always the tighter one, but
