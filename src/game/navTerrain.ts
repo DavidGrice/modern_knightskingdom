@@ -21,6 +21,7 @@
 // convention road.ts/carts.ts already use for exactly this reason.
 
 import { POND } from './data/world';
+import { DOWNS } from './data/downs';
 import { waterworks } from './waterworks';
 
 export interface TerrainExclusion {
@@ -40,6 +41,21 @@ export interface TerrainExclusion {
 
 export const terrainExclusions: TerrainExclusion[] = [
   { id: 'pond', region: null, shape: { kind: 'circle', x: POND.x, z: POND.z, r: POND.radius }, traversal: 'blocked' },
+  // Wave 17 #6 · the home nav grid widened from ±56m to ±200m (see
+  // navgrid.json's own note) so villagers can actually route to the real
+  // GROUNDS (up to ~197m out) instead of beelining the whole trip. The Downs
+  // (data/downs.ts) sit at z:[-128,-60] — well inside ±200m now — but every
+  // home-world walker still draws at a hardcoded y=0 (Villagers.tsx/Npc.tsx);
+  // that prototype was kept walkable-proof by living OUTSIDE the grid, not by
+  // any terrain check, so widening the grid alone would let a walker route
+  // straight onto a hillside it cannot climb. This entry is the replacement
+  // guarantee — see the dev-mode assertion below that checks it is actually
+  // there, and data/downs.ts's own header for the full history.
+  {
+    id: 'downs', region: null,
+    shape: { kind: 'aabb', x: DOWNS.x, z: DOWNS.z, hx: DOWNS.half, hz: DOWNS.half },
+    traversal: 'blocked',
+  },
 ];
 
 if (process.env.NODE_ENV !== 'production' && terrainExclusions.length === 0) {
@@ -96,4 +112,21 @@ export function terrainBlocks(x: number, z: number, region: string | null): bool
     }
   }
   return false;
+}
+
+// Wave 17 #6 · downs.ts used to prove "villagers can't stand on the hill" by
+// asserting its own box sat outside the (then ±56m) home nav grid entirely —
+// a walker outside the grid has no cells at all. Widening that grid to ±200m
+// (navgrid.json) so hauls can reach the real GROUNDS put the box 140m inside
+// it instead, so that proof moved here: this IS the entry that now keeps it
+// unreachable, so checking its own centre resolves 'blocked' is the same
+// "asserted rather than remembered" guard downs.ts used to run itself, aimed
+// at the one way this could actually go stale — the 'downs' entry above being
+// deleted or its region/traversal edited, not DOWNS.x/z/half drifting (this
+// file reads those live, so drift there re-derives correctly on its own).
+if (process.env.NODE_ENV !== 'production' && !terrainBlocks(DOWNS.x, DOWNS.z, null)) {
+  // eslint-disable-next-line no-console
+  console.warn('[navTerrain] DOWNS is not covered by a \'blocked\' exclusion — the home nav grid '
+    + 'reaches ±200m now (Wave 17 #6) and would let a walker route straight onto the hillside that '
+    + 'Villagers.tsx/Npc.tsx still draw every one of them at a hardcoded y=0.');
 }

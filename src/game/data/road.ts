@@ -113,9 +113,17 @@ const SZ = Math.round(SIGNPOST.z / ROAD_TILE); //  3
  * apart.
  *
  * Worth knowing about the outer legs: the AI's road preference is a mask on
- * the HOME nav grid, which is only ±56m (src/ai/config/navgrid.json), so
- * beyond that the new legs buy the player's own ROAD_SPEED_MULT and the
- * legibility of a road that visibly goes somewhere, not NPC path preference.
+ * the HOME nav grid (src/ai/config/navgrid.json). Wave 17 #6 widened that
+ * grid from ±56m to ±200m specifically so it would cover these outer legs —
+ * before that, only the run past the signpost got any NPC path preference at
+ * all, and a villager walking to the quarry or the deepwood beelined the
+ * entire trip with zero obstacle avoidance the moment the grid ran out. Every
+ * leg below now sits inside the grid, so A* genuinely prefers the printed
+ * road for the whole walk (ROAD_STEP_MULT's ~40% discount comfortably beats
+ * the road's own detour over a beeline) — though AI agents still never get
+ * the player's ROAD_SPEED_MULT itself (Locomotion.ts has no onRoad check), so
+ * the win is a villager that visibly follows the road and dodges obstacles
+ * the whole way, not a faster one.
  */
 const LEGS: [number, number][][] = [
   // 1 · the run out of the homestead, past the signpost.

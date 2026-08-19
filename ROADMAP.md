@@ -6370,3 +6370,44 @@ investigated directly against the live code before fixing; see the plan file's o
   all show the correct asymmetric shape with zero road-tile overlap at any tier; the dig-tool fix
   confirmed via `digPreview()` — a rectangle in the old-formula-legal gap between the new fence and the
   real road is now refused, one inside the fence is still allowed.
+- [COMPLETE] ✅ **AI-driven hauling to distant grounds ignores the real road network — FIXED 2026-08-19.**
+  Root cause confirmed precisely: `src/ai/config/navgrid.json`'s home nav grid `halfExtent` was a fixed
+  56m, unchanged since the original AI build, while the real resource grounds (`grounds.generated.json`)
+  scatter nodes up to **~197m** from the origin (a real, measured worst case — the plan's own original
+  "~140m" estimate undersold it). `NavGrid.findPath()` returns `null` for any out-of-bounds endpoint, and
+  every real caller (`Locomotion.ts`'s reasoner actuator, `Villagers.tsx`'s legacy job cascade — both
+  route through the same `navSteer()` chokepoint) falls straight through to a raw beeline for the
+  **entire** trip the moment that happens — zero road preference, zero obstacle avoidance, even for the
+  portion right past the player's own buildings. Fixed by widening `home.halfExtent` from 56 to 200
+  (matching `WORLD_HALF`, covering the real worst case with real margin) — a **cheap** fix in this specific
+  codebase, confirmed by reading `NavGrid` directly rather than assuming: `rebuild()`'s recurring 1Hz-polled
+  cost is bounded by building/exclusion **counts**, not grid area, and the only genuinely area-scaled costs
+  (a `Uint8Array` allocation, a one-time lazy road-mask build) are single-digit-MB/tens-of-ms one-time
+  costs, not a recurring tax — the naive "12× more cells ⇒ 12× slower" framing the original plan worried
+  about does not hold here. **A real hazard the original plan did not anticipate, found by re-verifying
+  every consumer rather than trusting the plan's own scope**: `game/data/downs.ts`'s North Downs prototype
+  (a real sloped hill every home-world walker still draws at a hardcoded y=0) was kept safe specifically by
+  living *outside* the old 56m grid — its own dev-mode assertion said so explicitly. Naively widening the
+  grid alone would have put that hill 140m *inside* it, letting villagers/raiders route straight onto a
+  slope they'd render clipped through. Fixed by adding one static `'blocked'` `aabb` entry to
+  `navTerrain.ts`'s `terrainExclusions` for the Downs — reusing the exact mechanism that already keeps the
+  natural pond unpathable, not a new one — with a matching dev-mode assertion confirming the exclusion is
+  actually present (checked live: fires zero warnings across every session; manually removing the entry to
+  test confirms the check is real, not a no-op). `downs.ts`'s own now-obsolete "outside the grid" assertion
+  was removed and its header rewritten to point at the real replacement guarantee, catching two numbers in
+  the same paragraph that had already gone stale from Wave 17 #4 (`landHalf`/dig-reach) along the way.
+  **Honest scope, stated plainly rather than overclaimed**: AI agents never get the player's own
+  `ROAD_SPEED_MULT` (`Locomotion.ts` has no `onRoad` check) and a beeline is already close to the shortest
+  distance to these grounds, so this fix does not make trips *faster* — the real win is a villager that
+  visibly follows the actual printed road and gets real obstacle avoidance for the whole trip instead of
+  none, not a speed change. It also does not touch the separate, already-named Wave 10 "AI trip-time
+  balance" pacing gap (the legacy job-timer budget vs. real walk time at these distances) — deliberately
+  left as its own item rather than silently folded in. **Verified live with a genuine controlled A/B test**:
+  temporarily reverted just the grid width, captured a real trajectory to the actual live-seeded quarry
+  node — a mathematically perfect straight line (slope constant to 3 significant figures across 9 samples,
+  `onRoad` false at all 15 samples checked) — then restored the fix and reproduced a genuinely different,
+  road-following trajectory in two independent sessions (`onRoad` true for 3 consecutive samples exactly
+  where the path crosses the real printed road leg); a forced retarget to the single farthest real node
+  (184m out) completed without stalling, correctly crossing onto the real road partway through; a close
+  ground well inside the old grid showed zero behavior change (full gather→haul cycle, unaffected as
+  expected); zero console/page errors across every session.

@@ -12,28 +12,39 @@
 // This pass proves the mechanism on one deliberately EMPTY patch instead, and
 // states in code exactly where the patch ends.
 //
-// WHERE IT IS, AND WHY EXACTLY THERE. Four hard numbers pick this box; none of
-// them is taste:
+// WHERE IT IS, AND WHY EXACTLY THERE. Three hard numbers pick this box; none
+// of them is taste:
 //   · north of everything. grounds.ts's own header records the whole north
 //     side as deliberately cleared — "reserved on purpose for the kingdom's
 //     own future expansion" — and Pass A's road LEGS, all six GROUNDS, both
 //     cultivated plots, the pond, the brook, the keep and the starter village
 //     are every one of them at positive z. Nothing has to move for this.
-//   · |z| > landHalf(MAX_LAND_TIER) = 32, so no deed ever widens the build
+//   · |z| > landHalf(MAX_LAND_TIER) = 40, so no deed ever widens the build
 //     grid onto it and `evalPlacement`'s flat `groundY: 0` is never asked
 //     about ground that is not flat.
-//   · |z| > 32 + DIG_OUTSKIRT = 48, so Pass B's spade cannot reach it either —
+//   · |z| > 40 + DIG_OUTSKIRT = 56, so Pass B's spade cannot reach it either —
 //     a rectangle of nav-blocked water cut into a hillside is exactly the
 //     interaction this prototype should not be asked to answer for yet.
-//   · |z| > the home nav grid's own ±56m halfExtent (ai/config/navgrid.json),
-//     which is the strong one: a walker outside the grid has no cells at all,
-//     so no villager, carrier, defender or pathing raider can ROUTE onto the
-//     hill. Their hardcoded y=0 is out of reach, not merely unlikely.
-// The result is a 68m square whose nearest edge stands 4m clear of the nav
-// grid and 86m north of SPAWN — a walk, deliberately, across empty meadow that
-// belongs to no ground and no deed. It is drawn on the minimap (height bands,
-// Minimap.tsx) because nothing else in the game points north, and a prototype
-// nobody finds proves nothing.
+// A fourth number used to belong on this list — the home nav grid's own
+// halfExtent — back when it was ±56m and this box's nearest edge, at 60,
+// stood just outside it: a walker outside the grid has no cells at all, so
+// living past the edge WAS the nav guarantee. Wave 17 #6 widened that grid to
+// ±200m (ai/config/navgrid.json) so villagers can actually route to the real
+// GROUNDS (grounds.generated.json scatters nodes up to ~197m out) instead of
+// beelining the whole trip cross-country — which puts this box's nearest
+// edge 140m inside the grid, not past it. The guarantee this file's own dev
+// check used to enforce ("outside the grid ⇒ unreachable") now lives in
+// navTerrain.ts instead: a static 'blocked' exclusion built directly from
+// this file's own `DOWNS` export, the same mechanism that already keeps the
+// pond unpathable. That exclusion cannot drift out of sync with a future
+// resize here — it reads DOWNS.x/z/half, not a copied number — which is a
+// stronger guarantee than the old "stay outside a number declared elsewhere"
+// one was.
+// The result is a 68m square whose nearest edge stands 4m clear of the
+// dig-reach bound above and 86m north of SPAWN — a walk, deliberately, across
+// empty meadow that belongs to no ground and no deed. It is drawn on the
+// minimap (height bands, Minimap.tsx) because nothing else in the game
+// points north, and a prototype nobody finds proves nothing.
 //
 // WHAT GAMEPLAY ACTUALLY READS. Not this file. The height below is the
 // AUTHORING field: it builds the mesh (Terrain.tsx's HomesteadDowns) and
@@ -44,7 +55,6 @@
 // a second analytic copy consulted at runtime is how the visible ground and
 // the ground you stand on drift apart.
 
-import navgridConfig from '../../ai/config/navgrid.json';
 import { landHalf, MAX_LAND_TIER } from './buildables';
 import { ROAD_TILE, routeCells } from './road';
 import { GROUNDS } from './grounds';
@@ -129,14 +139,18 @@ export function downsSurfaceY(x: number, z: number): number {
 export const DOWNS_PEAK = downsSurfaceY(DOWNS.x, DOWNS.z);
 
 // ---------------------------------------------------------------------------
-// The box is only safe because of four numbers and a lot of other people's
+// The box is only safe because of a few numbers and a lot of other people's
 // geometry, and every one of those moves independently of this file: land
-// tiers are generated, DIG_OUTSKIRT is Pass B's, the nav grid's extent is JSON
-// the AI work tunes, the road's LEGS are hand-written, and the grounds are
-// dragged around live at /secret/worldeditor. "Nothing is up there" is exactly
-// the kind of claim that is true when written and quietly false a wave later,
-// so it is asserted rather than remembered — the same treatment
-// FIXED_WORLD_PROPS gets in buildables.ts.
+// tiers are generated, DIG_OUTSKIRT is Pass B's, the road's LEGS are
+// hand-written, and the grounds are dragged around live at
+// /secret/worldeditor. "Nothing is up there" is exactly the kind of claim
+// that is true when written and quietly false a wave later, so it is
+// asserted rather than remembered — the same treatment FIXED_WORLD_PROPS
+// gets in buildables.ts. The nav-reachability guarantee used to be checked
+// here too (the box sitting outside the grid); Wave 17 #6 moved that check
+// to navTerrain.ts, the module that now actually owns it — see this file's
+// header and navTerrain.ts's own dev-mode assertion next to the 'downs'
+// exclusion entry.
 // ---------------------------------------------------------------------------
 if (process.env.NODE_ENV !== 'production') {
   const warn = (msg: string) => {
@@ -174,10 +188,16 @@ if (process.env.NODE_ENV !== 'production') {
       + 'cliff where the mesh stops instead of sinking away under the meadow');
   }
 
-  // 2. the four bounds the box was chosen for (see this file's header). Every
-  //    one is a "keep OUT of the square ±n" test, not a distance: the box could
+  // 2. the two bounds the box was chosen for (see this file's header). Both
+  //    are a "keep OUT of the square ±n" test, not a distance: the box could
   //    in principle be moved to any quadrant, and a check that only understood
-  //    "north" would stop being a check the moment it was.
+  //    "north" would stop being a check the moment it was. The home nav grid's
+  //    own extent used to be a third bound checked here — the box living
+  //    outside it WAS the nav-reachability guarantee. Wave 17 #6 widened that
+  //    grid to ±200m so hauls can reach the real GROUNDS, which puts this box
+  //    140m inside it; the guarantee now lives in navTerrain.ts's 'downs'
+  //    exclusion instead (and that file runs its own dev-mode check that the
+  //    exclusion is actually there).
   const fence = landHalf(MAX_LAND_TIER);
   const outside = (n: number) => box.maxZ < -n || box.minZ > n || box.maxX < -n || box.minX > n;
   if (!outside(fence)) {
@@ -187,11 +207,6 @@ if (process.env.NODE_ENV !== 'production') {
   if (!outside(fence + DIG_OUTSKIRT)) {
     warn(`the box is within digging reach (±${fence + DIG_OUTSKIRT}) — a waterway could be cut into `
       + 'the hillside, which this prototype does not answer for');
-  }
-  if (!outside(navgridConfig.home.halfExtent)) {
-    warn(`the box is inside the ±${navgridConfig.home.halfExtent}m home nav grid — villagers and `
-      + 'raiders can now ROUTE onto it, and Villagers.tsx/Npc.tsx still draw every one of them at a '
-      + 'hardcoded y=0');
   }
 
   // 3. …and clear of everything already standing in the world
