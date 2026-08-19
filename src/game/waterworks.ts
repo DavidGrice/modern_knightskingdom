@@ -62,13 +62,17 @@ export const MAX_WATERWORKS = 24;
  *  where the fence still grows with the land tiers. A moat that cannot sit
  *  OUTSIDE the wall it protects is not a moat, so this is not zero — and it
  *  is not unbounded either, for a reason that is mechanical rather than
- *  thematic: nav-blocking only exists on the home grid, which is ±56m
- *  (src/ai/config/navgrid.json). A cut beyond that would still stop the player
- *  and still refuse buildings, but villagers would path straight across it.
- *  The widest north/east/west fence is 40m (Wave 17 #4's `landHalf`, up from
- *  32 — see buildables.ts's LAND_TIERS note), so 40 + 16 = 56 lands EXACTLY
- *  on the nav grid's own edge rather than comfortably inside it as this used
- *  to read: no margin left on those three sides, though still not past it.
+ *  thematic: nav-blocking only exists on the home grid. The widest
+ *  north/east/west fence is 40m (Wave 17 #4's `landHalf`, up from 32 — see
+ *  buildables.ts's LAND_TIERS note), so 40 + 16 = 56 is this constant's own
+ *  bound, chosen independently of grid size. It used to land EXACTLY on the
+ *  home nav grid's own edge (±56m) — no margin left on those three sides —
+ *  but Wave 17 #6 widened that grid to ±200m (src/ai/config/navgrid.json) so
+ *  villagers can reach the real GROUNDS, so a dug waterway at this bound now
+ *  sits comfortably inside the grid rather than right at its edge; that
+ *  numeric coincidence was never a dependency (this constant is a formula,
+ *  not a read of navgrid.json), just a comment that would otherwise read as
+ *  one.
  *
  *  The south side does NOT use this constant at all any more — see
  *  `terrainConflict`'s own south-side bound, which is deliberately tighter

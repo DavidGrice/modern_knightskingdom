@@ -1,7 +1,20 @@
 {
   "_doc": [
     "PHASE_2_NAVIGATION_AND_GATHERING.md §2.0 — grid extent per context.",
-    "home: fixed, covers the whole ±56m homestead, unchanged since phase 1.",
+    "home: fixed. Wave 17 #6 widened this from 56 to 200 (== WORLD_HALF,",
+    "data/world.ts) — the six GROUNDS a villager actually hauls to/from",
+    "(grounds.generated.json) scatter nodes up to ~197m from origin",
+    "(ironseam's far corner), so a 56m grid left every real haul entirely",
+    "outside it: findPath() bails out (out-of-bounds endpoint) and navSteer",
+    "falls back to a raw beeline for the whole trip, no road preference, no",
+    "obstacle avoidance, past the player's own buildings. 200m covers the",
+    "worst case with margin and matches the world edge, so it never falls",
+    "short again as grounds move. The one region this widened grid must NOT",
+    "make walkable is The Downs (data/downs.ts) — a sloped-terrain prototype",
+    "every home-world walker still draws at hardcoded y=0 — so it is fenced",
+    "off with a static 'blocked' entry in navTerrain.ts's",
+    "terrainExclusions, the same mechanism that already keeps the pond",
+    "unpathable, rather than by relying on grid extent as before.",
     "destination: window, a 96m (2x halfExtent) box that follows the player",
     "through a template diorama rather than covering the whole declared",
     "radius (213-352m across the nine templates — see PHASE_STATUS.md's",
@@ -14,7 +27,7 @@
     "anything in iteration 2.4 — declared here now so both iterations read",
     "the same number rather than each hardcoding their own."
   ],
-  "home": { "mode": "fixed", "halfExtent": 56, "cellSize": 1.0 },
+  "home": { "mode": "fixed", "halfExtent": 200, "cellSize": 1.0 },
   "destination": { "mode": "window", "halfExtent": 48, "cellSize": 1.0, "recentreAt": 24, "maxStep": 0.6 },
   "crypt": { "mode": "fixed", "cellSize": 1.0 }
 }

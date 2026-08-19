@@ -125,8 +125,11 @@ These are the natural §4 smart objects — `bed` genuinely is a bed — but:
 `src/game/navgrid.ts`. Not a stub; it is what every villager, enemy and court
 NPC steers with today.
 
-- **1 m grid, A\* with octile heuristic**, covering ±56 m centred on the
-  homestead. String-pulled to corners. Diagonal corner-cutting blocked.
+- **1 m grid, A\* with octile heuristic**, covering ±200 m centred on the
+  homestead (widened from ±56 m in Wave 17 #6 — see `navgrid.json`'s own
+  note — so hauls can actually reach the resource GROUNDS, up to ~197 m out,
+  instead of falling out of bounds and beelining). String-pulled to corners.
+  Diagonal corner-cutting blocked.
 - **Obstacles are derived from `collisionBoxesFor()` — the same volumes that
   stop the player.** Real per-piece geometry, voxelised offline from the source
   OBJs by `scripts/gen-collision.mjs` and merged into a few AABBs.
@@ -146,7 +149,7 @@ NPC steers with today.
 
 ### Known limits
 
-1. Covers the homestead **only** — ±56 m, and only buildings where
+1. Covers the homestead **only** — ±200 m, and only buildings where
    `isHomeBuilding(b)`. The nine destination worlds have **no navigation at
    all**; actors there steer straight.
 2. Grid, not navmesh: no off-mesh links, no doors-as-links, no multi-level.
