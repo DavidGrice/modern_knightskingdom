@@ -6520,3 +6520,29 @@ section for full detail.
   (e.g. template-04: clamp distance 159.5, matching exactly); grepped the compiled `.next` production
   bundle and confirmed the new radius literals actually ship in the client output, not just the source.
   Zero console/page errors across the full run. `npx tsc --noEmit` / `npm run build`: both clean.
+
+- [COMPLETE] ✅ **Destination minimap now shows real topographic elevation instead of a plain circle —
+  FIXED 2026-08-19.** The minimap drew exactly one thing for a destination's shape: a stroked circle of
+  radius `dest.radius`, zero terrain information. Real per-location elevation data already existed at
+  runtime (`TemplateWorld.tsx`'s `sampleTemplateGroundY`, a raycast-based ground probe against the
+  actual mounted bake), and the home world's own North Downs hill already used the exact rendering
+  technique needed — a sampled-grid height raster shaded by alpha, precisely a topographic-map
+  technique. Extended that same approach (`src/components/hud/Minimap.tsx` — the real file location;
+  the initial task description named a `world/` path that turned out to be stale) to each destination's
+  own circular radius, swapping the Downs' analytic `downsSurfaceY` for a live `sampleTemplateGroundY`
+  raycast, guarded to only sample the destination actually mounted right now
+  (`getMountedRegion() === st.destination`) so a brief post-travel transition frame never paints a
+  stale or wrong bake's terrain under the circle. **Live verification caught a real performance
+  regression before shipping**: the first pass re-raycasted all ~380 surviving grid cells on every
+  ~180ms minimap draw tick, forever, for as long as the player remained at a destination — measured
+  255-511ms of synchronous main-thread work per pass at the heaviest destination (42,175 triangles),
+  severe enough that a real 90-frame sampling test timed out after 60 seconds at that destination while
+  completing quickly at home under identical conditions. Fixed by caching the raster grid keyed on the
+  mounted destination id, recomputing only when a real new mount actually occurs — a static bake never
+  needs re-sampling every tick. **Verified with a genuine controlled A/B test**: temporarily forced
+  always-recompute and reproduced the exact regression (avg 221.7ms/frame, matching the original
+  255-511ms range); restored the cached fix and reran identically — avg 16.6ms/frame, pure vsync, zero
+  stutter. Confirmed the elevation raster is correct once cached (real varying heights per destination,
+  distinct shape between destinations, home's own Downs branch unaffected) and the mount-mismatch guard
+  correctly protects the brief stale-mesh transition window (captured live and unforced). Zero
+  console/page errors throughout. `npx tsc --noEmit` / `npm run build`: both clean.

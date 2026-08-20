@@ -16,6 +16,7 @@ import { NPCS } from '@/game/data/npcs';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { worldEnv } from '@/game/env';
 import { playerState } from '../fps/PlayerController';
+import { getMountedRegion, sampleTemplateGroundY } from '../world/TemplateWorld';
 import { useEnemyStore } from '@/game/combat';
 import { villagerMobs } from '@/game/villagerMobs';
 
@@ -46,6 +47,21 @@ export default function Minimap() {
   useEffect(() => {
     let raf = 0;
     let last = 0;
+    // destination elevation raster cache: sampleTemplateGroundY raycasts the
+    // real mounted mesh with no BVH acceleration, so recomputing all ~380
+    // surviving cells of the 22x22 grid below on EVERY throttled draw tick
+    // (rather than once, the way the Downs' own DOWNS_PEAK is a precomputed
+    // figure, not a per-tick scan) measured 75-500ms of synchronous
+    // main-thread work per pass on the heavier destination bakes — a severe,
+    // continuous stutter the analytic Downs technique never had. The bake is
+    // static per destination (the same .glb scene every visit), so it is
+    // computed once per NEWLY MOUNTED destination and reused every tick
+    // after, keyed on id alone — cheap to invalidate, since only the id
+    // changing (a real new mount) should ever trigger a recompute.
+    let rasterDestId: string | null = null;
+    let rasterHeights: Float32Array | null = null;
+    let rasterLo = 0;
+    let rasterHi = 1;
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
       if (now - last < 180) return; // ~5 fps is plenty
@@ -129,6 +145,66 @@ export default function Minimap() {
           ctx.fill();
         }
       } else {
+        // this destination's own circular wander bound, shaded by real
+        // sampled elevation — the Downs' own 22x22 sampled-grid technique
+        // above, extended to a real destination bake: downsSurfaceY (an
+        // authored analytic field with a known DOWNS_PEAK) swapped for
+        // sampleTemplateGroundY (a live raycast against the actual mounted
+        // mesh — TemplateWorld.tsx), sampled across this destination's own
+        // origin/radius instead of the Downs' fixed box. There is no
+        // per-destination peak constant the way DOWNS_PEAK exists for the
+        // Downs, so the min/max is found from this same sampling pass
+        // instead of a precomputed figure. Circular, not square — cropped
+        // by the same distance test the wander-bound stroke below draws as
+        // an outline, so the raster fills exactly the ring the player can
+        // actually walk. Guarded to the CURRENTLY MOUNTED destination only:
+        // sampleTemplateGroundY raycasts whatever bake mountedRoot happens
+        // to hold right now, so sampling any other (unmounted) destination
+        // would silently paint that OTHER realm's terrain — or, with
+        // nothing mounted yet, the flat last-known-height fallback — under
+        // this circle. An unmounted destination (a brief transition frame,
+        // or a future non-active-destination caller) keeps the plain
+        // stroked circle below, unchanged.
+        if (getMountedRegion() === st.destination) {
+          const cells = 22;
+          const step = (dest.radius * 2) / cells;
+          // recompute the bake ONLY when the mounted destination id actually
+          // changed since the last draw tick — every other tick just reuses
+          // the cached grid below, turning ~380 raycasts/tick into ~380
+          // raycasts per destination VISIT
+          if (rasterDestId !== st.destination) {
+            const heights = new Float32Array(cells * cells).fill(NaN);
+            let lo = Infinity, hi = -Infinity;
+            for (let i = 0; i < cells; i++) {
+              for (let j = 0; j < cells; j++) {
+                const wx = dest.origin.x - dest.radius + (i + 0.5) * step;
+                const wz = dest.origin.z - dest.radius + (j + 0.5) * step;
+                const dx = wx - dest.origin.x;
+                const dz = wz - dest.origin.z;
+                if (dx * dx + dz * dz > dest.radius * dest.radius) continue; // outside the wander circle
+                const h = sampleTemplateGroundY(wx, wz);
+                heights[i * cells + j] = h;
+                if (h < lo) lo = h;
+                if (h > hi) hi = h;
+              }
+            }
+            rasterDestId = st.destination;
+            rasterHeights = heights;
+            rasterLo = lo;
+            rasterHi = hi;
+          }
+          const span = rasterHi - rasterLo || 1;
+          for (let i = 0; i < cells; i++) {
+            for (let j = 0; j < cells; j++) {
+              const h = rasterHeights![i * cells + j];
+              if (Number.isNaN(h)) continue;
+              const wx = dest.origin.x - dest.radius + (i + 0.5) * step;
+              const wz = dest.origin.z - dest.radius + (j + 0.5) * step;
+              ctx.fillStyle = `rgba(122, 98, 56, ${(0.22 + ((h - rasterLo) / span) * 0.5).toFixed(3)})`;
+              ctx.fillRect(px(wx - step / 2), pz(wz - step / 2), step * k + 1, step * k + 1);
+            }
+          }
+        }
         // this realm's own frame: the wander bound is the map's edge…
         ctx.strokeStyle = 'rgba(232, 193, 65, 0.35)';
         ctx.lineWidth = 1;
