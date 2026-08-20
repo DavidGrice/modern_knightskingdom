@@ -208,6 +208,12 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
         // Richard's spear are part of who they are. The village folk do not:
         // see NpcDef.keepProps for why that also fixed their rigs.
         keepProps={def.keepProps !== false}
+        // Bugfix (2026-08-19): every NpcDef here is a real, interactive,
+        // quest-giving court member (lines/sideQuests are mandatory fields —
+        // see NpcDef) — never cull one out of view for a performance
+        // optimization meant for ambient crowds. See RiggedFigure's own doc
+        // comment on `lodExempt`.
+        lodExempt
         clip={clip}
         loop={loop}
         onClipEnd={() => setClip('anim_r_restpose')}

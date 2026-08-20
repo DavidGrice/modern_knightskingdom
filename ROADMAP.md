@@ -6459,3 +6459,38 @@ investigated directly against the live code before fixing; see the plan file's o
   13-second sampling window; talking to each NPC still opened the correct dialogue; Wave 14's own POI
   waypoint teleport still landed the player at the exact correct offset from each NPC's position. Zero
   console/page errors across the full run. `npx tsc --noEmit` / `npm run build`: both clean.
+
+## Wave 18 — NPC visibility, trip distance, real topo map, tree orientation, and scene isolation, found live 2026-08-19
+
+Five new items reported immediately after Wave 17 shipped in full. Investigated by three parallel
+research passes plus a dedicated design pass for the largest item (scene isolation); two direct
+clarifying questions asked and answered before finalizing scope — see the plan file's own "Wave 18"
+section for full detail.
+
+- [COMPLETE] ✅ **NPCs at destinations disappear exactly when the player looks at them — FIXED
+  2026-08-19.** Root cause confirmed precisely: this project's rigged characters have no
+  `SkinnedMesh`/bone-skinning at all, so a stale-bind-pose-bounding-sphere bug was ruled out; the real
+  mechanism was a custom LOD visibility gate (`RiggedFigure.tsx`'s `characterLodDistance`, Performance
+  graphics tier only, cutoff 60) measured against `camera.position` — but the third-person chase
+  camera orbits the player on a ~4.6-unit boom arm that trails whatever direction the player currently
+  faces, so turning to look at a fixed point swings the camera to the FAR side of the player relative
+  to it, changing the measured camera-to-target distance by up to ~9.2 units purely from turning.
+  Destination radii (200+ units) put NPCs near the 60-unit mark often enough that this swing crossed
+  the cutoff exactly when centered in view — matching the reported symptom precisely. Fixed by
+  measuring the LOD distance against `playerState.x/y/z` (the player's real, camera-independent body
+  position, already written every frame from `pos.current`) instead of `camera.position`, and by
+  adding a new `lodExempt` prop that fully bypasses the cutoff for every interactive, quest-giving
+  court NPC (`Npc.tsx`'s `CourtNpc`, unconditionally — every `NpcDef` has mandatory `lines`/
+  `sideQuests`, so all of them qualify) — a real NPC with dialogue should never be culled into
+  unreachability by an optimization meant for ambient crowds. **Verified live with a genuine
+  root-cause regression test**: teleported the player to a FIXED, exact 55.0 units from a real ambient
+  NPC (confirmed not `lodExempt`) and physically turned the third-person camera through ~7 radians via
+  real pointer-locked mouse input across 16 samples — player-measured distance stayed exactly 55.00
+  throughout (proving the fix removes the oscillation at its source) while camera-position-measured
+  distance swung 50.49–59.57 (~9.1 units, matching the diagnosed ~9.2u max almost exactly, coming
+  within 0.43 units of crossing the old cutoff from turning alone) — and the NPC's visibility never
+  flickered. Separately confirmed the LOD cutoff still functions normally for non-exempt ambient
+  figures (visible at 55u, culled at 65u — the fix didn't disable LOD globally) and that `lodExempt`
+  is scoped to exactly the interactive-NPC render path (grepped all 8 other `RiggedFigure` call sites,
+  zero matches). Zero console/page errors across every test session. `npx tsc --noEmit` / `npm run
+  build`: both clean.
