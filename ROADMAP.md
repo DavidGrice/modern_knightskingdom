@@ -6546,3 +6546,25 @@ section for full detail.
   distinct shape between destinations, home's own Downs branch unaffected) and the mount-mismatch guard
   correctly protects the brief stale-mesh transition window (captured live and unforced). Zero
   console/page errors throughout. `npx tsc --noEmit` / `npm run build`: both clean.
+
+- [COMPLETE] ✅ **Enemies never filtered by world/destination — FIXED 2026-08-19 (Stage 0a of the
+  scene-isolation rearchitecture).** `Enemies.tsx` never filtered its render list by world at all,
+  unlike every other content type in this codebase (`Buildings.tsx`, `ResourceNodes.tsx`,
+  `Villagers.tsx`, `Npc.tsx` all already apply the same `(x.world ?? null) === (destination ?? null)`
+  pattern — the established "instance-separation doctrine"). A home raid kept rendering — and being
+  fought — at whatever destination the player traveled to mid-fight, and dungeon/arena/Cedric-camp
+  spawns bled into every other world too. Fixed by adding a required `world: string | null` field to
+  `EnemyData` (`combat.ts`), stamped at spawn time from the player's actual destination when `spawn()`
+  runs (every existing spawn call site already gates on being in the right place first, so this is
+  always correct at the moment of stamping), and filtering both of `Enemies.tsx`'s render passes on
+  it — closing the one gap where the established doctrine was missing, not inventing a new mechanism.
+  This is Stage 0a of the larger, separately-staged scene-isolation rearchitecture — a small,
+  standalone, independently-shippable piece of it; see the plan file's Wave 18 §5 for the full staged
+  sequence. **Verified live end to end**: spawned a real home enemy (`world: null`), traveled to a
+  destination mid-fight and confirmed it stopped rendering while remaining fully intact in the store
+  (a render filter, not a despawn — the enemy's hitbox lifecycle, an authoritative "is this actually
+  rendered" signal, confirmed this precisely); entered the dungeon and confirmed all 5 room-spawned
+  enemies (`world: "dungeon"`) rendered correctly there while the home enemy stayed hidden; returned
+  home and confirmed the home enemy rendered again while none of the 5 dungeon enemies bled through —
+  persistence-without-rendering verified in both directions. Zero console/page errors throughout.
+  `npx tsc --noEmit` / `npm run build`: both clean.
