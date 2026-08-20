@@ -250,6 +250,18 @@ export interface EnemyData {
   kind: EnemyKind;
   hp: number;
   raid: boolean;
+  /** Stage 0a (instance-separation doctrine, Phase 23): which world/
+   *  destination this individual belongs to — null means home, otherwise a
+   *  WORLD_DESTINATION_BY_ID id (e.g. CEDRIC_WORLD) or the fixed 'dungeon'/
+   *  'arena' destinations. Stamped once at spawn from whatever `destination`
+   *  the player was actually standing in when spawn() ran (every spawn call
+   *  site already gates on being in the right place first), mirroring
+   *  PlacedBuilding.world / VillagerState.world / NpcDef.world /
+   *  ResourceNodeState.world. Enemies.tsx filters both its render passes on
+   *  this so a raid at home doesn't keep rendering once the player travels
+   *  away mid-fight, and a dungeon/arena/Cedric-camp spawn doesn't bleed
+   *  into every other world either. */
+  world: string | null;
   dungeonRoom?: number; // index of the dungeon room this enemy belongs to, if any
   /** spawned by ArenaSpawner.tsx — lets the central kill-resolution paths
    *  below credit game/arena.ts's run-local counter without a second
@@ -321,6 +333,14 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       maxHp,
       scale,
       raid,
+      // instance-separation doctrine: wherever the player actually is right
+      // now IS this enemy's home world — true at every existing call site
+      // (each already gates on the right destination before spawning: the
+      // dungeon-room loop on destination === 'dungeon', ArenaSpawner on
+      // 'arena', Cedric's camp guards/duel/reinforcements on being at his
+      // camp, Storm's duel on her own NPC panel being open, and every raid/
+      // night-skeleton spawn on destination being null/home).
+      world: useGameStore.getState().destination ?? null,
       dungeonRoom,
       arena,
       finalStand,

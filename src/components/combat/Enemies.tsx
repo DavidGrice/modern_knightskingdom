@@ -559,7 +559,15 @@ function Enemy({ data }: { data: EnemyData }) {
 }
 
 export default function Enemies() {
-  const enemies = useEnemyStore((s) => s.enemies);
+  const allEnemies = useEnemyStore((s) => s.enemies);
+  const destination = useGameStore((s) => s.destination);
+  // instance-separation doctrine (Phase 23), Stage 0a: an enemy belongs to
+  // wherever it was spawned (EnemyData.world, absent/null = home) — same
+  // filter Buildings/ResourceNodes/Villagers/Npc already apply. Without it a
+  // home raid kept rendering (and being fought) at whatever destination the
+  // player travelled to mid-fight, and a dungeon/arena/Cedric-camp spawn
+  // bled into every other world too.
+  const enemies = allEnemies.filter((e) => (e.world ?? null) === (destination ?? null));
   const spawn = useEnemyStore((s) => s.spawn);
   const tick = useRef(0);
   const skelTimer = useRef(6);
