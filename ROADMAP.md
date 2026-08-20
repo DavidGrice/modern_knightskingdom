@@ -6494,3 +6494,29 @@ section for full detail.
   is scoped to exactly the interactive-NPC render path (grepped all 8 other `RiggedFigure` call sites,
   zero matches). Zero console/page errors across every test session. `npx tsc --noEmit` / `npm run
   build`: both clean.
+
+- [COMPLETE] ✅ **Trip distance across a template destination was too large — FIXED 2026-08-19.**
+  Confirmed via direct user Q&A that the complaint is roaming/trip distance, not visual object scale
+  — `DEST_WORLD_SCALE` (`worlds.ts`, retuned in Wave 17 #5) stays untouched. The real lever is each
+  destination's `radius`, the walkable-circle bound `PlayerController.tsx`'s wander clamp enforces —
+  a separate, hand-typed number per destination, never derived from `worldScale`. At the confirmed
+  4 units/sec walk speed, template-01's old radius (210) meant 105 seconds to cross the full diameter
+  on foot. Cut every destination's radius by this file's own established 0.5x default step — but only
+  after computing, per destination, the real straight-line distance from `dest.origin` to every real
+  NPC/guild-hall/boss-camp coordinate that must stay reachable (`npcs.ts`, `guilds.ts`'s `hallX`/
+  `hallZ`, `world.ts`'s `CEDRIC_CAMP`/`BATTLE_DOME`) — not guessed. Five of eight destinations (every
+  guild-hall-bound one: 02/03/04/07/08) would have walled off their own hall under a flat 0.5x, so
+  those instead use `hallDistance × 1.15`, reusing this same file's existing "+15% margin" convention
+  from `CHALLENGE_DESTINATIONS`, rounded to the file's `.5` precision so the real floor is never
+  undershot. template-01/05/06 cleared a flat 0.5x with comfortable margin. Claimed-plot flags were
+  deliberately excluded from the floor — they center on wherever the player was standing when they
+  claimed, so they can never be an external floor a smaller radius walls off. Final radii: template-01
+  210→105, -02 229.5→134.5, -03 214.5→128, -04 274.5→159.5, -05 235.5→117.75, -06 210→105, -07
+  235.5→134.5, -08 199.5→114. **Verified live end to end**: independently recomputed every cited
+  NPC/hall/camp distance by hand from the live source files and found zero discrepancies; started a
+  real dev server and drove real headless Chrome through actual gameplay — for all 8 destinations,
+  called the real `travelTo()` action and confirmed the landing distance, then forced a teleport past
+  the OLD radius and confirmed the live wander-clamp snapped the player back to exactly the NEW radius
+  (e.g. template-04: clamp distance 159.5, matching exactly); grepped the compiled `.next` production
+  bundle and confirmed the new radius literals actually ship in the client output, not just the source.
+  Zero console/page errors across the full run. `npx tsc --noEmit` / `npm run build`: both clean.
