@@ -6568,3 +6568,36 @@ section for full detail.
   home and confirmed the home enemy rendered again while none of the 5 dungeon enemies bled through —
   persistence-without-rendering verified in both directions. Zero console/page errors throughout.
   `npx tsc --noEmit` / `npm run build`: both clean.
+
+- [COMPLETE] ✅ **Destination GLB bakes never released from memory — FIXED 2026-08-19 (Stage 0b of the
+  scene-isolation rearchitecture).** drei's GLTF cache is a module-level `Map` keyed by URL, and no
+  `useGLTF.clear()` call existed anywhere in `src/` — every destination bake visited in a session
+  stayed resident in JS/GPU memory permanently, even long after leaving it. `TemplateWorldRoot`
+  already had real unmount-on-destination-change plumbing (`key={dest.id}` forcing a genuine remount,
+  a destId-keyed effect clearing the `mountedRoot`/`mountedRegion` singletons) — fixed by hooking
+  `useGLTF.clear(dest.model)` into that existing cleanup rather than building new unmount logic.
+  Confirmed via three.js source before writing anything that `normalizeTemplateBake`'s
+  `scene.clone(true)` shares geometry/material by reference with the cached original, so by the time
+  this cleanup runs nothing in the app still references the destination's scene graph —
+  `useGLTF.clear()` alone is sufficient and safe; no manual `.dispose()` was added given the real risk
+  of corrupting a still-shared resource if the reference-sharing assumption were ever wrong.
+  **Verified live with a real before/after A/B** (real network requests + post-GC JS heap
+  measurements, not estimates): with the fix, revisiting a left destination fires a fresh fetch
+  (confirming the cache entry is genuinely evicted) and heap growth plateaus once distinct content
+  stops arriving (+5.33MB across 5 destinations plus 2 revisits); with the fix temporarily disabled,
+  zero new requests fire on revisit and heap growth is monotonic and never stops (+8.62MB, still
+  climbing at the end of the same test). Revisit-after-clear renders correctly with zero regression
+  (verified terrain, geometry, NPC population, and prompts all correct; zero console errors). **A
+  real trade-off found and documented honestly, not glossed over**: since no `.dispose()` runs, a
+  player who repeatedly revisits the SAME destination now re-parses fresh GPU resources on every
+  revisit rather than reusing the old cache hit (confirmed via `renderer.info.memory`: geometry/
+  texture counts climbed ~70/~46 on 2 repeat visits with the fix, versus near-zero without it) —
+  not a correctness bug, nothing renders wrong or crashes, but a real memory-footprint trade-off
+  worth a `.dispose()` follow-up if repeat-revisit memory ever becomes the actual bottleneck. This
+  fix correctly solves the reported problem (many distinct destinations pinned in memory forever for
+  the rest of a session), which is the scenario that actually grows without bound. `npx tsc --noEmit`
+  / `npm run build`: both clean.
+
+**Stage 0 of the scene-isolation rearchitecture (Wave 18 #4 + #5) is complete.** Stage 1 (the
+template-01 proof of concept for real destination-scoped mount/unmount) is next per the plan file's
+own staged sequence.
