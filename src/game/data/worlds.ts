@@ -36,6 +36,42 @@
 // backs template-09's homestead terrain and all 6 challenge maps, neither
 // of which were reported as wrong; rescaling the homestead in particular is
 // the "much bigger and riskier change" the comment below already warns off.
+//
+// 2026-08-19: crossing a destination on foot still took too long even after
+// Wave 17 #5 above — that pass only retuned DEST_WORLD_SCALE, how big the
+// diorama LOOKS, and never touched `radius`, the walkable-circle bound
+// PlayerController's wander clamp actually enforces (third collision
+// branch). At 4 units/sec walk speed, template-01's old radius 210 meant
+// 105 seconds to cross the full diameter. Cut every template-01..08 radius
+// by the same 0.5x this file's own prior passes use to keep a change this
+// size deliberate rather than accidental — EXCEPT where a real, hand-placed
+// NPC/guild-hall/boss-camp coordinate (data/npcs.ts NpcDefs, data/guilds.ts
+// GUILDS' hallX/hallZ, data/world.ts's CEDRIC_CAMP/BATTLE_DOME) would land
+// past a flat halving, computed as real straight-line distance from each
+// destination's own `origin` — not guessed. Five destinations (02/03/04/07/
+// 08, every one guild-hall-bound) hit that floor; those instead get
+// `hallDistance * 1.15`, the same "+~15% margin" convention
+// CHALLENGE_DESTINATIONS below already uses for its own radius derivation,
+// rounded UP to this file's existing .5 precision so the real floor is
+// never undershot by the rounding:
+//   template-01  210    -> 105     (0.5x; floor 38.0  king/queen NpcDefs)
+//   template-02  229.5  -> 134.5   (floor 116.6 Knights' Order hall (1312,884); *1.15 = 134.1; Richard NpcDef at 112 clears it)
+//   template-03  214.5  -> 128     (floor 110.9 Anglers' Circle hall (1586,890); *1.15 = 127.5; John NpcDef at 104 clears it)
+//   template-04  274.5  -> 159.5   (floor 138.5 Builders' Guild hall (1912,862); *1.15 = 159.3; no NpcDef here)
+//   template-05  235.5  -> 117.75  (0.5x; floor 57.0  CEDRIC_CAMP (2185,945))
+//   template-06  210    -> 105     (0.5x; floor 54.0  BATTLE_DOME far edge (center dist 45 + radius 9); Storm NpcDef at 38 clears it)
+//   template-07  235.5  -> 134.5   (floor 116.6 Woodsmen's Lodge hall (2812,884); *1.15 = 134.1; no NpcDef here)
+//   template-08  199.5  -> 114     (floor 98.7  Miners' Brotherhood hall (3112,902); *1.15 = 113.5; Fenwick NpcDef at 30 clears it)
+// Every NPC/hall/camp distance above is real straight-line distance to that
+// destination's `origin`, hand-computed from the coordinates actually
+// stored in npcs.ts/guilds.ts/world.ts, not estimated. Claimed-plot flags
+// (ClaimedPlot, data/buildables.ts) are NOT in this floor: claimWorld/
+// foundSettlement center a plot on wherever the player was STANDING when
+// they claimed it (gameStore.ts), so a claim can only ever exist somewhere
+// already inside whatever radius was current at the time — it can never be
+// the thing a smaller radius walls off. DEST_WORLD_SCALE (below) is
+// untouched — this pass is radius only, the walkable bound, not the visual
+// size Wave 17 #5 already tuned.
 import type { ItemId } from '../types';
 import { DUNGEON_ORIGIN, REACH_LIMIT } from '../dungeon';
 
@@ -86,56 +122,56 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
     id: 'template-01', name: "The King's Approach",
     blurb: 'A grand castle crowns the hill above a road still lined with a marching procession.',
     thumb: '/assets/worlds/thumbs/template-01.png', model: '/assets/worlds/template-01.glb',
-    origin: { x: 1000, z: 1000 }, radius: 210, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1000, z: 1000 }, radius: 105, worldScale: DEST_WORLD_SCALE,
     loot: { gold: 12 }, lootText: 'You gather coins dropped along the procession road (+12 gold).',
   },
   {
     id: 'template-02', name: 'The Tourney Grounds',
     blurb: 'An old tournament field where mounted knights once ran at each other in earnest.',
     thumb: '/assets/worlds/thumbs/template-02.png', model: '/assets/worlds/template-02.glb',
-    origin: { x: 1300, z: 1000 }, radius: 229.5, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1300, z: 1000 }, radius: 134.5, worldScale: DEST_WORLD_SCALE,
     loot: { plank: 4 }, lootText: 'You salvage sound timber from a broken lance rack (+4 planks).',
   },
   {
     id: 'template-03', name: 'The River Landing',
     blurb: 'A quiet river crossing with a loading dock, cart tracks, and a hint of trade.',
     thumb: '/assets/worlds/thumbs/template-03.png', model: '/assets/worlds/template-03.glb',
-    origin: { x: 1600, z: 1000 }, radius: 214.5, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1600, z: 1000 }, radius: 128, worldScale: DEST_WORLD_SCALE,
     loot: { wood: 6, stone: 4 }, lootText: 'Goods left on the dock are yours for the taking (+6 wood, +4 stone).',
   },
   {
     id: 'template-04', name: 'The Siege Camp',
     blurb: "A war machine still stands aimed at a keep it never breached.",
     thumb: '/assets/worlds/thumbs/template-04.png', model: '/assets/worlds/template-04.glb',
-    origin: { x: 1900, z: 1000 }, radius: 274.5, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 1900, z: 1000 }, radius: 159.5, worldScale: DEST_WORLD_SCALE,
     loot: { iron_ore: 5 }, lootText: 'You pry loose iron fittings from the old siege engine (+5 iron ore).',
   },
   {
     id: 'template-05', name: 'The Rival Castle',
     blurb: "A neighboring lord's keep — banners raised, gates shut tight. Not one to besiege lightly. Yet.",
     thumb: '/assets/worlds/thumbs/template-05.png', model: '/assets/worlds/template-05.glb',
-    origin: { x: 2200, z: 1000 }, radius: 235.5, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 2200, z: 1000 }, radius: 117.75, worldScale: DEST_WORLD_SCALE,
     loot: { gold: 8 }, lootText: 'A merchant passing the gatehouse trades you a few coins for news (+8 gold).',
   },
   {
     id: 'template-06', name: 'The Sister Keep',
     blurb: 'A second stronghold watches over a green valley from a respectful distance.',
     thumb: '/assets/worlds/thumbs/template-06.png', model: '/assets/worlds/template-06.glb',
-    origin: { x: 2500, z: 1000 }, radius: 210, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 2500, z: 1000 }, radius: 105, worldScale: DEST_WORLD_SCALE,
     loot: { stone: 8 }, lootText: 'Loose quarried stone litters the roadside (+8 stone).',
   },
   {
     id: 'template-07', name: 'The Frozen Pass',
     blurb: 'Knights once held this icy mountain pass — the exposed rock looks promising for ore.',
     thumb: '/assets/worlds/thumbs/template-07.png', model: '/assets/worlds/template-07.glb',
-    origin: { x: 2800, z: 1000 }, radius: 235.5, worldScale: DEST_WORLD_SCALE, sky: 'mountains',
+    origin: { x: 2800, z: 1000 }, radius: 134.5, worldScale: DEST_WORLD_SCALE, sky: 'mountains',
     loot: { iron_ore: 8 }, lootText: 'The mountain pass is rich with ore (+8 iron ore — a mining bonus!).',
   },
   {
     id: 'template-08', name: 'The Old Ruins',
     blurb: 'Weathered hills hide old foundations — good ground for scavenging.',
     thumb: '/assets/worlds/thumbs/template-08.png', model: '/assets/worlds/template-08.glb',
-    origin: { x: 3100, z: 1000 }, radius: 199.5, worldScale: DEST_WORLD_SCALE,
+    origin: { x: 3100, z: 1000 }, radius: 114, worldScale: DEST_WORLD_SCALE,
     loot: { stone: 6, iron_ore: 4 }, lootText: 'You dig a little loot out of the ruins (+6 stone, +4 iron ore).',
   },
   {
