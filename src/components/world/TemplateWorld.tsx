@@ -290,7 +290,32 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
     mountedRoot.current = groupRef.current;
     mountedRegion.current = destId;
     resetTemplateGroundFallback();
-    return () => { mountedRoot.current = null; mountedRegion.current = null; };
+    return () => {
+      mountedRoot.current = null;
+      mountedRegion.current = null;
+      // Stage 0b (2026-08-19): release this destination's cached GLTF bake
+      // when leaving it, so a session that visits many destinations doesn't
+      // pin every one of them in drei's module-level cache forever. Confirmed
+      // live (Mesh.prototype.copy, three/src/objects/Mesh.js): the scene
+      // NormalizedTemplateScene renders is `scene.clone(true)`'d off the
+      // cached original (normalizeTemplateBake), and three's default clone
+      // shares geometry/material BY REFERENCE — it never deep-clones them —
+      // so the cache's original and every mounted clone point at the exact
+      // same geometry/material/texture objects. By the time this cleanup
+      // runs, mountedRoot above has just been dropped and the keyed
+      // <NormalizedTemplateScene> (key={dest.id}, below) has unmounted too,
+      // so nothing in the app still references this destination's scene
+      // graph. useGLTF.clear() (confirmed in
+      // node_modules/@react-three/fiber's useLoader.clear, which delegates
+      // to suspend-react's `clear`) only splices the entry out of that
+      // module-level Suspense cache array — it does not itself call
+      // .dispose() on anything — so this is what lets the whole graph
+      // finally become unreachable and GC-eligible instead of staying
+      // resident for the rest of the session. dungeon/arena have no real
+      // bake (model: ''); guarded off since there's nothing to clear and
+      // NormalizedTemplateScene is never rendered for them.
+      if (dest?.model) useGLTF.clear(dest.model);
+    };
   }, [destId]);
   if (!dest) return null;
   if (dest.id === 'dungeon') {
