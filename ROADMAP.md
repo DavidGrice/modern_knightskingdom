@@ -6631,3 +6631,54 @@ own staged sequence.
   revisited all 9 destinations after the fix, zero console/page errors; `template-01` (same asset
   family, untouched by this specific fix) renders identically to before, confirming no collateral
   damage from the new correction step. `npx tsc --noEmit` / `npm run build`: both clean.
+
+## Wave 18 item #5, Stage 1 — scene-isolation proof of concept on template-01, 2026-08-20
+
+Stage 0 (Wave 18 #4/#5 above) shipped the two independent bugfixes. This is the real
+architecture pilot: a genuine destination-scoped mount/unmount boundary, proven on exactly one
+destination before any wider rollout.
+
+- [COMPLETE] ✅ **Destination-scoped mount/unmount boundary (`DestinationScope`) built and proven
+  on template-01 — SHIPPED 2026-08-20.** Per the confirmed design (plan file's Wave 18 §5): NOT
+  literal separate `THREE.Scene` objects — a disciplined, `SCOPED_DESTINATIONS`-gated boundary
+  that completes the existing "Phase 23 instance-separation doctrine," with stored coordinates
+  staying absolute and only the final render write gaining a `- dest.origin.x/z` subtraction.
+  New `DestinationScope.tsx` mounts as a sibling of `TemplateWorld` in `GameWorld.tsx` (not
+  nested inside it — `TemplateWorld.tsx` already exports `destinationGroundY` to `Npc.tsx`, so
+  nesting a court-NPC-rendering piece back inside `TemplateWorld.tsx` would create a circular
+  import; two sibling groups at an identical `dest.origin` transform are functionally
+  indistinguishable to Three.js). A new `SCOPED_DESTINATIONS` set (`worlds.ts`, containing only
+  `'template-01'` for this pilot) is the single shared predicate every carve-out reads, so there
+  is exactly one place scope can ever drift. `Buildings.tsx`, `Npc.tsx`, `TemplatePopulation.tsx`,
+  and `CourtDressing.tsx` each gained a new `Destination*` export (same content/interaction logic
+  as their existing default export, restricted to one destination, rendered with an
+  `originOffset` prop defaulting to `{x:0,z:0}` so every non-scoped call site — home, templates
+  02-08/09, dungeon, arena, all 6 challenges — is byte-for-byte unchanged) and one small exclusion
+  in their default export so scoped content stops double-rendering there. A real, non-obvious
+  catch made independently during implementation: `Buildings.tsx`'s `CartMesh` has a SECOND
+  absolute-position write (`cartLivePos`, the live-drag override while a cart is being pushed)
+  that the original plan didn't name — left unfixed, a cart built at a scoped destination would
+  have snapped back to its double-offset spot the instant the player nudged it; caught and fixed
+  with the same `originOffset` treatment. **Verified live, thoroughly, not just by reading code**:
+  real `travelTo('template-01')` confirmed King/Queen render at their exact absolute world
+  positions via scene-graph ground truth, explicitly ruling out both failure shapes (origin
+  applied twice, origin never applied — zero hits for either); a built campfire and a live-dragged
+  cart both confirmed at the correct offset spot with zero hits at either bug-shape coordinate;
+  the real King's-court ceremony ran end to end from a cold `returnHome()` state; **the GLTF cache
+  release from Stage 0b was confirmed to still fire correctly through the new sibling boundary
+  via real network request counts** (not inference — the same `template-01.glb` URL was
+  re-fetched on every fresh mount cycle, proving no stale cache short-circuit); scene-graph root
+  object counts confirmed a genuine unmount (drops to exactly 0 on `returnHome()`) and clean
+  remount (reappears exactly once, not duplicated) across 3 full visit cycles; cross-contamination
+  checked in both directions by alternating template-01 ↔ template-02 (the old, unscoped path) —
+  zero bleed-through either way; confirmed no villager or enemy exists at template-01 today (so
+  Stage 0a's persistent-state carve-out reasoning had nothing further to apply here), and the
+  King's AI agent correctly despawns on leaving and resyncs cleanly on return, independent of and
+  unaffected by the new render nesting. Zero console/page errors across the entire session.
+  `npx tsc --noEmit` / `npm run build`: both clean. **Explicitly out of scope for this stage,
+  named not silently dropped**: `key={destId}` was deliberately NOT added to `TemplateWorldRoot`
+  itself (that would change the mount lifecycle for all 16 destinations at once, including the 15
+  this stage promises to leave completely untouched — revisit in Stage 2, when the pattern
+  generalizes to every destination together). **Stage 1 of the scene-isolation rearchitecture is
+  complete.** Stage 2 (generalize to templates 02-08) is next per the plan file's own staged
+  sequence.

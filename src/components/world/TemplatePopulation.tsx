@@ -51,7 +51,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
-import { WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
+import { SCOPED_DESTINATIONS, WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
 import { getBakeOffset, sampleTemplateGroundY, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
 import PropModel from './PropModel';
 import RiggedFigure from '../character/RiggedFigure';
@@ -160,7 +160,17 @@ const DEFAULT_PROP_HEIGHT = 0.8;
  *  because it's more robust than trusting this data's own approximate
  *  vertical placement (verified close, not exact, during the transform
  *  fix — see prepare-assets.mjs). */
-function Grounded({ x, z, rotationY, children }: { x: number; z: number; rotationY: number; children: React.ReactNode }) {
+// origin-offset for an instance rendered inside DestinationScope.tsx's own
+// group (already translated by dest.origin) — the default export below
+// passes nothing and keeps every non-scoped destination's absolute-position
+// behavior byte-for-byte. Used ONLY at the final g.position.set write — the
+// sampleTemplateGroundY(wx, wz) argument stays the full absolute value, per
+// the Stage 1 plan's §2 (a raycast against mountedRoot is nesting-agnostic
+// and needs the real world coordinate regardless of where this group hangs
+// in the React tree).
+const ZERO_OFFSET = { x: 0, z: 0 };
+
+function Grounded({ x, z, rotationY, originOffset = ZERO_OFFSET, children }: { x: number; z: number; rotationY: number; originOffset?: { x: number; z: number }; children: React.ReactNode }) {
   const group = useRef<THREE.Group>(null);
   useFrame(() => {
     const g = group.current;
@@ -168,12 +178,12 @@ function Grounded({ x, z, rotationY, children }: { x: number; z: number; rotatio
     const off = getBakeOffset();
     const wx = x + off.x;
     const wz = z + off.z;
-    g.position.set(wx, sampleTemplateGroundY(wx, wz), wz);
+    g.position.set(wx - originOffset.x, sampleTemplateGroundY(wx, wz), wz - originOffset.z);
   });
   return <group ref={group} rotation-y={rotationY}>{children}</group>;
 }
 
-function PopulationInstance({ row, dest, scaleCompensation }: { row: PopulationRow; dest: WorldDestination; scaleCompensation: number }) {
+function PopulationInstance({ row, dest, scaleCompensation, originOffset = ZERO_OFFSET }: { row: PopulationRow; dest: WorldDestination; scaleCompensation: number; originOffset?: { x: number; z: number } }) {
   const x = dest.origin.x + row.position[0] * scaleCompensation;
   const z = dest.origin.z + row.position[2] * scaleCompensation;
   const isActor = row.kind === 'actor' || row.kind === 'cast';
@@ -185,14 +195,14 @@ function PopulationInstance({ row, dest, scaleCompensation }: { row: PopulationR
     const family = row.assetRef.replace(/\d+$/, '');
     if (NAMED_COURT_FAMILIES.has(family)) return null;
     return (
-      <Grounded x={x} z={z} rotationY={row.rotationY}>
+      <Grounded x={x} z={z} rotationY={row.rotationY} originOffset={originOffset}>
         <RiggedFigure config={characterConfigFor(row.assetRef)} height={1.75} clip="anim_r_restpose" />
       </Grounded>
     );
   }
   if (!row.resolvedUrl) return null; // logged at build time (prepare-assets.mjs) — not silently dropped
   return (
-    <Grounded x={x} z={z} rotationY={row.rotationY}>
+    <Grounded x={x} z={z} rotationY={row.rotationY} originOffset={originOffset}>
       <PropModel url={row.resolvedUrl} height={DEFAULT_PROP_HEIGHT} />
     </Grounded>
   );
@@ -202,6 +212,13 @@ export default function TemplatePopulation() {
   const destination = useGameStore((s) => s.destination);
   const dest = destination ? WORLD_DESTINATION_BY_ID[destination] : null;
   if (!dest || !destination) return null;
+  // Stage 1 (2026-08-20): a SCOPED_DESTINATIONS member's population now
+  // renders through DestinationPopulation below instead, mounted inside
+  // DestinationScope.tsx's own origin-offset group — this component never
+  // mixes destinations in one render pass, so a single early return is the
+  // whole carve-out. Every other destination (including "no destination" =
+  // home, where dest is already null above) is completely unaffected.
+  if (SCOPED_DESTINATIONS.has(destination)) return null;
   const rows = (mapPopulation as Record<string, PopulationRow[]>)[destination];
   if (!rows) return null;
 
@@ -234,6 +251,27 @@ export default function TemplatePopulation() {
     <>
       {rows.map((r) => (
         <PopulationInstance key={r.groupId} row={r} dest={dest} scaleCompensation={scaleCompensation} />
+      ))}
+    </>
+  );
+}
+
+/** Stage 1 (scene-isolation rearchitecture, 2026-08-20) · identical body to
+ *  the default export above minus the dest/destination derivation (takes
+ *  `dest` as a prop instead, since DestinationScope.tsx already resolved
+ *  it), passing `originOffset={dest.origin}` down to PopulationInstance so
+ *  the same absolute stored positions land in the right local spot inside
+ *  DestinationScope's own origin-offset group. DEBUG_MARKERS' raw-marker
+ *  path is deliberately not reproduced here — it's a throwaway debug view of
+ *  the default export, not part of the real render this component owns. */
+export function DestinationPopulation({ dest }: { dest: WorldDestination }) {
+  const rows = (mapPopulation as Record<string, PopulationRow[]>)[dest.id];
+  if (!rows) return null;
+  const scaleCompensation = (dest.worldScale ?? TEMPLATE_WORLD_SCALE) / TEMPLATE_WORLD_SCALE;
+  return (
+    <>
+      {rows.map((r) => (
+        <PopulationInstance key={r.groupId} row={r} dest={dest} scaleCompensation={scaleCompensation} originOffset={dest.origin} />
       ))}
     </>
   );

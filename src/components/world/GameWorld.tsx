@@ -33,6 +33,7 @@ import CedricSiege from './CedricSiege';
 import BuildingInteriorRoom from './BuildingInteriorRoom';
 import Signpost from './Signpost';
 import TemplateWorld from './TemplateWorld';
+import DestinationScope from './DestinationScope';
 import PlayerController from '../fps/PlayerController';
 import PlayerAvatar from '../fps/PlayerAvatar';
 import Viewmodel from '../fps/Viewmodel';
@@ -92,6 +93,7 @@ export default function GameWorld() {
         <BattleDome />
         <CourtDressing />
         <TemplatePopulation />
+        <DestinationScope />
         <GuildHalls />
         <DragonOmen />
         <DragonSiege />

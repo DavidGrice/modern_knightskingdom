@@ -284,3 +284,13 @@ export const CHALLENGE_DESTINATIONS: WorldDestination[] = [
 
 export const WORLD_DESTINATION_BY_ID: Record<string, WorldDestination> =
   Object.fromEntries([...WORLD_DESTINATIONS, DUNGEON_DESTINATION, ARENA_DESTINATION, ...CHALLENGE_DESTINATIONS].map((d) => [d.id, d]));
+
+// Stage 1 pilot scope (scene-isolation rearchitecture, 2026-08-20) — the only
+// destination whose content renders through DestinationScope.tsx's own
+// origin-offset <group> instead of the flat/absolute top-level components
+// (Buildings, Npc, TemplatePopulation, CourtDressing) every other
+// destination still uses unchanged. Grows in Stage 2 (templates 02-08),
+// Stage 3 (dungeon/arena), Stage 4 (challenges). One shared Set rather than
+// four hand-typed 'template-01' string checks, so there is exactly one place
+// this can ever drift.
+export const SCOPED_DESTINATIONS = new Set<string>(['template-01']);
