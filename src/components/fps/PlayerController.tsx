@@ -6,7 +6,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore, TAX_COOLDOWN_MS } from '@/game/store/gameStore';
-import { LAND_TIERS, BUILDABLE_BY_ID, heightOf, labAssetId, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
+import { LAND_TIERS, BUILDABLE_BY_ID, CLAIM_RADIUS, heightOf, labAssetId, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
   BROOK, EYE_HEIGHT, FISHING_DOCK, FISH_CAST_RANGE, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
@@ -38,7 +38,8 @@ import { GUILD_BY_WORLD } from '@/game/data/guilds';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
-import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
+import { destinationGroundY, homeGroundY, getBakeOffset, getMountedRegion, TEMPLATE_WORLD_SCALE } from '../world/TemplateWorld';
+import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
 import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labIsLadder, labOccupyMode } from '@/game/data/labCapabilities';
 import { aimState, resolveAim } from '@/game/targeting';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
@@ -1503,17 +1504,94 @@ export default function PlayerController() {
           }
         }
       } else if (st.destination) {
-        // template worlds are lightweight destinations: no fine per-object
-        // collision against the merged bake, just a simple circular bound
-        // around its own origin (see game/data/worlds.ts)
+        // template worlds: no fine per-object collision against the merged
+        // bake, just a bound on where the player can wander to. Real
+        // terrain boundaries (2026-08-21): clamps against the actual
+        // classified walkable ground (templateWalkableFootprint.ts) when
+        // this destination has any, nearest-point-in-the-rects'-union — see
+        // that module's own header for the coordinate transform. A
+        // destination with no classified rects yet (challenges, dungeon,
+        // arena, any future template) falls all the way back to the
+        // original circular bound around dest.origin, byte-for-byte
+        // unchanged from before this pass.
+        //
+        // GATED ON A CONFIRMED MOUNT (getMountedRegion() === st.destination,
+        // the same guard Minimap.tsx's own raster already uses): live-tested
+        // and caught a real race otherwise — `st.destination` flips the
+        // instant travelTo() calls set(), but TemplateWorldRoot's async GLB
+        // (NormalizedTemplateScene's useGLTF, suspended) can take several
+        // frames longer to resolve, and getBakeOffset() holds a STALE
+        // previous-destination offset (or (0,0,0) pre-first-load) the whole
+        // time. Clamping against rects built from that wrong offset landed
+        // the player hundreds of units from the real intended spot on the
+        // very first frame, then never self-corrected once the real offset
+        // arrived — the wrongly-clamped point usually already sat inside
+        // the NOW-correctly-offset rects too, so the per-frame "already
+        // inside, no-op" fast path silently locked in the wrong answer
+        // forever. Skipping the clamp entirely for those first few
+        // pre-mount frames is safe: pendingTeleport (below `p = pos.current`
+        // is read) already placed the player at a deliberately-chosen valid
+        // point, and no real player input can have accumulated in the
+        // handful of frames a same-scene mount takes.
         const dest = WORLD_DESTINATION_BY_ID[st.destination];
-        if (dest) {
-          const dx = nx - dest.origin.x;
-          const dz = nz - dest.origin.z;
-          const d = Math.hypot(dx, dz);
-          if (d > dest.radius) {
-            nx = dest.origin.x + (dx / d) * dest.radius;
-            nz = dest.origin.z + (dz / d) * dest.radius;
+        if (dest && getMountedRegion() === st.destination) {
+          const scaleCompensation = (dest.worldScale ?? TEMPLATE_WORLD_SCALE) / TEMPLATE_WORLD_SCALE;
+          const rects = resolveWorldWalkableRects(dest, getBakeOffset(), scaleCompensation);
+          // a player's OWN claimed plot (claimWorld/foundSettlement) is
+          // centered wherever they were STANDING at claim time — see
+          // activeBuildRegion's own doc comment — which the classification
+          // pass had no way to know about in advance, unlike the resident
+          // NPCs' fixed hand-authored positions this same pass re-verified
+          // directly. A claim landing in the same near-origin gap the
+          // NPCs did (worlds.ts's TEMPLATE_ARRIVAL_SPAWN comment already
+          // documents dest.origin sits far outside every classified union)
+          // would otherwise get fenced away from the player's own building
+          // on their very next visit — so the claim's own CLAIM_RADIUS
+          // footprint (buildables.ts, the same square its build region
+          // already uses) is always unioned in here too, not just the
+          // classified rects. Cheap: at most one extra rect, one destination
+          // can have at most one claim. Gated on `rects` already being
+          // non-null (real classified data exists for this destination) —
+          // a destination with NO classified rects at all (a challenge
+          // ground; the generation script only ever covers template-01..09)
+          // must keep falling all the way through to the untouched circular
+          // fallback below, not collapse down to a bare 28-unit claim-only
+          // box that would be a big step DOWN from the old full-radius
+          // wander bound for anyone who claimed one of those.
+          const claim = st.claimedWorlds[st.destination];
+          const allRects = rects && claim
+            ? [...rects, { minX: claim.x - CLAIM_RADIUS, maxX: claim.x + CLAIM_RADIUS, minZ: claim.z - CLAIM_RADIUS, maxZ: claim.z + CLAIM_RADIUS }]
+            : rects;
+          if (allRects && allRects.length) {
+            // nearest point in the union: per-axis clamp to one rect's own
+            // bounds IS that rect's nearest point (0 distance when (nx,nz)
+            // already sits inside it) — so a position already on walkable
+            // ground comes back completely unchanged (its containing rect
+            // wins the reduction with d2=0), and the winner is always
+            // inside SOME rect, so the player can never be pushed outside
+            // the union. The generation script pads every rect by a small
+            // epsilon so two meant-to-be-adjacent rects overlap rather than
+            // leave a sub-precision gap — crossing that seam never clamps
+            // at all, full walking speed straight through.
+            let bestX = nx, bestZ = nz, bestD2 = Infinity;
+            for (const r of allRects) {
+              const cx = THREE.MathUtils.clamp(nx, r.minX, r.maxX);
+              const cz = THREE.MathUtils.clamp(nz, r.minZ, r.maxZ);
+              const ddx = nx - cx;
+              const ddz = nz - cz;
+              const d2 = ddx * ddx + ddz * ddz;
+              if (d2 < bestD2) { bestD2 = d2; bestX = cx; bestZ = cz; }
+            }
+            nx = bestX;
+            nz = bestZ;
+          } else {
+            const dx = nx - dest.origin.x;
+            const dz = nz - dest.origin.z;
+            const d = Math.hypot(dx, dz);
+            if (d > dest.radius) {
+              nx = dest.origin.x + (dx / d) * dest.radius;
+              nz = dest.origin.z + (dz / d) * dest.radius;
+            }
           }
         }
         // the Sealed Crypt (Phase 17) is the one destination with real walls

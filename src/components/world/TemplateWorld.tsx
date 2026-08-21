@@ -32,10 +32,12 @@
 // where a flip would be visually meaningless anyway — left alone rather
 // than risk its already-tuned 'origin' groundAnchor logic for zero benefit.
 import { useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { useGameStore } from '@/game/store/gameStore';
-import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
+import { WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
+import { getLocalWalkableRects } from '@/game/data/templateWalkableFootprint';
 import { BATTLE_DOME } from '@/game/data/world';
 import { inDowns } from '@/game/data/downs';
 import { arenaState } from '@/game/arena';
@@ -367,6 +369,73 @@ function ClaimFlag({ x, z, groundY }: { x: number; z: number; groundY: number })
   );
 }
 
+/** the ground-filler disc a template's real geometry sits on — not purely
+ *  cosmetic (see this file's own header on `raycastGroundY`/mountedRoot):
+ *  it is a real fallback floor the height-probe can hit past the edge of an
+ *  irregular bake silhouette, so it stays a circle (any exact-union shape
+ *  is overkill for something whose whole job is invisible in the common
+ *  case) but is now SIZED from the real classified walkable rects
+ *  (templateWalkableFootprint.ts) rather than the old `dest.radius + 4`
+ *  circular bound. A circle circumscribing the rects' own bounding corners
+ *  strictly covers every rect, same margin-of-safety the old radius-based
+ *  sizing always had over the wander bound it filled under.
+ *
+ *  Reuses a single unit-radius `circleGeometry` and rescales it via
+ *  `mesh.scale` every frame (the codebase's existing scratch-object-reuse
+ *  convention — Grounded/Marker in TemplatePopulation.tsx do the same
+ *  rather than allocate fresh geometry) instead of re-instantiating
+ *  `circleGeometry` with a new radius: `getBakeOffset()` isn't final until
+ *  the async GLB has actually loaded, so this has to keep re-deriving the
+ *  radius the same way those two do, not compute it once. Coordinates stay
+ *  GROUP-LOCAL throughout (no `dest.origin` added) — this mesh already
+ *  renders inside `TemplateWorldRoot`'s own origin-offset `<group>`, so
+ *  `getLocalWalkableRects`' raw un-recentred numbers only need
+ *  `scaleCompensation` and the live `bakeOffset`, exactly like this file's
+ *  own `normalizeTemplateBake` holder positions everything else in this
+ *  same group. Falls back to `dest.radius + 4` (byte-for-byte the old
+ *  sizing) whenever this destination has no classified rects yet. */
+function TemplateGroundDisc({ dest }: { dest: WorldDestination }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const localRects = useMemo(() => getLocalWalkableRects(dest.id), [dest.id]);
+  useFrame(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    let radius = dest.radius + 4;
+    // same mount guard as PlayerController.tsx's own clamp and Minimap.tsx's
+    // own rect overlay (see the former's comment for the live-caught race):
+    // getBakeOffset() holds a stale/zero value until THIS destination's own
+    // async GLB has actually resolved, so sizing off real rects before that
+    // is confirmed (mountedRegion.current === dest.id) would use the wrong
+    // offset. Harmless in practice (this disc sits under geometry that
+    // itself hasn't rendered yet either), but falling back to the plain
+    // radius-based sizing for those few frames costs nothing and keeps this
+    // consistent with the rest of the pass.
+    if (localRects && localRects.length && getMountedRegion() === dest.id) {
+      const off = getBakeOffset();
+      const scaleCompensation = (dest.worldScale ?? TEMPLATE_WORLD_SCALE) / TEMPLATE_WORLD_SCALE;
+      let maxD2 = 0;
+      for (const r of localRects) {
+        for (const cx of [r.minX, r.maxX]) {
+          for (const cz of [r.minZ, r.maxZ]) {
+            const gx = cx * scaleCompensation + off.x;
+            const gz = cz * scaleCompensation + off.z;
+            const d2 = gx * gx + gz * gz;
+            if (d2 > maxD2) maxD2 = d2;
+          }
+        }
+      }
+      radius = Math.sqrt(maxD2) + 4;
+    }
+    mesh.scale.setScalar(radius);
+  });
+  return (
+    <mesh ref={meshRef} rotation-x={-Math.PI / 2} receiveShadow>
+      <circleGeometry args={[1, 24]} />
+      <meshStandardMaterial color="#4c7a3a" roughness={1} />
+    </mesh>
+  );
+}
+
 function TemplateWorldRoot({ destId }: { destId: string }) {
   const dest = WORLD_DESTINATION_BY_ID[destId];
   const groupRef = useRef<THREE.Group>(null);
@@ -432,10 +501,7 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
           angle regardless of which way its terrain happens to face */}
       <hemisphereLight args={['#dfe8ff', '#3d6b2f', 4]} />
       <ambientLight intensity={3} />
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <circleGeometry args={[dest.radius + 4, 24]} />
-        <meshStandardMaterial color="#4c7a3a" roughness={1} />
-      </mesh>
+      <TemplateGroundDisc dest={dest} />
       <NormalizedTemplateScene key={dest.id} url={dest.model} scale={dest.worldScale} flipY destId={dest.id} />
       {claim && <ClaimFlag x={claim.x - dest.origin.x} z={claim.z - dest.origin.z} groundY={claim.groundY} />}
     </group>

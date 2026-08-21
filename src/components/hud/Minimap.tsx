@@ -5,18 +5,20 @@
 // its own origin at its own scale, with its own landmarks. The homestead
 // frame (pond/build region/nodes/merchant) never bleeds onto another realm.
 import { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { BUILD_REGION } from '@/game/data/buildables';
 import { DOWNS, DOWNS_PEAK, downsSurfaceY } from '@/game/data/downs';
 import { BATTLE_DOME, CEDRIC_CAMP, CEDRIC_WORLD, KEEP_INTERIOR, POND, STORM_WORLD, WORLD_HALF } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
+import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
 import { NPCS } from '@/game/data/npcs';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { worldEnv } from '@/game/env';
 import { playerState } from '../fps/PlayerController';
-import { getMountedRegion, sampleTemplateGroundY } from '../world/TemplateWorld';
+import { getBakeOffset, getMountedRegion, getMountedRoot, sampleTemplateGroundY, TEMPLATE_WORLD_SCALE } from '../world/TemplateWorld';
 import { useEnemyStore } from '@/game/combat';
 import { villagerMobs } from '@/game/villagerMobs';
 
@@ -62,6 +64,21 @@ export default function Minimap() {
     let rasterHeights: Float32Array | null = null;
     let rasterLo = 0;
     let rasterHi = 1;
+    // Real terrain boundaries (2026-08-21): alongside the elevation grid
+    // above, this same once-per-mount cache now also holds a measured
+    // world-space bbox of the actually mounted bake (TemplateWorld.tsx's
+    // getMountedRoot(); Box3.setFromObject walks node bounding boxes, not
+    // triangles — negligible next to the raycast sampling this cache exists
+    // to gate) and a resolution that scales the grid's CELL COUNT to the
+    // bbox's own aspect ratio while holding the total cell budget roughly
+    // constant (~484, matching the fixed 22x22 grid's own proven-cheap cost
+    // — see this cache's original doc comment) rather than scaling cell
+    // density unboundedly with area, so a much larger or more elongated
+    // destination's one-time post-travel sampling pass never turns back
+    // into the stutter that fix hunted down.
+    let rasterMinX = 0, rasterMaxX = 1, rasterMinZ = 0, rasterMaxZ = 1;
+    let rasterCellsX = 22, rasterCellsZ = 22;
+    let rasterViewHalf = 1;
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
       if (now - last < 180) return; // ~5 fps is plenty
@@ -76,7 +93,61 @@ export default function Minimap() {
       const dest = st.destination ? WORLD_DESTINATION_BY_ID[st.destination] : null;
       const cx = dest ? dest.origin.x : 0;
       const cz = dest ? dest.origin.z : 0;
-      const half = dest ? dest.radius * 1.12 : WORLD_HALF;
+      // Real terrain boundaries (2026-08-21): measure the mounted bake's
+      // real extent ONCE per newly-mounted destination (same guard/timing
+      // as the elevation raster's own recompute below — it has to run
+      // BEFORE half/k/px/pz are derived here, since the view window itself
+      // now comes from this measurement instead of a fixed dest.radius
+      // multiple). Only the currently MOUNTED destination's own root is
+      // safe to read (getMountedRegion's own rationale) — an unmounted or
+      // just-switched-destination frame leaves the cache alone rather than
+      // force a bogus read; `half` below falls back to the old
+      // radius-derived formula for exactly that (bounded, self-correcting
+      // within one mount) window.
+      if (dest && rasterDestId !== dest.id && getMountedRegion() === dest.id) {
+        const root = getMountedRoot();
+        if (root) {
+          const box = new THREE.Box3().setFromObject(root);
+          // half-extent NEEDED to keep the whole measured box inside a
+          // square view centered on dest.origin — not just the box's own
+          // half-width/-depth — so an off-center bake (recentring targets
+          // the WHOLE bake's bbox center, not the walkable footprint's)
+          // still never gets cropped on its far side.
+          const halfNeeded = Math.max(
+            Math.abs(box.min.x - dest.origin.x), Math.abs(box.max.x - dest.origin.x),
+            Math.abs(box.min.z - dest.origin.z), Math.abs(box.max.z - dest.origin.z),
+            1,
+          );
+          rasterViewHalf = halfNeeded * 1.08;
+          rasterMinX = box.min.x; rasterMaxX = box.max.x;
+          rasterMinZ = box.min.z; rasterMaxZ = box.max.z;
+          const boxWidth = Math.max(box.max.x - box.min.x, 0.001);
+          const boxDepth = Math.max(box.max.z - box.min.z, 0.001);
+          const CELL_BUDGET = 484; // ~22x22 — see this cache's own header
+          const aspect = boxWidth / boxDepth;
+          rasterCellsX = THREE.MathUtils.clamp(Math.round(Math.sqrt(CELL_BUDGET * aspect)), 12, 40);
+          rasterCellsZ = THREE.MathUtils.clamp(Math.round(Math.sqrt(CELL_BUDGET / aspect)), 12, 40);
+          const stepX = boxWidth / rasterCellsX;
+          const stepZ = boxDepth / rasterCellsZ;
+          const heights = new Float32Array(rasterCellsX * rasterCellsZ);
+          let lo = Infinity, hi = -Infinity;
+          for (let i = 0; i < rasterCellsX; i++) {
+            for (let j = 0; j < rasterCellsZ; j++) {
+              const wx = rasterMinX + (i + 0.5) * stepX;
+              const wz = rasterMinZ + (j + 0.5) * stepZ;
+              const h = sampleTemplateGroundY(wx, wz);
+              heights[i * rasterCellsZ + j] = h;
+              if (h < lo) lo = h;
+              if (h > hi) hi = h;
+            }
+          }
+          rasterDestId = dest.id;
+          rasterHeights = heights;
+          rasterLo = lo;
+          rasterHi = hi;
+        }
+      }
+      const half = dest ? (rasterDestId === dest.id ? rasterViewHalf : dest.radius * 1.12) : WORLD_HALF;
       const k = S / (half * 2); // world meters -> px
       const px = (x: number) => (x - cx + half) * k;
       const pz = (z: number) => (z - cz + half) * k;
@@ -145,72 +216,66 @@ export default function Minimap() {
           ctx.fill();
         }
       } else {
-        // this destination's own circular wander bound, shaded by real
-        // sampled elevation — the Downs' own 22x22 sampled-grid technique
-        // above, extended to a real destination bake: downsSurfaceY (an
-        // authored analytic field with a known DOWNS_PEAK) swapped for
-        // sampleTemplateGroundY (a live raycast against the actual mounted
-        // mesh — TemplateWorld.tsx), sampled across this destination's own
-        // origin/radius instead of the Downs' fixed box. There is no
-        // per-destination peak constant the way DOWNS_PEAK exists for the
-        // Downs, so the min/max is found from this same sampling pass
-        // instead of a precomputed figure. Circular, not square — cropped
-        // by the same distance test the wander-bound stroke below draws as
-        // an outline, so the raster fills exactly the ring the player can
-        // actually walk. Guarded to the CURRENTLY MOUNTED destination only:
-        // sampleTemplateGroundY raycasts whatever bake mountedRoot happens
-        // to hold right now, so sampling any other (unmounted) destination
-        // would silently paint that OTHER realm's terrain — or, with
-        // nothing mounted yet, the flat last-known-height fallback — under
-        // this circle. An unmounted destination (a brief transition frame,
-        // or a future non-active-destination caller) keeps the plain
-        // stroked circle below, unchanged.
-        if (getMountedRegion() === st.destination) {
-          const cells = 22;
-          const step = (dest.radius * 2) / cells;
-          // recompute the bake ONLY when the mounted destination id actually
-          // changed since the last draw tick — every other tick just reuses
-          // the cached grid below, turning ~380 raycasts/tick into ~380
-          // raycasts per destination VISIT
-          if (rasterDestId !== st.destination) {
-            const heights = new Float32Array(cells * cells).fill(NaN);
-            let lo = Infinity, hi = -Infinity;
-            for (let i = 0; i < cells; i++) {
-              for (let j = 0; j < cells; j++) {
-                const wx = dest.origin.x - dest.radius + (i + 0.5) * step;
-                const wz = dest.origin.z - dest.radius + (j + 0.5) * step;
-                const dx = wx - dest.origin.x;
-                const dz = wz - dest.origin.z;
-                if (dx * dx + dz * dz > dest.radius * dest.radius) continue; // outside the wander circle
-                const h = sampleTemplateGroundY(wx, wz);
-                heights[i * cells + j] = h;
-                if (h < lo) lo = h;
-                if (h > hi) hi = h;
-              }
-            }
-            rasterDestId = st.destination;
-            rasterHeights = heights;
-            rasterLo = lo;
-            rasterHi = hi;
-          }
+        // this destination's real measured extent, shaded by real sampled
+        // elevation — the Downs' own sampled-grid technique above, extended
+        // to a real destination bake: downsSurfaceY (an authored analytic
+        // field with a known DOWNS_PEAK) swapped for sampleTemplateGroundY
+        // (a live raycast against the actual mounted mesh —
+        // TemplateWorld.tsx). Real terrain boundaries (2026-08-21): the
+        // circular crop this replaced only ever matched the OLD artificial
+        // wander bound — the raster now fills the destination's entire
+        // measured bounding box (rasterMinX/Z..rasterMaxX/Z, cached above
+        // alongside this same height data), full stop, so backdrop terrain
+        // the player can never reach — a mountain rim, a distant hillside —
+        // is shown too, not hidden. Drawn only once real cached data exists
+        // FOR THIS destination (rasterDestId === dest.id, set by the cache
+        // block above): a fresh mount that hasn't measured yet just skips
+        // the shading for a tick rather than drawing another destination's
+        // stale terrain under this one's frame.
+        if (rasterDestId === dest.id && rasterHeights) {
+          const stepX = (rasterMaxX - rasterMinX) / rasterCellsX;
+          const stepZ = (rasterMaxZ - rasterMinZ) / rasterCellsZ;
           const span = rasterHi - rasterLo || 1;
-          for (let i = 0; i < cells; i++) {
-            for (let j = 0; j < cells; j++) {
-              const h = rasterHeights![i * cells + j];
-              if (Number.isNaN(h)) continue;
-              const wx = dest.origin.x - dest.radius + (i + 0.5) * step;
-              const wz = dest.origin.z - dest.radius + (j + 0.5) * step;
+          for (let i = 0; i < rasterCellsX; i++) {
+            for (let j = 0; j < rasterCellsZ; j++) {
+              const h = rasterHeights[i * rasterCellsZ + j];
+              const wx = rasterMinX + (i + 0.5) * stepX;
+              const wz = rasterMinZ + (j + 0.5) * stepZ;
               ctx.fillStyle = `rgba(122, 98, 56, ${(0.22 + ((h - rasterLo) / span) * 0.5).toFixed(3)})`;
-              ctx.fillRect(px(wx - step / 2), pz(wz - step / 2), step * k + 1, step * k + 1);
+              ctx.fillRect(px(wx - stepX / 2), pz(wz - stepZ / 2), stepX * k + 1, stepZ * k + 1);
             }
           }
         }
-        // this realm's own frame: the wander bound is the map's edge…
-        ctx.strokeStyle = 'rgba(232, 193, 65, 0.35)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(px(cx), pz(cz), dest.radius * k, 0, Math.PI * 2);
-        ctx.stroke();
+        // the walkable footprint — real classified rects (templateWalkable-
+        // Footprint.ts) when this destination has any, one strokeRect per
+        // rect (same gold the old single circle used); falls back to the
+        // original stroked circle, byte-for-byte, for any destination
+        // without classified data yet (challenges, dungeon, arena, a future
+        // template) OR — same guard as PlayerController.tsx's own clamp,
+        // see its comment for the live-caught race this avoids — for the
+        // first few frames after travelTo() before this destination's async
+        // GLB (and thus its real getBakeOffset()) has actually resolved;
+        // drawing rects against a stale/zero offset would flash a
+        // misplaced overlay before snapping correct a few frames later. The
+        // view above no longer doubles as "where you can walk" (that was
+        // the old circle's whole job) now that it shows the full real bake
+        // extent instead, so this is the ONLY remaining walkable-bound
+        // indicator on the map.
+        {
+          const scaleCompensation = (dest.worldScale ?? TEMPLATE_WORLD_SCALE) / TEMPLATE_WORLD_SCALE;
+          const rects = getMountedRegion() === dest.id ? resolveWorldWalkableRects(dest, getBakeOffset(), scaleCompensation) : null;
+          ctx.strokeStyle = 'rgba(232, 193, 65, 0.35)';
+          ctx.lineWidth = 1;
+          if (rects && rects.length) {
+            for (const r of rects) {
+              ctx.strokeRect(px(r.minX), pz(r.minZ), (r.maxX - r.minX) * k, (r.maxZ - r.minZ) * k);
+            }
+          } else {
+            ctx.beginPath();
+            ctx.arc(px(cx), pz(cz), dest.radius * k, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
         // …plus its own landmarks
         if (st.destination === STORM_WORLD) {
           ctx.strokeStyle = '#dfe4f0';

@@ -6682,3 +6682,88 @@ destination before any wider rollout.
   generalizes to every destination together). **Stage 1 of the scene-isolation rearchitecture is
   complete.** Stage 2 (generalize to templates 02-08) is next per the plan file's own staged
   sequence.
+
+## Real terrain-derived destination boundaries, replacing the artificial wander circle — 2026-08-21
+
+The player-reported "I hate being cut off by this circle" complaint, plus the explicit follow-up
+that the minimap should show a destination's real topography rather than being cropped to a
+circle too. Root cause of the original circle: `dest.radius` (a hand-picked pacing number, see
+Wave 18 #2 above) was never meant to track real geometry, so it inevitably felt arbitrary against
+dioramas that vary wildly in real shape and size.
+
+- [COMPLETE] ✅ **The wander boundary and the topographic minimap now both use real,
+  human-labeled terrain data instead of a circle — SHIPPED 2026-08-21.** A separate, earlier
+  Blender/Grok asset pipeline (`D:\...\grok\blender\movie\07082026`, see
+  `[[project_grok_pipeline_import]]`) already per-mesh-labeled every template map's terrain into
+  named groups (`terrain_mounds`, `terrain_mountain_L`, `flat_green_a`, etc.) with real 3D
+  bounding boxes — only a filtered subset of that data (asset-bearing "new content" groups) was
+  ever imported into the game before; the terrain classification itself was left on the table.
+  **Classification pass**: read every terrain-kind group across all 9 templates, classified each
+  as real walkable content vs. distant unclimbable backdrop/rim using both the group's own label
+  and real geometric signals (footprint-area-fraction and height-fraction of the whole map, and
+  whether the bbox touches a map edge) — not a naive name-substring rule, since naming is
+  genuinely inconsistent across templates (e.g. template-07 "The Frozen Pass" has 8 different
+  "mountain"/"mountain_snow"-labeled groups, most of which are real walkable snow terrain, not
+  backdrop, unlike template-01's clean 4-sided rim pattern). Every group the geometric heuristic
+  left ambiguous was checked live: flew the camera (`setPhotoMode` fly-out) to the group's real
+  transformed world position and screenshotted it — confirmed the pattern held repeatedly (every
+  backdrop candidate showed a dramatic textured mountain wall; every walkable-core candidate
+  showed flat, human-scaled ground with real props/NPCs standing on it). Reused the exact,
+  already-proven lab→world coordinate transform from the original Grok import work
+  (`LAB_METERS_TO_WORLD = 320`, `scripts/prepare-assets.mjs`) so this new data is byte-for-byte
+  consistent with the existing `mapPopulation.generated.json` convention. New generation script
+  `scripts/generate-walkable-footprint.mjs` (gitignored, matching this project's established
+  asset-pipeline convention) writes the committed `src/game/data/templateWalkableFootprint
+  .generated.json` — real per-template walkable-rect unions ranging from 1 rect (template-04,
+  template-09) to 15 (template-08). New leaf module `templateWalkableFootprint.ts` resolves those
+  bake-local rects into live world space at read time (`dest.origin` + `scaleCompensation` + the
+  live async `getBakeOffset()` — never baked in ahead of time, since a destination's `worldScale`
+  can override the base and the bake's real recentring offset isn't final until the GLB loads).
+  **`PlayerController.tsx`'s wander clamp** now resolves the player's candidate position against
+  the nearest point in the real rect union (a plain per-axis AABB clamp reduction — the exact
+  generalization of "project onto the circle" to multiple rects) instead of a circular distance
+  check, unioning in the player's own claimed-plot footprint too (so an existing claim can never
+  be fenced off by the new terrain-derived bound) — with a full, byte-for-byte fallback to the
+  original circular clamp for any destination with no classified data yet (challenges, dungeon,
+  arena). **`Minimap.tsx`**'s topographic raster (Wave 18 #3) now covers the destination's real
+  measured bounding-box extent (`THREE.Box3.setFromObject(getMountedRoot())`), not a circular
+  crop — showing the full real topography including unreachable backdrop terrain, exactly as
+  asked, since a smaller "walkable-only" crop would have just traded one artificial cutoff for a
+  different one. The walkable-rects union is drawn as its own overlay (one `strokeRect` per real
+  rect) so the player still sees exactly where they can walk, layered over the fuller terrain
+  picture. Cell count now scales with the real bounding box's aspect ratio while holding the same
+  proven-cheap ~484-cell budget the Wave 18 #3 performance fix already established, so a larger or
+  more elongated destination's one-time post-travel sampling pass never reintroduces that
+  regression. **`TemplateWorld.tsx`'s ground-filler disc** is now sized from the real rects'
+  circumscribing radius each frame (rescaling a reused unit-circle mesh, not reallocating
+  geometry) instead of `dest.radius + 4`, with the same fallback for unclassified destinations.
+  **`gameStore.ts`'s `travelTo()` arrival spawn** now uses a new hardcoded `TEMPLATE_ARRIVAL_SPAWN`
+  table (`worlds.ts`) instead of the old `dest.radius`-derived formula.
+  **A real, severe blocker caught by verify and properly root-caused by the fix pass, not
+  papered over**: the first implementation flung every waypoint-to-resident-NPC teleport (King,
+  Queen, Richard, John, Storm, Fenwick — all 6) 441 to 1967 world units away from the intended
+  NPC. Root cause: 5 terrain groups across 5 templates had been misclassified as backdrop when
+  they were actually the base ground the walkable "core" patches physically sit on (confirmed via
+  live raycasts showing all 6 residents stand on real, naturally-varying mesh terrain, and via
+  structural bbox-nesting proof that the "core" groups are literally contained inside the
+  wrongly-excluded ones) — re-classified correctly, plus two small live-measured supplemental
+  rects for two residents whose reported bbox undercounted their real standable ground. Also
+  added a permanent claim-footprint guard (independent of the classification data, since a
+  player's claim position is only known at claim time) so an existing save's claimed plot can
+  never be fenced off by this change. **Re-verified after the fix**: all 6 residents land at
+  exactly 0.00 distance from their target; a simulated worst-case existing claim (template-04,
+  3451 units outside the old circular bound) now lands exactly on the claim; general wandering
+  across all 9 templates remains real-terrain-bounded (1198–2789 units per destination, matching
+  each bake's actual size — not unbounded); zero console/page errors throughout. Every real
+  walkable footprint is dramatically larger than the circle it replaced (e.g. template-01's old
+  210-unit diameter vs. its real walkable union now spanning up to ~1837 units on one axis) —
+  confirms the artificial clamp really was cutting players off from most of the real terrain, not
+  just adding a cosmetic wall. `npx tsc --noEmit` / `npm run build`: both clean. **Honest
+  residual, not chased further**: `template-01`'s `terrain_steep` group and two of `template-07`'s
+  eight mountain-labeled groups (`mountain_c`, `mountain_snow_a`) were classified on the geometric
+  heuristic alone after a live visual check came back genuinely inconclusive (raycast-confirmed
+  real geometry but no clear vantage to see it from) — flagged explicitly in the classification
+  data for a closer look if a player ever reports being walled off near those specific spots.
+  `template-04`/`-05`/`-07`'s classification has no resident-NPC ground-truth to ­verify against
+  the way template-01/-02/-03/-06/-08 did, so the permanent claim-footprint guard added during the
+  fix pass is the real safety net for those, not a claim of equal certainty across every template.

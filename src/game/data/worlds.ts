@@ -183,6 +183,63 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
   },
 ];
 
+// Real terrain boundaries (2026-08-21): travelTo()'s own arrival spawn used
+// to be derived live from `dest.origin.z - dest.radius * 0.5` — a formula
+// that only ever made sense while `radius` was a real circular wander bound
+// AND `dest.origin` itself sat on real, walkable ground. PlayerController's
+// clamp now resolves against real classified walkable rects instead
+// (templateWalkableFootprint.ts), so both assumptions needed checking
+// against the actual live data before hardcoding anything.
+//
+// THIS TABLE WAS ORIGINALLY GOING TO BE that formula's literal frozen
+// output (the obvious "known-good snapshot" move) — but a live spot-check
+// (travel to each destination, sample the real classified rects with the
+// destination's own live getBakeOffset(), test whether the formula's own
+// target point actually falls inside the union) found `dest.origin` is
+// NOT close to the real walkable terrain for ANY of the 8 templates: the
+// old target sat 426 to 3451 world units outside every classified rect
+// (template-04 worst, template-03 best). This isn't a classification bug —
+// normalizeTemplateBake (TemplateWorld.tsx) recenters a destination's WHOLE
+// bake (backdrop mountains included) so ITS bbox center lands at
+// `dest.origin`, not the walkable core specifically, and these dioramas are
+// visibly lopsided (a mountain rim dominates far more volume on one side
+// than the flat ground does) — the exact same asymmetry already on record
+// for why King Leo's own procession-figure marker sits ~1740 units from
+// `dest.origin` (TemplatePopulation.tsx's header comment). Before this
+// pass, `dest.origin` had no real mesh under it at all — a player standing
+// there was always resting on TemplateWorldRoot's flat filler disc, never
+// on the actual bake. Hardcoding the old formula's raw output here would
+// have reproduced that: the player's very first frame would immediately
+// clamp hundreds-to-thousands of units away to the nearest real ground,
+// which is a worse arrival than just computing that real point up front.
+//
+// So instead: for each of the 8 templates, this is the OLD formula's own
+// target point, projected to the nearest point in the real rect union
+// (the exact nearest-point-in-union reduction PlayerController's clamp
+// itself uses), then nudged ~3 world units off that boundary toward the
+// containing rect's own center (capped at 40% of that rect's own
+// half-extent, so a slender rect can't be overshot) — landing just inside
+// real ground rather than exactly on its edge line. Live-verified
+// (2026-08-21): teleporting straight to each of these 8 points lands
+// EXACTLY there with zero further clamp movement, and `destinationGroundY`
+// returns a real, sane height at every one (not the flat filler-disc
+// fallback). A frozen snapshot either way — bakeOffset is deterministic
+// per bake (same .glb, same normalizeTemplateBake math every load), so
+// these numbers stay correct across sessions without a live recompute; any
+// destination NOT in this table (challenges, dungeon, arena, a future
+// template) falls back to the live radius formula unchanged (gameStore.ts's
+// own travelTo).
+export const TEMPLATE_ARRIVAL_SPAWN: Record<string, { x: number; z: number; yaw: number }> = {
+  'template-01': { x: 1353.41, z: 1313.906, yaw: Math.PI },
+  'template-02': { x: 2291.973, z: 2584.285, yaw: Math.PI },
+  'template-03': { x: 2013.427, z: 1048.466, yaw: Math.PI },
+  'template-04': { x: 2697.005, z: 4280.722, yaw: Math.PI },
+  'template-05': { x: 2238.261, z: 1547.555, yaw: Math.PI },
+  'template-06': { x: 3044.053, z: 1861.909, yaw: Math.PI },
+  'template-07': { x: 3049.824, z: 1490.66, yaw: Math.PI },
+  'template-08': { x: 3102.237, z: 1423.546, yaw: Math.PI },
+};
+
 // The procedural dungeon (Phase 17) piggybacks on this same destination
 // system (travel/collision/ground-height all reuse it) but is regenerated
 // fresh each entry via `enterDungeon()`, not visited via `travelTo()` — so
