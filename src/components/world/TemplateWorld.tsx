@@ -178,6 +178,85 @@ export function destinationGroundY(x: number, z: number): number {
 // radius values, bumped by the same ~5.33× to match).
 export const TEMPLATE_WORLD_SCALE = 0.32;
 
+// TREE-ORIENTATION FIX (2026-08-20): a player report of "some trees render
+// upside-down" led to a live investigation of every away-destination .glb
+// directly through GLTFLoader (Node, no browser) plus in-game raycasting
+// against the actually-mounted scene. Two prior investigation attempts
+// hadn't reached a confident visual read; this pass confirmed the cause
+// with both a geometric signal AND a dramatic before/after screenshot:
+// unlike the WHOLE-BAKE inversion `flipY` corrects above (every away-dest
+// .glb ships Y-inverted at the source, uniformly), a small number of
+// individual submeshes are ALSO independently mis-oriented WITHIN an
+// otherwise-correct bake — a defect baked into that one submesh's own raw
+// vertex data, invisible to a whole-scene correction and only fixable by
+// re-flipping that one mesh node back on its own.
+//
+// Confirmed live on template-03 (The River Landing): mesh nodes named
+// `mesh_0_27` and `mesh_0_31` (the Nth `isMesh` node found by
+// `scene.traverse`, 0-indexed, counting only within the GLTF scene itself
+// — i.e. index 27 and 31 here) hold a decorative conifer/topiary row along
+// the near riverbank. Every tree in it showed the tell of an inverted
+// canopy: canopy mass bulging at the TOP tapering to a point at the
+// ground, with a bare mounting stem poking up past the canopy into open
+// air — the mirror image of a normal tree (wide base, tapering to a point
+// overhead). Raycasting from the live camera through the on-screen
+// canopies (not guessed from the raw file — the visible shape was clicked
+// directly) resolved to exactly these two mesh nodes; mirroring each
+// node's OWN local geometry 180° about its own bounding-box center turned
+// every tree in the row into an ordinary right-side-up pine or ball
+// topiary (screenshotted before/after — see PR). A per-mesh mirror, not a
+// whole-object one, because these two mesh nodes hold ONLY this row (nothing
+// else observed sharing their material in that scene) — confirmed via
+// exhaustive raycasting from multiple angles before touching the geometry.
+//
+// The SAME visual defect (identical inverted-canopy silhouette, identical
+// decorative row) was also seen via screenshot in three other destinations
+// that reuse a near-identical asset — template-01, template-05,
+// template-06 — but the equivalent live fix there had an unexplained side
+// effect (the whole row went invisible rather than correcting) that wasn't
+// root-caused within a reasonable investigation budget. Deliberately left
+// OUT of the map below rather than ship an unverified guess; a real fix
+// for those three needs a fresh pass (start from live raycast + before/after
+// screenshot exactly as done here, don't assume the template-03 mesh
+// indexes transfer).
+const TREE_MESH_ORIENTATION_FIX: Record<string, number[]> = {
+  'template-03': [27, 31],
+};
+
+/** apply `TREE_MESH_ORIENTATION_FIX`'s per-mesh correction to a freshly
+ *  cloned GLTF scene (BEFORE the outer scale/flipY/recentring below, since
+ *  this mutates each targeted mesh's own LOCAL geometry — a mirror through
+ *  its own bounding-box center, independent of and unaffected by whatever
+ *  outer transform gets applied afterward). Counts `isMesh` nodes in
+ *  traversal order scoped to `scene` alone (matching how the fix's own
+ *  indexes were derived and confirmed — see the constant's comment) so
+ *  this must run on the GLTF scene itself, not a wrapper that adds sibling
+ *  meshes (e.g. TemplateWorldRoot's ground-circle) ahead of it. */
+function applyTreeMeshOrientationFix(scene: THREE.Object3D, destId?: string): void {
+  if (!destId) return;
+  const targets = TREE_MESH_ORIENTATION_FIX[destId];
+  if (!targets || targets.length === 0) return;
+  let i = 0;
+  scene.traverse((obj) => {
+    if (!(obj as THREE.Mesh).isMesh) return;
+    const idx = i++;
+    if (!targets.includes(idx)) return;
+    const mesh = obj as THREE.Mesh;
+    const geom = mesh.geometry;
+    geom.computeBoundingBox();
+    const box = geom.boundingBox!;
+    const cx = (box.min.x + box.max.x) / 2;
+    const cy = (box.min.y + box.max.y) / 2;
+    const cz = (box.min.z + box.max.z) / 2;
+    const m = new THREE.Matrix4()
+      .multiply(new THREE.Matrix4().makeTranslation(cx, cy, cz))
+      .multiply(new THREE.Matrix4().makeRotationX(Math.PI))
+      .multiply(new THREE.Matrix4().makeTranslation(-cx, -cy, -cz));
+    geom.applyMatrix4(m);
+    geom.computeVertexNormals();
+  });
+}
+
 /** normalize a whole-map template bake: fixed scale, centered on X/Z, ground
  *  at y=0, shadows + normals + double-sided materials. Shared by destination
  *  rendering below and the home world's own Far Meadow terrain (Phase 20 —
@@ -212,9 +291,15 @@ export const TEMPLATE_WORLD_SCALE = 0.32;
  *  source. A pure mirror, X/Z untouched; three.js's normal matrix corrects
  *  lighting automatically under the resulting negative-determinant
  *  transform, and `mesh.material.side = DoubleSide` (below) already masks
- *  any backface/winding artifact regardless. */
-export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE, groundAnchor: 'bboxMin' | 'origin' = 'bboxMin', flipY: boolean = false): { group: THREE.Group; offset: THREE.Vector3 } {
+ *  any backface/winding artifact regardless.
+ *
+ *  `destId` (default `undefined`): looks up `TREE_MESH_ORIENTATION_FIX`
+ *  below for a per-mesh correction — see that constant's own comment for
+ *  why a handful of individual submeshes need a SECOND, targeted fix on
+ *  top of the whole-bake `flipY` above. */
+export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE, groundAnchor: 'bboxMin' | 'origin' = 'bboxMin', flipY: boolean = false, destId?: string): { group: THREE.Group; offset: THREE.Vector3 } {
   const inner = scene.clone(true);
+  applyTreeMeshOrientationFix(inner, destId);
   const holder = new THREE.Group();
   holder.add(inner);
   holder.scale.set(scale, flipY ? -scale : scale, scale);
@@ -254,9 +339,9 @@ export function getBakeOffset(): THREE.Vector3 {
   return bakeOffset;
 }
 
-function NormalizedTemplateScene({ url, scale, flipY }: { url: string; scale?: number; flipY?: boolean }) {
+function NormalizedTemplateScene({ url, scale, flipY, destId }: { url: string; scale?: number; flipY?: boolean; destId?: string }) {
   const { scene } = useGLTF(url);
-  const { group, offset } = useMemo(() => normalizeTemplateBake(scene, scale, 'bboxMin', flipY), [scene, scale, flipY]);
+  const { group, offset } = useMemo(() => normalizeTemplateBake(scene, scale, 'bboxMin', flipY, destId), [scene, scale, flipY, destId]);
   useEffect(() => {
     bakeOffset.copy(offset);
     return () => { bakeOffset.set(0, 0, 0); };
@@ -351,7 +436,7 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
         <circleGeometry args={[dest.radius + 4, 24]} />
         <meshStandardMaterial color="#4c7a3a" roughness={1} />
       </mesh>
-      <NormalizedTemplateScene key={dest.id} url={dest.model} scale={dest.worldScale} flipY />
+      <NormalizedTemplateScene key={dest.id} url={dest.model} scale={dest.worldScale} flipY destId={dest.id} />
       {claim && <ClaimFlag x={claim.x - dest.origin.x} z={claim.z - dest.origin.z} groundY={claim.groundY} />}
     </group>
   );
