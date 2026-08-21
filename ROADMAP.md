@@ -6767,3 +6767,46 @@ dioramas that vary wildly in real shape and size.
   `template-04`/`-05`/`-07`'s classification has no resident-NPC ground-truth to ­verify against
   the way template-01/-02/-03/-06/-08 did, so the permanent claim-footprint guard added during the
   fix pass is the real safety net for those, not a claim of equal certainty across every template.
+
+## Wave 18 item #5, Stage 2 — scene-isolation rollout to templates 02-08, 2026-08-21
+
+Stage 1 proved the destination-scoped mount/unmount boundary on template-01 alone. This
+generalizes it to all 8 real travel destinations, per the plan's own staged sequence.
+
+- [COMPLETE] ✅ **`SCOPED_DESTINATIONS` grown to templates 01-08, one real regression found and
+  fixed before it could ship — SHIPPED 2026-08-21.** The one-line change (`worlds.ts`) was
+  mechanical since Stage 1 built the generic infrastructure — `Buildings.tsx`/`Npc.tsx`/
+  `TemplatePopulation.tsx`'s `Destination*` exports already filter purely on `dest.id`/
+  `Set.has()`, with zero hardcoded per-template strings, confirmed by reading all three in full.
+  **One real gap found in research and fixed before implementation, not discovered live**:
+  `CourtDressing.tsx`'s `SCOPED_DESTINATIONS` early-return in the default export runs *before*
+  its `template-02`/`template-03` special cases (`TourneyLists`/`RiverCargo`) — scoping those two
+  destinations would have silently killed both with nothing picking up the slack, since
+  `DestinationCourtDressing` only handled `template-01`. Fixed by threading the same
+  `originOffset` convention through `TourneyLists`/`RiverCargo` (matching `RoyalCourt`'s existing
+  pattern) and extending `DestinationCourtDressing` to cover all three; the now-unreachable
+  branches were pruned from the default export (now a documented inert no-op), matching this
+  file's own established precedent from Stage 1. Confirmed via full-codebase grep that guild
+  halls, Cedric's camp, and the Battle Dome (`GuildHalls.tsx`/`CedricCamp.tsx`/`BattleDome.tsx`)
+  are separate, always-mounted, self-gated siblings that never import `SCOPED_DESTINATIONS` and
+  are structurally unaffected by this change — not assumed, verified live too. **Verified live,
+  individually, for every one of the 7 newly-scoped destinations** (not a sample): real
+  `travelTo()` + genuine new `.glb` network fetch (not a cache hit) each time;
+  `DestinationScope`'s origin-offset group sitting at the exact correct `dest.origin`; real named
+  NPCs (Richard/John/Storm/Fenwick) landing at exact correct positions with zero double- or
+  missing-offset hits; guild halls/CedricCamp/BattleDome all rendering correctly at their real
+  positions, confirmed unaffected; **the exact flagged regression confirmed fixed live** —
+  template-02 shows real TourneyLists dressing, template-03 shows real RiverCargo dressing,
+  neither silently disappeared; cross-contamination checked at every step (previous destination's
+  content confirmed fully gone); a direct destination-to-destination hop (template-02 →
+  template-06 → template-03, no intervening `returnHome()`) confirmed zero stale content at each
+  landing; `Buildings.tsx`'s generic origin-offset path re-confirmed on template-04 specifically
+  (a destination with no named NPC, isolating the check) via a synthetic campfire landing at the
+  exact correct position. Stage 1's template-01 pilot reconfirmed unaffected; dungeon and 2
+  challenge maps spot-checked and confirmed still on the old, untouched path. Zero console/page
+  errors across every live test run. Verify pass: clean, 1 non-issue (template-08 has zero
+  population rows — pre-existing, documented, confirmed not a regression from this change), no
+  fix pass needed. `npx tsc --noEmit` / `npm run build`: both clean. **Stage 2 of the
+  scene-isolation rearchitecture is complete — all 8 real travel destinations now have genuine
+  mount/unmount isolation.** Stage 3 (dungeon + arena) is next per the plan's own staged
+  sequence.

@@ -89,67 +89,67 @@ function RoyalCourt({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number
 
 /** Richard's lists: a tilt barrier running the joust line (his post toward
  *  the stabled steed) with pennants at either end. */
-function TourneyLists() {
+function TourneyLists({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number; z: number } }) {
   const fenceX = 1292.5; // between Richard (1300, 888) and the steed (1285, 915)
   return (
     <Suspense fallback={null}>
       {[897, 902.5, 908].map((z) => (
-        <Grounded key={z} x={fenceX} z={z}>
+        <Grounded key={z} x={fenceX} z={z} originOffset={originOffset}>
           <group rotation-y={Math.PI / 2}>
             <PropModel url={`${SCEN}/l607900.glb`} height={1.1} />
           </group>
         </Grounded>
       ))}
-      <Grounded x={fenceX} z={893}><Pennant color="#b03a2e" /></Grounded>
-      <Grounded x={fenceX} z={912}><Pennant color="#2e5fb0" /></Grounded>
+      <Grounded x={fenceX} z={893} originOffset={originOffset}><Pennant color="#b03a2e" /></Grounded>
+      <Grounded x={fenceX} z={912} originOffset={originOffset}><Pennant color="#2e5fb0" /></Grounded>
     </Suspense>
   );
 }
 
 /** John's quartermaster stores: stacked cargo where the river trade lands. */
-function RiverCargo() {
+function RiverCargo({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number; z: number } }) {
   return (
     <Suspense fallback={null}>
-      <Grounded x={1597} z={893.5}>
+      <Grounded x={1597} z={893.5} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l473800.glb`} height={0.6} yaw={0.4} />
       </Grounded>
-      <Grounded x={1603.5} z={895}>
+      <Grounded x={1603.5} z={895} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l301500.glb`} height={0.7} yaw={1.2} />
       </Grounded>
-      <Grounded x={1602.5} z={898.5}>
+      <Grounded x={1602.5} z={898.5} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l248900.glb`} height={0.6} />
       </Grounded>
-      <Grounded x={1596.5} z={898}>
+      <Grounded x={1596.5} z={898} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l248900.glb`} height={0.6} yaw={0.8} />
       </Grounded>
     </Suspense>
   );
 }
 
+// Stage 2 (2026-08-21): every destination that ever had dressing here
+// (template-01/02/03) is now in SCOPED_DESTINATIONS, so this default export
+// is permanently inert — the `destination === 'template-02'`/`'template-03'`
+// branches it used to carry are gone, not just unreachable (same call the
+// old 'template-01' branch got in Stage 1). Left mounted in GameWorld.tsx
+// as a harmless no-op rather than pulled, since nothing depends on it being
+// gone and removing it is a separate, unrelated cleanup.
 export default function CourtDressing() {
   const destination = useGameStore((s) => s.destination);
-  // Stage 1 (2026-08-20): template-01's own RoyalCourt now renders through
-  // DestinationCourtDressing below instead, mounted inside
-  // DestinationScope.tsx's own origin-offset group — this component never
-  // mixes destinations in one render pass, so a single early return is the
-  // whole carve-out (the old `destination === 'template-01'` branch this
-  // replaced is gone, not just unreachable). template-02/template-03
-  // (TourneyLists/RiverCargo) are untouched — SCOPED_DESTINATIONS holds
-  // only 'template-01' today.
   if (destination && SCOPED_DESTINATIONS.has(destination)) return null;
-  if (destination === 'template-02') return <TourneyLists />;
-  if (destination === 'template-03') return <RiverCargo />;
   return null;
 }
 
-/** Stage 1 (scene-isolation rearchitecture, 2026-08-20) · renders whichever
- *  SCOPED_DESTINATIONS member's dressing exists, with `dest.origin`
- *  subtracted at each piece's final position write (via RoyalCourt's own
- *  `originOffset` threading through Grounded above) — meant to be mounted
- *  inside DestinationScope.tsx's own origin-offset group. Only template-01
- *  has dressing today (TourneyLists/RiverCargo stay on the default export
- *  above, unaffected, since template-02/03 aren't in SCOPED_DESTINATIONS). */
+/** Scene-isolation rearchitecture · renders whichever SCOPED_DESTINATIONS
+ *  member's dressing exists, with `dest.origin` subtracted at each piece's
+ *  final position write (via each function's own `originOffset` threading
+ *  through Grounded above) — meant to be mounted inside DestinationScope.tsx's
+ *  own origin-offset group. Stage 1 (2026-08-20) added template-01; Stage 2
+ *  (2026-08-21) added template-02/template-03 (TourneyLists/RiverCargo,
+ *  moved here from the default export above). Templates 04-08 have no
+ *  dressing of their own. */
 export function DestinationCourtDressing({ dest }: { dest: WorldDestination }) {
   if (dest.id === 'template-01') return <RoyalCourt originOffset={dest.origin} />;
+  if (dest.id === 'template-02') return <TourneyLists originOffset={dest.origin} />;
+  if (dest.id === 'template-03') return <RiverCargo originOffset={dest.origin} />;
   return null;
 }
