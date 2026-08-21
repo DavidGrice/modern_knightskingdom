@@ -2365,6 +2365,15 @@ function createGameStore() {
       if (!st.destination) return;
       set({ destination: null, dirty: true });
       resetDungeon();
+      // Stage 3 (Wave 18 #5): this is the generic exit offered at every
+      // destination including the arena (leaveArena() below is the OTHER,
+      // dedicated way out, reached only from combat.ts's on-death branch —
+      // there's no "Leave Arena" button). Without this, ArenaHud.tsx (which
+      // polls arenaState.active/env directly, with no destination linkage of
+      // its own) kept the "⚔️ … — N kills" badge on screen indefinitely
+      // after an ordinary walk-out. Harmless to call unconditionally, same
+      // as resetDungeon() just above.
+      endArenaRun();
       playerState.pendingTeleport = { x: SIGNPOST.x, z: SIGNPOST.z + 3, yaw: 0 };
       audio.play('horn', 0.7);
       st.notify('You return home.');
