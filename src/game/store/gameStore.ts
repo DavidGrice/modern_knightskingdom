@@ -57,7 +57,7 @@ import { playerState, resetPlayerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
 import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '../data/world';
-import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN } from '../data/worlds';
+import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN, TEMPLATE_ARRIVAL_SPAWN } from '../data/worlds';
 import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
 import {
@@ -2339,11 +2339,17 @@ function createGameStore() {
         dirty: true,
       });
       // a waypoint lands right in front of its resident (same -2.4 offset
-      // beginCeremony already uses to stand the player before the King)
-      // rather than the destination's generic origin landing spot.
+      // beginCeremony already uses to stand the player before the King).
+      // Otherwise: a frozen, known-good spawn point (TEMPLATE_ARRIVAL_SPAWN,
+      // worlds.ts — see its own comment) for the 8 destinations real
+      // walkable-rect data now covers, so day-one arrival never lands
+      // somewhere the new rect-union clamp (PlayerController.tsx) would
+      // immediately snap away from; any destination without an entry there
+      // (challenges, dungeon/arena bypass this formula entirely) keeps the
+      // original radius-derived landing spot unchanged.
       playerState.pendingTeleport = poi
         ? { x: poi.x, z: poi.z - 2.4, yaw: poi.yaw }
-        : { x: dest.origin.x, z: dest.origin.z - dest.radius * 0.5, yaw: Math.PI };
+        : TEMPLATE_ARRIVAL_SPAWN[id] ?? { x: dest.origin.x, z: dest.origin.z - dest.radius * 0.5, yaw: Math.PI };
       audio.play('canter', 0.8);
       if (firstVisit && dest.loot) {
         st.addItems(dest.loot, 'grant');
