@@ -1,12 +1,12 @@
 'use client';
-// Stage 1 of the scene-isolation rearchitecture (2026-08-20): a PROOF OF
-// CONCEPT, scoped to exactly one destination (SCOPED_DESTINATIONS,
-// worlds.ts) — template-01, "The King's Approach". Every other destination
-// (templates 02-08/09, dungeon, arena, all 6 challenges, and home/null) is
-// completely unaffected: their content keeps rendering through the same
-// flat, absolute-coordinate top-level components (Buildings, Npc,
-// TemplatePopulation, CourtDressing) this file's own Destination* siblings
-// were carved out of.
+// Scene-isolation rearchitecture: Stage 1 (2026-08-20) proved this out as a
+// proof of concept on exactly one destination (SCOPED_DESTINATIONS,
+// worlds.ts) — template-01, "The King's Approach". Stage 2 (2026-08-21)
+// generalized it to templates 02-08. template-09 (the homestead), dungeon,
+// arena, and all 6 challenges (plus home/null) remain unaffected: their
+// content keeps rendering through the same flat, absolute-coordinate
+// top-level components (Buildings, Npc, TemplatePopulation, CourtDressing)
+// this file's own Destination* siblings were carved out of.
 //
 // Mounted as a sibling of <TemplateWorld /> in GameWorld.tsx, NOT nested
 // inside TemplateWorld.tsx's own JSX — TemplateWorld.tsx already owns the

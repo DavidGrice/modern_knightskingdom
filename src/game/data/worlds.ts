@@ -342,12 +342,16 @@ export const CHALLENGE_DESTINATIONS: WorldDestination[] = [
 export const WORLD_DESTINATION_BY_ID: Record<string, WorldDestination> =
   Object.fromEntries([...WORLD_DESTINATIONS, DUNGEON_DESTINATION, ARENA_DESTINATION, ...CHALLENGE_DESTINATIONS].map((d) => [d.id, d]));
 
-// Stage 1 pilot scope (scene-isolation rearchitecture, 2026-08-20) — the only
-// destination whose content renders through DestinationScope.tsx's own
-// origin-offset <group> instead of the flat/absolute top-level components
-// (Buildings, Npc, TemplatePopulation, CourtDressing) every other
-// destination still uses unchanged. Grows in Stage 2 (templates 02-08),
-// Stage 3 (dungeon/arena), Stage 4 (challenges). One shared Set rather than
-// four hand-typed 'template-01' string checks, so there is exactly one place
-// this can ever drift.
-export const SCOPED_DESTINATIONS = new Set<string>(['template-01']);
+// Scene-isolation rearchitecture (2026-08-20) — the destinations whose
+// content renders through DestinationScope.tsx's own origin-offset <group>
+// instead of the flat/absolute top-level components (Buildings, Npc,
+// TemplatePopulation, CourtDressing) every other destination still uses
+// unchanged. Stage 1 (2026-08-20) proved this on template-01 alone; Stage 2
+// (2026-08-21) grew it to templates 02-08. Still to come: Stage 3
+// (dungeon/arena), Stage 4 (challenges). template-09 (the homestead) stays
+// out permanently. One shared Set rather than hand-typed per-template
+// string checks, so there is exactly one place this can ever drift.
+export const SCOPED_DESTINATIONS = new Set<string>([
+  'template-01', 'template-02', 'template-03', 'template-04',
+  'template-05', 'template-06', 'template-07', 'template-08',
+]);
