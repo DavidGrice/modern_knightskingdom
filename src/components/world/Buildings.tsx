@@ -15,6 +15,13 @@ import LabFlame from './LabFlame';
 import PropModel from './PropModel';
 import { isBuilt } from '@/game/types';
 import type { Buildable, PlacedBuilding } from '@/game/types';
+import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
+
+// origin-offset for a piece rendered inside DestinationScope.tsx's own
+// group (already translated by dest.origin) — every OTHER call site (home,
+// templates 02-08, challenges, dungeon, arena) passes nothing and keeps
+// today's absolute-position behavior byte-for-byte.
+const ZERO_OFFSET = { x: 0, z: 0 };
 
 function Campfire({ lit = true }: { lit?: boolean }) {
   return (
@@ -280,17 +287,21 @@ function Bed() {
 }
 
 // a pushed/hitched cart tracks a live position override (see game/carts.ts)
-// instead of its last-committed b.x/b.z, until the player lets go
-function CartMesh({ b, def, yaw }: { b: PlacedBuilding; def: Buildable; yaw: number }) {
+// instead of its last-committed b.x/b.z, until the player lets go. cartLivePos
+// (game/carts.ts) is absolute, same space as b.x/b.z — the originOffset
+// subtraction has to happen at this useFrame write too, not just the initial
+// JSX position, or a scoped destination's cart would snap back to its
+// unscoped (double-offset) spot the instant the player nudges it.
+function CartMesh({ b, def, yaw, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; def: Buildable; yaw: number; originOffset?: { x: number; z: number } }) {
   const group = useRef<THREE.Group>(null);
   useFrame(() => {
     const g = group.current;
     if (!g) return;
     const live = cartLivePos[b.id];
-    g.position.set(live?.x ?? b.x, b.y ?? 0, live?.z ?? b.z);
+    g.position.set((live?.x ?? b.x) - originOffset.x, b.y ?? 0, (live?.z ?? b.z) - originOffset.z);
   });
   return (
-    <group ref={group} position={[b.x, b.y ?? 0, b.z]} rotation-y={yaw}>
+    <group ref={group} position={[b.x - originOffset.x, b.y ?? 0, b.z - originOffset.z]} rotation-y={yaw}>
       <Suspense fallback={null}>
         <PropModel url={def.model!} height={def.size[1]} />
       </Suspense>
@@ -339,7 +350,7 @@ function MarketStall() {
 // the solid piece rising out of the ground (ConstructionSite.tsx). The box
 // pair below is the fallback for the handful of buildables that are built
 // from primitives (bed, torch, campfire) and so have no model to outline.
-function ConstructionSite({ b }: { b: PlacedBuilding }) {
+function ConstructionSite({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; originOffset?: { x: number; z: number } }) {
   const def = BUILDABLE_BY_ID[b.type];
   if (!def) return null;
   const progress = b.built ?? 0;
@@ -351,7 +362,7 @@ function ConstructionSite({ b }: { b: PlacedBuilding }) {
   ];
   if (def.model) {
     return (
-      <group position={[b.x, y, b.z]} rotation-y={yaw}>
+      <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw}>
         <Suspense fallback={null}>
           <ConstructionSiteModel url={def.model} size={def.size} progress={progress} worldY={y} />
         </Suspense>
@@ -359,7 +370,7 @@ function ConstructionSite({ b }: { b: PlacedBuilding }) {
     );
   }
   return (
-    <group position={[b.x, y, b.z]} rotation-y={yaw}>
+    <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw}>
       {/* the finished silhouette, ghost-faint */}
       <mesh position-y={h / 2}>
         <boxGeometry args={[w, h, d]} />
@@ -383,7 +394,7 @@ function ConstructionSite({ b }: { b: PlacedBuilding }) {
   );
 }
 
-export function BuildingMesh({ b }: { b: PlacedBuilding }) {
+export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; originOffset?: { x: number; z: number } }) {
   const def = BUILDABLE_BY_ID[b.type];
   if (!def) return null;
   // Wave 9 · a freeform piece renders at its TRUE facing; everything else (and
@@ -394,35 +405,37 @@ export function BuildingMesh({ b }: { b: PlacedBuilding }) {
   const yaw = b.yaw ?? (b.rot * Math.PI) / 2;
   const y = b.y ?? 0;
   const solidWorld = solidOffsetRotated(b.type, b.rot);
+  const px = b.x - originOffset.x;
+  const pz = b.z - originOffset.z;
   if (b.type === 'campfire') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><Campfire /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><Campfire /></group>;
   }
   if (b.type === 'forge') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><Forge /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><Forge /></group>;
   }
   if (b.type === 'torch') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><Torch /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><Torch /></group>;
   }
   if (b.type === 'bed') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><Bed /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><Bed /></group>;
   }
   if (b.type === 'quintain') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><Quintain id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><Quintain id={b.id} /></group>;
   }
   if (b.type === 'farmplot') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><FarmPlot id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><FarmPlot id={b.id} /></group>;
   }
   if (b.type === 'gate') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><GateFixture id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><GateFixture id={b.id} /></group>;
   }
   if (b.type === 'door') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><DoorFixture id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><DoorFixture id={b.id} /></group>;
   }
   if (b.type === 'warcart' || b.type === 'bladecart') {
-    return <CartMesh b={b} def={def} yaw={yaw} />;
+    return <CartMesh b={b} def={def} yaw={yaw} originOffset={originOffset} />;
   }
   if (b.type === 'market_stall') {
-    return <group position={[b.x, y, b.z]} rotation-y={yaw}><MarketStall /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw}><MarketStall /></group>;
   }
   // pieces the rig lab charted moving parts for (catapult arms, flag cloth,
   // flames) render through the OBJ-based rig so those parts actually move;
@@ -434,7 +447,7 @@ export function BuildingMesh({ b }: { b: PlacedBuilding }) {
         <RiggedProp
           assetId={labId}
           height={def.size[1]}
-          position={[b.x, y, b.z]}
+          position={[px, y, pz]}
           yaw={yaw}
           buildingId={b.id}
         />
@@ -444,7 +457,7 @@ export function BuildingMesh({ b }: { b: PlacedBuilding }) {
   return (
     <Suspense
       fallback={
-        <mesh position={[b.x, y + def.size[1] / 2, b.z]} rotation-y={yaw}>
+        <mesh position={[px, y + def.size[1] / 2, pz]} rotation-y={yaw}>
           <boxGeometry args={[def.size[0] * 0.9, def.size[1], def.size[2] * 0.9]} />
           <meshStandardMaterial color="#9a8a6a" transparent opacity={0.4} />
         </mesh>
@@ -458,7 +471,7 @@ export function BuildingMesh({ b }: { b: PlacedBuilding }) {
       <PropModel
         url={def.model!}
         height={def.size[1]}
-        position={[b.x - solidWorld[0], y, b.z - solidWorld[1]]}
+        position={[px - solidWorld[0], y, pz - solidWorld[1]]}
         yaw={yaw}
       />
     </Suspense>
@@ -481,7 +494,13 @@ export default function Buildings() {
   // interact-detection; KeepAssembly.tsx already owns 100% of its actual
   // visual (foundation plate + sockets), so it's excluded here to avoid
   // double-rendering a "Castle Foundation" mesh on top of that.
-  const buildings = allBuildings.filter((b) => (b.world ?? null) === (destination ?? null) && b.type !== 'keep');
+  // Stage 1 (2026-08-20): SCOPED_DESTINATIONS' own buildings now render
+  // through DestinationBuildings below instead, so this stops double-
+  // rendering them — every other world (including "no destination" = home)
+  // is completely unaffected, since SCOPED_DESTINATIONS never contains null.
+  const buildings = allBuildings.filter(
+    (b) => (b.world ?? null) === (destination ?? null) && b.type !== 'keep' && !SCOPED_DESTINATIONS.has(b.world ?? ''),
+  );
   return (
     <group>
       {buildings.map((b) => (
@@ -507,6 +526,48 @@ export default function Buildings() {
           }}
         >
           {isBuilt(b) ? <BuildingMesh b={b} /> : <ConstructionSite b={b} />}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Stage 1 (scene-isolation rearchitecture, 2026-08-20) · same building list
+ *  as the default export above, restricted to one SCOPED_DESTINATIONS member
+ *  and rendered with `dest.origin` subtracted at the final position write —
+ *  meant to be mounted inside DestinationScope.tsx's own origin-offset
+ *  <group>, so the same absolute stored `b.x`/`b.z` lands in the right local
+ *  spot. Interaction wiring (openBuildingMenu/removeBuilding) is identical
+ *  to the default export's — a claimed plot at a scoped destination
+ *  (claimWorld/foundSettlement, keyed per destId same as everywhere else)
+ *  builds and demolishes the same way home does. */
+export function DestinationBuildings({ dest }: { dest: WorldDestination }) {
+  const allBuildings = useGameStore((s) => s.buildings);
+  const buildMode = useGameStore((s) => s.buildMode);
+  const removeBuilding = useGameStore((s) => s.removeBuilding);
+  const buildings = allBuildings.filter((b) => b.world === dest.id && b.type !== 'keep');
+  return (
+    <group>
+      {buildings.map((b) => (
+        <group
+          key={b.id}
+          onClick={(e: any) => {
+            const st = useGameStore.getState();
+            if (!st.buildMode || st.buildSelection || st.movingBuilding) return;
+            if (st.buildTool === 'demolish') return;
+            e.stopPropagation();
+            st.openBuildingMenu(b.id);
+          }}
+          onContextMenu={(e: any) => {
+            if (!buildMode) return;
+            e.stopPropagation();
+            (e as { nativeEvent?: Event }).nativeEvent?.preventDefault?.();
+            removeBuilding(b.id);
+          }}
+        >
+          {isBuilt(b)
+            ? <BuildingMesh b={b} originOffset={dest.origin} />
+            : <ConstructionSite b={b} originOffset={dest.origin} />}
         </group>
       ))}
     </group>

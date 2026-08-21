@@ -14,20 +14,31 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import { NPC_KING } from '@/game/data/world';
+import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
 import PropModel from './PropModel';
 import { Torch } from './Buildings';
 
 const AC = '/assets/props/castle_accessories';
 const SCEN = '/assets/props/scenery';
 
+// origin-offset for a piece rendered inside DestinationScope.tsx's own
+// group (already translated by dest.origin) — every existing call site
+// (this file's own default export, GuildHalls.tsx's import of this same
+// Grounded) passes nothing and keeps today's absolute-position behavior
+// byte-for-byte.
+const ZERO_OFFSET = { x: 0, z: 0 };
+
 /** a child group that rides the bake terrain at its own spot, per frame
- *  (the bake streams in async, so a one-shot sample would race the load) */
-export function Grounded({ x, z, lift = 0, children }: { x: number; z: number; lift?: number; children: React.ReactNode }) {
+ *  (the bake streams in async, so a one-shot sample would race the load).
+ *  `sampleTemplateGroundY(x, z)` stays the full absolute value regardless of
+ *  `originOffset` — a raycast against mountedRoot is nesting-agnostic (see
+ *  TemplateWorld.tsx); only the final position write below is local. */
+export function Grounded({ x, z, lift = 0, originOffset = ZERO_OFFSET, children }: { x: number; z: number; lift?: number; originOffset?: { x: number; z: number }; children: React.ReactNode }) {
   const group = useRef<THREE.Group>(null);
   useFrame(() => {
     if (group.current) group.current.position.y = sampleTemplateGroundY(x, z) + lift;
   });
-  return <group ref={group} position={[x, 0, z]}>{children}</group>;
+  return <group ref={group} position={[x - originOffset.x, 0, z - originOffset.z]}>{children}</group>;
 }
 
 /** pennant pole — the same simple procedural flag treatment as ClaimFlag,
@@ -50,12 +61,12 @@ export function Pennant({ color }: { color: string }) {
 /** King Leo & Leonora's open-air court: a stone dais bearing the real
  *  throne mold, flanked by the Keep interior's mirrored crest banners and
  *  a pair of standing torches — set just behind where the pair stand. */
-function RoyalCourt() {
+function RoyalCourt({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number; z: number } }) {
   const cx = NPC_KING.x;
   const cz = NPC_KING.z + 3.2; // behind the royal pair (they face -Z)
   return (
     <Suspense fallback={null}>
-      <Grounded x={cx} z={cz}>
+      <Grounded x={cx} z={cz} originOffset={originOffset}>
         <mesh position-y={0.2} castShadow receiveShadow>
           <boxGeometry args={[7, 0.4, 3.4]} />
           <meshStandardMaterial color="#8b8b90" roughness={1} />
@@ -70,8 +81,8 @@ function RoyalCourt() {
           <PropModel url={`${AC}/18_l7196300.glb`} height={1.6} />
         </group>
       </Grounded>
-      <Grounded x={cx - 4.6} z={cz - 1.6}><Torch /></Grounded>
-      <Grounded x={cx + 4.6} z={cz - 1.6}><Torch /></Grounded>
+      <Grounded x={cx - 4.6} z={cz - 1.6} originOffset={originOffset}><Torch /></Grounded>
+      <Grounded x={cx + 4.6} z={cz - 1.6} originOffset={originOffset}><Torch /></Grounded>
     </Suspense>
   );
 }
@@ -117,8 +128,28 @@ function RiverCargo() {
 
 export default function CourtDressing() {
   const destination = useGameStore((s) => s.destination);
-  if (destination === 'template-01') return <RoyalCourt />;
+  // Stage 1 (2026-08-20): template-01's own RoyalCourt now renders through
+  // DestinationCourtDressing below instead, mounted inside
+  // DestinationScope.tsx's own origin-offset group — this component never
+  // mixes destinations in one render pass, so a single early return is the
+  // whole carve-out (the old `destination === 'template-01'` branch this
+  // replaced is gone, not just unreachable). template-02/template-03
+  // (TourneyLists/RiverCargo) are untouched — SCOPED_DESTINATIONS holds
+  // only 'template-01' today.
+  if (destination && SCOPED_DESTINATIONS.has(destination)) return null;
   if (destination === 'template-02') return <TourneyLists />;
   if (destination === 'template-03') return <RiverCargo />;
+  return null;
+}
+
+/** Stage 1 (scene-isolation rearchitecture, 2026-08-20) · renders whichever
+ *  SCOPED_DESTINATIONS member's dressing exists, with `dest.origin`
+ *  subtracted at each piece's final position write (via RoyalCourt's own
+ *  `originOffset` threading through Grounded above) — meant to be mounted
+ *  inside DestinationScope.tsx's own origin-offset group. Only template-01
+ *  has dressing today (TourneyLists/RiverCargo stay on the default export
+ *  above, unaffected, since template-02/03 aren't in SCOPED_DESTINATIONS). */
+export function DestinationCourtDressing({ dest }: { dest: WorldDestination }) {
+  if (dest.id === 'template-01') return <RoyalCourt originOffset={dest.origin} />;
   return null;
 }

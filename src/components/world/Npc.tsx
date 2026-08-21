@@ -22,10 +22,19 @@ import { registerNpcMob } from '@/game/npcMobs';
 import { destinationGroundY } from './TemplateWorld';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
+import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
 
 const MOVE_CLIPS = new Set(['anim_c_walk', 'anim_r_restpose']);
 
-function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
+// origin-offset for an instance rendered inside DestinationScope.tsx's own
+// group (already translated by dest.origin) — the default export below
+// passes nothing and keeps every non-scoped destination's absolute-position
+// behavior byte-for-byte. See §2 of the Stage 1 plan: every OTHER value in
+// this file (destinationGroundY's x/z args, mob.x/mob.z, agent.position) stays
+// absolute — only the final g.position.set(...)/JSX position write is local.
+const ZERO_OFFSET = { x: 0, z: 0 };
+
+function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; index: number; originOffset?: { x: number; z: number } }) {
   const greetSeq = useGameStore((s) => s.npcGreetSeq);
   const greetId = useGameStore((s) => s.npcGreetId);
   const greetClip = useGameStore((s) => s.npcGreetClip);
@@ -110,7 +119,7 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x, 0, loc.z);
+      g.position.set(loc.x - originOffset.x, 0, loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -130,7 +139,7 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x, 0, loc.z);
+      g.position.set(loc.x - originOffset.x, 0, loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -148,7 +157,7 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x, 0, loc.z);
+      g.position.set(loc.x - originOffset.x, 0, loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -158,9 +167,12 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
 
     if (!schedule) {
       // residents stand on their bake's real terrain (these hillside scenes
-      // vary meters in relief); home NPCs stay on the flat meadow at y=0
+      // vary meters in relief); home NPCs stay on the flat meadow at y=0.
+      // destinationGroundY(def.x, def.z) stays the full ABSOLUTE value — see
+      // this file's own ZERO_OFFSET comment — only the final position.set
+      // write below is shifted into this group's local (origin-offset) space.
       const gy = def.world ? destinationGroundY(def.x, def.z) : 0;
-      g.position.set(def.x, gy, def.z);
+      g.position.set(def.x - originOffset.x, gy, def.z - originOffset.z);
       mob.x = def.x; mob.z = def.z;
       return;
     }
@@ -179,7 +191,11 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
     const moving = dist > 0.08;
     p.x += dx * Math.min(1, dt * 0.15);
     p.z += dz * Math.min(1, dt * 0.15);
-    g.position.set(p.x, 0, p.z);
+    // reachable only for home NPCs (schedule requires !def.world, so
+    // originOffset is always ZERO_OFFSET here today) — offset-subtracted
+    // anyway for the same defensive-parity reason as the other three
+    // useFrame branches above.
+    g.position.set(p.x - originOffset.x, 0, p.z - originOffset.z);
     mob.x = p.x;
     mob.z = p.z;
     // only steer the walk/idle animation when not mid-greet — a wave in
@@ -200,7 +216,7 @@ function CourtNpc({ def, index }: { def: NpcDef; index: number }) {
   });
 
   return (
-    <group ref={group} position={[def.x, 0, def.z]} rotation-y={def.yaw}>
+    <group ref={group} position={[def.x - originOffset.x, 0, def.z - originOffset.z]} rotation-y={def.yaw}>
       <RiggedFigure
         config={def.config}
         height={def.id === 'king' ? 1.85 : 1.75}
@@ -235,9 +251,13 @@ export default function Npc() {
   // Alric & Beda (2026-07-20): once recruited onto the roster (their
   // Villager id matches their NpcDef id), they're a real villager now —
   // Villagers.tsx renders them, not this static flavor figure.
+  // Stage 1 (2026-08-20): SCOPED_DESTINATIONS' own court NPCs now render
+  // through DestinationCourtNpcs below instead, so this stops double-
+  // rendering them — every other world (including "no destination" = home)
+  // is completely unaffected, since SCOPED_DESTINATIONS never contains null.
   const revealed = NPCS.filter(
     (n) => isNpcRevealed(n, completedQuests) && (n.world ?? null) === (destination ?? null)
-      && !villagers.some((v) => v.id === n.id),
+      && !villagers.some((v) => v.id === n.id) && !SCOPED_DESTINATIONS.has(n.world ?? ''),
   );
   return (
     <Suspense fallback={null}>
@@ -246,6 +266,31 @@ export default function Npc() {
           arrival would reshuffle everyone else's night-gathering spot */}
       {revealed.map((n) => (
         <CourtNpc key={n.id} def={n} index={NPCS.findIndex((x) => x.id === n.id)} />
+      ))}
+    </Suspense>
+  );
+}
+
+/** Stage 1 (scene-isolation rearchitecture, 2026-08-20) · same revealed-NPC
+ *  filter as the default export above, restricted to one SCOPED_DESTINATIONS
+ *  member and rendered with `dest.origin` subtracted at the final position
+ *  write in each — meant to be mounted inside DestinationScope.tsx's own
+ *  origin-offset <group>, so the same absolute stored `def.x`/`def.z` lands
+ *  in the right local spot. `villagers` exclusion kept even though no
+ *  villager currently has `world: dest.id` (Villagers.tsx has nothing to
+ *  move for Stage 1 — confirmed empty, not assumed) — the same future-proof
+ *  reasoning as npcs.ts's Alric/Beda recruitment carve-out in the default
+ *  export. */
+export function DestinationCourtNpcs({ dest }: { dest: WorldDestination }) {
+  const completedQuests = useGameStore((s) => s.completedQuests);
+  const villagers = useGameStore((s) => s.villagers);
+  const revealed = NPCS.filter(
+    (n) => isNpcRevealed(n, completedQuests) && n.world === dest.id && !villagers.some((v) => v.id === n.id),
+  );
+  return (
+    <Suspense fallback={null}>
+      {revealed.map((n) => (
+        <CourtNpc key={n.id} def={n} index={NPCS.findIndex((x) => x.id === n.id)} originOffset={dest.origin} />
       ))}
     </Suspense>
   );
