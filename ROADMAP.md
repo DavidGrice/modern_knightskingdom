@@ -6810,3 +6810,60 @@ generalizes it to all 8 real travel destinations, per the plan's own staged sequ
   scene-isolation rearchitecture is complete — all 8 real travel destinations now have genuine
   mount/unmount isolation.** Stage 3 (dungeon + arena) is next per the plan's own staged
   sequence.
+
+## Wave 18 item #5, Stage 3 — dungeon + arena, 2026-08-21
+
+**Honest reframe up front**: the plan's original one-line framing for this stage
+("procedurally generated, not baked — same mount/unmount discipline") turned out not to
+transfer cleanly once investigated. Dungeon and arena were never on the `TemplateWorld`/
+`DestinationScope` boundary Stages 1-2 built — they're rendered via special-cased branches
+inside `TemplateWorldRoot` that predate this whole rearchitecture, and that scene-graph
+mount/unmount was already confirmed adequate (verified live: `enterDungeon()`/`enterArena()`
+can only fire when `destination` is already falsy, so every real entry already goes through a
+full unmount/remount of the whole tree; neither has a real GLB bake, so Stage 0b's cache-release
+fix correctly doesn't apply). Extending `SCOPED_DESTINATIONS` to include them would have been a
+confirmed no-op — no `Buildings`/`NpcDef`/`TemplatePopulation`/`CourtDressing` content is tagged
+`world: 'dungeon'` or `'arena'` anywhere. Rather than manufacture busywork to match the plan's
+literal wording, the research pass looked one layer down — the same place Stage 0a/0b's own
+precedent points (ephemeral state that outlives a naive unmount because it lives in a leaf
+module or separate store) — and found real, previously-unknown, user-facing bugs there instead.
+
+- [COMPLETE] ✅ **Two real state-leak bugs found and fixed — SHIPPED 2026-08-21.** (1) `arenaState`
+  was only ever reset on death (`endArenaRun()`'s one call site, `combat.ts`'s knockout branch) —
+  the ordinary "Return Home" exit every destination offers never touched it, so `ArenaHud.tsx`
+  (which polls `arenaState.active`/`env` directly, with no `destination` linkage of its own) left
+  the "⚔️ [environment] — N kills" badge stuck on screen indefinitely after any voluntary
+  walk-out, until the player either died once or reloaded the page. (2) Neither dungeon- nor
+  arena-spawned enemies were ever removed from `useEnemyStore` on a voluntary exit — and arena
+  enemies were never removed on *any* exit path, since the death handler's arena branch
+  early-returns before reaching the general knockout code's unscoped `clear()`. Two concrete,
+  reproducible failure modes this caused: abandoning a partially-cleared dungeon descent left a
+  frozen leftover enemy that reappeared in the *next*, differently-generated layout (rooms are
+  renumbered from 0 every descent, so the stale `dungeonRoom` index collides) and permanently
+  blocked that room from ever registering cleared — silently costing the whole descent's reward
+  if it was the last room; and since the arena is explicitly an endless mode players leave with
+  enemies still alive, survivors accumulated in the store release-over-release with zero cap,
+  eventually starving `ArenaSpawner.tsx`'s global `MAX_TARGET` count and permanently breaking
+  monster spawning in *every future* arena session — a real, escalating regression reachable from
+  ordinary repeated play, not an edge case. **Fix**: a new scoped `removeByWorld(world)` action on
+  `useEnemyStore` (`combat.ts`), wired via a `useGameStore.subscribe()` sibling to the file's
+  existing `maxStamina` subscriber — tracking `destination` in a closure and firing whenever it
+  transitions away from `'dungeon'`/`'arena'`, rather than patching each exit call site
+  individually (this codebase's own documented precedent: a direct `gameStore.ts` → `combat.ts`
+  import would create a fresh cycle with the reverse edge that already exists, the same landmine
+  `Perception.ts`'s own header and `AgentManager.ts` already flag). This also means the fix covers
+  every current and future exit path automatically, not just the two known today. Plus an
+  unconditional `endArenaRun()` call added to `returnHome()` beside the existing `resetDungeon()`,
+  fixing the stuck-badge bug directly. **Verified live, both exact bug scenarios reproduced and
+  confirmed fixed**: left the dungeon via `returnHome()` while still alive with combat rooms
+  uncleared — enemies correctly removed from the store; re-entered — genuinely fresh, differently-
+  shaped layout with zero stale cleared rooms or frozen leftover enemies. Left the arena via
+  `returnHome()` with survivors alive — `arenaState` correctly reset (fixing the stuck HUD) and
+  survivors correctly removed from the store; re-entered with a different environment — kills
+  counter reset, and critically the spawner immediately produced fresh enemies rather than being
+  starved by leftover ghosts from the previous session. Templates 01/05 and a challenge map
+  spot-checked and confirmed completely unaffected. Zero console/page errors throughout. `npx tsc
+  --noEmit` / `npm run build`: both clean. No changes to `TemplateWorld.tsx`, `DungeonScene.tsx`,
+  `ArenaScene.tsx`, or `SCOPED_DESTINATIONS` — confirmed none were needed. **Stage 3 of the
+  scene-isolation rearchitecture is complete.** Stage 4 (the 6 challenge maps) is next and last,
+  per the plan's own staged sequence.

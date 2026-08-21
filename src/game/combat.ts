@@ -315,6 +315,11 @@ interface EnemyStore {
   ) => void;
   remove: (id: number) => void;
   clear: () => void;
+  /** Stage 3 (Wave 18 #5): drop every enemy stamped with this `world` (see
+   *  EnemyData.world above) without touching anyone else's — the scoped
+   *  counterpart to `clear()`'s full wipe, for a voluntary exit from a
+   *  world-tagged space (dungeon/arena today) rather than a knockout. */
+  removeByWorld: (world: string | null) => void;
 }
 
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
@@ -361,9 +366,36 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
   },
   remove: (id) => set({ enemies: get().enemies.filter((e) => e.id !== id) }),
   clear: () => set({ enemies: [] }),
+  removeByWorld: (world) => set({ enemies: get().enemies.filter((e) => (e.world ?? null) !== world) }),
 }));
 
 if (w) w.__kke = useEnemyStore;
+
+// Stage 3 (Wave 18 #5): dungeon-room and arena enemies were only ever
+// dropped from this store on a knockout (damagePlayer's own general clear()
+// below, which the arena's early-return death branch skips entirely) — never
+// on the ordinary voluntary exit (Return Home, or a future exit path). Left uncleared, a partially-cleared dungeon descent's survivor
+// re-appears frozen in the NEXT descent's differently-generated layout
+// (rooms are numbered from 0 every time, so a stale `dungeonRoom` index
+// collides) and permanently blocks that room from ever registering
+// `cleared`; arena survivors accumulate release-over-release since the mode
+// is explicitly endless, eventually starving ArenaSpawner.tsx's global
+// MAX_TARGET cap for every future session. React to the store here (a
+// sibling to the maxStamina subscriber above) rather than gameStore
+// importing this module back, which would create a fresh cycle — gameStore
+// already imports nothing from combat.ts, and combat.ts already imports
+// useGameStore the other way. Tracking the previous value in a closure
+// (rather than reading zustand's second `prevState` argument) mirrors
+// PlayerController.tsx's own pointer-lock subscriber for the same reason:
+// simplest thing that works, one clear precedent in this codebase already.
+let lastEnemyWorld: string | null = null;
+useGameStore.subscribe((s) => {
+  const world = s.destination ?? null;
+  if (world !== lastEnemyWorld && (lastEnemyWorld === 'dungeon' || lastEnemyWorld === 'arena')) {
+    useEnemyStore.getState().removeByWorld(lastEnemyWorld);
+  }
+  lastEnemyWorld = world;
+});
 
 /** passive reduction from worn armor (+ the Ironclad perk) — stacks
  *  additively but capped, so a shield block (75% reduction) stays the
