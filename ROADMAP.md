@@ -6601,3 +6601,33 @@ section for full detail.
 **Stage 0 of the scene-isolation rearchitecture (Wave 18 #4 + #5) is complete.** Stage 1 (the
 template-01 proof of concept for real destination-scoped mount/unmount) is next per the plan file's
 own staged sequence.
+
+- [PARTIAL] ✅ **Upside-down trees at some template destinations — template-03 FIXED 2026-08-20;
+  template-01/-05/-06 identified but deliberately left unfixed.** Confirmed by prior investigation
+  this couldn't be a per-asset name lookup (baked mesh nodes carry generic, material-split names with
+  zero semantic identity) — needed a live visual/geometric identification pass instead, which took
+  three attempts to land cleanly (two prior attempts were cut short by session limits/a machine
+  restart mid-investigation, not by the problem itself). The third pass confirmed the real cause on
+  `template-03` (The River Landing): mesh nodes `mesh_0_27`/`mesh_0_31` — a decorative conifer/topiary
+  row along the riverbank — ship with inverted canopy geometry AT THE SOURCE, independent of and
+  invisible to the existing whole-bake `flipY` correction (which mirrors the entire scene uniformly
+  and can't selectively re-flip one already-wrong submesh back). Confirmed live, not guessed: raycast
+  from the actual camera through the on-screen inverted canopies (bulging at the top, tapering to a
+  point at the ground, a bare stem poking into open air) resolved to exactly these two mesh nodes;
+  mirroring each mesh's own local geometry 180° about its own bounding-box center turned every tree in
+  the row into an ordinary right-side-up shape, confirmed with before/after screenshots through a
+  fresh page load exercising the real persisted code path. Fixed via a new
+  `destinationId → meshIndex[]` lookup (`TREE_MESH_ORIENTATION_FIX`, `TemplateWorld.tsx`) applied to
+  the cloned scene before the outer scale/flipY transform, since it mutates each target mesh's own
+  local geometry independent of the outer transform — populated with only the one confirmed entry.
+  **Honestly left unfixed, not silently dropped**: the identical inverted-canopy defect is also
+  visible via screenshot on `template-01`, `template-05`, and `template-06`, which reuse a
+  near-identical asset — raycast-confirmed their mesh nodes too, but the equivalent live fix there had
+  an unexplained side effect (the whole row went invisible instead of correcting) that wasn't
+  root-caused within a reasonable investigation budget. Rather than ship an unverified guess, those
+  three were deliberately left out of the fix map; the code comment documents the diagnostic approach
+  (live raycast + before/after screenshot) that worked for template-03, for whoever picks this up next
+  — the mesh indexes will NOT simply transfer, each needs its own fresh confirmation pass. Verified:
+  revisited all 9 destinations after the fix, zero console/page errors; `template-01` (same asset
+  family, untouched by this specific fix) renders identically to before, confirming no collateral
+  damage from the new correction step. `npx tsc --noEmit` / `npm run build`: both clean.
