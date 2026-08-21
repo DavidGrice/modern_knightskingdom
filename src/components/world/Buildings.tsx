@@ -19,8 +19,8 @@ import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
 
 // origin-offset for a piece rendered inside DestinationScope.tsx's own
 // group (already translated by dest.origin) — every OTHER call site (home,
-// templates 02-08, challenges, dungeon, arena) passes nothing and keeps
-// today's absolute-position behavior byte-for-byte.
+// dungeon, arena — the SCOPED_DESTINATIONS non-members, worlds.ts) passes
+// nothing and keeps today's absolute-position behavior byte-for-byte.
 const ZERO_OFFSET = { x: 0, z: 0 };
 
 function Campfire({ lit = true }: { lit?: boolean }) {

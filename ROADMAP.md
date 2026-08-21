@@ -6867,3 +6867,52 @@ module or separate store) — and found real, previously-unknown, user-facing bu
   `ArenaScene.tsx`, or `SCOPED_DESTINATIONS` — confirmed none were needed. **Stage 3 of the
   scene-isolation rearchitecture is complete.** Stage 4 (the 6 challenge maps) is next and last,
   per the plan's own staged sequence.
+
+## Wave 18 item #5, Stage 4 (FINAL) — the 6 challenge maps, 2026-08-21
+
+Unlike Stage 3, the plan's literal framing *did* transfer here — but the research still verified
+that directly rather than assuming it from the template-02-08 precedent, and correctly found the
+real answer was more nuanced than a blind copy of Stage 2.
+
+- [COMPLETE] ✅ **Challenge grounds added to `SCOPED_DESTINATIONS`; a real, previously-unclosed
+  gap fixed — SHIPPED 2026-08-21.** Two things distinguish challenge grounds from dungeon/arena
+  (Stage 3), confirmed live, not assumed: they render through the exact same generic
+  `TemplateWorldRoot` branch templates 01-08 use (real baked `.glb`s, not the dungeon/arena
+  special-case), and — unlike dungeon/arena, which are structurally unclaimable —
+  `ClaimBanner.tsx` excludes only `'dungeon'`/`'arena'`, so a challenge ground can genuinely be
+  claimed and built on today via the exact same flow as any template. That meant a real gap
+  existed: `Buildings.tsx`'s default export was rendering any building placed on a claimed
+  challenge ground through the flat/absolute path (since `challenge-N` wasn't in
+  `SCOPED_DESTINATIONS`) — the same pre-Stage-2 shape templates 02-08 used to have. Fixed by
+  adding all 6 challenge ids to `SCOPED_DESTINATIONS` (`worlds.ts`) — mechanical, since
+  `DestinationBuildings`/`BuildingMesh`/`ConstructionSite`/`CartMesh` were already fully generic
+  on `dest.id`/`dest.origin` from Stage 2's own work. **Also investigated and correctly ruled
+  out** the other suspect: `buildChallenge.ts`'s own header explicitly groups it with
+  `arenaState` as the same "ephemeral leaf-module run state" pattern Stage 3 found a real bug in
+  — but confirmed live that its architecture is fundamentally different and safe: `arenaState`
+  was *push*-based (reset only from specific call sites, one of which Return Home never called);
+  `buildChallengeState` is *poll*-based, re-checking the live `destination` unconditionally every
+  frame from `PlayerController.tsx`'s main loop and self-healing to inactive the instant it
+  doesn't match, on every exit path (Return Home, knockout, or winning) with no gap — the exact
+  opposite shape of the bug Stage 3 found, not the same bug recurring. No code change was needed
+  there, and none was made. **Verified live across all 6 challenge grounds individually** (65
+  automated checks): real bake rendering, real `claimWorld()` + building placement with
+  correct-offset confirmation (ruling out both double-offset and missing-offset failure shapes),
+  cross-contamination checks against the immediately-prior destination, real GLTF cache release
+  confirmed via network-request counts (not inference) proving a genuine re-fetch on re-entry;
+  separately, a real mid-attempt leak test on challenge-1 (the only one with the timed mechanic
+  wired up) — started a real timed attempt, left via `returnHome()` mid-attempt, confirmed
+  `buildChallengeState.active` self-healed correctly and a fresh second attempt could start
+  cleanly. A regression sweep confirmed templates 01/05 and dungeon/arena (Stages 1-3) remain
+  completely unaffected. Zero console/page errors across the entire run. `npx tsc --noEmit` /
+  `npm run build`: both clean.
+
+**The scene-isolation rearchitecture (Stages 0 through 4) is complete.** Every real,
+claimable/buildable destination in the game — all 8 travel templates and all 6 challenge
+grounds, 14 in total — now has genuine, structural mount/unmount isolation instead of sharing
+one flat, always-mounted render tree. Along the way this effort also found and fixed two
+unrelated but real, previously-unknown bugs (Stage 3's dungeon/arena state leaks) that the
+original circle-boundary/mount-isolation work would never have surfaced on its own. Stages 5
+(gating the ~11 home-only components that still render/tick while the player is away) and 6
+(docs cleanup) remain in the plan file as later, explicitly out-of-scope-for-now work — not
+started.
