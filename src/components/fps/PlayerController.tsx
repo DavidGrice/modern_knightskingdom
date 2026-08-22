@@ -1756,7 +1756,32 @@ export default function PlayerController() {
       // would have ridden the player straight through the hillside.
       let floorY: number;
       if (st.destination) {
-        floorY = destinationGroundY(p.x, p.z);
+        // SAME stale-mount race as the horizontal walkable-rect clamp above
+        // (see its own comment for the full mechanism) — but live-caught as
+        // its OWN, worse bug (2026-08-21): destinationGroundY ultimately
+        // raycasts whatever `mountedRoot` currently holds with NO check that
+        // it belongs to `st.destination`, unlike the horizontal clamp which
+        // already gates on `getMountedRegion() === st.destination`. During
+        // the handful of frames after travelTo() flips st.destination but
+        // before the new bake's async GLB has actually mounted, this was
+        // sampling the OLD, still-mounted destination's geometry at the NEW
+        // destination's raw world coordinates — landing on top of whatever
+        // happened to be there on the old bake (live-traced: up to 234.7
+        // units into the air, template-04 -> template-05), which the smooth
+        // ground-lerp below would then glide the player up to. Once the real
+        // bake mounted a frame or two later, the real (much lower) floorY
+        // dropped grounded.current back to false and the player free-fell
+        // several real seconds back down to actual ground — self-healing,
+        // but a jarring, broken-looking launch right at arrival. Guarded the
+        // same way: for these few frames, hold floorY at the player's OWN
+        // current eye-relative height instead of sampling anything — that
+        // makes groundEye equal p.y below, a no-op for every branch of the
+        // gravity resolve until the real bake confirms and destinationGroundY
+        // is trustworthy again. Exactly as safe as the horizontal guard's own
+        // reasoning: pendingTeleport already placed p.y at a deliberately
+        // chosen eye height for the new destination, and no real fall can
+        // have accumulated in the handful of frames a same-scene mount takes.
+        floorY = getMountedRegion() === st.destination ? destinationGroundY(p.x, p.z) : p.y - eyeOff;
       } else if (riding) {
         floorY = _terrainOut.y = homeGroundY(p.x, p.z);
       } else {

@@ -100,7 +100,16 @@ export const STARTER_VILLAGE_CLEAR: { x: number; z: number; r: number }[] = [
 // template-05 — the rebellion's seat, pitched on the terrain-probed flat
 // ground at the foot of his castle). See CedricCamp.tsx; still the game's
 // capstone boss encounter, now reached by actually traveling there.
-export const CEDRIC_CAMP = { x: 2185, z: 945 };
+// 2026-08-21: repositioned from (2185, 945) after DEST_WORLD_SCALE's
+// research-spike halving (worlds.ts) left the old spot 329 units outside the
+// real walkable rect union (templateWalkableFootprint.ts) — already 603
+// units outside pre-halving, a pre-existing bug this pass also fixes. The
+// nearest-point-in-union nudge lands in a real but generic corner of the
+// bake's walkable area; hand-picked this spot instead via a live
+// walk-around (same approach worlds.ts's own template-03 river-landing
+// spawn used) — open grass with the diorama's own hills on the skyline,
+// confirmed clean from multiple facings, real ground height.
+export const CEDRIC_CAMP = { x: 2764, z: 1869 };
 export const CEDRIC_WORLD = 'template-05';
 export const CEDRIC_REVEAL_QUEST = 'knights_arms';
 export const CEDRIC_INTERACT_RANGE = 5;
