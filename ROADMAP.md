@@ -6916,3 +6916,62 @@ original circle-boundary/mount-isolation work would never have surfaced on its o
 (gating the ~11 home-only components that still render/tick while the player is away) and 6
 (docs cleanup) remain in the plan file as later, explicitly out-of-scope-for-now work — not
 started.
+
+## Destination world scale halved — a knowingly-risky, explicitly-confirmed change, 2026-08-21
+
+**Not a default recommendation.** The user asked for the 8 template destinations' visual scale
+cut to half its current size. Before implementing, the real consequence was computed and shown
+to them directly: at the current scale, the internal human-scale reference in each bake renders
+at ~1.62m, already close to the player's own fixed 1.75m height — halving it would drop that
+reference to ~0.81m, meaning the player would loom nearly 2x over every building and NPC in
+these dioramas, the same category of "broken scale" bug this project's history had already
+rejected once before (`TEMPLATE_WORLD_SCALE`'s own 0.06 value, "dollhouse-sized castles," just
+in the opposite direction). **The user was told this plainly and confirmed they wanted the full
+cut anyway.** Implemented as asked.
+
+- [COMPLETE] ✅ **`DEST_WORLD_SCALE` halved (0.3 → 0.15); every downstream fixed-coordinate
+  consequence found and fixed — SHIPPED 2026-08-21.** Every hand-placed entity at these
+  destinations (6 named NPCs, 5 guild halls, Cedric's camp, arrival-spawn points) is stored as a
+  fixed absolute world coordinate — these don't move when `worldScale` changes, but the real bake
+  geometry scales toward/away from `dest.origin`, so the ground actually under each fixed point
+  shifts to different terrain. Checked all 13 entities live, at both scales, not assumed: 7 were
+  unaffected (already exactly on real ground at the new scale too). **2 were genuine new
+  regressions caused by this specific change** (Richard the Strong and the Knights' Order hall,
+  both on template-02, landed 42-46 units outside the real walkable terrain) — repositioned via
+  the same nearest-point-in-union methodology already established for arrival spawns. **3 turned
+  out to be a pre-existing bug this pass incidentally surfaced, not something the halving caused**
+  (Builders' Guild hall, Cedric's camp, Miners' Brotherhood hall were already broken — badly, up
+  to 3505 units off — at the *current, unhalved* scale; confirmed by testing the old scale
+  directly, screenshots showing the camera wedged in clipped geometry or standing in an empty
+  distant field). Two of these three needed a real, hand-picked reposition rather than the
+  automatic nearest-point formula (which just lands in the nearest large classified rect,
+  wherever that happens to be, not a sensible "near the lodge/camp" spot) — found via a live
+  walk-around of each diorama, same technique already used for template-03's river-landing
+  arrival spawn. All 8 `TEMPLATE_ARRIVAL_SPAWN` points recomputed at the new scale (the
+  hand-picked template-03 riverbank spot was independently re-tested against the new scale and
+  survived unchanged, so it was kept rather than replaced). **A real, previously-unknown,
+  unrelated bug was found and fixed along the way**: live testing (not just reading code) caught
+  the player launching up to 234.7 world units into the air when traveling directly between two
+  already-mounted destinations (worst case: template-04 → template-05, now the natural path to
+  Cedric's camp), taking a full 6 seconds of visible free-fall to land safely. Root cause: the
+  horizontal walkable-rect clamp already guards against sampling a stale, still-mounted previous
+  destination's mesh during the async GLB-swap transition (`getMountedRegion() === st.destination`
+  — Stage 1's own established pattern), but the *vertical* gravity/ground-snap resolve had no
+  matching guard, so for a few frames after `travelTo()` flips `destination` but before the new
+  bake mounts, gravity was sampling the OLD bake's geometry at the NEW destination's coordinates.
+  This bug predates and is independent of the scale change — it would exist at any
+  `DEST_WORLD_SCALE` value — but the new coordinates this pass introduced happened to trigger its
+  worst manifestation in ordinary sequential play. Fixed with the same guard pattern already used
+  for the horizontal clamp. **Verified live, thoroughly**: independently recomputed
+  `normalizeTemplateBake`'s real bbox math from the actual `.glb` files at both scales (exact
+  0.5000 ratio for all 8 templates) and cross-checked against the running server's own
+  `getBakeOffset()` — zero delta on every one; all 6 NPCs and all 5 guild halls + Cedric's camp +
+  the Battle Dome teleport-tested with zero further clamp movement, real dialogue/guild panels
+  opening correctly; all 8 arrival spawns confirmed landing cleanly; wander-tested in 4 directions
+  from every arrival point across all 8 destinations (32 checks) with no void/fall-through; the
+  gravity-race fix re-verified by frame-by-frame Y-position tracing across the full
+  template-01→...→08 travel sequence — zero spike at every hop after the fix, versus a confirmed
+  234.7-unit spike before it. Zero console/page errors throughout. `npx tsc --noEmit` /
+  `npm run build`: both clean. **Honestly flagged, not fixed here**: template-04's bake classifies
+  only a single walkable rect for its entire diorama (a real, separate content/classification gap,
+  not something a coordinate pick can solve) — worth its own follow-up look.

@@ -264,7 +264,13 @@ export const NPCS: NpcDef[] = [
     },
     // Phase 20: Richard keeps the lists at The Tourney Grounds (template-02,
     // lands at ~(1300, 877.5)) — jousting happens on his own field now
-    x: 1300, z: 888, yaw: Math.PI,
+    // 2026-08-21: repositioned from (1300, 888) after DEST_WORLD_SCALE's
+    // research-spike halving (worlds.ts) — the old spot now sits 42 units
+    // outside the real walkable rect union (templateWalkableFootprint.ts).
+    // Nearest-point-in-union + 3-unit inward nudge, live-verified (teleport
+    // lands exactly here, real ground height, still the tourney field near
+    // the jousting props/castle).
+    x: 1300, z: 933, yaw: Math.PI,
     world: 'template-02',
     greetSound: 'greeting_richard',
     portrait: '/assets/minifigs/minifigrichardstrong00.png',

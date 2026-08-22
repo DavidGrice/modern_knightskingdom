@@ -24,10 +24,33 @@ export interface GuildDef {
 
 export const SWITCH_TITHE = 25; // gold to change banners after first joining
 
+// 2026-08-21: hallX/hallZ for woodsmen/builders/miners/knights repositioned
+// after DEST_WORLD_SCALE's research-spike halving (worlds.ts) moved the real
+// walkable-ground rects (templateWalkableFootprint.ts) out from under the
+// old hand-placed coordinates. anglers' hall (template-03) was unaffected —
+// still 0 distance from the real walkable union at the new scale, left as
+// originally placed.
+//   knights (template-02): was (1312,884), 46 units outside the union ->
+//     nearest-point-in-union + 3-unit inward nudge, live-verified.
+//   miners (template-08): was (3112,902), 58 units outside (already 18
+//     outside pre-halving — a pre-existing bug this pass also fixes) ->
+//     same nearest-in-union nudge, live-verified.
+//   woodsmen (template-07) and builders (template-04): the nearest-in-union
+//   nudge for these two lands in a real but generic, distant corner of each
+//   bake's one huge classified rect — technically valid ground but not a
+//   sensible "near the lodge/siege works" spot. Hand-picked via a live
+//   walk-around of each diorama instead (same approach worlds.ts's own
+//   template-03 river-landing spawn used): woodsmen's new spot sits in a
+//   clear, correctly-scaled stretch of the frozen pass with the snowy
+//   mountain backdrop in view; builders' new spot is deep inside that
+//   bake's only walkable rect, confirmed clean from all four cardinal
+//   directions (this diorama's classification genuinely has just the one
+//   rect — a separate, pre-existing classification gap, not something a
+//   coordinate pick can fix, and already flagged as its own follow-up).
 export const GUILDS: GuildDef[] = [
   {
     id: 'woodsmen', name: "Woodsmen's Lodge", icon: '🪓',
-    world: 'template-07', hallX: 2812, hallZ: 884,
+    world: 'template-07', hallX: 3350, hallZ: 2058,
     challengeId: 'woodcutter',
     blurb: 'Axe-folk of the high timber. The Lodge asks only that the forest already knows your name.',
     passiveLabel: 'Deep Grain',
@@ -35,7 +58,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'miners', name: "Miners' Brotherhood", icon: '⛏️',
-    world: 'template-08', hallX: 3112, hallZ: 902,
+    world: 'template-08', hallX: 3110.59, hallZ: 962.65,
     challengeId: 'quarrier',
     blurb: 'Delvers of the Old Ruins. Stone remembers who splits it with respect.',
     passiveLabel: 'Ore Sense',
@@ -51,7 +74,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'builders', name: "Builders' Guild", icon: '🔨',
-    world: 'template-04', hallX: 1912, hallZ: 862,
+    world: 'template-04', hallX: 2299.56, hallZ: 2641.42,
     challengeId: 'architect',
     blurb: 'Engineers of the siege works. Every wall in the realm knows our marks.',
     passiveLabel: 'Master Joinery',
@@ -59,7 +82,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'knights', name: "Knights' Order", icon: '⚔️',
-    world: 'template-02', hallX: 1312, hallZ: 884,
+    world: 'template-02', hallX: 1310.03, hallZ: 932.26,
     challengeId: 'monster_hunter',
     blurb: 'Sworn blades of the tourney field. Strength proven, strength shared.',
     passiveLabel: 'Weight of the Order',
