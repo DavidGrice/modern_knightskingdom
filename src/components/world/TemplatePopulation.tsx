@@ -54,7 +54,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { SCOPED_DESTINATIONS, WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
 import { getBakeOffset, sampleTemplateGroundY, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
 import PropModel from './PropModel';
-import RiggedFigure from '../character/RiggedFigure';
+import RiggedFigure, { useIdleFidget } from '../character/RiggedFigure';
 import type { CharacterConfig } from '@/game/types';
 import mapPopulation from '@/game/data/mapPopulation.generated.json';
 
@@ -183,6 +183,19 @@ function Grounded({ x, z, rotationY, originOffset = ZERO_OFFSET, children }: { x
   return <group ref={group} rotation-y={rotationY}>{children}</group>;
 }
 
+/** the decorative-actor rows (Cedric's cameos, Weezil, Gilbert, generic-
+ *  good/generic-bad troops) — no NpcDef/Agent exists for any of these (see
+ *  NAMED_COURT_FAMILIES's own comment on why the same donor family can't be
+ *  relocated to one), so they get RiggedFigure's local, non-Agent idle-clip
+ *  cycle (useIdleFidget) instead of a permanent frozen anim_r_restpose. A
+ *  separate component, not inlined in PopulationInstance below, so the
+ *  timer/hook only runs for actual actor rows — the far more numerous prop
+ *  rows never pay for it. */
+function DecorativeActor({ config }: { config: CharacterConfig }) {
+  const { clip, loop, onClipEnd } = useIdleFidget();
+  return <RiggedFigure config={config} height={1.75} clip={clip} loop={loop} onClipEnd={onClipEnd} />;
+}
+
 function PopulationInstance({ row, dest, scaleCompensation, originOffset = ZERO_OFFSET }: { row: PopulationRow; dest: WorldDestination; scaleCompensation: number; originOffset?: { x: number; z: number } }) {
   const x = dest.origin.x + row.position[0] * scaleCompensation;
   const z = dest.origin.z + row.position[2] * scaleCompensation;
@@ -196,7 +209,7 @@ function PopulationInstance({ row, dest, scaleCompensation, originOffset = ZERO_
     if (NAMED_COURT_FAMILIES.has(family)) return null;
     return (
       <Grounded x={x} z={z} rotationY={row.rotationY} originOffset={originOffset}>
-        <RiggedFigure config={characterConfigFor(row.assetRef)} height={1.75} clip="anim_r_restpose" />
+        <DecorativeActor config={characterConfigFor(row.assetRef)} />
       </Grounded>
     );
   }

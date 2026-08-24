@@ -16,7 +16,7 @@ import { useEnemyStore } from '@/game/combat';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD } from '@/game/data/world';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import PropModel from './PropModel';
-import RiggedFigure from '../character/RiggedFigure';
+import RiggedFigure, { useIdleFidget } from '../character/RiggedFigure';
 import type { CharacterConfig } from '@/game/types';
 
 const CEDRIC_CONFIG: CharacterConfig = {
@@ -62,6 +62,13 @@ export default function CedricCamp() {
       group.current.position.y = sampleTemplateGroundY(CEDRIC_CAMP.x, CEDRIC_CAMP.z);
     }
   });
+  // drives the idle boss AND the jailed-after-defeat figure below with a
+  // local ambient idle-clip cycle rather than a permanent frozen restpose —
+  // Enemies.tsx already owns his real *fight* animation once combat starts,
+  // this is only his pre/post-fight idle pose. The two JSX blocks below are
+  // mutually exclusive (alive XOR defeated), so one hook instance safely
+  // drives whichever figure is actually mounted.
+  const idle = useIdleFidget();
 
   if (!revealed || destination !== CEDRIC_WORLD) return null;
 
@@ -78,14 +85,14 @@ export default function CedricCamp() {
       {!defeatedCedric && !cedricAlive && (
         <Suspense fallback={null}>
           <group rotation-y={Math.PI}>
-            <RiggedFigure config={CEDRIC_CONFIG} height={1.9} keepProps clip="anim_r_restpose" />
+            <RiggedFigure config={CEDRIC_CONFIG} height={1.9} keepProps clip={idle.clip} loop={idle.loop} onClipEnd={idle.onClipEnd} />
           </group>
         </Suspense>
       )}
       {defeatedCedric && (
         <Suspense fallback={null}>
           <group position={[0, 0, 2.5]}>
-            <RiggedFigure config={CEDRIC_CONFIG} height={1.9} keepProps clip="anim_r_restpose" />
+            <RiggedFigure config={CEDRIC_CONFIG} height={1.9} keepProps clip={idle.clip} loop={idle.loop} onClipEnd={idle.onClipEnd} />
             {/* the same portcullis lattice used for gates — bars on the man
                 who "we'll soon have safely behind bars" */}
             <PropModel url="/assets/props/windows_doors/06_l318500.glb" height={2.4} position={[0, 0, -0.4]} />

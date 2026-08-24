@@ -10,6 +10,7 @@ import type { CharacterConfig } from '@/game/types';
 import { useAppStore } from '@/game/store/appStore';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
 import { playerState } from '@/game/playerState';
+import { FIDGET_CLIPS } from '@/ai/actions/ambient';
 
 /** scratch for the LOD distance check below — module-scope like every other
  *  per-frame scratch object in this codebase (see PlayerController.tsx) */
@@ -152,4 +153,53 @@ export default function RiggedFigure({
 
   if (!rig) return null;
   return <primitive object={rig.group} />;
+}
+
+const REST_CLIP = 'anim_r_restpose';
+// wide spread so a crowd of these never reads as synchronized puppets —
+// each instance rolls its own next-fidget delay independently
+const IDLE_FIDGET_MIN_REST = 4;
+const IDLE_FIDGET_MAX_REST = 11;
+
+function randomFidgetRest() {
+  return IDLE_FIDGET_MIN_REST + Math.random() * (IDLE_FIDGET_MAX_REST - IDLE_FIDGET_MIN_REST);
+}
+
+/** Drives the `clip`/`loop`/`onClipEnd` trio for a decorative, non-Agent
+ *  figure — the same controlled-clip contract every other RiggedFigure
+ *  caller already supplies by hand, generated locally on a timer instead of
+ *  through a real NpcDef/Agent. For the figures this exists for (Cedric's
+ *  cameos, Weezil, Gilbert, generic troops — TemplatePopulation.tsx/
+ *  CedricCamp.tsx), registering a real Agent isn't an option: see
+ *  TemplatePopulation.tsx's own header comment for why the raw Grok
+ *  position data resolves thousands of world units from dest.origin for
+ *  this same donor family, deep in unreachable background terrain.
+ *
+ *  Reuses the exact FIDGET_CLIPS pool `idle_fidget` (ai/actions/ambient.ts)
+ *  plays for every real NPC's own Agent-driven ambient behavior — same
+ *  clips, same "background life only" curation, just cycled locally rather
+ *  than through the Reasoner. The return-to-rest signal is RiggedFigure's
+ *  own onEnd callback (the clip's real length), exactly like Npc.tsx's
+ *  `onClipEnd={() => setClip('anim_r_restpose')}` already uses to settle a
+ *  greet wave back to idle. */
+export function useIdleFidget() {
+  const [clip, setClip] = useState(REST_CLIP);
+  const [loop, setLoop] = useState(true);
+  const restTimer = useRef(randomFidgetRest());
+
+  useFrame((_, dt) => {
+    if (clip !== REST_CLIP) return; // mid-fidget already — onClipEnd below settles it
+    restTimer.current -= dt;
+    if (restTimer.current > 0) return;
+    setClip(FIDGET_CLIPS[Math.floor(Math.random() * FIDGET_CLIPS.length)]);
+    setLoop(false);
+  });
+
+  const onClipEnd = () => {
+    setClip(REST_CLIP);
+    setLoop(true);
+    restTimer.current = randomFidgetRest();
+  };
+
+  return { clip, loop, onClipEnd };
 }

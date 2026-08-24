@@ -23,7 +23,10 @@ import type { Curve } from '../core/curves';
 // (anim_r_greet1/anim_r_regalwave — reserved for gameStore.pokeNpc's own
 // click-triggered greeting, and for notice.ts's passive reaction) — this
 // pool is background life only.
-const FIDGET_CLIPS = ['anim_c_think', 'anim_c_confused', 'anim_c_attention', 'anim_c_pleased', 'anim_r_congratulate'];
+// Exported: RiggedFigure.tsx's useIdleFidget reuses this same pool for
+// decorative, non-Agent figures (TemplatePopulation.tsx/CedricCamp.tsx) that
+// have no NpcDef to route through this Action's real Reasoner path at all.
+export const FIDGET_CLIPS = ['anim_c_think', 'anim_c_confused', 'anim_c_attention', 'anim_c_pleased', 'anim_r_congratulate'];
 
 // No real per-clip duration reaches this module (that's rig/animator-side
 // data, lazily loaded by RiggedFigure/MinifigAnimator) — same "fixed hold,
