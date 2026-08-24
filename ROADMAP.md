@@ -6975,3 +6975,31 @@ cut anyway.** Implemented as asked.
   `npm run build`: both clean. **Honestly flagged, not fixed here**: template-04's bake classifies
   only a single walkable rect for its entire diorama (a real, separate content/classification gap,
   not something a coordinate pick can solve) — worth its own follow-up look.
+
+## Decorative Lego figures no longer frozen — real ambient idle animation, 2026-08-24
+
+- [COMPLETE] ✅ **Cedric's cameos, Weezil, Gilbert, generic-good/generic-bad troops, and Cedric's
+  own camp figure (alive + jailed) all get real ambient idle-clip cycling — SHIPPED 2026-08-24.**
+  13 figures across `TemplatePopulation.tsx`'s decorative actor rows (templates 02/03/04/06/07)
+  and `CedricCamp.tsx`'s primary boss figure were permanently locked to `anim_r_restpose` with no
+  state at all — the only rigged characters in the game that never moved. These are not real
+  `NpcDef`/Agent entities and can't become one: the same raw Grok cast position data resolves
+  thousands of world units from `dest.origin`, deep in unreachable background terrain (documented
+  in `TemplatePopulation.tsx`'s own header, found in Wave 17 #5) — registering a real Agent for
+  any of them risks that exact bug. Fix: a new `useIdleFidget()` hook (`RiggedFigure.tsx`) drives
+  the same `clip`/`loop`/`onClipEnd` contract every other `RiggedFigure` caller already supplies —
+  rests on `anim_r_restpose`, counts down a per-instance randomized 4–11s timer (so a crowd never
+  reads as synchronized puppets), plays one random clip from `ambient.ts`'s `FIDGET_CLIPS` pool
+  (now exported — the exact pool the real NPCs' own `idle_fidget` Action already uses) once, then
+  settles back via the clip's real `onEnd` length, matching the same settle-to-rest convention
+  `Npc.tsx` already uses for its greet-wave. `NAMED_COURT_FAMILIES`'s skip logic, `Enemies.tsx`'s
+  real Cedric combat animation, and the 5 named court NPCs' own `courtAmbientSync.ts` Agent path
+  are all untouched by this change — confirmed both by reading the diff and live. **Verified live,
+  not just read**: all 5 checks passed against real running game state — decorative rows on
+  templates 02/04/06 genuinely cycle rest↔fidget over a live 15s window; Cedric's own camp figure
+  on template-05 animates pre-fight; all 5 named court NPCs still show exactly one rig instance
+  each (no decorative duplicate, real Agent path intact) and still animate via their own system;
+  a real Cedric combat encounter still plays his real fight clip via `Enemies.tsx`, fully
+  independent of the idle-cycle change, with the idle figure cleanly unmounting during the fight;
+  zero console/page errors throughout. `npx tsc --noEmit` / `npm run build`: both clean (verified
+  independently in the isolated worktree, not just by the implementing pass).
