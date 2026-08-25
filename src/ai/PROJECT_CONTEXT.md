@@ -188,10 +188,62 @@ rooms should happen before phase 2 starts, not during.
   vary 12 m+. Never hardcode `y = 0` for anything that can travel.
 - **Instance separation.** The nine destination worlds are not separate
   scenes; they sit far apart in one shared coordinate space (template-01 is
-  around x≈1000, cedric's camp x≈2185). Anything with a position must also
-  carry which world it belongs to, or it renders in the sky above the
-  homestead. The AI system models this as `agent.region` (`null` = home) and
-  drops off-region agents to LOD tier D.
+  around x≈1000, cedric's camp x≈2185). As of the Wave 18 #5 scene-isolation
+  rearchitecture, a mismatched `world` no longer just risks rendering in the
+  wrong place — the content is never mounted at all. Most list-shaped actors
+  (buildings, court NPCs, villagers, resource nodes, court dressing, guild
+  halls, a destination's own claimed structures) filter themselves to
+  `(x.world ?? null) === (destination ?? null)` before rendering a row, and
+  whole home-only environment pieces (the homestead terrain bake, the road,
+  the signpost, the starter-village dressing, the merchant) are conditionally
+  mounted at GameWorld.tsx's own call site the same way. Anything with a
+  position still must carry which world it belongs to — the failure mode is
+  now "renders nowhere," not "renders in the wrong place."
+
+  Two exceptions to that filter, both deliberate: `Enemies.tsx` mounts a
+  home-world enemy (`world` null) unconditionally, in addition to whichever
+  destination's own enemies currently match — so a raid does not just render
+  in the wrong place if this were skipped, it would freeze outright, since
+  each `<Enemy>` instance owns the only `useFrame` that ever advances that
+  mob's position/HP/state (Wave 18 #5 bugfix, after the first version of this
+  rearchitecture shipped that exact freeze). `Defenders.tsx` never filtered
+  by world at all — every recruited defender stays mounted regardless of
+  where the player currently is. Both rely on the same spatial argument as
+  the paragraph above: home sits near the origin, every destination sits
+  thousands of units away in the same shared space, so a mounted home actor
+  is never actually in the current camera's view once the player has
+  travelled elsewhere — there is nothing to hide.
+
+  This isolation is a RENDER guarantee only, not a simulation pause: raids
+  (including the raiders' own movement, keep-battering, and combat with
+  defenders — not just the supporting systems below), construction progress,
+  and villager/defender activity at the homestead deliberately keep
+  resolving in real time while the player is at a destination (a confirmed
+  design choice). The battering ram (`RaiderRam.tsx`), the emplacement/charge
+  defense tick (`Emplacements.tsx`), the arena spawner, and this AI runtime
+  itself all stay unconditionally mounted for exactly that reason, each keyed
+  off its own internal `destination`/`isHomeBuilding` check rather than a
+  GameWorld.tsx-level gate — and `Enemies.tsx`'s own spawner `useFrame` (the
+  raid trigger and its "beaten back" resolution/payout) is no longer gated on
+  `destination` either, for the same reason: a raid that was already running
+  when the player left must still be able to conclude, not just hang until
+  they return. Every position that logic touches (`roadEntry()`, `HOME_X`/
+  `HOME_Z`, the ram's own ring) is home-anchored rather than derived from the
+  player's own live position, which is what makes running it while away
+  safe. The one deliberate exception within that spawner is the *night
+  skeleton rise*, which stays gated on `destination` — its spawn point is
+  genuinely `playerState.x/z`-relative, so it only makes sense while the
+  player is standing there to see it. The raid's own loud one-shot audio
+  (warcry/horn/voice barks — `audio.play`/`playVoice`, not the positional
+  `playAt`) is also `!destination`-gated for the same reason ROADMAP.md's own
+  older TODO called out: a raid resolving while away should notify (a
+  `st.notify` toast fires unconditionally either way), not blare a sound the
+  player isn't there to place.
+
+  The AI system's own `agent.region` (`null` = home) is a separate,
+  unaffected concern — it throttles a given agent's *cognition* rate (LOD
+  tier D when off the camera's active region), independent of whether that
+  region currently has anything mounted for the player to see.
 - **The player transform is a write-only mirror.** `playerState.x/z/yaw` is
   republished from the controller's own refs every frame; writing to it does
   nothing. Relocation goes through `playerState.pendingTeleport`.

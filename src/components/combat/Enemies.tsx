@@ -110,6 +110,14 @@ function Enemy({ data }: { data: EnemyData }) {
   const path = useRef({ pts: [] as { x: number; z: number }[], i: 0, t: 0, tx: 0, tz: 0 });
   const [clip, setClip] = useState('anim_c_walk');
   const remove = useEnemyStore((s) => s.remove);
+  // Wave 18 #5 bugfix: THIS enemy's own home-ness, not the player's current
+  // `st.destination` — Enemies() now keeps home enemies mounted even while
+  // the player is elsewhere (see its own comment), so every branch below
+  // that used to read the player's global destination as a stand-in for
+  // "is this mob at home" has to ask about the mob instead, or a home
+  // raider ticking while the player is away would wrongly read itself as
+  // being at whatever destination the player happens to be visiting.
+  const enemyAtHome = (data.world ?? null) === null;
 
   // drop this mob's hit volumes when it leaves the field, or a dead id keeps
   // soaking bolts fired through the empty space where it used to stand
@@ -220,7 +228,7 @@ function Enemy({ data }: { data: EnemyData }) {
               m.z += (sz / sd) * (1.1 - sd) * 0.5;
             }
           }
-          g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : homeGroundY(m.x, m.z), m.z);
+          g.position.set(m.x, enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z), m.z);
           g.rotation.y = m.yaw + Math.PI;
           if (clip !== 'anim_c_run') setClip('anim_c_run');
           return;
@@ -252,7 +260,7 @@ function Enemy({ data }: { data: EnemyData }) {
         m.z += nz * 3.0 * dt;
         m.yaw = Math.atan2(-nx, -nz);
         if (away > 44) { remove(data.id); return; }
-        g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : homeGroundY(m.x, m.z), m.z);
+        g.position.set(m.x, enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z), m.z);
         g.rotation.y = m.yaw + Math.PI;
         if (clip !== 'anim_c_run') setClip('anim_c_run');
         return;
@@ -267,7 +275,7 @@ function Enemy({ data }: { data: EnemyData }) {
       // Ordinary night skeletons are not raiders and leave the castle alone.
       let keepTarget: { socketId: string; x: number; z: number; name: string } | null = null;
       let keepD = Infinity;
-      if (data.raid && !st.destination && st.keep) {
+      if (data.raid && enemyAtHome && st.keep) {
         for (const sock of KEEP_SOCKETS) {
           const partId = st.keep.parts[sock.id];
           if (!partId || (st.keep.built[sock.id] ?? 0) < 1) continue;
@@ -289,7 +297,7 @@ function Enemy({ data }: { data: EnemyData }) {
       let defTarget: (typeof defenderState)[string] | null = null;
       let defId = '';
       let defD = Infinity;
-      if (!st.destination && data.kind !== 'storm') {
+      if (enemyAtHome && data.kind !== 'storm') {
         for (const [vid, dsd] of Object.entries(defenderState)) {
           if (dsd.state === 'downed' || dsd.elevated) continue;
           const dd = Math.hypot(dsd.x - m.x, dsd.z - m.z);
@@ -436,16 +444,20 @@ function Enemy({ data }: { data: EnemyData }) {
         }
       }
       // Keep out of the pond and the world edge — home-only geography, same
-      // !st.destination guard the keepTarget/defTarget checks above already
-      // use. Found and fixed while building the arena (requested 2026-08-03):
-      // both this pond check and the WORLD_HALF clamp below were previously
-      // unconditional, so an enemy spawned thousands of units away at a real
-      // destination's own origin got yanked back inside the home world's
-      // tiny ±200 bound every single frame. A genuine pre-existing latent
-      // bug for the Sealed Crypt too (DUNGEON_ORIGIN is (4200,4200)) — it
-      // just never surfaced there, since a room fight is short and its own
-      // walls mask a mob's position snapping around.
-      if (!st.destination) {
+      // enemyAtHome guard the keepTarget/defTarget checks above already use
+      // (Wave 18 #5: was `!st.destination`, the player's own location, until
+      // home enemies started staying mounted while the player travels away —
+      // see this mob's own `enemyAtHome` for why that stopped being the
+      // right question to ask). Found and fixed while building the arena
+      // (requested 2026-08-03): both this pond check and the WORLD_HALF
+      // clamp below were previously unconditional, so an enemy spawned
+      // thousands of units away at a real destination's own origin got
+      // yanked back inside the home world's tiny ±200 bound every single
+      // frame. A genuine pre-existing latent bug for the Sealed Crypt too
+      // (DUNGEON_ORIGIN is (4200,4200)) — it just never surfaced there,
+      // since a room fight is short and its own walls mask a mob's position
+      // snapping around.
+      if (enemyAtHome) {
         const pd = Math.hypot(m.x - POND.x, m.z - POND.z);
         if (pd < POND.radius + 1) {
           m.x = POND.x + ((m.x - POND.x) / pd) * (POND.radius + 1);
@@ -493,7 +505,7 @@ function Enemy({ data }: { data: EnemyData }) {
     // of reach rather than merely unlikely, and is deliberately left alone.
     // `homeGroundY` is 0 everywhere but the prototype's own square, so this
     // changes nothing anywhere else in the world.
-    g.position.set(m.x, st.destination ? destinationGroundY(m.x, m.z) : homeGroundY(m.x, m.z), m.z);
+    g.position.set(m.x, enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z), m.z);
     g.rotation.y = m.yaw + Math.PI;
 
     const want =
@@ -567,7 +579,24 @@ export default function Enemies() {
   // home raid kept rendering (and being fought) at whatever destination the
   // player travelled to mid-fight, and a dungeon/arena/Cedric-camp spawn
   // bled into every other world too.
-  const enemies = allEnemies.filter((e) => (e.world ?? null) === (destination ?? null));
+  //
+  // Wave 18 #5 bugfix: home-world enemies (world null) are ALWAYS included
+  // here now, regardless of `destination` — not just when destination is
+  // also null. A raid's own combatants are the one thing that must keep
+  // moving/fighting/dying while the player is away (PROJECT_CONTEXT.md's
+  // "Instance separation" note; RaiderRam/Emplacements already stay
+  // unconditionally mounted for the identical reason). This is safe the
+  // same way those two are: home sits near the origin while every
+  // destination sits thousands of units away in the same shared coordinate
+  // space, so a mounted home raider is never actually in view once the
+  // player has travelled elsewhere — nothing extra to hide. Only home gets
+  // this treatment; a DIFFERENT destination's own enemies (dungeon rooms,
+  // the arena, Cedric's camp) still unmount and pause the instant the
+  // player leaves THAT world, which is what they're supposed to do.
+  const enemies = allEnemies.filter((e) => {
+    const w = e.world ?? null;
+    return w === null || w === (destination ?? null);
+  });
   const spawn = useEnemyStore((s) => s.spawn);
   const tick = useRef(0);
   const skelTimer = useRef(6);
@@ -655,30 +684,57 @@ export default function Enemies() {
       }
     }
 
-    // skeletons rise at night near the player, crumble at dawn — homestead
-    // only: suppressed while away (template worlds or the dungeon above)
-    if (st.destination) return;
-    const skeletons = list.filter((e) => e.kind === 'skeleton' && e.mob.state !== 'dying');
-    if (worldEnv.night > 0.62) {
-      skelTimer.current -= 1;
-      if (skeletons.length < 3 && skelTimer.current <= 0) {
-        skelTimer.current = 14 + Math.random() * 14;
-        const a = Math.random() * Math.PI * 2;
-        const r = 26 + Math.random() * 12;
-        const sx = playerState.x + Math.cos(a) * r;
-        const sz = playerState.z + Math.sin(a) * r;
-        spawn('skeleton', sx, sz);
-        audio.playAt('skeleton', sx, sz, 0.7);
-        st.notify('Bones rattle in the dark…');
-      }
-    } else {
-      for (const e of skeletons) {
-        e.mob.state = 'dying';
-        e.mob.dieT = 0;
+    // skeletons rise at night NEAR THE PLAYER, crumble at dawn — spawn
+    // position is anchored to playerState.x/z itself (see below), which is
+    // only meaningful while the player is actually standing at the
+    // homestead to have them rise beside them, so this part alone stays
+    // gated on `st.destination` (a real "player must be home" case, unlike
+    // the raid logic right below it — see that block's own comment for why
+    // IT no longer early-returns here). Wave 18 #5 bugfix: this used to be a
+    // single `if (st.destination) return;` that also swallowed the raid
+    // cooldown/resolve/trigger logic below every frame the player was away —
+    // now it only wraps what actually needs the player's own position.
+    if (!st.destination) {
+      const skeletons = list.filter((e) => e.kind === 'skeleton' && e.mob.state !== 'dying');
+      if (worldEnv.night > 0.62) {
+        skelTimer.current -= 1;
+        if (skeletons.length < 3 && skelTimer.current <= 0) {
+          skelTimer.current = 14 + Math.random() * 14;
+          const a = Math.random() * Math.PI * 2;
+          const r = 26 + Math.random() * 12;
+          const sx = playerState.x + Math.cos(a) * r;
+          const sz = playerState.z + Math.sin(a) * r;
+          spawn('skeleton', sx, sz);
+          audio.playAt('skeleton', sx, sz, 0.7);
+          st.notify('Bones rattle in the dark…');
+        }
+      } else {
+        for (const e of skeletons) {
+          e.mob.state = 'dying';
+          e.mob.dieT = 0;
+        }
       }
     }
 
-    // bandit raids at dusk once the homestead is established
+    // bandit raids at dusk once the homestead is established. Wave 18 #5
+    // bugfix: deliberately NOT gated on `st.destination` (unlike the
+    // skeleton rise above) — every position this block touches is anchored
+    // to roadEntry()/HOME_X/HOME_Z or the ram's own fixed ring, never the
+    // player's own live position, so a raid can genuinely start, be fought
+    // (by defenders and the keep, both of which already read all of
+    // useEnemyStore rather than a world-filtered subset — see Defenders.tsx/
+    // damageKeepPart), and resolve while the player is away visiting a
+    // destination. This is what makes PROJECT_CONTEXT.md's "Instance
+    // separation" claim — that raids deliberately keep resolving in real
+    // time while the player is elsewhere — actually true; previously this
+    // whole section was unreachable whenever `st.destination` was set, so an
+    // already-in-progress raid could never even conclude: raidActive/
+    // raidCooldown just hung until the player came home. The loud one-shot
+    // stingers below (warcry/horn/voice barks) stay `!st.destination`-gated
+    // on their own — ROADMAP.md's own TODO already called out that a raid
+    // resolving while away should notify, not blare, and `st.notify` itself
+    // (never gated) is what delivers that notification regardless of where
+    // the player is.
     raidCooldown.current = Math.max(0, raidCooldown.current - 1);
     const raiders = list.filter((e) => e.raid);
     if (raidActive.current && raiders.length === 0) {
@@ -697,7 +753,7 @@ export default function Enemies() {
         st.grantArmory(piece, 1);
         st.notify(`A fallen raider's ${ITEMS[piece].name.toLowerCase()} is added to the Armory.`, true);
       }
-      audio.play('horn', 0.8);
+      if (!st.destination) audio.play('horn', 0.8);
     }
     if (
       !raidActive.current &&
@@ -708,8 +764,7 @@ export default function Enemies() {
     ) {
       raidActive.current = true;
       raidCooldown.current = Math.max(240, worldEnv.dayLength * 1.5);
-      audio.play('warcry', 0.9);
-      audio.play('horn', 0.9);
+      if (!st.destination) { audio.play('warcry', 0.9); audio.play('horn', 0.9); }
       const a0 = Math.random() * Math.PI * 2;
       // N79 (requested 2026-07-28): raiders arrive by the road instead of
       // popping into existence on a ring around the homestead — spawned
@@ -723,6 +778,16 @@ export default function Enemies() {
         const a = (i / 3) * Math.PI * 2;
         return [entry.x + Math.cos(a) * 3, entry.z + Math.sin(a) * 3];
       }
+      // Wave 18 #5 bugfix: every spawn() call below now passes `null` as the
+      // explicit 10th `worldOverride` arg — this block can now fire while
+      // `st.destination` is set (see this block's own comment), and spawn()
+      // otherwise stamps a new enemy's `world` from whatever destination the
+      // player currently happens to be standing in. Without the override, a
+      // raid triggered while away would tag its own raiders with the
+      // player's CURRENT destination instead of home, so they'd never render
+      // there (positioned at home's coordinates, thousands of units off) and
+      // would vanish from view for good the moment the player came home
+      // (home is destination null, no longer a `world` match).
       if (st.alliance === 'cedric') {
         // Phase 19 alliance branch: pledge to Cedric and it's the CROWN that
         // comes for your homestead — a wave of royal knights, never Cedric's
@@ -730,7 +795,7 @@ export default function Enemies() {
         st.notify('⚔ The crown brands you a traitor — royal knights raid your homestead!', true);
         for (let i = 0; i < 3; i++) {
           const [sx, sz] = roadSpawnPos(i);
-          spawn('royal', sx, sz, true, undefined, true);
+          spawn('royal', sx, sz, true, undefined, true, false, 1, false, null);
         }
       } else {
         // unsworn or crown-sworn: the bandit threat, exactly as before
@@ -741,22 +806,22 @@ export default function Enemies() {
         const cedricEligible = st.completedQuests.includes(CEDRIC_REVEAL_QUEST) && !st.defeatedCedric;
         const cedricLed = cedricEligible && Math.random() < 0.35;
         if (cedricLed) {
-          audio.playVoice('greeting_cedric', 0.9);
+          if (!st.destination) audio.playVoice('greeting_cedric', 0.9);
           st.notify('⚔ Cedric the Bull himself leads the raid on your homestead!', true);
           const [sx, sz] = roadSpawnPos(0);
-          spawn('cedric', sx, sz, true, undefined, true);
+          spawn('cedric', sx, sz, true, undefined, true, false, 1, false, null);
         } else {
           // Gilbert the Bad leads the raid, with Weezil somewhere in the pack —
           // their own real voice lines instead of an anonymous mob (see combat.ts)
-          audio.playVoice('greeting_gilbert', 0.85);
+          if (!st.destination) audio.playVoice('greeting_gilbert', 0.85);
           st.notify('⚔ Gilbert the Bad leads a raid on your homestead!', true);
           const [sx, sz] = roadSpawnPos(0);
-          spawn('gilbert', sx, sz, true, undefined, true);
+          spawn('gilbert', sx, sz, true, undefined, true, false, 1, false, null);
         }
-        audio.playVoice('greeting_weezil', 0.6);
+        if (!st.destination) audio.playVoice('greeting_weezil', 0.6);
         for (let i = 1; i < 3; i++) {
           const [sx, sz] = roadSpawnPos(i);
-          spawn('bandit', sx, sz, true, undefined, true);
+          spawn('bandit', sx, sz, true, undefined, true, false, 1, false, null);
         }
       }
       // raiders occasionally bring their own ram — the same threat the

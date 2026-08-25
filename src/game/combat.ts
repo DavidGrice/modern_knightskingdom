@@ -253,14 +253,23 @@ export interface EnemyData {
   /** Stage 0a (instance-separation doctrine, Phase 23): which world/
    *  destination this individual belongs to — null means home, otherwise a
    *  WORLD_DESTINATION_BY_ID id (e.g. CEDRIC_WORLD) or the fixed 'dungeon'/
-   *  'arena' destinations. Stamped once at spawn from whatever `destination`
-   *  the player was actually standing in when spawn() ran (every spawn call
-   *  site already gates on being in the right place first), mirroring
-   *  PlacedBuilding.world / VillagerState.world / NpcDef.world /
+   *  'arena' destinations. Stamped at spawn from whatever `destination` the
+   *  player was actually standing in when spawn() ran (every spawn call site
+   *  gates on being in the right place first) — UNLESS spawn()'s own
+   *  `worldOverride` param is passed, which wins instead (Wave 18 #5
+   *  bugfix: Enemies.tsx's raid trigger fires even while the player is away
+   *  at a destination, since every raid spawn position is anchored to
+   *  roadEntry()/HOME_X/HOME_Z rather than the player's own live position —
+   *  it passes `null` explicitly so a raider is still tagged home, not
+   *  wherever the player happened to be standing when the raid started),
+   *  mirroring PlacedBuilding.world / VillagerState.world / NpcDef.world /
    *  ResourceNodeState.world. Enemies.tsx filters both its render passes on
-   *  this so a raid at home doesn't keep rendering once the player travels
-   *  away mid-fight, and a dungeon/arena/Cedric-camp spawn doesn't bleed
-   *  into every other world either. */
+   *  this — EXCEPT a home (`null`) enemy, which stays mounted no matter
+   *  what the player's own `destination` currently is (Wave 18 #5 bugfix:
+   *  a raid must keep moving/fighting/resolving while the player is away,
+   *  not freeze the instant they travel). A dungeon/arena/Cedric-camp
+   *  spawn is unaffected by that exception and still stops rendering (and
+   *  ticking) the moment the player leaves THAT world, same as before. */
   world: string | null;
   dungeonRoom?: number; // index of the dungeon room this enemy belongs to, if any
   /** spawned by ArenaSpawner.tsx — lets the central kill-resolution paths
@@ -312,6 +321,7 @@ interface EnemyStore {
   spawn: (
     kind: EnemyKind, x: number, z: number, raid?: boolean, dungeonRoom?: number,
     approaching?: boolean, finalStand?: boolean, extraScale?: number, arena?: boolean,
+    worldOverride?: string | null,
   ) => void;
   remove: (id: number) => void;
   clear: () => void;
@@ -324,7 +334,7 @@ interface EnemyStore {
 
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
   enemies: [],
-  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false, finalStand = false, extraScale = 1, arena = false) => {
+  spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false, finalStand = false, extraScale = 1, arena = false, worldOverride) => {
     // requested 2026-08-03: ArenaSpawner.tsx's own run-local escalation
     // (game/arena.ts's arenaSpawnScale()) layers on top of the existing
     // game-progress curve rather than replacing it — extraScale defaults to
@@ -345,7 +355,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       // 'arena', Cedric's camp guards/duel/reinforcements on being at his
       // camp, Storm's duel on her own NPC panel being open, and every raid/
       // night-skeleton spawn on destination being null/home).
-      world: useGameStore.getState().destination ?? null,
+      world: worldOverride !== undefined ? worldOverride : (useGameStore.getState().destination ?? null),
       dungeonRoom,
       arena,
       finalStand,

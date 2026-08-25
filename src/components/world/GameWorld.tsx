@@ -67,14 +67,20 @@ export default function GameWorld() {
       <Suspense fallback={null}>
         <GameSky variant={skyVariant} />
       </Suspense>
-      <Terrain />
+      {/* Wave 18 #5 · home-only environment pieces, gated at THIS mount site
+          rather than with an internal `if (destination) return null` —
+          Terrain owns its own useFrame (seasonal tint + water scroll), and a
+          real unmount is what actually tears that down instead of leaving it
+          ticking behind a hidden mesh. See PROJECT_CONTEXT.md's "Instance
+          separation" note for the full render-guarantee this completes. */}
+      {!destination && <Terrain />}
       <ResourceNodes />
       <Grounds />
       <KeepAssembly />
       <MountedHorse />
       <WorkshopBench />
       <Buildings />
-      <Signpost />
+      {!destination && <Signpost />}
       <Suspense fallback={null}>
         <BuildingInteriorRoom />
       </Suspense>
@@ -83,12 +89,16 @@ export default function GameWorld() {
       </Suspense>
       <Suspense fallback={null}>
         <Npc />
-        <Merchant />
+        {!destination && <Merchant />}
         <Villagers />
         <Defenders />
-        <Road />
+        {!destination && <Road />}
+        {/* real simulation, not decoration — its useFrame drives actual
+            raid-defense fire/detonation via siege.ts and renders nothing
+            itself, so there is no GPU cost to save by gating it; only the
+            tick would be lost, silently disabling home defense while away */}
         <Emplacements />
-        <StarterVillage />
+        {!destination && <StarterVillage />}
         <CedricCamp />
         <BattleDome />
         <CourtDressing />
@@ -115,6 +125,12 @@ export default function GameWorld() {
       )}
       <Suspense fallback={null}>
         <Enemies />
+        {/* Wave 18 #5 · left always-mounted, deliberately not gated on
+            destination: its own useFrame is the only place raiderRamState
+            advances toward the home gate and calls ramCheck (real siege
+            damage) — there is no central store tick doing this, so gating
+            the render would silently freeze the ram's advance while the
+            player is away. */}
         <RaiderRam />
       </Suspense>
       <Cannonballs />
