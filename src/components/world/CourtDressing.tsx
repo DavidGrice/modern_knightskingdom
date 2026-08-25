@@ -1,19 +1,27 @@
 'use client';
 // Phase 20 step 3 (dressing half): set-piece dressing for the court
 // instances — a throne dais and crest banners behind King Leo & Queen
-// Leonora at The King's Approach, tilt-barrier lists and pennants on
-// Richard's Tourney Grounds, and dock cargo around John at The River
-// Landing. Environment placement exactly like CedricCamp (mounted only
-// while visiting, real catalog models), never player buildings. Every
+// Leonora and stacked quartermaster's stores near John of Mayne, all at
+// The King's Approach, plus tilt-barrier lists and pennants on Richard's
+// Tourney Grounds. Environment placement exactly like CedricCamp (mounted
+// only while visiting, real catalog models), never player buildings. Every
 // piece follows the bake's terrain at its OWN x/z (these sites sit on
 // slopes — a single group-level height would float one end of the lists
 // and bury the other).
+// 2026-08-25: John's stores used to sit at The River Landing (template-03,
+// hence the old function name `RiverCargo`) — moved here alongside him when
+// his NpcDef relocated to The King's Approach (see npcs.ts's own comment on
+// why). The crate/barrel models were never actually river-themed (generic
+// storage props, same molds reused elsewhere as Workbench/Stockpile/Barrel),
+// so only the anchor point and the doc comments needed to move, not the
+// dressing itself.
 import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import { NPC_KING } from '@/game/data/world';
+import { NPC_BY_ID } from '@/game/data/npcs';
 import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
 import PropModel from './PropModel';
 import { Torch } from './Buildings';
@@ -106,20 +114,28 @@ function TourneyLists({ originOffset = ZERO_OFFSET }: { originOffset?: { x: numb
   );
 }
 
-/** John's quartermaster stores: stacked cargo where the river trade lands. */
-function RiverCargo({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number; z: number } }) {
+/** John's quartermaster stores: stacked crates and barrels scattered around
+ *  wherever he actually stands (see npcs.ts's own NpcDef — never a second
+ *  hand-typed literal here, so this can't drift out of sync with him the
+ *  way the old river-landing version implicitly could have). Offsets are
+ *  unchanged from the original River Landing layout (2026-08-21 and
+ *  earlier) — just re-anchored to his current position; the props
+ *  themselves were always generic storage molds, never river-specific. */
+function QuartermasterStores({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number; z: number } }) {
+  const jx = NPC_BY_ID['john'].x;
+  const jz = NPC_BY_ID['john'].z;
   return (
     <Suspense fallback={null}>
-      <Grounded x={1597} z={893.5} originOffset={originOffset}>
+      <Grounded x={jx - 3} z={jz - 2.5} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l473800.glb`} height={0.6} yaw={0.4} />
       </Grounded>
-      <Grounded x={1603.5} z={895} originOffset={originOffset}>
+      <Grounded x={jx + 3.5} z={jz - 1} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l301500.glb`} height={0.7} yaw={1.2} />
       </Grounded>
-      <Grounded x={1602.5} z={898.5} originOffset={originOffset}>
+      <Grounded x={jx + 2.5} z={jz + 2.5} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l248900.glb`} height={0.6} />
       </Grounded>
-      <Grounded x={1596.5} z={898} originOffset={originOffset}>
+      <Grounded x={jx - 3.5} z={jz + 2} originOffset={originOffset}>
         <PropModel url={`${SCEN}/l248900.glb`} height={0.6} yaw={0.8} />
       </Grounded>
     </Suspense>
@@ -144,12 +160,21 @@ export default function CourtDressing() {
  *  final position write (via each function's own `originOffset` threading
  *  through Grounded above) — meant to be mounted inside DestinationScope.tsx's
  *  own origin-offset group. Stage 1 (2026-08-20) added template-01; Stage 2
- *  (2026-08-21) added template-02/template-03 (TourneyLists/RiverCargo,
- *  moved here from the default export above). Templates 04-08 have no
- *  dressing of their own. */
+ *  (2026-08-21) added template-02/template-03 (TourneyLists/RiverCargo, moved
+ *  here from the default export above). template-01 grew a second piece
+ *  (2026-08-25): John's stores followed him here from template-03 (see
+ *  QuartermasterStores's own comment), which is why that destination's own
+ *  case below dropped — nobody lives at The River Landing anymore for it to
+ *  dress. Templates 04-08 have no dressing of their own. */
 export function DestinationCourtDressing({ dest }: { dest: WorldDestination }) {
-  if (dest.id === 'template-01') return <RoyalCourt originOffset={dest.origin} />;
+  if (dest.id === 'template-01') {
+    return (
+      <>
+        <RoyalCourt originOffset={dest.origin} />
+        <QuartermasterStores originOffset={dest.origin} />
+      </>
+    );
+  }
   if (dest.id === 'template-02') return <TourneyLists originOffset={dest.origin} />;
-  if (dest.id === 'template-03') return <RiverCargo originOffset={dest.origin} />;
   return null;
 }

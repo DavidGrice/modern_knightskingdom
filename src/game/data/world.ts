@@ -1,4 +1,16 @@
 // Static world layout constants (meters).
+// 2026-08-25: imports resolveDestPoint/WORLD_DESTINATION_BY_ID (worlds.ts)
+// for the durable away-destination coordinates below (NPC_KING, CEDRIC_CAMP,
+// BATTLE_DOME) — see worlds.ts's own 2026-08-25 comment for what that buys.
+// This is a NEW edge (world.ts never imported worlds.ts before); it works
+// only because buildables.ts stopped importing FROM world.ts the same day
+// (see the dev-only BUILD_REGION guard below, moved here from buildables.ts
+// for exactly this reason) — otherwise this line would complete the cycle
+// worlds.ts -> dungeon.ts -> buildables.ts -> world.ts -> worlds.ts and crash
+// on a TDZ access to WORLD_DESTINATION_BY_ID.
+import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
+import { BUILD_REGION } from './buildables';
+
 export const WORLD_HALF = 200;          // world spans ±200 on x/z
 export const SPAWN: [number, number, number] = [0, 0, 26];
 export const EYE_HEIGHT = 1.6;
@@ -36,7 +48,14 @@ export const BROOK = {
 // Phase 20: the King holds court at his own castle (template-01, The King's
 // Approach) — must match his NpcDef in data/npcs.ts; the knighting ceremony
 // teleports the player before him here.
-export const NPC_KING = { x: 1000, z: 962, yaw: Math.PI };
+// 2026-08-25: converted to the same durable local point as King Leo's own
+// NpcDef (npcs.ts, local (0, -253.333)) via resolveDestPoint — sharing the
+// exact call means these two can never drift apart again, which a second
+// hand-typed literal here always risked (this constant was NOT in the
+// research spike's own migration table, but it's the identical class of
+// bug — a hand-typed world x/z, only correct at one scale — found by
+// checking this file directly while implementing that table).
+export const NPC_KING = { ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 0, -253.333), yaw: Math.PI };
 
 export const INTERACT_RANGE = 3.4;
 export const STATION_RANGE = 4.5;
@@ -109,7 +128,12 @@ export const STARTER_VILLAGE_CLEAR: { x: number; z: number; r: number }[] = [
 // walk-around (same approach worlds.ts's own template-03 river-landing
 // spawn used) — open grass with the diorama's own hills on the skyline,
 // confirmed clean from multiple facings, real ground height.
-export const CEDRIC_CAMP = { x: 2764, z: 1869 };
+// 2026-08-25: converted to a durable LOCAL point via resolveDestPoint (see
+// worlds.ts's 2026-08-25 comment) — local (3760, 5793.333), derived from
+// the 2026-08-21 world position above run backward through the same
+// invariant TEMPLATE_ARRIVAL_SPAWN's template-05 entry uses (it's the same
+// point).
+export const CEDRIC_CAMP = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-05'], 3760, 5793.333);
 export const CEDRIC_WORLD = 'template-05';
 export const CEDRIC_REVEAL_QUEST = 'knights_arms';
 export const CEDRIC_INTERACT_RANGE = 5;
@@ -118,7 +142,14 @@ export const CEDRIC_INTERACT_RANGE = 5;
 // template-06, on its terrain-probed flat ground), grounded in Queen
 // Leonora's own line about her daughter's swordsmanship (see game/data/
 // npcs.ts's 'storm' NpcDef).
-export const BATTLE_DOME = { x: 2500, z: 955, radius: 9 };
+// 2026-08-25: x/z converted to a durable LOCAL point via resolveDestPoint
+// (local (0, -300), derived from the pre-halving (2500, 955) via this same
+// file's own invariant — see worlds.ts's 2026-08-25 comment). `radius`
+// stays a plain constant, NOT a resolved local value: it's the fixed
+// world-unit size of a hand-authored flat arena disc (BattleDome.tsx),
+// unrelated to the diorama bake's own scale, so it doesn't shrink alongside
+// DEST_WORLD_SCALE the way a bake-relative position does.
+export const BATTLE_DOME = { ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-06'], 0, -300), radius: 9 };
 export const STORM_WORLD = 'template-06';
 
 /** Fixed world props that must never stand inside the buildable region.
@@ -130,3 +161,29 @@ export const FIXED_WORLD_PROPS: { name: string; x: number; z: number }[] = [
   { name: 'POND', x: POND.x, z: POND.z },
   { name: 'FISHING_DOCK', x: FISHING_DOCK.startX, z: FISHING_DOCK.startZ },
 ];
+
+// Dev-only guard for the rule above: nothing fixed in the world may stand
+// inside the buildable region. The signpost did for a long while, silently
+// eating a grid square, and the region is due to grow — so this fails loudly
+// at import time in development rather than being re-discovered by eye.
+// Relocated here from buildables.ts (2026-08-25): this file now needs
+// worlds.ts (for the durable NPC_KING/CEDRIC_CAMP/BATTLE_DOME coordinates
+// above), and worlds.ts -> dungeon.ts -> buildables.ts is already a real
+// runtime chain — so buildables.ts importing FIXED_WORLD_PROPS FROM here
+// would complete a cycle and crash on a TDZ access. Importing BUILD_REGION
+// the other way instead (this file from buildables.ts, above) breaks that
+// cycle rather than completing it; buildables.ts no longer imports
+// anything from world.ts at all.
+if (process.env.NODE_ENV !== 'production') {
+  const bad = FIXED_WORLD_PROPS.filter(
+    (p) => p.x >= BUILD_REGION.minX && p.x <= BUILD_REGION.maxX
+      && p.z >= BUILD_REGION.minZ && p.z <= BUILD_REGION.maxZ,
+  );
+  if (bad.length) {
+    console.warn(
+      '[buildables] fixed world prop(s) inside BUILD_REGION — they will occupy '
+      + 'build squares the player cannot clear: '
+      + bad.map((p) => `${p.name} (${p.x}, ${p.z})`).join(', '),
+    );
+  }
+}

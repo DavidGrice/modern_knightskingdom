@@ -195,8 +195,10 @@ export const EXISTING_QUEST_ALLEGIANCE: Record<string, number> = {
   r_lists: 4,
   // Storm's duels are a courtesy of the court
   s_firstblood: 4,
-  // John of Mayne keeps the river landing — his work is the realm's upkeep
-  // rather than the crown's politics, so it stays genuinely neutral and is
+  // John of Mayne keeps the realm's stores (2026-08-25: at The King's
+  // Approach now, not the river landing he used to work from — see
+  // npcs.ts's own comment on his NpcDef) — his work is upkeep rather than
+  // the crown's politics either way, so it stays genuinely neutral and is
   // deliberately absent from this table.
 
   // Cedric's existing three. The smuggling run is the doorway to his whole

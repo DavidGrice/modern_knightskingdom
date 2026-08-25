@@ -27,12 +27,24 @@ export const QUESTS: Quest[] = [
   },
   {
     // Phase 20 travel beat: the reveal toast said John "will receive you at
-    // The River Landing" — this makes actually going there the quest.
+    // The River Landing" — this made actually going there the quest. That
+    // toast is generated live from the NPC's own `world` field (see
+    // gameStore.ts's revealAfterQuest handler), so it already follows him
+    // automatically; this quest's own hardcoded destination/text did not,
+    // and needed updating alongside his NpcDef.
+    // 2026-08-25: John moved to The King's Approach (template-01) — see
+    // npcs.ts's own comment on his NpcDef for why (his real Grok cast data
+    // places him with the royal court, not the river dock). Updated this
+    // quest's travel target and text to follow him there; the quest's own
+    // id (`word_from_river`) is kept as-is for save compatibility even
+    // though the name reads a little stale now — the same "an old id can
+    // outlive what it originally described" convention this project
+    // already uses for buildable ids (buildables.ts's `labAssetId`).
     id: 'word_from_river',
-    name: 'Word from the River',
-    description: 'John of Mayne keeps the realm’s stores at The River Landing. Consult the Travel Map at the signpost and present yourself to the Quartermaster.',
+    name: 'Word from the Castle',
+    description: 'John of Mayne keeps the realm’s stores at The King’s Approach. Consult the Travel Map at the signpost and present yourself to the Quartermaster.',
     objectives: [
-      { id: 'go', label: 'Travel to The River Landing', kind: 'visit', target: 'template-03', count: 1 },
+      { id: 'go', label: 'Travel to The King’s Approach', kind: 'visit', target: 'template-01', count: 1 },
       { id: 'meet', label: 'Present yourself to John of Mayne', kind: 'talk', target: 'john', count: 1 },
     ],
     rewardText: 'Gold and the Quartermaster’s favor',

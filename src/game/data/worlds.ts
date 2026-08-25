@@ -136,7 +136,61 @@ export interface WorldDestination {
 // outside the real walkable-rect union (Richard/Knights'/Miners'/Builders'/
 // Woodsmen's/CEDRIC_CAMP) was repositioned in npcs.ts/guilds.ts/world.ts —
 // see each file's own comment at the changed coordinate.
-const DEST_WORLD_SCALE = 0.32 * 1.25 * 0.75 * 0.5;
+// 2026-08-24 RESEARCH SPIKE: halved again per explicit user request (third
+// such cut in a row) to test live consequences ahead of a durable-storage
+// redesign for the fixed entities below (npcs.ts/guilds.ts/world.ts) — see
+// that investigation's own findings. Left in place for implement to build
+// on; NOT yet accompanied by a fix pass for TEMPLATE_ARRIVAL_SPAWN or any
+// fixed NPC/hall/camp coordinate at this new scale.
+const DEST_WORLD_SCALE = 0.32 * 1.25 * 0.75 * 0.5 * 0.5;
+
+// 2026-08-25 IMPLEMENT PASS: closes the research spike above. Every
+// hand-placed NPC/guild-hall/boss-camp coordinate in npcs.ts/guilds.ts/
+// world.ts, plus TEMPLATE_ARRIVAL_SPAWN below, is now stored as a LOCAL
+// (bake-space) point and resolved through `resolveDestPoint` below instead
+// of a hand-typed world x/z — durable storage, not a fourth one-off
+// reposition round. Provable from normalizeTemplateBake's own math
+// (TemplateWorld.tsx): for any raw local point P, the final world position
+// is `dest.origin + scale*(P - rawCenter)`. Since `dest.origin` never moves
+// and `rawCenter` is a pure geometry constant, this collapses to one
+// invariant — `worldPos(scale) = dest.origin + scale*localPoint` — so a
+// point stored as `localPoint` lands at the exact scale-appropriate spot
+// after ANY future DEST_WORLD_SCALE change, not just this one. This is the
+// third cut in a row to break hand-typed world coordinates (6 entities broke
+// 2026-08-21, 9-10 more broke ahead of this pass per the research spike
+// above) — this ends that recurrence rather than deferring it to a fourth.
+//
+// Every local value below (and in npcs.ts/guilds.ts/world.ts) was derived
+// from this file's own PRIOR committed literal — the one at the old 0.15
+// scale — via the same invariant run backward:
+// `localPoint = (worldPos_observed - dest.origin) / scale_observed`. Two
+// exceptions were captured live directly at the CURRENT 0.075 scale instead,
+// having no prior literal to invert: template-03's new arrival spawn below,
+// and John Mayne's hand-picked castle spot (see npcs.ts's own comment on
+// his NpcDef for why the distant cast-row marker wasn't usable as-is).
+//
+// One transcription error from the research spike's own migration table was
+// caught and corrected while implementing this: Miners' Brotherhood hall's
+// local Z came out to -249.667 in that writeup, but re-deriving it directly
+// via the invariant above ((962.65 - 1000) / 0.15) gives exactly -249 —
+// used here instead (see guilds.ts).
+export function resolveDestPoint(dest: WorldDestination, localX: number, localZ: number): { x: number; z: number } {
+  // TEMPLATE_WORLD_SCALE's own base (TemplateWorld.tsx) — the constant
+  // itself can't be imported here, see DEST_WORLD_SCALE's own comment above
+  // for why (that file already imports WORLD_DESTINATION_BY_ID from here).
+  const scale = dest.worldScale ?? 0.32;
+  return { x: dest.origin.x + localX * scale, z: dest.origin.z + localZ * scale };
+}
+
+/** the inverse of resolveDestPoint — recovers a destination-LOCAL (bake-
+ *  space) point from a live world position. Used to convert a freshly
+ *  hand-picked/live-captured spot into the same durable storage every other
+ *  entry uses, rather than hand-typing a world x/z that only holds at the
+ *  scale it was picked at. */
+export function toDestLocalPoint(dest: WorldDestination, worldX: number, worldZ: number): { x: number; z: number } {
+  const scale = dest.worldScale ?? 0.32;
+  return { x: (worldX - dest.origin.x) / scale, z: (worldZ - dest.origin.z) / scale };
+}
 
 export const WORLD_DESTINATIONS: WorldDestination[] = [
   {
@@ -257,40 +311,41 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
 // live-verified (2026-08-21): teleporting straight to each of these 8
 // points lands EXACTLY there with zero further clamp movement, and
 // `destinationGroundY` returns a real, sane height at every one.
+//
+// 2026-08-25: switched every entry from a frozen world-space literal (only
+// ever correct at the scale it was captured) to a LOCAL point resolved
+// through `resolveDestPoint` (this file's own 2026-08-25 comment above has
+// the proof) — same values as the 2026-08-21 recompute above, just stored
+// the durable way so a FOURTH DEST_WORLD_SCALE cut won't break this table
+// again. `TEMPLATE_DEST_BY_ID` below is a small local lookup because
+// `WORLD_DESTINATION_BY_ID` itself isn't assembled until after
+// DUNGEON_DESTINATION/ARENA_DESTINATION/CHALLENGE_DESTINATIONS are declared
+// further down this file — this table only ever needed the 8 real templates
+// anyway. template-03 is the one real content change here, not just a
+// storage change: the old hand-picked riverbank spot (1711.06, 856.54) is
+// superseded by a fresh point captured live directly on the new, smaller
+// landing area — (1544.66, 937.40) at the current 0.075 scale, confirmed
+// inside the real walkable union with zero clamp movement — because the
+// prior spot itself no longer survived this cut (50.2 units outside), so
+// this isn't a preference call.
+const TEMPLATE_DEST_BY_ID: Record<string, WorldDestination> =
+  Object.fromEntries(WORLD_DESTINATIONS.map((d) => [d.id, d]));
+
 export const TEMPLATE_ARRIVAL_SPAWN: Record<string, { x: number; z: number; yaw: number }> = {
-  'template-01': { x: 1002.652, z: 948.903, yaw: Math.PI },
-  'template-02': { x: 1300, z: 935.75, yaw: Math.PI },
-  // manually overridden 2026-08-21: a hand-picked spot on the real riverbank
-  // (was the auto-derived nearest-in-union point above, which worked but
-  // wasn't the intended landing feel) — captured live via window.__kkp while
-  // standing there, so it's already confirmed inside the walkable union.
-  // Re-verified 2026-08-21 (same day, after the DEST_WORLD_SCALE halving
-  // above): re-teleported to this exact old-scale point against the new
-  // scale and it still lands with zero further clamp and a real ground
-  // height — the riverbank spot survived the rescale, so it's kept as-is
-  // rather than replaced by the generic formula.
-  'template-03': { x: 1711.06, z: 856.54, yaw: Math.PI },
-  // template-04/05/07's formula-derived point each land in a real but
-  // generic corner of that bake's walkable union (see guilds.ts's/world.ts's
-  // 2026-08-21 comments on Builders'/Woodsmen's halls and CEDRIC_CAMP, which
-  // hit the exact same unions). Kept as formula-derived for template-04
-  // (confirmed clean from all 4 cardinal directions, no better option exists
-  // — that bake classifies only one walkable rect total); template-05 and
-  // template-07 are hand-picked below instead, matching CEDRIC_CAMP and the
-  // Woodsmen's hall fix in those same destinations, for the same reason.
-  'template-04': { x: 2299.563, z: 2641.421, yaw: Math.PI },
-  // hand-picked 2026-08-21 (see world.ts's CEDRIC_CAMP comment) — the
-  // formula-derived point (2220.144, 1274.884) is real ground but sits right
-  // at a dense backdrop tree cluster; this spot is open grass with the
-  // diorama's own hills on the skyline, confirmed live from multiple facings.
-  'template-05': { x: 2764, z: 1869, yaw: Math.PI },
-  'template-06': { x: 2501.926, z: 949.8, yaw: Math.PI },
-  // hand-picked 2026-08-21 (see guilds.ts's Woodsmen's Lodge comment) — the
-  // formula-derived point (2925.607, 1246.659) is real ground but sits
-  // jammed against a steep rock slope; this spot is a clear stretch of the
-  // frozen pass with the snowy mountain backdrop in view, confirmed live.
-  'template-07': { x: 3350, z: 2058, yaw: Math.PI },
-  'template-08': { x: 3100, z: 963.002, yaw: Math.PI },
+  'template-01': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-01'], 17.68, -340.647), yaw: Math.PI },
+  'template-02': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-02'], 0, -428.333), yaw: Math.PI },
+  // captured live directly at the current 0.075 scale (see this table's own
+  // 2026-08-25 comment above) — supersedes the old riverbank override, which
+  // did not survive this cut.
+  'template-03': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-03'], -737.867, -834.667), yaw: Math.PI },
+  // nearest-in-union derived, unchanged in substance since 2026-08-21
+  'template-04': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-04'], 2663.753, 10942.807), yaw: Math.PI },
+  // same point as CEDRIC_CAMP (world.ts) — see that constant's own comment
+  'template-05': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-05'], 3760, 5793.333), yaw: Math.PI },
+  'template-06': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-06'], 12.84, -334.667), yaw: Math.PI },
+  // same point as the Woodsmen's Lodge hall (guilds.ts) — see its own comment
+  'template-07': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-07'], 3666.667, 7053.333), yaw: Math.PI },
+  'template-08': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-08'], 0, -246.653), yaw: Math.PI },
 };
 
 // The procedural dungeon (Phase 17) piggybacks on this same destination
