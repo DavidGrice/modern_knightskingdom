@@ -1,7 +1,6 @@
 import type { Buildable, BuildRect, ClaimedPlot, PlacedBuilding } from '../types';
 import GENERATED from './bricks.generated.json';
 import LAND_TIERS_DATA from './landTiers.generated.json';
-import { FIXED_WORLD_PROPS } from './world';
 import { shapeFor } from '../collisionShapes';
 
 // Grid pitches in meters: big structures snap to GRID, brick-scale pieces to STUD.
@@ -776,23 +775,15 @@ export function maxHpFor(type: string): number {
   return Math.max(15, Math.round(totalCost * 3));
 }
 
-// Dev-only guard for the rule above: nothing fixed in the world may stand
-// inside the buildable region. The signpost did for a long while, silently
-// eating a grid square, and the region is due to grow — so this fails loudly
-// at import time in development rather than being re-discovered by eye.
-if (process.env.NODE_ENV !== 'production') {
-  const bad = FIXED_WORLD_PROPS.filter(
-    (p) => p.x >= BUILD_REGION.minX && p.x <= BUILD_REGION.maxX
-      && p.z >= BUILD_REGION.minZ && p.z <= BUILD_REGION.maxZ,
-  );
-  if (bad.length) {
-    console.warn(
-      '[buildables] fixed world prop(s) inside BUILD_REGION — they will occupy '
-      + 'build squares the player cannot clear: '
-      + bad.map((p) => `${p.name} (${p.x}, ${p.z})`).join(', '),
-    );
-  }
-}
+// The dev-only "no fixed world prop inside BUILD_REGION" guard that used to
+// live here moved to world.ts (2026-08-25) — it needs FIXED_WORLD_PROPS
+// (world.ts) AND BUILD_REGION (here), and world.ts needing worlds.ts (for
+// the new durable-storage resolveDestPoint calls) would otherwise complete a
+// real import cycle: worlds.ts -> dungeon.ts -> buildables.ts -> world.ts ->
+// worlds.ts. Keeping the check here and having world.ts import BUILD_REGION
+// FROM here (below, unchanged) breaks that cycle instead of completing it —
+// see world.ts's own comment at the relocated check for the assertion
+// itself.
 
 // debug handle: lets a smoke test compare the collision volumes against the
 // mesh that is actually drawn (see scripts/smoke123.mjs)

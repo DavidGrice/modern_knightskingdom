@@ -2,7 +2,7 @@ import type { Alliance, CharacterConfig, ItemId, SkillId } from '../types';
 import { EXISTING_QUEST_ALLEGIANCE, EXTRA_SIDE_QUESTS } from './allegianceQuests';
 import { allegianceGateHint, meetsAllegiance } from './allegiance';
 import type { SoundName } from '@/lib/audio';
-import { BATTLE_DOME } from './world';
+import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 import { SETTLEMENT_QUESTS } from './settlementQuests';
 import { DELIVERY_QUESTS } from './deliveryQuests';
 
@@ -177,7 +177,11 @@ export const NPCS: NpcDef[] = [
     // (template-01). The travel landing (~1000, 888) is a steep hillside;
     // the court stands on the flat ground past it (terrain-probed y≈5), so
     // the walk up really is the king's approach.
-    x: 1000, z: 962, yaw: Math.PI,
+    // 2026-08-25: x/z converted to a durable LOCAL point via resolveDestPoint
+    // (worlds.ts) — local (0, -253.333), derived from the pre-halving world
+    // position (1000, 962) via that function's own invariant. Must stay in
+    // sync with world.ts's NPC_KING, which uses this exact same call.
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 0, -253.333), yaw: Math.PI,
     world: 'template-01',
     greetSound: 'greeting_king',
     portrait: '/assets/minifigs/minifigkingleo00.png',
@@ -216,7 +220,9 @@ export const NPCS: NpcDef[] = [
       armColor: 24, handColor: 18, legColor: 150, hipColor: 24,
     },
     // beside the King at the royal castle (Phase 20)
-    x: 1005, z: 963, yaw: Math.PI,
+    // 2026-08-25: converted to a durable LOCAL point via resolveDestPoint —
+    // local (33.333, -246.667), derived from the pre-halving (1005, 963).
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 33.333, -246.667), yaw: Math.PI,
     world: 'template-01',
     greetSound: 'greeting_queen',
     portrait: '/assets/minifigs/minifigqueenleonora00.png',
@@ -270,7 +276,9 @@ export const NPCS: NpcDef[] = [
     // Nearest-point-in-union + 3-unit inward nudge, live-verified (teleport
     // lands exactly here, real ground height, still the tourney field near
     // the jousting props/castle).
-    x: 1300, z: 933, yaw: Math.PI,
+    // 2026-08-25: converted to a durable LOCAL point via resolveDestPoint —
+    // local (0, -446.667), derived from the 2026-08-21 world position above.
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-02'], 0, -446.667), yaw: Math.PI,
     world: 'template-02',
     greetSound: 'greeting_richard',
     portrait: '/assets/minifigs/minifigrichardstrong00.png',
@@ -323,10 +331,33 @@ export const NPCS: NpcDef[] = [
       name: 'John', headDonor: 'minifigjohnmayne00', bodyDonor: 'minifigjohnmayne00',
       armColor: 30, handColor: 18, legColor: 38, hipColor: 38,
     },
-    // Phase 20: John runs the stores from The River Landing (template-03,
-    // lands at ~(1600, 885.5)) — the realm's trade flows through his dock
-    x: 1600, z: 896, yaw: Math.PI,
-    world: 'template-03',
+    // 2026-08-25: moved from The River Landing (template-03) to The King's
+    // Approach (template-01), alongside King Leo and Queen Leonora. Found
+    // during this pass's DEST_WORLD_SCALE research spike by checking the
+    // real Grok cast data directly (reports/rigs/template-01_PARTS.json's
+    // own "cast" list, and template_01_layout.json's groups): John's donor
+    // family (minifigjohnmayne) is real cast on template-01, clustered
+    // tightly with King Leo and Queen Leonora — it never appears on
+    // template-03 at all. His river-landing posting was never grounded in
+    // the source game's own data.
+    //
+    // x/z: John's real cast-row position (mapPopulation.generated.json,
+    // resolved through the live bake pipeline) lands ~208 world units from
+    // the King/Queen's actual court — the same "distant marching-procession
+    // backdrop marker" category TemplatePopulation.tsx's own header comment
+    // already documents for King Leo's own procession figure, not a usable
+    // interactive stand-point. So per that same file's convention, this is a
+    // hand-picked spot instead: (997, 968) at the live 0.075 scale — same
+    // walkable rect as King/Queen, same ground height as King's own spot,
+    // ~5-7 units from each of them (matching their own ~5-unit spacing).
+    // Converted to the durable LOCAL form every other entry in this file
+    // uses — local (-40, -426.667) — via worlds.ts's toDestLocalPoint, since
+    // this point was captured fresh at the current scale rather than
+    // inverted from an older literal (see worlds.ts's own 2026-08-25
+    // comment for why that's the one other exception besides template-03's
+    // new arrival spawn).
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], -40, -426.667), yaw: Math.PI,
+    world: 'template-01',
     greetSound: 'greeting_john',
     portrait: '/assets/minifigs/minifigjohnmayne00.png',
     lines: [
@@ -370,7 +401,27 @@ export const NPCS: NpcDef[] = [
     // line: "Have you met my daughter Princess Storm? ... Few can match her
     // skills with a sword." (c1s04t4c.txt) — see BattleDome.tsx. Phase 20:
     // the dome (and she) reside at The Sister Keep now.
-    x: BATTLE_DOME.x, z: BATTLE_DOME.z + BATTLE_DOME.radius - 2, yaw: Math.PI,
+    // 2026-08-25: used to be computed relative to BATTLE_DOME (world.ts) —
+    // `BATTLE_DOME.x, BATTLE_DOME.z + BATTLE_DOME.radius - 2`, standing just
+    // inside its edge (7 of the ring's 9-unit radius out from center).
+    // Converted instead to her own durable LOCAL point — local
+    // (0, -253.333), derived from her pre-halving world position (2500,
+    // 962) — matching how every other fixed NPC in this file is now stored.
+    // Live-verified: she still lands inside the ring (real ground, distance
+    // to the walkable union is 0), but only 3.5 units out from BATTLE_DOME's
+    // center now, not 7 — a real, checked side effect of switching from a
+    // dome-relative FORMULA (whose `+ radius - 2` term is a fixed WORLD-unit
+    // offset, unaffected by scale) to a LOCAL point (whose distance from any
+    // other local point in the same destination shrinks along with
+    // DEST_WORLD_SCALE, same as everything else stored this way — see
+    // worlds.ts's own 2026-08-25 comment on why that's still exactly
+    // correct for staying inside real walkable ground, just not for staying
+    // a fixed WORLD-unit distance from a fixed-size prop like the dome).
+    // Reads as "posed near the middle of her own small ring" rather than
+    // "leaning against its wall" — a real visual change, not a bug — kept as
+    // the research's own recommended value rather than re-tuned by hand,
+    // since nothing here actually requires the edge-hugging blocking.
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-06'], 0, -253.333), yaw: Math.PI,
     world: 'template-06',
     greetSound: 'greeting_storm',
     portrait: '/assets/minifigs/minifigprincessstorm00.png',
@@ -470,7 +521,10 @@ export const NPCS: NpcDef[] = [
     // near the template-08 travel landing (origin {x:3100,z:1000}) — ground
     // height is sampled live by Npc.tsx for any world-resident NPC
     // (destinationGroundY), same as every other court/village resident.
-    x: 3100, z: 970, yaw: Math.PI,
+    // 2026-08-25: converted to a durable LOCAL point via resolveDestPoint —
+    // local (0, -200), derived from the pre-halving world position
+    // (3100, 970).
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-08'], 0, -200), yaw: Math.PI,
     keepProps: false,
     greetSound: 'villager',
     portrait: '/assets/minifigs/minifiggenericgood00.png',

@@ -1,5 +1,6 @@
 import type { LifetimeStats } from '../types';
 import { CHALLENGES, challengeProgress } from './challenges';
+import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 
 // Guilds (Phase 21): five orders of the realm, each headquartered in a
 // different instance of the Kingdom (their halls are rendered by
@@ -47,10 +48,26 @@ export const SWITCH_TITHE = 25; // gold to change banners after first joining
 //   directions (this diorama's classification genuinely has just the one
 //   rect — a separate, pre-existing classification gap, not something a
 //   coordinate pick can fix, and already flagged as its own follow-up).
+//
+// 2026-08-25: every hallX/hallZ below (anglers' included — it broke too at
+// the second halving) converted from a hand-typed world x/z to a durable
+// LOCAL point resolved via `resolveDestPoint` (worlds.ts) — see that
+// function's own 2026-08-25 comment for the scale-invariance proof. Each
+// local value is this file's own PRE-halving (0.15-scale) literal above, run
+// backward through the same invariant: `local = (worldPos - origin) / 0.15`.
+// One exception: Miners' Brotherhood's local Z came out to -249.667 in the
+// research spike that recommended this migration — re-derived directly here
+// as `(962.65 - 1000) / 0.15 = -249` exactly, and -249 is what's used below.
+const WOODSMEN_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-07'], 3666.667, 7053.333);
+const MINERS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-08'], 70.6, -249);
+const ANGLERS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-03'], -93.333, -733.333);
+const BUILDERS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-04'], 2663.733, 10942.8);
+const KNIGHTS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-02'], 66.867, -451.6);
+
 export const GUILDS: GuildDef[] = [
   {
     id: 'woodsmen', name: "Woodsmen's Lodge", icon: '🪓',
-    world: 'template-07', hallX: 3350, hallZ: 2058,
+    world: 'template-07', hallX: WOODSMEN_HALL.x, hallZ: WOODSMEN_HALL.z,
     challengeId: 'woodcutter',
     blurb: 'Axe-folk of the high timber. The Lodge asks only that the forest already knows your name.',
     passiveLabel: 'Deep Grain',
@@ -58,7 +75,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'miners', name: "Miners' Brotherhood", icon: '⛏️',
-    world: 'template-08', hallX: 3110.59, hallZ: 962.65,
+    world: 'template-08', hallX: MINERS_HALL.x, hallZ: MINERS_HALL.z,
     challengeId: 'quarrier',
     blurb: 'Delvers of the Old Ruins. Stone remembers who splits it with respect.',
     passiveLabel: 'Ore Sense',
@@ -66,7 +83,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'anglers', name: "Anglers' Circle", icon: '🎣',
-    world: 'template-03', hallX: 1586, hallZ: 890,
+    world: 'template-03', hallX: ANGLERS_HALL.x, hallZ: ANGLERS_HALL.z,
     challengeId: 'angler',
     blurb: 'Quiet company on the river bank. Patience, then the pull.',
     passiveLabel: 'Read the Water',
@@ -74,7 +91,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'builders', name: "Builders' Guild", icon: '🔨',
-    world: 'template-04', hallX: 2299.56, hallZ: 2641.42,
+    world: 'template-04', hallX: BUILDERS_HALL.x, hallZ: BUILDERS_HALL.z,
     challengeId: 'architect',
     blurb: 'Engineers of the siege works. Every wall in the realm knows our marks.',
     passiveLabel: 'Master Joinery',
@@ -82,7 +99,7 @@ export const GUILDS: GuildDef[] = [
   },
   {
     id: 'knights', name: "Knights' Order", icon: '⚔️',
-    world: 'template-02', hallX: 1310.03, hallZ: 932.26,
+    world: 'template-02', hallX: KNIGHTS_HALL.x, hallZ: KNIGHTS_HALL.z,
     challengeId: 'monster_hunter',
     blurb: 'Sworn blades of the tourney field. Strength proven, strength shared.',
     passiveLabel: 'Weight of the Order',
