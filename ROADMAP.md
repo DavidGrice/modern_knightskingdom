@@ -7003,3 +7003,65 @@ cut anyway.** Implemented as asked.
   independent of the idle-cycle change, with the idle figure cleanly unmounting during the fight;
   zero console/page errors throughout. `npx tsc --noEmit` / `npm run build`: both clean (verified
   independently in the isolated worktree, not just by the implementing pass).
+
+## Destination world scale quartered again, via durable scale-relative storage; John Mayne moved to his real cast home — 2026-08-25
+
+- [COMPLETE] ✅ **`DEST_WORLD_SCALE` halved a third time (0.15 → 0.075) — every fixed-coordinate
+  consequence solved permanently instead of patched again — SHIPPED 2026-08-25.** The prior two
+  halvings each required a manual reposition pass (6 entities broke 2026-08-21); this third cut
+  would have broken 9-10 of the 13 hand-placed entities (NPCs, guild halls, Cedric's camp, all 8
+  arrival spawns) — confirmed by live-testing every one of them against the real classified
+  walkable union at the new scale before touching anything. Rather than a fourth manual
+  reposition (guaranteed to break again on a fifth tuning request), every fixed coordinate in
+  `npcs.ts`/`guilds.ts`/`world.ts`/`worlds.ts` is now stored as a destination-LOCAL (bake-space)
+  point and resolved into live world space at read time via two new helpers in `worlds.ts`,
+  `resolveDestPoint`/`toDestLocalPoint`. This is provably correct, not just empirically lucky:
+  `normalizeTemplateBake`'s own transform math (`TemplateWorld.tsx`) reduces to one invariant,
+  `worldPos(scale) = dest.origin + scale * localPoint` — a point stored as `localPoint` lands at
+  the exact scale-appropriate spot after *any* future `DEST_WORLD_SCALE` change, forever, not just
+  this one. Every local value was derived by running each file's own prior committed literal
+  backward through this same invariant (one transcription slip in the research pass's own table —
+  Miners' Brotherhood's local Z — was independently re-derived and corrected to the exact value
+  during implementation, not just copied through). A real import-cycle prerequisite was found and
+  fixed along the way: `world.ts` needed `worlds.ts` for the new helpers, but
+  `worlds.ts → dungeon.ts → buildables.ts → world.ts` was already a real runtime chain that would
+  have completed a cycle and TDZ-crashed — fixed by relocating a ~15-line dev-only
+  "no fixed prop inside `BUILD_REGION`" guard from `buildables.ts` into `world.ts` and reversing
+  that one import edge. **Verified live, including a real architecture-soundness test, not just
+  today's specific numbers**: independently recomputed `normalizeTemplateBake`'s bbox/scale math
+  from the actual `.glb` files and cross-checked against the running server's own
+  `getBakeOffset()` for all 8 destinations (zero delta); all 6 named NPCs, all 5 guild halls,
+  Cedric's camp, the Battle Dome, and all 8 `TEMPLATE_ARRIVAL_SPAWN` points teleport-tested with
+  zero further clamp movement and real dialogue/guild panels opening correctly; **temporarily set
+  `DEST_WORLD_SCALE` to an unrelated 0.11 with zero changes to any data file** and re-ran the full
+  position battery — every entity still landed exactly inside real walkable ground, proving the
+  storage mechanism itself is sound rather than merely correct for 0.075; reverted cleanly
+  afterward. The gravity-race fix from the second halving was re-verified across all 8 sequential
+  destination transitions (zero spike at every hop). Zero console/page errors throughout.
+  `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+- [COMPLETE] ✅ **John Mayne moved from The River Landing (template-03) to The King's Approach
+  (template-01), alongside King Leo and Queen Leonora — his real Grok-categorized cast home.**
+  The user pointed back to `reports/rigs/` in the Blender lab's asset-labeling data, having
+  personally categorized which NPC is which character with Grok; a prior research pass this
+  session had only checked `reports/maps/*_layout.json`'s bare actor rows and concluded no such
+  data existed. It was there: `reports/rigs/template-0N_PARTS.json`, a per-map file (one per
+  template + challenge, previously unexamined) with a clean named-cast table for every map. Cross-
+  referencing all 9 real templates against every current `NpcDef` placement confirmed John's donor
+  family (`minifigjohnmayne`) is real cast on template-01 — clustered tightly with King Leo and
+  Queen Leonora, i.e. genuinely "his crew" — and never appears on template-03 at all; King, Queen,
+  and Richard's existing placements were spot-checked against the same table and confirmed already
+  correct. (Caught a live process mistake mid-session: an earlier workflow attempt had reached its
+  John Mayne conclusion using only the incomplete `layout.json` data and was about to ship a wrong,
+  local-dressing-only fix on template-03; it was stopped — before it touched any file beyond the
+  scale constant — and relaunched with the corrected cast data before any wrong fix landed.) John's
+  real cast-row position itself resolved to a distant decorative "marching procession" backdrop
+  marker (~208 units from the King/Queen's actual court, the same category `TemplatePopulation
+  .tsx`'s own header already documents as unusable for a live stand-point) — so his actual
+  in-world coordinate is a hand-picked spot next to the King and Queen instead, live-verified on
+  real walkable ground at the King's own ground height. His quartermaster-stores set dressing
+  (`CourtDressing.tsx`, formerly `RiverCargo`) now anchors to his real current position instead of
+  a second hand-typed template-03 literal, and the `word_from_river` quest's travel target/text
+  were updated to follow him to The King's Approach (its id is kept for save compatibility). The
+  user's fresh live-captured template-03 arrival spawn (1544.66, 937.40) was confirmed to survive
+  the new 0.075 scale cleanly and now supersedes the old riverbank override, which did not.
