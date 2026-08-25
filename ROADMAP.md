@@ -7065,3 +7065,78 @@ cut anyway.** Implemented as asked.
   were updated to follow him to The King's Approach (its id is kept for save compatibility). The
   user's fresh live-captured template-03 arrival spawn (1544.66, 937.40) was confirmed to survive
   the new 0.075 scale cleanly and now supersedes the old riverbank override, which did not.
+
+## Wave 18 #5 Stage 5 (+ Stage 6): home-only render gating, with a real raid-freeze bug found and fixed — SHIPPED 2026-08-25
+
+**Design question answered first, via `AskUserQuestion`**: should home raids/building/AI activity
+keep resolving in real time while the player is away at a destination, or pause? The user chose
+**keep simulating** — the harder, more architecturally demanding option, since it means gating
+must never stop any real gameplay logic, only wasted rendering.
+
+- [COMPLETE] ✅ **Five purely-decorative home-only components now unmount while the player is at
+  a destination** (`Terrain`, `Signpost`, `Merchant`, `Road`, `StarterVillage`), closing the last
+  functional gap in the scene-isolation rearchitecture (Stages 0-4 previously shipped, PRs
+  #160-170). Gated at `GameWorld.tsx`'s own mount site via real conditional mounting
+  (`{!destination && <X/>}`), not an internal early-return — a real distinction found in research:
+  `Terrain` and `Merchant` both own a top-level `useFrame`, and React Three Fiber's frame
+  subscription survives an internal `return null` (proven by `Wildlife.tsx`'s own `Horse`
+  sub-component, which does exactly that today) — only a genuine unmount tears the subscription
+  down. `MountedHorse` and `Wildlife` were investigated and correctly left ungated: riding is not
+  home-only (Richard's jousting field is a real destination), and `Wildlife` contains a
+  destination-specific horse (Richard's own steed) that a blanket gate would have deleted
+  everywhere. `RaiderRam` and `Emplacements` were investigated and correctly left unconditionally
+  mounted — both drive real gameplay-state simulation (siege ram advance, turret/charge defense)
+  entirely inside their own `useFrame`, with no central store tick backing them, so gating their
+  render would have silently paused real defense/damage while the player is away.
+
+- [COMPLETE] ✅ **A real, previously-unknown bug found by verify while testing exactly the
+  property the user asked for**: an in-progress home raid's own combatants (raiders, ordinary
+  night skeletons) completely froze — bit-for-bit identical position/HP/state — the instant the
+  player left for any destination, only resuming on return. Root cause was a **pre-existing**
+  Stage 1-2 pattern, not introduced by this stage's own changes: `Enemies.tsx` mounted a raider's
+  `<Enemy>` component (the only place owning the `useFrame` that ever advances that mob's
+  position/HP/state) only when its `world` matched the player's *current* destination — so a home
+  raider (`world: null`) was fully unmounted, not just hidden, the moment `destination` became
+  non-null. A second, compounding defect in the same file: the raid trigger/resolve block was
+  gated behind a single `if (st.destination) return;`, so an already-started raid could never even
+  conclude while the player was away — it just hung, waiting for their return.
+  **Root-caused and fixed, not patched around**: `Enemies.tsx`'s render/mount filter now always
+  includes home-world enemies regardless of the player's own destination (mirroring the existing
+  `RaiderRam`/`Emplacements` precedent — safe because home and every destination sit thousands of
+  units apart in the same shared coordinate space, so a mounted home raider is never actually in
+  view once the player has travelled elsewhere); every check inside `Enemy()` that used the
+  player's global `destination` as a stand-in for "is this mob at home" (ground height, keep-
+  targeting, defender-targeting, pond/world-edge clamp) now asks about the *mob's own* `world`
+  instead (`enemyAtHome`), since a home mob can now be ticking while the player's destination is
+  something else entirely. The raid trigger/resolve block itself is no longer destination-gated
+  (only the night-skeleton rise stays gated, since its spawn point is genuinely
+  `playerState`-relative) — but its loud one-shot audio (warcry/horn/voice barks) stays
+  `!destination`-gated, so a raid starting or ending while away notifies via toast rather than
+  blaring audio the player isn't there to hear, matching this file's own pre-existing ROADMAP TODO
+  that already anticipated exactly this gap. `EnemyStore.spawn()` gained an optional
+  `worldOverride` param (10th, backward-compatible — every pre-existing call site is untouched) so
+  a raid triggered while the player is away tags its raiders `world: null` explicitly, instead of
+  stamping them with whatever destination the player currently happens to be standing in (which
+  would have positioned them thousands of units off and made them un-renderable forever, even
+  after the player came home).
+  **Verified live, twice** — once by the verify pass that found the bug (a real A/B: reset the
+  ram, travelled away, waited 6s, found the ram correctly advanced while every enemy stayed frozen
+  to 15 decimal places), and again by the fix pass's own 14-point re-verification script: raiders
+  now genuinely advance while away, a raid triggered while already away spawns correctly
+  home-tagged, a raid can now resolve (payout + notify) while the player is still at a
+  destination, and — critically — a DIFFERENT destination's own enemies were confirmed to still
+  freeze correctly the instant the player leaves that world, proving the fix is home-only, not a
+  blanket always-simulate. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.
+
+- [COMPLETE] ✅ **Stage 6 folded in**: `src/ai/PROJECT_CONTEXT.md`'s stale "Instance separation"
+  section (still describing the pre-Stage-0 flat, always-mounted-everywhere model) rewritten to
+  describe the real, now-complete render guarantee — including both the `Enemies.tsx`/
+  `Defenders.tsx` exceptions and the explicit "this is a render guarantee only, not a simulation
+  pause" clarification, so a future reader can't make the same "raids must be gated too" mistake
+  this stage's own first draft briefly made. A full regression sweep across all 8 travel
+  destinations, the dungeon, the arena, and all 6 challenge grounds (17 destinations total) found
+  zero console errors and sane object counts throughout, folded into this stage's own verify pass
+  rather than a separate stage.
+
+**The full 6-stage scene-isolation rearchitecture (Stages 0 through 6) is now complete.**
