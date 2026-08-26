@@ -216,13 +216,100 @@ export const TEMPLATE_WORLD_SCALE = 0.32;
 // that reuse a near-identical asset — template-01, template-05,
 // template-06 — but the equivalent live fix there had an unexplained side
 // effect (the whole row went invisible rather than correcting) that wasn't
-// root-caused within a reasonable investigation budget. Deliberately left
-// OUT of the map below rather than ship an unverified guess; a real fix
-// for those three needs a fresh pass (start from live raycast + before/after
-// screenshot exactly as done here, don't assume the template-03 mesh
-// indexes transfer).
+// root-caused within that first pass's budget. Deliberately left OUT of the
+// map at the time rather than ship an unverified guess.
+//
+// FOLLOW-UP PASS (2026-08-26): finished the job above, one destination at a
+// time, same live-raycast-first method — and, per that first pass's own
+// admission, re-derived each index from scratch rather than trusting any
+// number carried over from elsewhere (a carried-over guess for template-01
+// was independently checked here and turned out wrong — see its own note
+// below for what that guess actually was and why the live evidence
+// overrides it).
+//
+// ROOT CAUSE of the earlier "went invisible" report, confirmed by directly
+// reproducing it: an index derived from the WRONG traversal scope — e.g.
+// counting `isMesh` nodes starting from `TemplateWorldRoot`'s outer
+// `<group>` (which puts `TemplateGroundDisc`'s own mesh ahead of the real
+// GLTF scene — exactly the trap this file's own `applyTreeMeshOrientationFix`
+// doc comment already calls out) instead of `inner` alone — lands the fix
+// on the wrong mesh entirely. That much was already suspected; what this
+// pass adds is direct confirmation of what happens next. These bakes carry
+// a handful of huge terrain/backdrop-scale meshes (one single mesh spanning
+// 700+ world units was found live on template-05) alongside the small
+// decorative rows. Their true rendered content is NOT centered in their own
+// local bounding box — most of a backdrop panel's real geometry can sit
+// hard against one face of its bbox, nowhere near the box's own center.
+// `applyTreeMeshOrientationFix`'s mirror is a 180° rotation about that local
+// bbox center: harmless (an in-place flip) for a small, roughly
+// self-similar tree, but for one of these lopsided giants it relocates most
+// of the mesh's triangles to the opposite side of its own (very large) box.
+// Reproduced live twice this pass, on two different oversized meshes in two
+// different destinations — one read as a flat panel erupting into tall
+// diagonal spikes, the other warped the far background into jagged
+// unrelated terrain — neither is literally "nothing rendered," but both are
+// dramatic, camera-angle-dependent relocations of a large mass of geometry;
+// depending on exactly where that mass lands relative to the camera and the
+// rest of the scene (underground, in the sky, behind existing terrain), the
+// same failure mode reads just as plausibly as "the row went invisible."
+// Not a second bug — the wrong-mesh-mirror trap the function's doc comment
+// already warned about, just not previously reproduced firsthand. The other
+// two listed hypotheses were re-checked directly against these three
+// destinations' own real row meshes and both stay ruled out exactly as they
+// were for template-03: every one is genuine non-planar 3D geometry (a real
+// extent on all three local axes, not a billboard), and
+// `normalizeTemplateBake` already forces `THREE.DoubleSide` on every
+// material before anything renders, so backface culling was never a factor.
+//
+// template-01 (The King's Approach): mesh node `mesh_0_60` — confirmed via
+// the same raycast-the-actual-on-screen-defect method as template-03, on
+// the decorative conifer/ball-topiary row along the procession road. NOTE:
+// this does NOT match `[58, 59]`, the pair a prior draft of this fix
+// proposed for this destination — those two were independently
+// investigated here too (same live methodology) and turned out to be
+// something else entirely: `mesh_0_58` is a striped bunting/pennant
+// backdrop panel and `mesh_0_59` is the round ornament balls hanging on
+// it — real decorative geometry, but not the tree row, and not
+// mis-oriented (mirroring either produces no improvement; mirroring
+// `mesh_0_58`/`_59` was never actually applied live for exactly this
+// reason). `mesh_0_60`, by contrast, is a single mesh holding the ENTIRE
+// tree row (confirmed by tinting it alone and watching the whole row light
+// up) — mirroring it turned every canopy into an ordinary right-side-up
+// pine, screenshotted before/after from an unmoved camera.
+//
+// template-05 (The Rival Castle): mesh nodes `mesh_0_41` and `mesh_0_49` —
+// matches the earlier draft's own guess for this destination, but
+// re-confirmed here from scratch rather than trusted on faith: raycasting
+// the on-screen inverted canopies (both the ball ornaments and the conifer
+// spikes in the same row) resolved to exactly these two mesh nodes, and
+// mirroring both turned the whole row into ordinary pines/topiaries in one
+// before/after pair (the castle behind the row, previously obscured by the
+// inverted canopies, became visible once the fix was applied).
+//
+// template-06 (The Sister Keep): mesh nodes `mesh_0_78`, `mesh_0_79`,
+// `mesh_0_80`, `mesh_0_81` — 4 indices, not 2, because this destination's
+// row genuinely bakes as two backdrop-tile segments (a white one and a red
+// one) sitting side by side, each contributing its own ball-topiary mesh
+// and its own conifer mesh (a real structural difference from the other
+// three, not an error). Confirmed incrementally from an unmoved camera:
+// mirroring `mesh_0_79` alone fixed only the ball-topiary canopies, leaving
+// the row's cone-shaped trees (and part of the backdrop panel itself)
+// still visibly wrong; adding `mesh_0_80`/`_81` fixed the cones; adding
+// `mesh_0_78` (a thin sliver of the backdrop panel) finished the job. A
+// genuine "looks done after the first mesh but isn't" trap, caught by
+// checking every visually-distinct shape in the row rather than stopping
+// at the first improvement. All 4 together produce a complete right-side-up
+// row across both tile segments. Two other backdrop tiles
+// elsewhere in this same destination (`mesh_0_76`, `mesh_0_77`) carry a
+// similar-looking arch/cone pattern but are a different asset at a
+// different location, not part of the reported row — `mesh_0_76` was
+// tried live and, consistent with the wrong-mesh trap above, erupted into
+// spikes rather than correcting, confirming it does not belong in this fix.
 const TREE_MESH_ORIENTATION_FIX: Record<string, number[]> = {
   'template-03': [27, 31],
+  'template-01': [60],
+  'template-05': [41, 49],
+  'template-06': [78, 79, 80, 81],
 };
 
 /** apply `TREE_MESH_ORIENTATION_FIX`'s per-mesh correction to a freshly
