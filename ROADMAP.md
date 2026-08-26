@@ -7140,3 +7140,56 @@ must never stop any real gameplay logic, only wasted rendering.
   rather than a separate stage.
 
 **The full 6-stage scene-isolation rearchitecture (Stages 0 through 6) is now complete.**
+
+## Wave 18 #6 (tree orientation) finished — template-01/-05/-06 fixed, root cause of the earlier "invisible" report found — SHIPPED 2026-08-26
+
+- [COMPLETE] ✅ **The inverted-canopy tree defect is now fixed on all four destinations that have
+  it** (template-03 shipped 2026-08-20, PR #165; template-01/-05/-06 finished here). None of the
+  three new destinations' mesh indices transferred from template-03's `[27, 31]` — each was
+  independently re-derived via the same live-raycast-the-actual-on-screen-defect methodology:
+  `template-01: [60]`, `template-05: [41, 49]`, `template-06: [78, 79, 80, 81]`.
+  `template-06` genuinely needed 4 indices, not 2 — its row bakes as two separate backdrop-tile
+  segments (white and red), each with its own ball-topiary and conifer mesh, a real structural
+  difference from the other three destinations' single-segment bakes, caught by deliberately
+  checking a wide reference shot rather than judging the fix from one close-up angle after the
+  first improvement looked done. `template-01`'s own research draft proposed `[58, 59]` — this
+  was independently re-investigated during implementation and found to be wrong: those two meshes
+  are a striped bunting/pennant backdrop and its hanging ornament balls, real decorative geometry
+  but not the tree row; the actual row is a single mesh, `mesh_0_60`, confirmed by tinting it
+  alone (the whole visible row lit up) and by mirroring it (an ordinary right-side-up row
+  resulted, screenshotted before/after).
+
+- [COMPLETE] ✅ **Root cause of the prior session's "went invisible" report, reproduced live, not
+  just theorized.** `applyTreeMeshOrientationFix` counts `isMesh` nodes scoped to the raw GLTF
+  scene alone (already documented in the function's own doc comment) — but `TemplateWorldRoot`
+  mounts `TemplateGroundDisc` as a sibling mesh node ahead of that scene in the outer group, so any
+  index derived by counting from the wrong scope lands one or more mesh nodes off from what the
+  fix function actually targets. These bakes carry a handful of huge terrain/backdrop-scale meshes
+  (one single mesh spanning 700+ world units was found live on template-05) whose real geometry is
+  NOT centered in their own local bounding box, unlike a small symmetric tree — mirroring one of
+  these 180° about its own bbox center (the fix's actual operation) relocates most of its
+  triangles to the diametrically opposite side of that very large box. Reproduced live twice this
+  pass, on two different oversized meshes in two different destinations: one read as a flat
+  backdrop panel erupting into tall diagonal spikes, the other warped the far background into
+  unrelated jagged terrain — neither is literally "nothing rendered," but both are dramatic,
+  camera-angle-dependent relocations of a large geometry mass, which is a fully consistent
+  explanation for a plain-language "the row went invisible" report depending on exactly where that
+  mass ends up relative to the camera and the rest of the scene. The two other hypotheses on the
+  table (a thin billboard mesh whose flipped normals could explain a culling-driven disappearance;
+  a backface-culling gap) were tested directly against all three destinations' real row meshes and
+  ruled out — every one is genuine non-planar 3D geometry, and `normalizeTemplateBake` already
+  forces `THREE.DoubleSide` on every material before anything renders.
+
+- **Verified live, thoroughly**: zero console/page errors across a combined pass through all four
+  fixed destinations plus a scan of every untouched destination (confirming the
+  `TREE_MESH_ORIENTATION_FIX` lookup is a correct no-op everywhere else); `npx tsc --noEmit` /
+  `npm run build` both clean, verified independently. For template-01, -03, and -06, the verify
+  pass independently re-resolved each destination's real mesh identity live (same traversal-scope
+  method the fix itself uses) and got an exact match to the shipped indices, including total mesh
+  counts per destination — directly ruling out the historical wrong-mesh-mirror failure mode
+  rather than inferring it. **Honestly flagged, not silently passed over**: verify could not obtain
+  a cleanly-framed screenshot of template-05's row specifically despite roughly 10 distinct
+  camera-navigation attempts (the destination's own backdrop geometry made it difficult to frame),
+  so that one destination's fix is confirmed correct by exact mesh-identity match and the absence
+  of any defect tell or corruption artifact in every attempt, but not by a personally-witnessed
+  clean visual the way the other three were.
