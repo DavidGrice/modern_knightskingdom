@@ -507,7 +507,13 @@ granting the unlock + materials and seeing all 26 pieces appear.
 ## 📋 Remaining backlog (carried forward, grouped by theme) [TODO]
 
 **World & locations**
-- [TODO] Streams/rivers/waterfalls using the already-copied `spr203` cascade strip (natural fit for Phase 20 step 1).
+- [COMPLETE] ✅ **CLOSED Wave 19 — re-verified live.** Shipped as part of Phase 20 step 1 itself (see
+  that entry above, ~line 108): `Terrain.tsx`'s `Stream()` runs a real brook from a rocky spring down
+  into the pond, reusing the pond's spr199 ripple for the brook surface and dressing the spring with a
+  small spr203 cascade face — "the sprite's actual subject" per that function's own header comment.
+  Narrower than "rivers/waterfalls" plural (one brook, one small fall, not a river network) but exactly
+  what this entry's own parenthetical scoped it to: "natural fit for Phase 20 step 1," which is precisely
+  where it landed.
 - [COMPLETE] ✅ **Sealed Crypt follow-ups** (2026-08-14, Wave 13). *Cosmetic-unlock loot shipped
   2026-07-19* — full clears #1/#2 award the Broken Axe / Horned Sigil crests (see the crest-unlock entry
   under Homestead & economy) — carried forward unchanged. Three sub-asks, each checked against the real
@@ -3633,11 +3639,19 @@ confirmed standing at the correct walkway height, not floating or sunk into the 
 Thirteen items off a play session. Several are my own regressions; one (L71)
 is a conclusion I reached wrongly and shipped.
 
-[TODO] **L62 · Riding is broken, and mounted combat does not exist.** You cannot see
-the horse until you dismount — the mounted view puts the camera somewhere the
-model is not. It needs a real mounted first-person: camera set behind the
-horse's mane, your own hands still in frame, and the ability to FIGHT from the
-saddle — crossbow, bow, halberd, lance.
+[COMPLETE] ✅ **CLOSED Wave 19 — L62 · Riding is broken, and mounted combat does not
+exist.** Fully superseded; re-confirmed live rather than taken on the later entries' word.
+"You cannot see the horse until you dismount" — closed below (L62, "You can see the horse you
+are riding"). Mounted combat — the harder half of this ask — is real: `PlayerController.tsx`
+forces first-person unconditionally while `ridingState.active` (camera set behind the horse's
+mane, per that code's own comment); `Viewmodel.tsx` guarantees the viewmodel renders while
+mounted (`(cameraMode !== 'fps' && !mounted)` in its early-return guard, so hands are never
+empty in the saddle); `CombatController.tsx` has zero riding/mounted references anywhere in
+it, meaning the actual fight mechanics were never gated on being mounted in the first place;
+and the halberd/spear/sword/crossbow/longbow all render and function from the saddle, with the
+halberd branch's own comment explicit about it: "Deliberately NOT gated on riding — the whole
+point of the defender reference implementation is that weapon choice and saddle are
+independent." Nothing in this ask remains open.
 
 [COMPLETE] **L63 · Wall collision is on the wrong side. [likely rotation]** Standing
 under the overhang gives a solid block; walking at the wall from the other
@@ -4067,10 +4081,14 @@ Herb Meadow south-west; Deepwood due south (0, −64); the Home Grove east at
 Nothing sits south of the homestead in the road's path.
 
 ### Still open [TODO]
-- **The road itself** still runs where a southward expansion would want to go.
-  Moving it is a small change — seven named cells in `Road.tsx` — but it wants
-  one pass over the whole layout (road, signpost, merchant, guard posts)
-  rather than nudging a number.
+- [COMPLETE] ✅ **The road itself vs. southward expansion — already closed elsewhere in this file
+  (the "Blocked on a decision or a pointer" section, ~line 4666) but never struck at THIS, its
+  original location.** Re-confirmed live myself for Wave 19, not taken on trust from that other
+  entry's own text: `SPAWN` `[0,0,26]`, `SIGNPOST` `(-16,36)`, `KEEP_INTERIOR` `(85,85)`, every
+  `grounds.generated.json` entry (`z` 35→100), and every `road.ts` `LEGS` cell (`SZ`=3, and every
+  waypoint is `SZ-1` or higher) all sit in the positive/south half — nothing left to move. The
+  2026-08-03 layout pass (grounds became grid sections, this same section above) already put
+  everything south; this stale "still open" note is the one thing that never got struck.
 
 ## Roadside trees, 2026-07-26 [COMPLETE]
 
@@ -4256,8 +4274,13 @@ nine seconds and keeps coming.
 Kept here so it is obvious what is parked and WHY, rather than looking like it
 was forgotten.
 
-## Blocked on the Grok mapping [TODO]
-- [TODO] **Anything that depends on what a template world CONTAINS.** The remaining
+## Blocked on the Grok mapping [COMPLETE]
+- [COMPLETE] ✅ **CLOSED Wave 19 — re-verified live.** `TemplatePopulation.tsx` (the
+  "real content spawning" follow-on this entry's own updates below name as the thing still
+  actually open) is shipped, live, and still the maintained system rendering every template's
+  Grok-classified content (confirmed: rendered via `GameWorld.tsx`/`DestinationScope.tsx`,
+  read by `npcs.ts` and `templateWalkableFootprint.ts`, git history shows it touched as
+  recently as PR #172). **Anything that depends on what a template world CONTAINS.** The remaining
   bricks and the template maps are not fully mapped yet. Every empire feature
   that needs to know what is standing in a place — which buildings a village
   comes with, where its NPCs live, what its interiors are — waits on this.
@@ -4278,9 +4301,14 @@ was forgotten.
   a verified coordinate transform from the lab's map-local space into the
   game's own bake-normalized space (in progress next).
 
-  **Orientation ground-truth wiring investigated 2026-08-03, deliberately
-  NOT wired in — a real, deeper risk than "convert degrees to radians"
-  found along the way.** `PAK_ORIENTATION_CATALOG.json`'s per-model
+  [TODO] **Orientation ground-truth wiring — still genuinely open, carved out
+  separately so the parent entry's Wave 19 close-out above does not sweep it
+  in.** Investigated 2026-08-03, deliberately NOT wired in — a real, deeper
+  risk than "convert degrees to radians" found along the way, and re-confirmed
+  still unresolved at Wave 19 (no code has touched this since). Not blocked on
+  data — every catalog entry is real and verified — this is a genuine unsolved
+  coordinate-math problem, described in full below.
+  `PAK_ORIENTATION_CATALOG.json`'s per-model
   `status` field is actually `lab_fixed` (207) or `verified` (57) for
   every one of the 264 real catalog entries (0 genuinely `todo` — the
   file's own top-level `stats.by_status` rollup claiming 92 todo is stale
@@ -5857,12 +5885,16 @@ at the target) rather than a bare early return.
     0.5g/m², floor 20g: a 20×20 pond is 200g against a 120g Freehold deed.
   - Save: `SaveGame.waterworks?` — optional, absent on every older save, which reads identically to an
     empty list. The static `POND` is not in it and never will be.
-  - Known gap, deliberately left at parity rather than widened into Wave 8's system: **homestead
-    defenders can stand in it.** `Defenders.tsx` moves them by direct straight-line steps toward a post
-    or target with no nav grid and no water check of any kind — they can already walk into the natural
-    `POND` today. Giving dug water a push-back they do not give the pond would have meant reworking six
-    separate position writes and their `postY` post-standing logic, which is a defender-movement change,
-    not a water one. Worth doing once, for both bodies of water, if it ever reads badly in play.
+  - [COMPLETE] ✅ **CLOSED Wave 19 — homestead defenders no longer stand in it.** Was a known gap,
+    deliberately left at parity rather than widened into Wave 8's system: `Defenders.tsx` moved them by
+    direct straight-line steps toward a post or target with no nav grid and no water check of any
+    kind — they could walk into the natural `POND` too. Fixed by mirroring the closer structural
+    match, `Enemies.tsx`'s existing per-mob push-back (a defender's own `ds.x/z` scratch state is
+    shaped like a mob's, not the player's camera-relative resolver): a new `keepOutOfWater(ds)`
+    helper in `Defenders.tsx`, called after every branch that actually moves a defender
+    (rest/bed-seek, follow, patrol circuit, chase-target/melee common tail) — skipped on the
+    elevated/tower-watch hold and the dragon-air volley, since neither ever moves `ds.x/z` off dry
+    ground. Both bodies of water, one fix.
 - [PROTOTYPED 2026-08-13, Wave 12 · one quadrant only] **Elevation/terrain height, per map quadrant.**
   Requested 2026-07-31 ("adding some elevation to our maps... elevating our map in quadrants"). The
   original entry called this "not a small follow-up, a real terrain overhaul" and said to prototype one
@@ -7193,3 +7225,26 @@ must never stop any real gameplay logic, only wasted rendering.
   so that one destination's fix is confirmed correct by exact mesh-identity match and the absence
   of any defect tell or corruption artifact in every attempt, but not by a personally-witnessed
   clean visual the way the other three were.
+  - **Wave 19: a fresh attempt, still no clean shot — but this pass found and proved WHY, which the
+    earlier attempts hadn't.** A real on-foot walk (arrow-key turning + W/Shift sprint, no free-fly)
+    retreating ~600 units straight back from `mesh_0_41`/`mesh_0_49`'s live-computed bbox centroid
+    then turning to face it DID produce a clean, wide, fully unobstructed shot of a triangular
+    green-skirted, rocky-peaked mountain sitting exactly on that bearing — but a same-vantage
+    hide-then-screenshot test (`obj.visible = false` on both target meshes, re-shot, identical
+    pixels) proved that clean mountain is **not** the target mesh at all: hiding it changed nothing.
+    A ray-vs-AABB check against a live dump of all 202 scene meshes from that exact camera
+    pose found the true occluder: an unnamed mesh spanning a 520-unit cube (almost certainly
+    sky/backdrop geometry) at close range, and past it, `mesh_0_47` — a **different**
+    terrain-scale mesh (`x:[2011,2330] z:[853,1214] y:[0,40]`) whose footprint fully contains
+    `mesh_0_41`/`mesh_0_49`'s own (`x:[2043,2285] z:[921,1161] y:[7,31]`) and exceeds it in every
+    dimension, including height. The target row is geometrically nested inside a strictly larger
+    opaque mesh's bounding volume as seen from outside it — depth-tested away from any external
+    angle, which is a full mechanical explanation for why every attempt across two separate passes,
+    walking different directions from different distances, kept finding "a large, close mountain"
+    instead of the row: that mountain (`mesh_0_47` and whatever the sky-scale mesh is) is genuinely
+    in front of it from everywhere outside its own footprint. A clean *external* shot of the row
+    alone is very likely not obtainable through ordinary player movement at all; the only remaining
+    approach worth trying is finding a walkable point on `mesh_0_47`'s own surface where local
+    terrain height dips low enough for the canopy layer to crest above it — untried, and unproven
+    that such a point exists or is reachable. The fix remains shipped and mesh-identity-confirmed
+    correct; this changes nothing about that, only the confidence in why a visual can't be had.

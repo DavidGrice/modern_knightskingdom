@@ -9,7 +9,7 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, lootFor, KIND_LABEL, type EnemyData } from '@/game/combat';
-import { registerDefender, defenderOrders, defenderStrike, scoutReported } from '@/game/defenders';
+import { registerDefender, defenderOrders, defenderStrike, scoutReported, type DefenderState } from '@/game/defenders';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
 import { chestplateHp, chestplateTierOf } from '@/game/data/armor';
@@ -26,6 +26,8 @@ import { heightOf } from '@/game/data/buildables';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from './Villagers';
 import { isBuilt, isHomeBuilding } from '@/game/types';
+import { POND } from '@/game/data/world';
+import { pushOutOfWater } from '@/game/waterworks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import type { CharacterConfig, Villager } from '@/game/types';
 
@@ -39,6 +41,27 @@ const SCOUT_EYES = 30;    // scout order: base sighting range (Wit adds to it)
 const MELEE_RANGE = 1.8;
 const BOW_RANGE = 16;
 const RECOVER_MS = 45000; // real time knocked out before returning to the fight
+
+/** Wave 19 · same push-back `Enemies.tsx` gives a raider (its `ds.x/z` scratch
+ *  state is shaped the same way, unlike the player's camera-relative
+ *  resolver) — pond circle first, then any player-dug waterworks rectangle.
+ *  Previously nothing at all: this file stepped a defender straight at a post
+ *  or a target with no water check of any kind, a confirmed parity gap
+ *  against both the natural POND and Wave 12's dug moats (see waterworks.ts's
+ *  own header comment and the ROADMAP "Known gap" note this closes). Called
+ *  after every branch that actually advances `ds.x/z` — not the elevated/
+ *  tower-watch hold or the dragon-air volley, since neither ever moves a
+ *  defender off dry ground. */
+function keepOutOfWater(ds: DefenderState) {
+  const pd = Math.hypot(ds.x - POND.x, ds.z - POND.z);
+  if (pd < POND.radius + 1) {
+    ds.x = POND.x + ((ds.x - POND.x) / pd) * (POND.radius + 1);
+    ds.z = POND.z + ((ds.z - POND.z) / pd) * (POND.radius + 1);
+  }
+  const out = pushOutOfWater(ds.x, ds.z, 0.6);
+  ds.x = out.x;
+  ds.z = out.z;
+}
 
 function DefenderFigure({ villager }: { villager: Villager }) {
   const buildings = useGameStore((s) => s.buildings);
@@ -222,6 +245,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
           yaw.current += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+        keepOutOfWater(ds);
         g.position.set(ds.x, hasClaimableBed ? 0 : ds.postY, ds.z);
         g.rotation.y = yaw.current + Math.PI;
         return;
@@ -244,6 +268,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
           yaw.current += diff * Math.min(1, dt * 4);
           if (clip !== 'anim_c_run') setClip('anim_c_run');
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+        keepOutOfWater(ds);
         g.position.set(ds.x, 0, ds.z);
         g.rotation.y = yaw.current + Math.PI;
         return;
@@ -278,6 +303,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       yaw.current += diff * Math.min(1, dt * 3);
       const wantClip = order === 'scout' ? 'anim_c_run' : 'anim_c_walk';
       if (clip !== wantClip) setClip(wantClip);
+      keepOutOfWater(ds);
       g.position.set(ds.x, order === 'scout' ? 0 : ds.postY, ds.z);
       g.rotation.y = yaw.current + Math.PI;
       return;
@@ -365,6 +391,11 @@ function DefenderFigure({ villager }: { villager: Villager }) {
     // approximated being hit back is gone; tower elevation still protects,
     // because ground enemies skip elevated defenders entirely
 
+    // common tail for both branches above: only the chase step (the !inRange
+    // branch) actually moves ds.x/z, but the water push belongs here rather
+    // than duplicated inside it, since a standing-and-swinging defender is
+    // already out of the water by definition (they got there by chasing)
+    keepOutOfWater(ds);
     g.position.set(ds.x, ds.postY, ds.z);
     g.rotation.y = yaw.current + Math.PI;
   });
