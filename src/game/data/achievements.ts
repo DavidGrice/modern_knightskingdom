@@ -1,5 +1,6 @@
 import type { SkillId } from '../types';
 import { SKILLS, levelFromXp } from './ranks';
+import { QUESTS } from './quests';
 
 // Deeds: checked against a snapshot of the game state; awarded once, saved.
 
@@ -55,7 +56,13 @@ export const DEEDS: DeedDef[] = [
   { id: 'keep', name: 'Castle Builder', icon: '🏰', desc: 'Raise the Grand Keep.',
     check: (s) => s.buildings.some((b) => b.type === 'keep') },
   { id: 'paladin', name: 'Paladin of the Realm', icon: '👑', desc: 'Complete every royal quest.',
-    check: (s) => s.completedQuests.length >= 8 },
+    // Was a hardcoded `8` that never matched QUESTS.length (11 since this
+    // file's first commit) — drifted out of sync with the "every royal
+    // quest" text from day one. Derived from the real count instead; a
+    // no-op for anyone who already earned this deed (checkDeeds() never
+    // re-evaluates an earned deed), only raising the bar for players who
+    // haven't yet.
+    check: (s) => s.completedQuests.length >= QUESTS.length },
   { id: 'treasury', name: 'Royal Treasury', icon: '💰', desc: "Open the Grand Keep's treasure chest.",
     check: (s) => !!s.treasureOpened },
   { id: 'cedric_jailed', name: 'Behind Bars', icon: '🔒', desc: 'Defeat Cedric the Bull at his forest camp.',

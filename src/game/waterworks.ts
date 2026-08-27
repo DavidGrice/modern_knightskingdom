@@ -23,11 +23,12 @@
 // what it is not is a visible hole in the ground. That needs the terrain-height
 // work the elevation pass is scoped around, and is the honest follow-up here.
 //
-// One other thing it deliberately is NOT: a push-back for homestead defenders.
-// Defenders.tsx steps them straight at a post or a target with no nav grid and
-// no water check at all — they can walk into the natural POND today — so dug
-// water is left at exactly that parity rather than growing a special case only
-// half the water in the world obeys. See the ROADMAP entry.
+// Wave 19: Defenders.tsx now gets the same push-back — a `keepOutOfWater(ds)`
+// helper, mirroring Enemies.tsx's per-mob push (its own `ds.x/z` scratch state
+// is shaped like a mob's, not the player's camera-relative resolver), called
+// after every branch that actually moves a defender. The parity gap this
+// paragraph used to document (no water check at all, natural POND included)
+// is closed for both bodies of water. See the ROADMAP entry.
 import { GRID, landHalf, landSouthHalf } from './data/buildables';
 import { ROAD_TILE, routeCells } from './data/road';
 import {
