@@ -20,6 +20,7 @@ import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
 import { fortDamageReduction } from './fort';
+import { hasLineOfSight } from './navgrid';
 // NPC_AI_SPEC §6.2 — the AI's world-sound emitter. Both modules are
 // deliberately import-light leaves of the perception layer (sounds.ts pulls
 // only playerState + the config JSON; Belief.ts owns the entity-id scheme),
@@ -902,6 +903,19 @@ export function stepBolt(b: Bolt, dt: number): boolean {
   const nx = b.pos.x + b.vel.x * dt;
   const ny = b.pos.y + b.vel.y * dt;
   const nz = b.pos.z + b.vel.z * dt;
+  // Wave 20 · a shaft that would have to pass through a wall/building this
+  // frame stops right there instead, lodged in whatever it hit — the same
+  // real 3D obstacle boxes findPath routes around (game/navgrid.ts's
+  // hasLineOfSight), tested against this frame's own segment rather than a
+  // new field on Bolt. Because it is a true 3D box test using each box's
+  // real yBase/yTop (not the flattened 2D nav grid), a battlement shot's
+  // early segments — well above the wall's own yTop, since muzzleHeight()
+  // above adds +1.45m to a standing surface already at the wall's own top —
+  // never register as blocked, so the elevated-archery mechanic survives.
+  if (!hasLineOfSight(b.pos.x, b.pos.y, b.pos.z, nx, ny, nz, st.destination ?? null)) {
+    audio.play('brick_collide', 0.5);
+    return true; // despawns — lodged in whatever it hit
+  }
   // Segment-vs-enemy, tested against that donor's REAL per-part volumes
   // (game/hitbox.ts, measured from the assembled rig). This replaces a
   // single 0.55m sphere parked at a fixed chest height, which both let a

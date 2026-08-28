@@ -23,6 +23,7 @@ import { dragonAir } from './DragonOmen';
 import { horses, mountOf } from '@/game/riding';
 import RiggedProp from './RiggedProp';
 import { heightOf } from '@/game/data/buildables';
+import { hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from './Villagers';
 import { isBuilt, isHomeBuilding } from '@/game/types';
@@ -365,23 +366,30 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
       if (ds.attackCd <= 0) {
         ds.attackCd = loadout === 'bow' ? 1.6 : 1.1;
-        // Courage (Phase 24A) weights the swing; Riposte trait adds steel;
-        // a bare-fisted defender (no Armory weapon spent on them yet) hits
-        // noticeably softer than one armed with sword/halberd — real reason
-        // to spend that stock rather than leaving the roster unarmed.
-        // Wave 11 · the expression itself moved to `defenderStrike`
-        // (game/defenders.ts), term for term, so the AI reasoner's own
-        // `engage_threat` action swings for exactly this and cannot drift
-        // from it — see that function's comment.
-        const dmg = defenderStrike(villager);
-        target.hp -= dmg;
-        if (target.hp <= 0 && target.mob.state !== 'dying') {
-          target.mob.state = 'dying';
-          target.mob.dieT = 0;
-          recordKill(target.kind);
-          gainDefenderXp(villager.id, 15);
-          addItems(lootFor(target), 'grant');
-          notify(`${villager.name} defeats a raider!`, true);
+        // Wave 20 · a bow shot needs a real unobstructed sightline — melee is
+        // 1.8m contact range, never behind a wall in practice, so only the
+        // bow case pays the check. Elevated/tower defenders never reach this
+        // branch (they `return` early above), so ground height is always a
+        // safe assumption here.
+        if (loadout !== 'bow' || hasLineOfSight(ds.x, GROUND_LOS_Y, ds.z, target.mob.x, GROUND_LOS_Y, target.mob.z)) {
+          // Courage (Phase 24A) weights the swing; Riposte trait adds steel;
+          // a bare-fisted defender (no Armory weapon spent on them yet) hits
+          // noticeably softer than one armed with sword/halberd — real reason
+          // to spend that stock rather than leaving the roster unarmed.
+          // Wave 11 · the expression itself moved to `defenderStrike`
+          // (game/defenders.ts), term for term, so the AI reasoner's own
+          // `engage_threat` action swings for exactly this and cannot drift
+          // from it — see that function's comment.
+          const dmg = defenderStrike(villager);
+          target.hp -= dmg;
+          if (target.hp <= 0 && target.mob.state !== 'dying') {
+            target.mob.state = 'dying';
+            target.mob.dieT = 0;
+            recordKill(target.kind);
+            gainDefenderXp(villager.id, 15);
+            addItems(lootFor(target), 'grant');
+            notify(`${villager.name} defeats a raider!`, true);
+          }
         }
       }
     }

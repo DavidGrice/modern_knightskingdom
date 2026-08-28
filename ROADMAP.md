@@ -7248,3 +7248,51 @@ must never stop any real gameplay logic, only wasted rendering.
     terrain height dips low enough for the canopy layer to crest above it — untried, and unproven
     that such a point exists or is reachable. The fix remains shipped and mesh-identity-confirmed
     correct; this changes nothing about that, only the confidence in why a visual can't be had.
+
+## Wave 20: line-of-sight for ranged combat, and enemies can no longer spawn inside your own walls — SHIPPED 2026-08-28
+
+- [COMPLETE] ✅ **Real line-of-sight for every ranged attack in the game** (`ROADMAP.md`'s own
+  long-standing TODO — previously distance was the only check, a wall between attacker and target
+  never mattered). One shared primitive, `hasLineOfSight()` (`src/game/navgrid.ts`), used by all
+  three real ranged-combat call sites: a defender's bow shot (`Defenders.tsx`), a ranged bandit's
+  shot at a defender or the player (`Enemies.tsx`), and the player's own fired bolt/arrow
+  (`combat.ts`'s `stepBolt()`, stopped mid-flight and lodged in whatever it hit). Deliberately
+  **not** built on the existing pathfinding grid — that grid flattens height (`isWalkable` has no
+  y-parameter), which would have falsely blocked the elevated-archery bonus (`onBattlement()`, a
+  player firing from atop their own wall). Instead reuses the exact same source data the nav grid
+  already builds from (a new shared `forEachObstacleBox()`, mechanically extracted from
+  `NavGrid.rebuild()` with zero behavior change to it) via a real 3D segment-vs-box test against
+  each obstacle's true `yBase`/`yTop`, cached per-region and only rebuilt when the source array's
+  identity changes — the same memoization `NavGrid` itself already relies on, so this adds no new
+  per-frame cost beyond a cheap loop over a cached box array on an actual attack-cooldown tick (for
+  defenders/enemies) or an in-flight-projectile physics step (for the player), never scaling with
+  raid size. **Verified live with genuine before/after damage A/Bs**, not synthetic unit calls: a
+  defender's bow target held exactly steady in HP through 3.5s of attacks while a real wall sat on
+  the firing line, then died within another 3.5s once the wall was removed — repeated the same way
+  for a ranged bandit vs. a defender (36→36 walled, 36→31.2 clear) and vs. the player (10→10
+  walled, 10→4.42 clear). The elevation exemption was independently confirmed via the exported
+  primitive itself: a line through a real wall at ground height is blocked, the identical line 5m
+  above the wall's own top is not. A live performance sample (10 bandits vs. 6 bow defenders,
+  actively fighting near 8 real walls) showed zero measurable frame-rate impact (60.22fps vs. a
+  60.05fps idle baseline). `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+- [COMPLETE] ✅ **Night skeletons can no longer rise inside a fully walled homestead** (the other
+  half of `ROADMAP.md`'s "enemies shouldn't spawn inside the kingdom" TODO — dusk raiders already
+  correctly walked in from the road; skeletons had zero wall awareness). The spawn ring (26-38m from
+  the player) now re-rolls up to 6 times against `fort.ts`'s existing cached `insideWalls()`
+  flood-fill check, and falls back to the same `roadEntry()` walk-in treatment raiders already get
+  if every roll still lands inside an enclosure — a fallback skeleton is tagged `approaching` (so it
+  paths in via the nav grid like a raider) without being miscounted as one in raid-resolution
+  bookkeeping, which filters strictly on a separate `raid` flag. **Verified live with a real
+  deterministic proof, not just observed luck**: built an actual sealed 96-piece wall ring, forced
+  real night, and confirmed via `window.__kkfort` that `enclosed:true`; collected 7 natural spawn
+  cycles over ~2.5 real minutes with every one landing outside the ring; then pinned `Math.random()`
+  so every one of the 6 reroll candidates computed to the exact same point deep inside the ring —
+  the actual skeleton that spawned correctly used the `roadEntry()` fallback instead, proving the
+  reroll loop genuinely rejects the bad candidate rather than coincidentally succeeding. Dusk raiders
+  were confirmed completely unaffected by this same test session (still spawning at the real
+  `roadEntry()` coordinate, `raid:true`). **Honestly scoped, not silently included**: a related but
+  distinct TODO — enemies spawning inside a building's own footprint, not just a walled courtyard —
+  was flagged during research as a one-line, near-zero-cost addition to the same reroll loop
+  (skipping `navBlocked()`, already exported and cheap) but deliberately left out since it wasn't
+  what this wave was asked to fix; tracked separately for a future pass.
