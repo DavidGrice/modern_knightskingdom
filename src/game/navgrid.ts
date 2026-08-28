@@ -13,7 +13,7 @@
 // the navmesh, so a breached wall, an archway or an open gate is walkable
 // without anyone remembering to say so.
 import * as THREE from 'three';
-import { collisionBoxesFor } from './data/buildables';
+import { collisionBoxesFor, type CollisionBox } from './data/buildables';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from './types';
 import { activeTerrainExclusions, terrainBlocks } from './navTerrain';
 import { waterworks } from './waterworks';
@@ -49,6 +49,14 @@ const AGENT_RADIUS = 0.55;
 /** a box only blocks if it actually intersects the band a walker occupies */
 const WALK_LOW = 0.55;   // matches PlayerController's STEP_UP: lower is a kerb
 const WALK_HIGH = 1.7;   // above this it is an overhang you pass beneath
+/** Wave 20 · approximate shot-release height for a ground-standing defender
+ *  or enemy — neither has a per-frame draw height of its own the way the
+ *  player's muzzleHeight() (combat.ts) does, so hasLineOfSight callers that
+ *  represent a ground combatant share this one fixed value rather than each
+ *  inventing a slightly different height that could drift. Sits inside the
+ *  walker band above (WALK_LOW..WALK_HIGH) since that is exactly the body
+ *  height a ground-standing figure already occupies. */
+export const GROUND_LOS_Y = 1.2;
 /** Requested 2026-07-30: A* prefers a road cell over open ground by this
  *  fraction of its ordinary step cost — real enough to route someone onto
  *  the carriageway for a route that already runs near it, not so cheap a
@@ -89,6 +97,43 @@ export interface NavGridOptions {
    *  what the player can climb. Unset (fixed/home grids) means no height
    *  field is ever built and this check never fires. */
   maxStep?: number;
+}
+
+/**
+ * Wave 20 · the per-building obstacle source, factored out of
+ * `NavGrid.rebuild()` below so `hasLineOfSight` (also this wave, near the
+ * bottom of this file) can share it instead of keeping a second, driftable
+ * copy of "which pieces actually block something here." Purely mechanical —
+ * `rebuild()`'s own behavior is unchanged, this is the same filter it always
+ * ran, just callable from two places now. Boxes come back in the piece's own
+ * local frame exactly as `collisionBoxesFor` returns them — translating by
+ * `b.x/b.y/b.z` is each caller's own job, since one wants a flattened 2D
+ * footprint and the other a real 3D box.
+ */
+function forEachObstacleBox(
+  buildings: PlacedBuilding[],
+  region: string | null,
+  cb: (b: PlacedBuilding, box: CollisionBox) => void,
+): void {
+  for (const b of buildings) {
+    // a construction-site ghost is not yet an obstacle; a building outside
+    // this grid's own region is nowhere near it
+    if (!isBuilt(b)) continue;
+    const buildingRegion = isHomeBuilding(b) ? null : (b.world ?? null);
+    if (buildingRegion !== region) continue;
+    // iteration 2.10 — an open gate has zero collision, matching
+    // PlayerController.tsx's own player-collision loop exactly
+    // (`b.type === 'gate' && (gateOpen[b.id] ?? true) => passable`).
+    // Found while verifying §2.5's "gate vs wall" checklist item: this
+    // check was simply absent before, so every gate — open or closed —
+    // was permanently solid to findPath/navSteer regardless of state,
+    // while the player could already walk straight through an open one.
+    // Wave 8 · an opened door is as walkable as a raised gate — the two are
+    // one rule now (isDoorLike), so a villager routes through the door you
+    // left open instead of walking round your whole yard
+    if (isDoorLike(b.type) && (useGameStore.getState().gateOpen[b.id] ?? true)) continue;
+    for (const box of collisionBoxesFor(b.type, b.rot)) cb(b, box);
+  }
 }
 
 /**
@@ -392,42 +437,27 @@ export class NavGrid {
     this.builtWaterRev = waterworks.rev;
     this.blocked = new Uint8Array(this.dim * this.dim);
 
-    for (const b of buildings) {
-      // a construction-site ghost is not yet an obstacle; a building outside
-      // this grid's own region is nowhere near it
-      if (!isBuilt(b)) continue;
-      const buildingRegion = isHomeBuilding(b) ? null : (b.world ?? null);
-      if (buildingRegion !== this.region) continue;
-      // iteration 2.10 — an open gate has zero collision, matching
-      // PlayerController.tsx's own player-collision loop exactly
-      // (`b.type === 'gate' && (gateOpen[b.id] ?? true) => passable`).
-      // Found while verifying §2.5's "gate vs wall" checklist item: this
-      // check was simply absent before, so every gate — open or closed —
-      // was permanently solid to findPath/navSteer regardless of state,
-      // while the player could already walk straight through an open one.
-      // Wave 8 · an opened door is as walkable as a raised gate — the two are
-      // one rule now (isDoorLike), so a villager routes through the door you
-      // left open instead of walking round your whole yard
-      if (isDoorLike(b.type) && (useGameStore.getState().gateOpen[b.id] ?? true)) continue;
-      for (const box of collisionBoxesFor(b.type, b.rot)) {
-        const base = (b.y ?? 0) + box.yBase;
-        const top = (b.y ?? 0) + box.yTop;
-        // an overhang (a battlement walkway, an archway crown) is not an
-        // obstacle at ground level — this is what lets a walker use a gateway
-        if (top <= WALK_LOW || base >= WALK_HIGH) continue;
-        const cx = b.x + (box.ox ?? 0);
-        const cz = b.z + (box.oz ?? 0);
-        const hx = box.hx + AGENT_RADIUS;
-        const hz = box.hz + AGENT_RADIUS;
-        const i0 = Math.max(0, this.toCellX(cx - hx));
-        const i1 = Math.min(this.dim - 1, this.toCellX(cx + hx));
-        const j0 = Math.max(0, this.toCellZ(cz - hz));
-        const j1 = Math.min(this.dim - 1, this.toCellZ(cz + hz));
-        for (let i = i0; i <= i1; i++) {
-          for (let j = j0; j <= j1; j++) this.blocked[this.idx(i, j)] = 1;
-        }
+    // Wave 20 · the filter (built-only, region match, open-gate skip) now
+    // lives in the shared forEachObstacleBox above, alongside the new
+    // hasLineOfSight — mechanical extraction, no behavior change here.
+    forEachObstacleBox(buildings, this.region, (b, box) => {
+      const base = (b.y ?? 0) + box.yBase;
+      const top = (b.y ?? 0) + box.yTop;
+      // an overhang (a battlement walkway, an archway crown) is not an
+      // obstacle at ground level — this is what lets a walker use a gateway
+      if (top <= WALK_LOW || base >= WALK_HIGH) return;
+      const cx = b.x + (box.ox ?? 0);
+      const cz = b.z + (box.oz ?? 0);
+      const hx = box.hx + AGENT_RADIUS;
+      const hz = box.hz + AGENT_RADIUS;
+      const i0 = Math.max(0, this.toCellX(cx - hx));
+      const i1 = Math.min(this.dim - 1, this.toCellX(cx + hx));
+      const j0 = Math.max(0, this.toCellZ(cz - hz));
+      const j1 = Math.min(this.dim - 1, this.toCellZ(cz + hz));
+      for (let i = i0; i <= i1; i++) {
+        for (let j = j0; j <= j1; j++) this.blocked[this.idx(i, j)] = 1;
       }
-    }
+    });
 
     // Phase 2, iteration 2.1 — stamp terrain exclusions (water) in AFTER
     // building obstacles, on top of them. Wave 12: the list is now the static
@@ -817,9 +847,121 @@ export function findPath(
   return homeGrid.findPath(sx, sz, tx, tz, maxNodes);
 }
 
+// ---------------------------------------------------------------------------
+// Wave 20 · line of sight for ranged combat.
+//
+// Deliberately NOT built on the flattened 2D `blocked` grid above: that grid
+// throws away height (`isWalkable` has no y-parameter), which would falsely
+// block a shot fired from atop a wall or tower — onBattlement()'s elevated-
+// archery bonus (combat.ts) puts a standing player's muzzle right over their
+// own wall's footprint. Instead this reuses the same SOURCE data the grid
+// itself is built from (forEachObstacleBox → collisionBoxesFor) via a real
+// segment-vs-AABB test against each box's actual yBase/yTop, which has no
+// such blind spot and reads more literally as "raycast vs the obstacle
+// boxes" besides.
+// ---------------------------------------------------------------------------
+
+interface LosBox { cx: number; cz: number; hx: number; hz: number; yBase: number; yTop: number; }
+interface LosCache { builtFrom: PlacedBuilding[]; boxes: LosBox[]; }
+
+// One cache per region, each memoized on its own source array's identity —
+// exactly the way NavGrid.rebuild() memoizes on `builtFrom === buildings`.
+// Keyed by String(region) (null -> "null"), which can never collide with a
+// real region id (WORLD_DESTINATION_BY_ID/dungeon ids are code-defined,
+// non-empty, and never the literal string "null").
+const losCaches = new Map<string, LosCache>();
+
+function losSource(region: string | null): PlacedBuilding[] {
+  // Crypt walls are synthesized locally (see dungeonWallBuildings above) and
+  // never enter the global buildings list, so the dungeon needs its own
+  // source — and a fresh descent replaces `dungeonWallBuildings` with a new
+  // array, so the identity check below picks up a re-descent for free, same
+  // as ensureDungeonGrid()'s own rebuild() call already relies on.
+  if (region === 'dungeon') {
+    ensureDungeonGrid();
+    return dungeonWallBuildings;
+  }
+  return useGameStore.getState().buildings;
+}
+
+function losBoxes(region: string | null): LosBox[] {
+  const key = String(region);
+  const source = losSource(region);
+  const cached = losCaches.get(key);
+  if (cached && cached.builtFrom === source) return cached.boxes;
+
+  const boxes: LosBox[] = [];
+  forEachObstacleBox(source, region, (b, box) => {
+    boxes.push({
+      cx: b.x + (box.ox ?? 0),
+      cz: b.z + (box.oz ?? 0),
+      hx: box.hx,
+      hz: box.hz,
+      yBase: (b.y ?? 0) + box.yBase,
+      yTop: (b.y ?? 0) + box.yTop,
+    });
+  });
+  losCaches.set(key, { builtFrom: source, boxes });
+  return boxes;
+}
+
+/** Segment (ox,oy,oz) + t·(dx,dy,dz), t∈[0,1], vs an axis-aligned box — the
+ *  standard slab method. No AGENT_RADIUS padding: that is walker fatness,
+ *  wrong for a thin arrow/bolt/sightline. */
+function segmentHitsBox(
+  ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, box: LosBox,
+): boolean {
+  let tMin = 0, tMax = 1;
+  const axes: [number, number, number, number][] = [
+    [ox, dx, box.cx - box.hx, box.cx + box.hx],
+    [oz, dz, box.cz - box.hz, box.cz + box.hz],
+    [oy, dy, box.yBase, box.yTop],
+  ];
+  for (const [o, d, lo, hi] of axes) {
+    if (Math.abs(d) < 1e-9) {
+      if (o < lo || o > hi) return false;
+      continue;
+    }
+    let t0 = (lo - o) / d;
+    let t1 = (hi - o) / d;
+    if (t0 > t1) { const tmp = t0; t0 = t1; t1 = tmp; }
+    tMin = Math.max(tMin, t0);
+    tMax = Math.min(tMax, t1);
+    if (tMin > tMax) return false;
+  }
+  return true;
+}
+
+/**
+ * True if a straight segment from (fromX,fromY,fromZ) to (toX,toY,toZ) is
+ * NOT interrupted by any built obstacle in `region` — a real 3D check
+ * against the same collision volumes findPath routes around (see the module
+ * doc above), not the flattened 2D nav grid, so an elevated shot over a
+ * wall's own footprint reads correctly. `region` follows the same "null
+ * means home" convention as everywhere else in this file (NavGridOptions.
+ * region, Agent.region, PlacedBuilding.world) — Defenders.tsx and Enemies.
+ * tsx's own home-only call sites can simply omit it.
+ *
+ * The one shared LOS check for ranged combat: Defenders.tsx, Enemies.tsx and
+ * combat.ts's stepBolt() all call this rather than each rolling its own,
+ * and any future ranged-combat caller should reach for it too rather than
+ * inventing a fourth ad hoc version that could drift from the rest.
+ */
+export function hasLineOfSight(
+  fromX: number, fromY: number, fromZ: number,
+  toX: number, toY: number, toZ: number,
+  region: string | null = null,
+): boolean {
+  const dx = toX - fromX, dy = toY - fromY, dz = toZ - fromZ;
+  for (const box of losBoxes(region)) {
+    if (segmentHitsBox(fromX, fromY, fromZ, dx, dy, dz, box)) return false;
+  }
+  return true;
+}
+
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kknav = {
-    findPath, navBlocked, rebuildNav, getNavGrid, navSteer,
+    findPath, navBlocked, rebuildNav, getNavGrid, navSteer, hasLineOfSight,
     heightAt: (region: string | null, x: number, z: number) => getNavGrid(region).heightAt(x, z),
   };
 }

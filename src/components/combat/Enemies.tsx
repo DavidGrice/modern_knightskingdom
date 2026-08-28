@@ -15,7 +15,7 @@ import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
 import { measureHitBoxes } from '@/lib/minifigRig';
 import { registerHitbox, unregisterHitbox } from '@/game/hitbox';
-import { findPath, rebuildNav } from '@/game/navgrid';
+import { findPath, rebuildNav, hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import HealthBillboard from './HealthBillboard';
 import type { RiggedMinifig } from '@/lib/minifigRig';
@@ -29,6 +29,7 @@ import { roadEntry } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
 import { defenderState } from '@/game/defenders';
+import { insideWalls } from '@/game/fort';
 import { dungeonState } from '@/game/dungeon';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
@@ -323,7 +324,12 @@ function Enemy({ data }: { data: EnemyData }) {
           m.yaw = Math.atan2(-ndx, -ndz);
           if (m.attackCd <= 0) {
             m.attackCd = data.ranged ? RANGED_ATTACK_CD : ATTACK_CD[data.kind];
-            defTarget.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
+            // Wave 20 · a ranged bandit needs a real unobstructed sightline
+            // on the defender it is shooting at; melee's own 1.7m contact
+            // range needs no check.
+            if (!data.ranged || hasLineOfSight(m.x, GROUND_LOS_Y, m.z, defTarget.x, GROUND_LOS_Y, defTarget.z, data.world ?? null)) {
+              defTarget.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
+            }
             if (defTarget.hp <= 0 && defTarget.state === 'ok') {
               defTarget.state = 'downed';
               defTarget.downedUntil = Date.now() + 45000;
@@ -360,8 +366,15 @@ function Enemy({ data }: { data: EnemyData }) {
             : ATTACK_CD[data.kind];
           // a duel with Storm ends the instant either side lands a blow —
           // no lingering damage, just resolution (see combat.ts's resolveDuel)
-          if (data.ranged) damagePlayer(RANGED_DMG * data.scale);
-          else if (data.kind === 'storm') resolveDuel(false, data.id);
+          if (data.ranged) {
+            // Wave 20 · real target height here (not GROUND_LOS_Y): the
+            // player genuinely has elevation (a battlement, a tower), and
+            // testing against their actual y is what lets an archer shoot
+            // over a wall's own footprint at a player standing on it.
+            if (hasLineOfSight(m.x, GROUND_LOS_Y, m.z, playerState.x, playerState.y, playerState.z, data.world ?? null)) {
+              damagePlayer(RANGED_DMG * data.scale);
+            }
+          } else if (data.kind === 'storm') resolveDuel(false, data.id);
           else damagePlayer(ATTACK_DMG[data.kind] * data.scale);
         }
       } else if (d < 26 || (m.alertT ?? 0) > 0) {
@@ -700,11 +713,30 @@ export default function Enemies() {
         skelTimer.current -= 1;
         if (skeletons.length < 3 && skelTimer.current <= 0) {
           skelTimer.current = 14 + Math.random() * 14;
-          const a = Math.random() * Math.PI * 2;
-          const r = 26 + Math.random() * 12;
-          const sx = playerState.x + Math.cos(a) * r;
-          const sz = playerState.z + Math.sin(a) * r;
-          spawn('skeleton', sx, sz);
+          // Wave 20 · a ring point can land inside a fully walled-in
+          // homestead (insideWalls, game/fort.ts — the same cheap cached
+          // flood-fill Sound Walls already reads), which used to rise a
+          // skeleton on the wrong side of your own fence. A few re-rolls are
+          // enough given the ring sits 26-38m out and a typical wall
+          // footprint is small against that; if every try still lands
+          // inside, fall back to the same road-entry treatment dusk raiders
+          // already get rather than spawning somewhere unchecked.
+          let sx = 0, sz = 0, placed = false;
+          for (let tries = 0; tries < 6; tries++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 26 + Math.random() * 12;
+            const cx = playerState.x + Math.cos(a) * r;
+            const cz = playerState.z + Math.sin(a) * r;
+            if (!insideWalls(cx, cz)) { sx = cx; sz = cz; placed = true; break; }
+          }
+          if (!placed) {
+            const entry = roadEntry();
+            sx = entry.x;
+            sz = entry.z;
+          }
+          // approaching is independent of raid — a fallback skeleton walks in
+          // via the nav grid like a raider does, without being counted as one
+          spawn('skeleton', sx, sz, false, undefined, !placed);
           audio.playAt('skeleton', sx, sz, 0.7);
           st.notify('Bones rattle in the dark…');
         }
