@@ -72,8 +72,13 @@ function threatOf(agent: Agent): Belief | null {
  *  where the agent GOES and what it faces, and every one of those reads goes
  *  through the belief above. Whether a swing actually connects cannot be
  *  answered from a memory: the world adjudicates that, exactly as
- *  `Defenders.tsx`'s own `inRange` test does. */
-function liveTargetFor(beliefId: string): EnemyData | null {
+ *  `Defenders.tsx`'s own `inRange` test does.
+ *
+ *  Exported (Wave 21) so `engageThreatVillager.ts` can reuse this exact
+ *  resolution instead of forking it — live-target resolution is the one
+ *  piece of this file safe (and worth) sharing with that action; everything
+ *  else (the damage formula, the gates, the tuning) stays fully separate. */
+export function liveTargetFor(beliefId: string): EnemyData | null {
   if (!beliefId.startsWith('enemy:')) return null;
   const id = Number(beliefId.slice(6));
   const e = useEnemyStore.getState().enemies.find((x) => x.id === id);

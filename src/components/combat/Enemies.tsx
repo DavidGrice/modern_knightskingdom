@@ -28,7 +28,12 @@ import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { roadEntry } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
-import { defenderState } from '@/game/defenders';
+import { defenderState, DOWNED_RECOVER_MS } from '@/game/defenders';
+import { villagerCombatState } from '@/game/villagerCombat';
+import { villagerMobs } from '@/game/villagerMobs';
+import { peekCombatState, clearCombatState } from '@/ai/actions/combatState';
+import { reportAgentDamaged } from '@/ai/perception/Senses';
+import { agentManager } from '@/ai/core/AgentManager';
 import { insideWalls } from '@/game/fort';
 import { dungeonState } from '@/game/dungeon';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
@@ -305,6 +310,29 @@ function Enemy({ data }: { data: EnemyData }) {
           if (dd < 16 && dd < defD) { defD = dd; defTarget = dsd; defId = vid; }
         }
       }
+
+      // Wave 21: an ORDINARY villager who has already chosen (via the AI
+      // reasoner's own `engage_threat_villager`) to fight becomes a valid
+      // raider target too — one rung below a sworn defender, same shape as
+      // the defTarget loop just above. `peekCombatState(...).mode === 'engage'`
+      // is the gate that matters: someone merely fleeing/working/hiding
+      // stays untouchable exactly as before this wave, and the check is a
+      // read-only peek (never creates an entry) so scanning every villager
+      // here on every enemy's frame cannot itself populate that map.
+      // Position comes from `villagerMobs` (the same live x/z Villagers.tsx
+      // itself writes every frame), since villagerCombatState only tracks
+      // HP/downed, not where the villager actually stands.
+      let villagerTarget: { id: string; x: number; z: number } | null = null;
+      let villagerD = Infinity;
+      if (enemyAtHome && data.kind !== 'storm') {
+        for (const [vid, vcs] of Object.entries(villagerCombatState)) {
+          if (vcs.state === 'downed' || peekCombatState(vid)?.mode !== 'engage') continue;
+          const vm = villagerMobs[vid];
+          if (!vm) continue;
+          const dd = Math.hypot(vm.x - m.x, vm.z - m.z);
+          if (dd < 16 && dd < villagerD) { villagerD = dd; villagerTarget = { id: vid, x: vm.x, z: vm.z }; }
+        }
+      }
       if (keepTarget && keepD < d && keepD < defD) {
         m.state = 'attack';
         m.attackCd -= dt;
@@ -332,7 +360,7 @@ function Enemy({ data }: { data: EnemyData }) {
             }
             if (defTarget.hp <= 0 && defTarget.state === 'ok') {
               defTarget.state = 'downed';
-              defTarget.downedUntil = Date.now() + 45000;
+              defTarget.downedUntil = Date.now() + DOWNED_RECOVER_MS;
               const name = st.villagers.find((v) => v.id === defId)?.name ?? 'A defender';
               st.notify(`${name} is knocked down defending the homestead!`);
             }
@@ -343,6 +371,48 @@ function Enemy({ data }: { data: EnemyData }) {
           const nx = (defTarget.x - m.x) / defD;
           const nz = (defTarget.z - m.z) / defD;
           const sp = data.kind === 'skeleton' ? (defD > 8 ? speed * 0.7 : speed * 1.5) : speed;
+          m.x += nx * sp * dt;
+          m.z += nz * sp * dt;
+          m.yaw = Math.atan2(-nx, -nz);
+        }
+      } else if (villagerTarget && villagerD < d) {
+        // Wave 21: the same shape as the defTarget branch above, one rung
+        // weaker — a villager who chose to fight gets fought back at.
+        if (villagerD < (data.ranged ? RANGED_RANGE : 1.7)) {
+          m.state = 'attack';
+          m.attackCd -= dt;
+          const ndx = villagerTarget.x - m.x;
+          const ndz = villagerTarget.z - m.z;
+          m.yaw = Math.atan2(-ndx, -ndz);
+          if (m.attackCd <= 0) {
+            m.attackCd = data.ranged ? RANGED_ATTACK_CD : ATTACK_CD[data.kind];
+            // Wave 20 parity: a ranged bandit needs a real sightline on the
+            // villager it is shooting at, same as it needs one on a defender.
+            if (!data.ranged || hasLineOfSight(m.x, GROUND_LOS_Y, m.z, villagerTarget.x, GROUND_LOS_Y, villagerTarget.z, data.world ?? null)) {
+              const vcs = villagerCombatState[villagerTarget.id];
+              if (vcs) {
+                vcs.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
+                // §6.3's damage-memory term (Senses.ts) needs the AI clock
+                // (`agentManager.now`), NOT `Date.now()` — `downedUntil`
+                // just below is the one field on this record that stays on
+                // wall-clock time, compared against `Date.now()` elsewhere.
+                reportAgentDamaged(villagerTarget.id, agentManager.now);
+                if (vcs.hp <= 0 && vcs.state === 'ok') {
+                  vcs.state = 'downed';
+                  vcs.downedUntil = Date.now() + DOWNED_RECOVER_MS;
+                  clearCombatState(villagerTarget.id); // stop a now-stale swing/approach
+                  const name = st.villagers.find((v) => v.id === villagerTarget!.id)?.name ?? 'A villager';
+                  st.notify(`${name} is knocked down defending the homestead!`);
+                }
+              }
+            }
+          }
+        } else {
+          m.state = 'chase';
+          m.attackCd = Math.max(0.4, m.attackCd - dt);
+          const nx = (villagerTarget.x - m.x) / villagerD;
+          const nz = (villagerTarget.z - m.z) / villagerD;
+          const sp = data.kind === 'skeleton' ? (villagerD > 8 ? speed * 0.7 : speed * 1.5) : speed;
           m.x += nx * sp * dt;
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);

@@ -41,6 +41,14 @@
 // own capability gate instead (tier D / roster villager), for the reasons its
 // header sets out — registering it is what makes §8's coarse stepping have
 // something to step for an agent no renderer is mounting.
+//
+// Wave 21 adds `engage_threat_villager` (engageThreatVillager.ts) — a real,
+// tuned, WEAKER combat action for the ordinary (non-defender) roster, fully
+// separate from `engage_threat` above (which stays exactly as inert as the
+// Wave 11 note above already describes). Also added to the villager
+// archetype's `intrinsic` list (config/archetypes.json) for the same reason
+// every other action here needs that: `assembleCandidates` silently skips a
+// registered action its archetype was never offered.
 import { registerActions, type Action } from '../core/Reasoner';
 import { FLEE_TO_SAFETY } from './flee';
 import { SLEEP } from './sleep';
@@ -52,17 +60,18 @@ import { IDLE_FIDGET } from './ambient';
 import { NOTICE_PLAYER } from './notice';
 import { TAKE_COVER } from './takeCover';
 import { ENGAGE_THREAT } from './engageThreat';
+import { ENGAGE_THREAT_VILLAGER } from './engageThreatVillager';
 import { WANDER } from './wander';
 
 export const ACTIONS: Action[] = [
   FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
-  IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, WANDER,
+  IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
 ];
 registerActions(ACTIONS);
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkactions = {
     FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
-    IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, WANDER,
+    IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
   };
 }

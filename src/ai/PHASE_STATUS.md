@@ -489,6 +489,20 @@ and cannot fire before. **Reversing it is a migration off a shipped, tuned
 combat AI and needs its own sign-off and its own live verification**, not a
 side effect of the phase that happened to write the action.
 
+**Wave 21 (2026-08-28) gave this its sign-off — but as a NEW action, not a
+reversal of the one above.** `engage_threat` itself is untouched and still
+permanently inert exactly as this section describes (`rosterSync.ts`'s
+defender exclusion never moved). Instead, a distinct, deliberately WEAKER
+action — `engage_threat_villager` (`actions/engageThreatVillager.ts`) — was
+built for the ordinary roster, with its own flat HP/damage pool
+(`game/villagerCombat.ts`, well below a defender's tuned floor), its own
+courage/proximity/difficulty-tier capability gates, and `interruptPriority`
+tied with (not above) `take_cover`, so `flee_to_safety` still wins outright
+during a real raid — the "invincible farmer" risk this section named is
+what every one of those design choices was built to avoid. See that file's
+own header for the full reasoning and `ROADMAP.md`'s Wave 21 entry for live
+balance-verification evidence.
+
 **`FollowLeader` / `assist_leader` — scoped down, honestly.** There is exactly
 one follower behaviour in this game: `defenderOrders.order === 'follow'`
 (`Defenders.tsx`), a defender forming up 2.6 m behind the player. It belongs to

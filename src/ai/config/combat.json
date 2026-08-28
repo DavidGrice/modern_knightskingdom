@@ -197,5 +197,45 @@
     "approachStop": 1.4,
     "swingSeconds": 1.1,
     "loseTargetSec": 2.5
+  },
+
+  "engageVillager": {
+    "_doc": [
+      "Wave 21 — engage_threat_villager: an ORDINARY (non-defender)",
+      "villager's own, much weaker version of `engage` above. A distinct",
+      "block on purpose, matching the distinct action file/id (see",
+      "ai/actions/engageThreatVillager.ts's own header) — nothing here is",
+      "allowed to silently drift the defender-tuned block above.",
+      "",
+      "reach/approachStop mirror `engage`'s own geometry (same 1.8m contact",
+      "range, same 1.4m approach stop) — it is the same physical swing by",
+      "the same kind of person, just weaker (see game/villagerCombat.ts's",
+      "flat, unleveled damage constant). swingSeconds 1.3 sits between a",
+      "trained defender's practiced 1.1s and a skeleton's own 1.6s pace:",
+      "swings, but slower than someone trained.",
+      "",
+      "closeRange 3.5 is engage.reach + engage.approachStop (1.8 + 1.4 =",
+      "3.2) plus a small margin — 'already near the threat when it",
+      "appears', not 'anywhere on the perceived map', so a whole roster",
+      "does not converge on one distant raider the instant it is noticed.",
+      "",
+      "courageThreshold 6 reads data/attributes.ts's existing 1-10 courage",
+      "roll, with 5 as the baseline `defenderStrike()` already treats as",
+      "'no bonus' — 'above-average courage' is a real, non-arbitrary",
+      "cutoff, not an invented number.",
+      "",
+      "capableTierMax 1 is this wave's own DPS/TTK simulation result: past",
+      "difficulty tier 1, `raidStrength()` (game/difficulty.ts) scales the",
+      "very skeletons a villager would fight faster than a villager's own",
+      "flat, unleveled stats can keep up with — a villager has no",
+      "gainDefenderXp-style growth the way a defender does."
+    ],
+    "reach": 1.8,
+    "approachStop": 1.4,
+    "swingSeconds": 1.3,
+    "loseTargetSec": 2.5,
+    "closeRange": 3.5,
+    "courageThreshold": 6,
+    "capableTierMax": 1
   }
 }

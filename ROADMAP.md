@@ -7296,3 +7296,68 @@ must never stop any real gameplay logic, only wasted rendering.
   was flagged during research as a one-line, near-zero-cost addition to the same reroll loop
   (skipping `navBlocked()`, already exported and cheap) but deliberately left out since it wasn't
   what this wave was asked to fix; tracked separately for a future pass.
+
+## Wave 21: ordinary villagers can fight back — real HP, real weaker attack, real balance verification — SHIPPED 2026-08-28
+
+The user was explicitly asked and chose: villagers WILL be able to fight back, not stay
+defender-only forever. Sequenced after Wave 20 (line-of-sight) specifically so this is tuned
+against a world where an armed combatant can't abuse ranged-through-walls.
+
+- [COMPLETE] ✅ **A real, tuned, much-weaker combat capability for the ordinary (non-defender)
+  roster** — a new `engage_threat_villager` reasoner action (`ai/actions/engageThreatVillager.ts`),
+  fully separate from the existing `engage_threat` (which stays exactly as permanently inert as
+  before — `rosterSync.ts`'s `job === 'defender'` exclusion never moved). **A real prerequisite
+  found during research, not assumed away**: ordinary villagers had zero combat presence of any
+  kind before this wave — no HP field, no hitbox, nothing in `Enemies.tsx`'s targeting loop even
+  aware they existed. A new `game/villagerCombat.ts` gives them a real HP pool (8, flat — no
+  level/loadout/trait scaling exists for this population the way it does for defenders) and a
+  real, deliberately weak flat attack (1 damage/hit, 1.3s cooldown — 42% of an unarmored defender's
+  own DPS floor), plus the same downed-not-permanently-dead recovery pattern a defender already
+  gets (45s, now a shared `DOWNED_RECOVER_MS` constant instead of two duplicated literals — folded
+  in a small pre-existing dead-code cleanup along the way, `Defenders.tsx`'s own local
+  `RECOVER_MS` was never actually referenced). Melee-only: confirmed live that no code path can put
+  a weapon in a plain villager's hands (`setDefenderLoadout` refuses any non-defender job), so this
+  wasn't a tuning choice, it's the only thing technically possible without also building a whole
+  weapon-assignment path — which conveniently means zero exposure to the ranged-through-walls risk
+  Wave 20 was worried about.
+- [COMPLETE] ✅ **The "who fights" rule, anchored in the actual reasoner math, not a guess.** Traced
+  the real utility-reasoner priorities (`Reasoner.ts`) and found `flee_to_safety` (survival, weight
+  4.0, `interruptPriority` 10) fires flat whenever any raid-flagged enemy exists anywhere, with no
+  per-agent locality check — so during a genuine bandit raid, **nothing changes**: every villager
+  still flees, exactly as before this wave, confirmed live (a real raid spawned adjacent to brave,
+  capable villagers and every one of them fled, including the two with high enough courage to
+  otherwise fight). This wave's real, reliable new content is entirely the *between-raid* case — a
+  lone night skeleton wandering the fields, the one hostile this game ever spawns at home with
+  `raid: false`, the same niche the existing `take_cover` action already proved out. A villager only
+  engages if ALL of: courage ≥ 6 (data/attributes.ts's existing 1-10 roll, using 5 — the formula's
+  own "no bonus" baseline — as the cutoff, ~47% of the roster), within ~3.5m of the threat when
+  noticed (so a whole roster doesn't converge on one distant raider from range), the current
+  difficulty tier is ≤1 (a villager has no `gainDefenderXp`-style growth to keep pace with
+  `raidStrength()`'s own scaling — this wave's own DPS/time-to-kill simulation showed a fight past
+  tier 1 becoming a mathematically certain beating, not a fair one), and not already downed. A real
+  alternative — giving the villager action raid-priority above `flee_to_safety` — was investigated
+  and explicitly rejected: the actual math shows the one window it would need (a villager already
+  adjacent to a raider inside flee's own 2-second minimum-duration) essentially never occurs, since
+  raiders approach gradually via the road; not worth the real architectural risk of the first-ever
+  priority above the survival ceiling for a payoff that doesn't materialize in practice.
+- **Verified live with real tracked balance data across multiple difficulty tiers, not a vibe
+  check**: at tier 0, a courage-qualifying villager reliably beat a lone night skeleton with HP to
+  spare (two replicates: 6/8 and 4/8 HP remaining); at tier 1, the same fight was a genuine
+  nail-biter (1.25/8 HP remaining) — matching the design's own hand-simulated prediction almost
+  exactly; at tier 2, the difficulty-tier capability gate correctly withheld the action entirely —
+  the villager fled instead and was never touched, live-confirming the gate actually prevents the
+  "mathematically certain beating" it was built to avoid, not just on paper. Neither balance failure
+  mode this wave was watching for is present: villagers neither die uselessly fast nor tank hits
+  indefinitely. Downed/recovery was verified end-to-end with a real killing blow through to
+  automatic recovery after the timer. Defender combat was re-verified live and is byte-for-byte
+  unaffected (same HP/damage/cooldown numbers as before this wave). `npx tsc --noEmit` /
+  `npm run build`: both clean, verified independently. **Two "polish" findings from verify, both
+  addressed**: several pre-existing comments elsewhere in the AI system (`takeCover.ts`,
+  `perception.json`, `Senses.ts`, `PHASE_STATUS.md`) asserted "an ordinary villager cannot be
+  damaged" as settled fact — true when written, false as of this wave — updated in place with a
+  dated correction rather than left to mislead a future reader. A minor, player-invisible quirk
+  (a downed villager's own debug-visible "current action" can briefly still read `take_cover`
+  rather than something that says "downed") was noted but not fixed — it has no gameplay effect
+  since the villager's position is already frozen and no position-dependent action can complete
+  while downed, and is honestly documented as a known, harmless loose end rather than silently
+  dropped.

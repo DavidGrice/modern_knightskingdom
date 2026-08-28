@@ -2,25 +2,39 @@
 // `take_cover` — the first action in this system to treat `bb.threatLevel` as
 // an OUTPUT rather than as something to be suppressed by.
 //
-// WHY THIS AND NOT A VILLAGER SWINGING BACK. Phase 6 shipped real perception
-// and phase 6's own closing note flagged the missing half honestly: threat now
-// correctly suppresses work through six `not_threatened` considerations, but
-// nothing NEW fires on it. This is that outlet, and its shape is decided by
-// what an ordinary villager in this game actually is, not by the spec's own
-// wording. Checked against the live code rather than assumed:
-//   - No villager can be damaged. `Enemies.tsx`'s target selection only ever
-//     picks the player, a sworn defender (via `defenderState`), or a keep
-//     piece — a farmer standing in a raid is untouchable today.
-//   - No villager can deal damage. `setDefenderLoadout` (gameStore.ts) refuses
-//     any villager whose job is not 'defender', and `rosterSync.ts`
-//     structurally excludes defenders from having an `Agent` at all.
-// So an ordinary villager who "fought back" would be an invincible farmer
-// killing raiders for free — a real balance regression in a tuned combat game,
-// dressed up as an AI feature. Getting out of the way, behind something solid,
-// while shouting about what they saw, is the honest combat behaviour available
-// to this population, and it is genuinely new: nothing in this game reacts to a
-// lone night skeleton wandering into the fields, because the only existing
-// reaction (`flee_to_safety`) gates on the global `raid` flag.
+// WHY THIS AND NOT A VILLAGER SWINGING BACK (at the time this was written —
+// see the Wave 21 update below for what changed). Phase 6 shipped real
+// perception and phase 6's own closing note flagged the missing half
+// honestly: threat now correctly suppresses work through six
+// `not_threatened` considerations, but nothing NEW fires on it. This was
+// that outlet, and its shape was decided by what an ordinary villager in
+// this game actually was, not by the spec's own wording. True when checked
+// against the live code at the time:
+//   - No villager could be damaged. `Enemies.tsx`'s target selection only
+//     ever picked the player, a sworn defender (via `defenderState`), or a
+//     keep piece — a farmer standing in a raid was untouchable.
+//   - No villager could deal damage. `setDefenderLoadout` (gameStore.ts)
+//     refused any villager whose job was not 'defender', and `rosterSync.ts`
+//     structurally excluded defenders from having an `Agent` at all.
+// So an ordinary villager who "fought back" would have been an invincible
+// farmer killing raiders for free — a real balance regression in a tuned
+// combat game, dressed up as an AI feature. Getting out of the way, behind
+// something solid, while shouting about what they saw, was the only honest
+// combat behaviour available to this population at the time, and it was
+// genuinely new: nothing in this game reacted to a lone night skeleton
+// wandering into the fields, because the only existing reaction
+// (`flee_to_safety`) gates on the global `raid` flag.
+//
+// WAVE 21 UPDATE (2026-08-28): the premise above is no longer true. Ordinary
+// villagers now DO have real HP (`game/villagerCombat.ts`) and a real, much
+// weaker attack (`actions/engageThreatVillager.ts`, action id
+// `engage_threat_villager`) — see that file's own header for the full design
+// (courage/proximity/difficulty-tier gates, downed-not-dead recovery). This
+// file itself is unchanged by that wave: `take_cover` is still what a
+// villager who does NOT meet those gates (too timid, too far, world too
+// dangerous, already downed) falls back to, and it still loses outright to
+// `flee_to_safety` during an actual raid exactly as described below —
+// villager combat only ever fires between raids.
 //
 // RELATIONSHIP TO flee_to_safety, which is untouched. That action is survival
 // (weight 4.0, interruptPriority 10) and answers "a raid is on" by running to

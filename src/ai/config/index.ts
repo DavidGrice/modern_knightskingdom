@@ -200,10 +200,28 @@ export interface EngageConfig {
   loseTargetSec: number;
 }
 
+/** Wave 21 — `engage_threat_villager`'s own reach/rhythm plus its three
+ *  capability-gate thresholds (see combat.json's `engageVillager._doc`).
+ *  A distinct interface from `EngageConfig` even though the shape mostly
+ *  overlaps: `courageThreshold`/`capableTierMax`/`closeRange` have no
+ *  equivalent on the defender-tuned action, and folding them into
+ *  `EngageConfig` would make every existing `COMBAT.engage` reference look
+ *  like it also carries a villager-only field. */
+export interface EngageVillagerConfig {
+  reach: number;
+  approachStop: number;
+  swingSeconds: number;
+  loseTargetSec: number;
+  closeRange: number;
+  courageThreshold: number;
+  capableTierMax: number;
+}
+
 export interface CombatConfig {
   cover: CoverConfig;
   alarm: AlarmConfig;
   engage: EngageConfig;
+  engageVillager: EngageVillagerConfig;
 }
 
 /** Phase 8 (§10's build-order item 8, the "ambient" half) — `wander`'s own

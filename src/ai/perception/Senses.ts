@@ -171,17 +171,19 @@ function deriveThreat(agent: Agent, st: PerceptionState, now: number, dt: number
 
 /** §6.3's "time since last damage" input, as a real entry point.
  *
- *  Nothing calls it yet, and that is a fact about the GAME rather than a gap
- *  in this phase: an ordinary villager cannot be damaged at all today.
- *  `Enemies.tsx`'s target selection only ever picks the player, a sworn
- *  defender (via `defenderState`), or a keep piece — and `rosterSync.ts`
- *  deliberately excludes defenders from having an `Agent` in the first place,
- *  so no agent in this system is reachable by any damage path that exists.
+ *  Real caller as of Wave 21 (2026-08-28, `Enemies.tsx`'s `villagerTarget`
+ *  damage branch) — an ordinary villager who chose to fight
+ *  (`engage_threat_villager`) now has real HP (`game/villagerCombat.ts`) and
+ *  can be damaged, so this line finally has something to report for.
  *
- *  Implemented and inert rather than omitted: phase 7 (combat + companion) is
- *  the phase that introduces something with an agent AND a health bar, and
- *  when it does, this is the one line it needs — not a re-derivation of the
- *  threat formula. */
+ *  Before that wave, nothing called it, and that was a fact about the GAME
+ *  rather than a gap in this phase: an ordinary villager could not be
+ *  damaged at all. `Enemies.tsx`'s target selection only ever picked the
+ *  player, a sworn defender (via `defenderState`), or a keep piece — and
+ *  `rosterSync.ts` deliberately excludes DEFENDERS from having an `Agent` in
+ *  the first place, so no agent in this system was reachable by any damage
+ *  path that existed at the time. Implemented and inert rather than
+ *  omitted, on purpose, exactly for this day. */
 export function reportAgentDamaged(agentId: string, now: number): void {
   const agent = agentManager.get(agentId);
   if (agent) agent.bb.lastDamageAt = now;
