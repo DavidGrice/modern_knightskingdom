@@ -21,6 +21,7 @@ import { waterAt } from '@/game/waterworks';
 import { bestStore } from '@/game/storage';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
+import { registerVillagerCombat } from '@/game/villagerCombat';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId, Villager } from '@/game/types';
 
@@ -69,12 +70,34 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     yaw: homeAngle, pause: (h % 7),
   });
   const mob = useMemo(() => registerVillagerMob(villager.id, home[0], home[1]), [villager.id, home]);
+  // Wave 21 — an ordinary villager's own combat state (HP/downed), the same
+  // shape Defenders.tsx's `registerDefender` gives a sworn defender. Idempotent
+  // like that call: `ai/actions/engageThreatVillager.ts`'s own reasoner
+  // considerations also call this (so a not-currently-rendered villager's
+  // state still exists), and both call sites racing to create the same entry
+  // first is harmless.
+  const vc = useMemo(() => registerVillagerCombat(villager.id), [villager.id]);
 
   useFrame((_, dt) => {
     const s = state.current;
     const g = group.current;
     if (!g) return;
     mob.clip = clip;
+
+    // Downed: hide and freeze in place until the recovery timer clears,
+    // mirroring Defenders.tsx's own `ds.state === 'downed'` early-return
+    // exactly (same wall-clock `Date.now()` comparison against `downedUntil`
+    // — that field is stamped from `Date.now()` at the hit that downed them,
+    // in Enemies.tsx). Checked before the Agent-driven MOVE_TO branch below,
+    // same as Defenders.tsx checks it before any of its own movement/attack
+    // logic — a downed villager's position (and `mob.x/z`, which the reasoner's
+    // own position mirror in rosterSync.ts reads every frame) simply stops
+    // updating for the duration, exactly like a downed defender's `ds.x/z`.
+    if (vc.state === 'downed') {
+      if (Date.now() >= vc.downedUntil) { vc.state = 'ok'; vc.hp = vc.maxHp; }
+      else { g.visible = false; return; }
+    }
+    g.visible = true;
 
     // Phase 3, iteration 3.3 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
     // Intent takes over movement entirely, checked FIRST before all seven

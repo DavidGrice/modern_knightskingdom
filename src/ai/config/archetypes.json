@@ -66,14 +66,24 @@
     "cascade moving them and a competing MOVE_TO would starve it. That is why",
     "'guard' and 'ambient' can keep listing 'wander' below with no effect —",
     "neither is spawned by any live code path, and the gate would decline them",
-    "anyway (it requires a roster job, which only a real villager has)."
+    "anyway (it requires a roster job, which only a real villager has).",
+    "Updated 2026-08-28 (Wave 21): villager gained 'engage_threat_villager'",
+    "(actions/engageThreatVillager.ts) — a real, tuned, WEAKER combat action for",
+    "the ordinary (non-defender) roster, distinct from 'engage_threat' above",
+    "(guard's own, which no live code path can ever spawn — see this list's",
+    "2026-08-11 note, still true and still unchanged by this wave). Gated by",
+    "courage, proximity to the threat, and the current difficulty tier, so not",
+    "every villager fights and not at every stage of the game — see that",
+    "file's own header for the full argument. 'take_cover' is untouched: a",
+    "raid still sends every villager fleeing exactly as before, and this new",
+    "action's real, reliable content is entirely the between-raid case."
   ],
   "villager": {
     "label": "Villager",
     "needProfile": "villager",
     "intrinsic": [
       "wander", "socialize", "idle", "flee_to_safety", "sleep", "gather_resource", "haul_to_deposit",
-      "seek_deposit", "tend_farmplot", "idle_fidget", "notice_player", "take_cover"
+      "seek_deposit", "tend_farmplot", "idle_fidget", "notice_player", "take_cover", "engage_threat_villager"
     ]
   },
   "court": {

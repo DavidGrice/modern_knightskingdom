@@ -20,6 +20,16 @@ export interface DefenderState {
 
 export const defenderState: Record<string, DefenderState> = {};
 
+/** Real time knocked out before returning to the fight. Shared by a downed
+ *  defender (this file, via Enemies.tsx's own `defTarget.downedUntil` write)
+ *  and, as of Wave 21, a downed ordinary villager (game/villagerCombat.ts) —
+ *  one number instead of two duplicated literals. Extracted from
+ *  Defenders.tsx's own local `RECOVER_MS`, which turned out to be dead code
+ *  (never referenced — `Enemies.tsx`'s `defTarget.downedUntil = Date.now() +
+ *  45000` was always the one place this actually mattered) found and folded
+ *  in while building this wave. */
+export const DOWNED_RECOVER_MS = 45000;
+
 // Phase 24C — the captain's standing order, applied to ALL defenders at once
 // (per-defender orders are a later refinement). Session-tactical state, not
 // persisted: a reload rallies everyone back to their normal patrol.

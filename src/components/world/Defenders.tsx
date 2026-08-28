@@ -41,7 +41,10 @@ const ENGAGE_RADIUS = 22; // how far from themselves a patrolling defender spots
 const SCOUT_EYES = 30;    // scout order: base sighting range (Wit adds to it)
 const MELEE_RANGE = 1.8;
 const BOW_RANGE = 16;
-const RECOVER_MS = 45000; // real time knocked out before returning to the fight
+// Wave 21: the real recovery constant lives in game/defenders.ts now
+// (DOWNED_RECOVER_MS), shared with the new villager-downed path — this file
+// never actually referenced its own former local copy (see that export's
+// own comment), so there is nothing here for it to replace.
 
 /** Wave 19 · same push-back `Enemies.tsx` gives a raider (its `ds.x/z` scratch
  *  state is shaped the same way, unlike the player's camera-relative
