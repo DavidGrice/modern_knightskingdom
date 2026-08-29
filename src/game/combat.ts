@@ -4,7 +4,7 @@
 // mutated in place by each enemy's frame loop).
 import { create } from 'zustand';
 import { audio } from '@/lib/audio';
-import { useGameStore } from './store/gameStore';
+import { atGuildMaxRank, useGameStore } from './store/gameStore';
 import { playerState } from './playerState';
 import { ridingState } from './riding';
 import { damageRaiderRam, raiderRamState, RAM_RADIUS } from './raiderRam';
@@ -699,8 +699,11 @@ export function playerAttack(): boolean {
   // a worn-out weapon still swings, just softer — durability is a nudge
   // toward the workbench, not a hard block on fighting
   const worn = (st.durability[kind] ?? 100) <= 0;
-  // Knights' Order passive + Heavy Hand talent: flat melee damage bonuses
-  const orderBonus = (st.guild === 'knights' ? 1 : 0) + (st.skillTree.includes('combat3') ? 1 : 0)
+  // Knights' Order passive + Heavy Hand talent: flat melee damage bonuses.
+  // Wave 22: Champion of the Order (max guild rank) sharpens the base
+  // passive itself, +1 -> +2.
+  const orderBonus = (st.guild === 'knights' ? (atGuildMaxRank(st.guild, st.guildRanks, 'knights') ? 2 : 1) : 0)
+    + (st.skillTree.includes('combat3') ? 1 : 0)
     + Math.floor((st.attrSpent.might ?? 0) / 2); // Might attribute
   const baseDmg = held ? (worn ? wp.wornDmg : wp.dmg) : 1; // nothing held = bare fists
   // Berserker trade-off: +30% damage with a weapon in hand specifically (its

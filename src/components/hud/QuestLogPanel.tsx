@@ -17,6 +17,7 @@ import { HOUSE_COLORS } from '@/game/data/allegiance';
 import AllegianceMeter from './AllegianceMeter';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { CEDRIC_WORLD } from '@/game/data/world';
+import { GUILD_BY_ID, GUILDS, guildRankIndex } from '@/game/data/guilds';
 import Ico from '../ui/Ico';
 
 interface QuestRegion {
@@ -42,6 +43,14 @@ const CEDRIC_REGION: QuestRegion = {
   id: CEDRIC_WORLD, label: WORLD_DESTINATION_BY_ID[CEDRIC_WORLD]?.name ?? 'The Rival Castle',
   icon: '🐂', npcIds: ['cedric'],
 };
+// Wave 22 · same non-NpcDef-region shape as CEDRIC_REGION above, one per
+// guild. Only the player's OWN current guild's region is ever appended (see
+// QuestLogPanel below) — a guild's errand board is for members only, so
+// there is nothing to show for a guild you don't carry the banner of.
+const GUILD_REGION_ID = (guildId: string) => `guild_${guildId}`;
+const GUILD_REGIONS: Record<string, QuestRegion> = Object.fromEntries(
+  GUILDS.map((g) => [g.id, { id: GUILD_REGION_ID(g.id), label: g.name, icon: g.icon, npcIds: [g.id] }]),
+);
 // Wave 13 · Alric/Beda used to give no errands at all, so the homestead
 // deliberately got no region of its own here. Now that deliveryQuests.ts
 // gives them one each, a world-less giver with real work needs SOME region
@@ -63,14 +72,18 @@ function RewardLine({ q }: { q: SideQuestDef }) {
 function GiverBlock({ npcId }: { npcId: string }) {
   const completedQuests = useGameStore((s) => s.completedQuests);
   const reputation = useGameStore((s) => s.reputation);
+  const guildRanks = useGameStore((s) => s.guildRanks);
   const sideQuest = useGameStore((s) => s.sideQuest);
   const trackedQuest = useGameStore((s) => s.trackedQuest);
   const setTrackedQuest = useGameStore((s) => s.setTrackedQuest);
   const completedSideQuests = useGameStore((s) => s.completedSideQuests);
   const allegiance = useGameStore((s) => s.allegiance);
   const alliance = useGameStore((s) => s.alliance);
-  const npc = npcId === 'cedric' ? null : NPC_BY_ID[npcId];
-  const revealed = npc ? isNpcRevealed(npc, completedQuests) : true; // cedric gated by alliance, not reveal
+  // Wave 22 · a guild id is not an NpcDef either — same non-NPC treatment
+  // 'cedric' already gets, since NPC_BY_ID has neither.
+  const guild = GUILD_BY_ID[npcId];
+  const npc = npcId === 'cedric' || guild ? null : NPC_BY_ID[npcId];
+  const revealed = npc ? isNpcRevealed(npc, completedQuests) : true; // cedric/guild gated elsewhere, not reveal
   const name = sideQuestGiverName(npcId);
   const pool = sideQuestsOf(npcId);
 
@@ -86,6 +99,7 @@ function GiverBlock({ npcId }: { npcId: string }) {
 
   const rep = npc ? (reputation[npcId] ?? 0) : 0;
   const repTier = npc?.repTitles ? [...npc.repTitles].reverse().find((t) => rep >= t.min) : null;
+  const guildRankTitle = guild ? guild.rankTitles[guildRankIndex(guild, guildRanks[npcId] ?? 0)] : null;
   const mine = sideQuest?.npcId === npcId ? sideQuest : null;
   const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
   const others = pool.filter((q) => q.id !== mine?.questId);
@@ -95,6 +109,7 @@ function GiverBlock({ npcId }: { npcId: string }) {
       <div className="quest-giver-name">
         {name}
         {repTier && <span className="quest-giver-title">— {repTier.title}</span>}
+        {guildRankTitle && <span className="quest-giver-title">— {guildRankTitle.title}</span>}
       </div>
       {mine && mineDef && (
         <div className="quest-entry active">
@@ -179,17 +194,22 @@ export default function QuestLogPanel() {
   const questProgress = useGameStore((s) => s.questProgress);
   const sideQuest = useGameStore((s) => s.sideQuest);
   const alliance = useGameStore((s) => s.alliance);
+  const myGuild = useGameStore((s) => s.guild);
   const trackedQuest = useGameStore((s) => s.trackedQuest);
   const setTrackedQuest = useGameStore((s) => s.setTrackedQuest);
 
   const [showCompleted, setShowCompleted] = useState(false);
   const [openRegions, setOpenRegions] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = { main: true };
-    const giver = sideQuest && sideQuest.npcId !== 'cedric' ? NPC_BY_ID[sideQuest.npcId] : null;
+    const sqGuild = sideQuest ? GUILD_BY_ID[sideQuest.npcId] : null;
+    const giver = sideQuest && sideQuest.npcId !== 'cedric' && !sqGuild ? NPC_BY_ID[sideQuest.npcId] : null;
     // Wave 13 · a world-less giver (Alric/Beda) files under 'homestead' now
-    // that they can actually hand out an errand — see HOMESTEAD_REGION
+    // that they can actually hand out an errand — see HOMESTEAD_REGION.
+    // Wave 22 · a guild errand files under that guild's own region instead.
     const giverWorld = sideQuest
-      ? (sideQuest.npcId === 'cedric' ? CEDRIC_WORLD : (giver ? giver.world ?? 'homestead' : null))
+      ? (sideQuest.npcId === 'cedric' ? CEDRIC_WORLD
+        : sqGuild ? GUILD_REGION_ID(sqGuild.id)
+        : (giver ? giver.world ?? 'homestead' : null))
       : null;
     if (giverWorld) init[giverWorld] = true;
     return init;
@@ -198,7 +218,10 @@ export default function QuestLogPanel() {
 
   const activeQuestId = QUESTS.find((q) => !completedQuests.includes(q.id))?.id;
   const baseRegions = HOMESTEAD_REGION ? [HOMESTEAD_REGION, ...NPC_REGIONS] : NPC_REGIONS;
-  const regions = alliance === 'cedric' ? [...baseRegions, CEDRIC_REGION] : baseRegions;
+  const withCedric = alliance === 'cedric' ? [...baseRegions, CEDRIC_REGION] : baseRegions;
+  // Wave 22 · only the player's own current guild gets a region — its
+  // errand board is for members only, so there's nothing to show otherwise.
+  const regions = myGuild && GUILD_REGIONS[myGuild] ? [...withCedric, GUILD_REGIONS[myGuild]] : withCedric;
 
   return (
     <div className="game-panel clickable menu-family">

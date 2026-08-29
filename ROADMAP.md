@@ -1360,7 +1360,27 @@ just coincidentally matching) and confirmed centering holds again on the default
   Ore Sense (boulders yield ore far more often), Read the Water (fish bite ~30% sooner), Master Joinery
   (construction swings count 30% extra — player and builder villagers alike), Weight of the Order (+1
   melee damage). All verified end-to-end, including the deterministic Builders math and the tithe.
-  **Follow-ups:** guild vendors, guild-exclusive errand pools, guild reputation/ranks within each order.
+  **Follow-ups (guild vendors, errand pools, reputation/ranks) shipped in Wave 22 — see below.**
+- [COMPLETE] ✅ **Guild Depth (Wave 22, shipped)**: the three follow-ups above, for all 5 guilds, reusing
+  existing plumbing throughout rather than new systems. *Vendor:* `GuildDef.vendor` (3 rows/guild, real
+  existing ItemIds — including giving the long-orphaned `axe` its first acquisition path anywhere in the
+  game, at the Woodsmen's Lodge), gated on membership + rank via new action `buyGuildOffer`, which
+  re-checks both fresh off `data/guilds.ts` and delegates to the existing `buyOffer` for the actual gold
+  math (Silver Tongue discount included for free). *Errands:* new `GUILD_QUESTS` pool in `data/npcs.ts`
+  (3 chained errands per guild, member-only), mirroring `CEDRIC_WAR_QUESTS`' non-NpcDef shape exactly and
+  reusing `sideQuestsOf`/`acceptSideQuest`/`turnInSideQuest`/`abandonSideQuest` verbatim — every errand
+  targeting a crafted good deliberately uses `kind: 'craft'` rather than `'gather'` (a real pre-existing
+  bug found along the way: a gather-kind errand aimed at a craft-only item like `plank`/`iron_bar` can
+  never have its counter incremented, already live on `bd_timber`/`k_iron_levy`/`q_feast`, left as its own
+  follow-up). *Rank:* a new parallel `guildRanks` record (deliberately never merged with the per-NPC
+  `reputation` record or the continuous allegiance axis — three genuinely different standings), 4 titles
+  per guild on `GuildDef.rankTitles` (same shape/convention as `NpcDef.repTitles`), +15 per errand turn-in
+  via new action `addGuildRep`. Real player-visible effects: rank gates the vendor's 2nd/3rd row, AND the
+  top rank sharpens that guild's own passive itself (Deep Grain 20%→30%, Ore Sense 65%→75%, Read the
+  Water ×0.7→×0.6, Master Joinery +30%→+45%, Weight of the Order +1→+2 — one small `atGuildMaxRank` check
+  added at each passive's existing call site). `GuildPanel` (Panels.tsx) gained Standing/Guild
+  Store/Guild Work sections inside its existing member-only branch; `QuestLogPanel` mirrors its 3
+  existing `'cedric'` special-cases for a guild id so its errand board actually lists in the journal.
 - [COMPLETE] ✅ **Skill tree (Phase 21, shipped)**: the Talent Tree in the Abilities panel — seven skill branches ×
   three tiers = 21 talents (`data/skillTree.ts`), points earned one per total skill level (derived, not
   stored — the perks pattern), costs 1/2/3 per tier, each tier gating on the previous talent AND a real

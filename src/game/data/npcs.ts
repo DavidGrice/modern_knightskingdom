@@ -5,6 +5,7 @@ import type { SoundName } from '@/lib/audio';
 import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 import { SETTLEMENT_QUESTS } from './settlementQuests';
 import { DELIVERY_QUESTS } from './deliveryQuests';
+import { GUILD_BY_ID } from './guilds';
 
 // The royal court, stationed around the realm. Each NPC greets with their
 // original voice line and offers repeatable side quests from a themed pool.
@@ -563,8 +564,120 @@ export const CEDRIC_WAR_QUESTS: SideQuestDef[] = [
   },
 ];
 
+// Wave 22: each guild's own repeatable errand pool, offered only to members
+// (the membership check lives in gameStore's acceptSideQuest — see its own
+// comment). A guild id is not an NpcDef, so this mirrors CEDRIC_WAR_QUESTS'
+// shape (a separate pool keyed to a non-NpcDef id) rather than
+// EXTRA_SIDE_QUESTS' shape (merged into an existing NPC's own pool) — there
+// is no NpcDef to merge into. Chains use `requires` exactly like every other
+// pool; every errand targeting a crafted good (plank/iron_bar/cooked_fish)
+// deliberately uses `kind: 'craft'` with `target` = the recipe id, NEVER
+// `kind: 'gather'` — bumpSideQuest's matchesKind (gameStore.ts) never
+// cross-matches craft<->gather, so a gather-kind errand aimed at a craft-only
+// item can never have its counter incremented (a real, pre-existing bug
+// already shipped on bd_timber/k_iron_levy/q_feast, out of this wave's
+// scope to fix, but the reason every NEW errand here avoids repeating it).
+export const GUILD_QUESTS: Record<string, SideQuestDef[]> = {
+  woodsmen: [
+    {
+      id: 'wm_haul', kind: 'gather', target: 'wood', need: 10,
+      label: 'Haul 10 logs down from the high stands',
+      xpSkill: 'woodcutting', xp: 35, rewardItems: { plank: 3, gold: 14 },
+    },
+    {
+      id: 'wm_planks', kind: 'craft', target: 'plank', need: 6,
+      label: 'Mill 6 planks for the Lodge stores',
+      xpSkill: 'woodcutting', xp: 45, rewardItems: { flowers: 2, gold: 20 },
+      requires: ['wm_haul'],
+    },
+    {
+      id: 'wm_thin', kind: 'kill', target: 'any', need: 3,
+      label: 'Thin what has been stalking the tree line — 3 kills',
+      xpSkill: 'combat', xp: 55, rewardItems: { gold: 30 },
+      requires: ['wm_planks'],
+    },
+  ],
+  miners: [
+    {
+      id: 'mn_haul', kind: 'gather', target: 'stone', need: 10,
+      label: 'Haul 10 stone up from the deep cuts',
+      xpSkill: 'mining', xp: 35, rewardItems: { iron_ore: 2, gold: 14 },
+    },
+    {
+      id: 'mn_ore', kind: 'gather', target: 'iron_ore', need: 6,
+      label: 'Bring up 6 iron ore for the Brotherhood',
+      xpSkill: 'mining', xp: 50, rewardItems: { stone: 3, gold: 22 },
+      requires: ['mn_haul'],
+    },
+    {
+      id: 'mn_bars', kind: 'craft', target: 'iron_bar', need: 3,
+      label: 'Smelt 3 bars at the forge for the Brotherhood',
+      xpSkill: 'smithing', xp: 60, rewardItems: { gold: 34 },
+      requires: ['mn_ore'],
+    },
+  ],
+  anglers: [
+    {
+      id: 'an_catch', kind: 'gather', target: 'fish', need: 6,
+      label: "Land 6 fish for the Circle's smokehouse",
+      xpSkill: 'fishing', xp: 35, rewardItems: { gold: 14 },
+    },
+    {
+      id: 'an_smoke', kind: 'craft', target: 'cooked_fish', need: 4,
+      label: 'Smoke 4 fish over the Circle fire',
+      xpSkill: 'fishing', xp: 45, rewardItems: { gold: 22 },
+      requires: ['an_catch'],
+    },
+    {
+      id: 'an_stew', kind: 'craft', target: 'fish_stew', need: 2,
+      label: 'Simmer 2 pots of stew for the riverbank table',
+      xpSkill: 'fishing', xp: 55, rewardItems: { gold: 32 },
+      requires: ['an_smoke'],
+    },
+  ],
+  builders: [
+    {
+      id: 'bg_haul', kind: 'gather', target: 'stone', need: 10,
+      label: 'Haul 10 stone to the siege camp',
+      xpSkill: 'mining', xp: 35, rewardItems: { plank: 3, gold: 14 },
+    },
+    {
+      id: 'bg_fences', kind: 'build', target: 'fence', need: 4,
+      label: 'Raise 4 fence sections around the camp',
+      xpSkill: 'building', xp: 45, rewardItems: { stone: 3, gold: 22 },
+      requires: ['bg_haul'],
+    },
+    {
+      id: 'bg_tower', kind: 'build', target: 'tower', need: 1,
+      label: 'Raise a watch tower for the Guild',
+      xpSkill: 'building', xp: 90, rewardItems: { iron_bar: 2, gold: 50 },
+      requires: ['bg_fences'],
+    },
+  ],
+  knights: [
+    {
+      id: 'kn_patrol', kind: 'kill', target: 'any', need: 3,
+      label: "Ride patrol — put down 3 of the Order's foes",
+      xpSkill: 'combat', xp: 50, rewardItems: { gold: 20 },
+    },
+    {
+      id: 'kn_bandits', kind: 'kill', target: 'bandit', need: 4,
+      label: 'Clear 4 bandits off the tourney road',
+      xpSkill: 'combat', xp: 80, rewardItems: { iron_bar: 1, gold: 32 },
+      requires: ['kn_patrol'],
+    },
+    {
+      id: 'kn_hard', kind: 'kill', target: 'skeleton', need: 5,
+      label: 'Put 5 skeletons back in the ground',
+      xpSkill: 'combat', xp: 110, rewardItems: { gold: 50 },
+      requires: ['kn_bandits'],
+    },
+  ],
+};
+
 export function sideQuestsOf(npcId: string): SideQuestDef[] {
-  const base = npcId === 'cedric' ? CEDRIC_WAR_QUESTS : (NPC_BY_ID[npcId]?.sideQuests ?? []);
+  const base = npcId === 'cedric' ? CEDRIC_WAR_QUESTS
+    : GUILD_QUESTS[npcId] ?? (NPC_BY_ID[npcId]?.sideQuests ?? []);
   // errands that take a side live in their own module (data/allegianceQuests)
   // so the whole "which way does this pull me?" picture reads in one place;
   // the pre-existing ones get their delta stamped on here for the same reason
@@ -611,6 +724,13 @@ export function questLabelById(id: string): string | null {
   }
   const ced = CEDRIC_WAR_QUESTS.find((q) => q.id === id);
   if (ced) return ced.label;
+  // Wave 22 · so a guild errand chain's `requires` names its precursor
+  // ("First: Mill 6 planks...") instead of falling back to the raw id, the
+  // same reason CEDRIC_WAR_QUESTS gets its own check just above.
+  for (const list of Object.values(GUILD_QUESTS)) {
+    const hit = list.find((q) => q.id === id);
+    if (hit) return hit.label;
+  }
   for (const list of Object.values(EXTRA_SIDE_QUESTS)) {
     const hit = list.find((q) => q.id === id);
     if (hit) return hit.label;
@@ -620,5 +740,6 @@ export function questLabelById(id: string): string | null {
 
 export function sideQuestGiverName(npcId: string): string {
   if (npcId === 'cedric') return 'Cedric the Bull';
+  if (GUILD_BY_ID[npcId]) return GUILD_BY_ID[npcId].name;
   return NPC_BY_ID[npcId]?.name ?? 'someone';
 }
