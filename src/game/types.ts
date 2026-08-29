@@ -293,6 +293,13 @@ export interface SaveGame {
    *  single always-on companion, not a roster, so one boolean is the whole
    *  of its saved state. Absent/false = still the wild, decorative bird. */
   falconTamed?: boolean;
+  /** Wave 25 · Tam, the companion squire (game/data/companion.ts and
+   *  PlayerController's 'talk_companion' interact), has been recruited via
+   *  Richard's own 'r_squire' side quest. Same single-boolean shape as
+   *  falconTamed above, for the same reason: one always-on companion, not a
+   *  roster — Tam is never pushed into `villagers` (see gameStore's
+   *  recruitCompanion). Absent/false = not recruited yet. */
+  companionRecruited?: boolean;
   /** Wave 13 · turned on Cedric's own camp after already pledging to him
    *  (gameStore's betrayCedric) — permanent, so `pledgeAlliance('cedric')`
    *  can refuse a known turncoat forever. Absent/false = never happened. */

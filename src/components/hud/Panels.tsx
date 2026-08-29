@@ -573,7 +573,7 @@ function ParleyPanel() {
       const start = (completedQuests.length + pool.length) % pool.length;
       for (let i = 0; i < pool.length; i++) {
         const q = pool[(start + i) % pool.length];
-        if (!sideQuestBlocker(q, completedSideQuests, allegiance, 'cedric')) return q;
+        if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, 'cedric')) return q;
       }
       return null;
     })();
@@ -846,7 +846,7 @@ function GuildErrands({ guildId }: { guildId: string }) {
     const start = (completedQuests.length + pool.length) % pool.length;
     for (let i = 0; i < pool.length; i++) {
       const q = pool[(start + i) % pool.length];
-      if (!sideQuestBlocker(q, completedSideQuests, allegiance, alliance)) return q;
+      if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, alliance)) return q;
     }
     return null;
   })();

@@ -21,10 +21,13 @@ import { agentManager } from '@/ai/core/AgentManager';
 import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { resetNpcAgentSync } from '@/ai/npcSync';
 import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
+import { resetCompanionAgentSync } from '@/ai/companionSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
+import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
+import { resetCompanionCombat } from '../companion';
 import { SELL_PRICES } from '../data/trade';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress } from '../data/challenges';
@@ -211,6 +214,10 @@ interface GameState {
    *  SaveGame.falconTamed for why this is one flag, not a roster like the
    *  horses above. */
   falconTamed: boolean;
+  /** Wave 25 · Tam, the companion squire, has been recruited — see
+   *  types.ts's own SaveGame.companionRecruited doc for the full reasoning
+   *  (one boolean, not a roster, same shape as falconTamed above). */
+  companionRecruited: boolean;
   /** Wave 13 · turned on Cedric's own war council once already sworn to him
    *  (see betrayCedric). A permanent burnt bridge, not a cooldown: once
    *  true, `pledgeAlliance('cedric')` refuses forever — the one thing that
@@ -351,6 +358,17 @@ interface GameState {
   /** Wave 13 · tame the falcon companion — a no-op once already tamed,
    *  mirroring markDragonSeen/openTreasureChest's own one-way guard. */
   tameFalcon: () => void;
+  /** Wave 25 · recruit Tam, the companion squire — a no-op once already
+   *  recruited, byte-for-byte mirroring tameFalcon's own one-way guard.
+   *  Called from turnInSideQuest() when Richard's 'r_squire' errand is
+   *  turned in. */
+  recruitCompanion: () => void;
+  /** Wave 25 · Tam's own flavor-greet interact (PlayerController's
+   *  'talk_companion' kind) — a random line from COMPANION_LINES, the
+   *  content-level equivalent of an NpcDef's own `lines` array without
+   *  dragging in DialoguePanel's stationary-NPC machinery (see
+   *  PlayerController's own interact comment for why). */
+  greetCompanion: () => void;
   markDragonSeen: () => void;
   recordDragonSiege: (routed: boolean) => void;
   /** Cedric's Siege: a homestead siege ended — routed before the timer, or
@@ -970,6 +988,7 @@ function createGameStore() {
     stabled: [],
     mounts: {},
     falconTamed: false,
+    companionRecruited: false,
     betrayedCedric: false,
     guild: null,
     guildRanks: {},
@@ -1015,6 +1034,12 @@ function createGameStore() {
       resetVillagerAgentSync();
       resetNpcAgentSync();
       resetCourtAmbientAgentSync();
+      resetCompanionAgentSync();
+      // Tam's own combat state is keyed by a FIXED id (unlike a roster
+      // villager's fresh 'v<n>' one every game) — without this a new
+      // character would silently inherit whatever HP the last session left
+      // him at. See game/companion.ts's own comment on resetCompanionCombat.
+      resetCompanionCombat(COMPANION_ID);
       targetRegistry.clear();
       // §6.2 — the AI's world-sound ring is module state too: a fresh session
       // must not have two seconds of the last one's combat still audible.
@@ -1038,7 +1063,7 @@ function createGameStore() {
         notifications: [], prompt: null, actionProgress: null, dirty: true,
         timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
         gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
+        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
@@ -1056,6 +1081,10 @@ function createGameStore() {
       resetVillagerAgentSync();
       resetNpcAgentSync();
       resetCourtAmbientAgentSync();
+      resetCompanionAgentSync();
+      // same reasoning as newGame's own call: a fixed-id combat record must
+      // not carry a prior session's HP into this loaded one.
+      resetCompanionCombat(COMPANION_ID);
       targetRegistry.clear();
       // §6.2 — the AI's world-sound ring is module state too: a fresh session
       // must not have two seconds of the last one's combat still audible.
@@ -1103,6 +1132,7 @@ function createGameStore() {
         stabled: s.stabled ?? [],
         mounts: s.mounts ?? {},
         falconTamed: s.falconTamed ?? false,
+        companionRecruited: s.companionRecruited ?? false,
         betrayedCedric: s.betrayedCedric ?? false,
         guild: s.guild ?? null,
         guildRanks: s.guildRanks ?? {},
@@ -1168,6 +1198,7 @@ function createGameStore() {
         stabled: [...stabledHorses.ids],
         mounts: { ...stabledHorses.assigned },
         falconTamed: s.falconTamed,
+        companionRecruited: s.companionRecruited,
         betrayedCedric: s.betrayedCedric,
         guild: s.guild,
         guildRanks: s.guildRanks,
@@ -2135,7 +2166,7 @@ function createGameStore() {
       // precursor chains and allegiance/alliance gates are enforced HERE as
       // well as in the UI, so a stale panel can never hand out work you have
       // not earned
-      const blocked = sideQuestBlocker(def, st.completedSideQuests, st.allegiance, st.alliance);
+      const blocked = sideQuestBlocker(def, st.completedSideQuests, st.completedQuests, st.allegiance, st.alliance);
       if (blocked) { st.notify(blocked); return; }
       set({ sideQuest: { npcId, questId, have: 0 }, dirty: true });
       st.notify(`Errand accepted: ${def.label}`);
@@ -2170,6 +2201,11 @@ function createGameStore() {
       st.addXp(def.xpSkill, def.xp);
       if (def.rewardItems) st.addItems(def.rewardItems, 'grant');
       audio.play('treasure', 0.8);
+      // Wave 25 · this specific errand's turn-in is also Tam's recruitment
+      // beat — a one-off special case, not a new general "quest ->
+      // companion" system, same shape as the rest of this function's own
+      // narrow, hand-named side effects.
+      if (def.id === 'r_squire') st.recruitCompanion();
       // a delivery hands off to whoever's actually standing here, not the
       // (physically absent) giver back home
       st.notify(def.kind === 'deliver'
@@ -3130,6 +3166,20 @@ function createGameStore() {
       set({ falconTamed: true, dirty: true });
       audio.play('falcon', 0.8);
       st.notify('The falcon lands and stays — it will watch the land for you now.', true);
+    },
+
+    recruitCompanion: () => {
+      const st = get();
+      if (st.companionRecruited) return;
+      set({ companionRecruited: true, dirty: true });
+      audio.play('villager', 0.7);
+      st.notify(`Tam kneels, then rises at your side — ${TAM_TITLE}, from this day.`, true);
+    },
+
+    greetCompanion: () => {
+      const line = COMPANION_LINES[Math.floor(Math.random() * COMPANION_LINES.length)];
+      audio.play('villager', 0.7, false);
+      get().notify(line, true);
     },
 
     markDragonSeen: () => {

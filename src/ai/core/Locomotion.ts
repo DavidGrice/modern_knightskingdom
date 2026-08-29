@@ -27,6 +27,21 @@ import { agentManager, despawnHooks, tierChangeHooks } from './AgentManager';
 
 const WALK_SPEED = 0.9; // m/s — matches Villagers.tsx's existing wander/work pace
 const RUN_SPEED = 1.6; // m/s — matches Villagers.tsx's existing raid-flee pace
+
+// Wave 25 verification fix — a companion's own speed cap, kept fully separate
+// from WALK_SPEED/RUN_SPEED above. Those two are tuned against OTHER agents
+// (a villager's own wander pace / raid-flee pace) and follow_leader/
+// assist_leader wrongly inherited them by using the same 'walk'/'run' MOVE_TO
+// vocabulary — but the thing a companion actually has to keep pace with is
+// the PLAYER (PlayerController.tsx's own base walk 4 m/s / sprint 7 m/s), not
+// a fellow NPC, and 1.6 m/s can never catch either: verified live, the follow
+// gap grew without bound (5.4 -> 22.6 units over 8s) at exactly 4.0-1.6=2.4
+// m/s of net separation. Set with real margin above the player's SPRINT (not
+// just the walk), so a companion who falls behind — during combat, while
+// downed, or just from a sprint burst — always has a real, bounded path back
+// to formation instead of drifting further away every second forever.
+const COMPANION_WALK_SPEED = 4.4; // m/s — a hair over the player's own 4 m/s base walk
+const COMPANION_RUN_SPEED = 8.5; // m/s — clears the player's own 7 m/s sprint with real margin to close a gap
 /** MOVE_TO_ANCHOR has no author-supplied stopDistance (unlike MOVE_TO) —
  *  anchor resolution already decided exactly where to stand, so "arrived"
  *  just needs to be "close enough," not a caller-tunable value. */
@@ -320,7 +335,15 @@ function stepAgent(agent: Agent, dt: number): void {
   // as brisk. The cap only binds for a near-maxed veteran; every ordinary
   // villager lands well under it.
   const mult = agent.bb.tripSpeedMult > 0 ? agent.bb.tripSpeedMult : 1;
-  const speed = intent.speed === 'run' ? RUN_SPEED : Math.min(WALK_SPEED / mult, RUN_SPEED);
+  // Wave 25 verification fix — the companion archetype gets its own, much
+  // higher cap (see this file's own comment on COMPANION_RUN_SPEED above)
+  // instead of the villager-tuned WALK_SPEED/RUN_SPEED pair. tripSpeedMult is
+  // a villager work-trip mechanic (Agent.think's own live read) that never
+  // applies to a companion, so it's simply skipped on this branch rather than
+  // folded in for a value that can never be anything but 1.
+  const speed = agent.archetype === 'companion'
+    ? (intent.speed === 'run' ? COMPANION_RUN_SPEED : COMPANION_WALK_SPEED)
+    : intent.speed === 'run' ? RUN_SPEED : Math.min(WALK_SPEED / mult, RUN_SPEED);
 
   if (agent.steering === 'teleport') {
     // §8, verbatim: "jump along their path in coarse steps". Capped so a long

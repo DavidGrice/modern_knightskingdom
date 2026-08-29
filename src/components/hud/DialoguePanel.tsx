@@ -96,7 +96,7 @@ export default function DialoguePanel() {
     const start = (completedQuests.length + pool.length) % pool.length;
     for (let i = 0; i < pool.length; i++) {
       const q = pool[(start + i) % pool.length];
-      if (!sideQuestBlocker(q, completedSideQuests, allegiance, alliance)) return q;
+      if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, alliance)) return q;
     }
     return null; // every candidate is blocked right now
   }, [npc, pool, completedQuests.length, completedSideQuests, allegiance, alliance]);

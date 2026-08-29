@@ -49,6 +49,19 @@
 // archetype's `intrinsic` list (config/archetypes.json) for the same reason
 // every other action here needs that: `assembleCandidates` silently skips a
 // registered action its archetype was never offered.
+//
+// Wave 25 adds `follow_leader` (followLeader.ts) and `assist_leader`
+// (assistLeader.ts) — the first real Actions the `companion` archetype's own
+// intrinsic list has ever had registered for it (archetypes.json has listed
+// both ids since phase 5; PHASE_STATUS.md's phase 7 note called them
+// aspirational for the same reason `wander` once was — no follower entity
+// existed for them to be about). Neither is added to any OTHER archetype's
+// intrinsic list: `follow_leader` claims the `companion` category
+// (CATEGORY_WEIGHT/CATEGORY_INTERRUPT_PRIORITY.companion, defined since
+// phase 5, unused by any Action until now) outright, and `assist_leader`
+// reuses `engage_threat`'s own combat shape behind its own distinct
+// `is_companion` gate — see that file's header for why it is not simply
+// `engage_threat_villager` under a new name.
 import { registerActions, type Action } from '../core/Reasoner';
 import { FLEE_TO_SAFETY } from './flee';
 import { SLEEP } from './sleep';
@@ -62,10 +75,13 @@ import { TAKE_COVER } from './takeCover';
 import { ENGAGE_THREAT } from './engageThreat';
 import { ENGAGE_THREAT_VILLAGER } from './engageThreatVillager';
 import { WANDER } from './wander';
+import { FOLLOW_LEADER } from './followLeader';
+import { ASSIST_LEADER } from './assistLeader';
 
 export const ACTIONS: Action[] = [
   FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
   IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
+  FOLLOW_LEADER, ASSIST_LEADER,
 ];
 registerActions(ACTIONS);
 
@@ -73,5 +89,6 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkactions = {
     FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
     IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
+    FOLLOW_LEADER, ASSIST_LEADER,
   };
 }

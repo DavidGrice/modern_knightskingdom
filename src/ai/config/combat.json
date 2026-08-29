@@ -237,5 +237,42 @@
     "closeRange": 3.5,
     "courageThreshold": 6,
     "capableTierMax": 1
+  },
+
+  "engageCompanion": {
+    "_doc": [
+      "Wave 25 — assist_leader (ai/actions/assistLeader.ts): Tam, the",
+      "companion squire's own combat rhythm. Same shape as `engage` above",
+      "(EngageConfig — reach/approachStop/swingSeconds/loseTargetSec, no new",
+      "interface needed), reach/approachStop identical to both `engage` and",
+      "`engageVillager` (same 1.8m contact range, same 1.4m approach stop —",
+      "it is the same physical swing by the same kind of person, just a",
+      "different strength). swingSeconds 1.2 is the exact numeric midpoint",
+      "between a villager's own 1.3s and a trained defender's 1.1s — see",
+      "game/companion.ts's own header for the full HP/damage/DPS table this",
+      "sits inside.",
+      "",
+      "No closeRange/courageThreshold/capableTierMax fields (unlike",
+      "`engageVillager`): those three exist specifically to stop a whole",
+      "ROSTER of flat, unleveled villagers from mass-dogpiling into fights",
+      "their stats can't scale with as raidStrength() climbs. There is",
+      "exactly one companion, ever (falcon.ts's own 'one always-on",
+      "companion, not a fleet' precedent) — that risk cannot occur here, so",
+      "assist_leader's own gate is simply `agent.archetype === 'companion'`,",
+      "argued in full in that file's header.",
+      "",
+      "leashDistance 20 (verification fix, post-ship) — Defenders.tsx's own",
+      "`ENGAGE_RADIUS` (how far a patrolling defender will spot a hostile in",
+      "the first place) is 20m from a fixed post; this reuses that same real",
+      "reference point but measures from the PLAYER instead, since a",
+      "companion's 'post' is wherever the player currently is. Past it,",
+      "assist_leader gives up on a target it cannot otherwise stop chasing",
+      "(see assistLeader.ts's own header) and hands back to follow_leader."
+    ],
+    "reach": 1.8,
+    "approachStop": 1.4,
+    "swingSeconds": 1.2,
+    "loseTargetSec": 2.5,
+    "leashDistance": 20
   }
 }

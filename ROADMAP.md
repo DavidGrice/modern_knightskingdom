@@ -7518,3 +7518,87 @@ Two items, sequenced together because the second builds on Wave 20's `hasLineOfS
   all 4 directions for all 4 buildings, confirming the door prompt now appears everywhere it should
   while the existing Stable interior (untouched) continued to work exactly as before.
   `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+## Wave 25: a real humanoid companion — Tam, the Squire — SHIPPED 2026-08-29
+
+The user was explicitly asked and chose a HUMANOID squire/knight companion over a reskinned-beast
+option. This populates the `companion` AI archetype (`archetypes.json`) that has sat fully defined
+and completely unused since AI phase 5 — `follow_leader`/`assist_leader` were aspirational config
+strings with zero implementation, and `Blackboard.leaderId` had never been written by anything in
+this codebase's history.
+
+- [COMPLETE] ✅ **Identity, recruitment, and scope — every real design question answered against
+  live data, not guessed.** Checked the full donor catalog before picking one: every named court
+  NPC and every combat-mob family already claims a unique donor, leaving `minifiggenericgood00` —
+  already worn anonymously by Alric/Beda/Fenwick/the Merchant — as the only real option. Named him
+  **Tam**, titled "Your Squire" (not "Squire" alone, since `ranks.ts` already uses that as the
+  player's *own* rank name). **A real, verified deviation from the initial plan**: the plan assumed
+  keeping this donor's molded halberd+shield (`keepProps: true`), but that donor's molded props are
+  parented at their original baked position rather than re-hung with the arm — precisely the
+  floating-weapon bug this codebase already found and fixed for Gilbert. Tam wears a real,
+  separately-portalled sword+shield instead, the same way every other armed figure in the game
+  already avoids that bug. **Recruitment** reuses the existing side-quest pipeline entirely: a new
+  errand from Richard the Strong (`r_squire`, 2 kills, real reward), gated on actual knighthood via
+  one new, generally-useful `SideQuestDef.needsQuest` field (distinct from the existing `requires`,
+  which only checks other side-quest ids) rather than a bespoke recruitment system. **Scope
+  deliberately held tight**, matching `falcon.ts`'s own "one always-on companion, not a fleet"
+  precedent: no independent leveling curve, no gear-slot system, no roster entry — Tam is never
+  pushed into `st.villagers`, which keeps the whole loadout/leveling/roster-panel machinery out of
+  scope for free. Both are named, explicit Wave 25b follow-ups, not silently dropped.
+- [COMPLETE] ✅ **`follow_leader` and `assist_leader`, built for real, with a real architectural
+  correction along the way.** The original framing described `follow_leader` as "writing
+  `bb.leaderId`" as if that write gated the action's own scoring — traced the actual reasoner
+  mechanics and found this circular (`assembleCandidates` scores every candidate *before*
+  `Activity.start()` ever runs, so a consideration reading a field only that same action ever
+  writes would read `null` forever). Fixed: the gate is `agent.archetype === 'companion'`; the
+  `bb.leaderId = 'player'` write is a documented side effect, not the condition. `assist_leader`
+  reuses `engage_threat`'s original combat shape (not `engage_threat_villager`'s weaker one, and
+  not its courage/proximity/tier gates either — those exist specifically to stop a whole *roster*
+  of flat villagers from mass-dogpiling as difficulty scales, a risk that cannot occur for one
+  dedicated entity) under its own `is_companion` gate, so nothing here touches either of Wave 21's
+  villager-combat code paths. Combat stats (16 HP, 1.5 dmg, 1.2s swing) sit at the exact numeric
+  midpoint between Wave 21's villager floor and an unarmored defender's floor — meaningfully above
+  one, clearly short of the other, cross-checked against real enemy HP/damage tables the same way
+  Wave 21's own balance work was.
+- [COMPLETE] ✅ **Follows the player everywhere, including across travel**, reusing the exact
+  "renders unconditionally, no destination gate" convention `MountedHorse.tsx`/the tamed falcon
+  already established (confirmed live: neither is gated the way `Terrain`/`Signpost`/`Merchant` are
+  at the same `GameWorld.tsx` call site). A new `companionSync.ts` keeps `agent.region` in step with
+  `st.destination` on every travel — without it, Tam's stale `region` would stop matching any real
+  destination the instant the player left home, silently dropping him to tier D (unrendered)
+  forever; his position is snapped rather than pathed on the same frame, mirroring how the player's
+  own travel is an instant teleport, not a walk, into a coordinate space his last `MOVE_TO` knew
+  nothing about. Made a real, checked target-priority decision in `Enemies.tsx`: Tam is a valid
+  raider target one rung below a sworn defender and one rung above an already-fighting villager,
+  gated on his own current region (not `enemyAtHome`, since he isn't home-bound) matching every
+  destination he might actually be standing in.
+- **Three real, live-measured bugs found by verify and fixed, not shipped broken:**
+  1. **Unbounded follow gap (blocker).** `follow_leader`/`assist_leader` inherited the AI
+     locomotion system's villager-tuned speed caps (0.9/1.6 m/s, meant for a villager's own
+     wander/flee pace) instead of comparing against what a companion actually has to keep up
+     with — the player's own 4/7 m/s walk/sprint. Measured live: the gap grew unbounded, 5.4→22.6
+     units over 8 seconds of ordinary walking, never closing on its own. Fixed with a dedicated,
+     fully isolated companion speed cap (4.4/8.5 m/s, real margin above the player's own top
+     speed) gated on `agent.archetype === 'companion'` — zero effect on any villager or defender.
+  2. **Permanent incapacitation once downed (blocker).** Villagers and defenders each have their
+     own render component's per-frame check that resets `state`/`hp` once `downedUntil` elapses;
+     `Companion.tsx` had no equivalent anywhere. Confirmed live with a real organic 4-bandit
+     takedown (not a forced value): Tam's state stayed frozen at `downed` indefinitely, meaning
+     the *first* real fight he lost in a session incapacitated him for the rest of it, silently
+     contradicting the design's own "never permanently dies" claim. Fixed by adding the identical
+     hide-while-downed/auto-recover check `Villagers.tsx`/`Defenders.tsx` already use.
+  3. **Unleashed chase (real-bug).** `assist_leader` had no give-up condition against a target
+     that flees faster than Tam can ever catch (a fleeing bandit's 3.0 m/s vs. his then-capped
+     1.6 m/s) — its only exit condition (losing sight for 2.5s) never fires against a target
+     crossing open, unobstructed ground. **The first fix attempt was verified wrong, and caught
+     before shipping**: an `update()`-time early return past a leash distance did nothing,
+     because it only ended that one Activity instance — the very next reasoner think just
+     re-selected the same action fresh and picked the chase back up, measured running Tam out to
+     43+ real meters before this was caught. Fixed for real by making the leash a proper scoring
+     **consideration** (`within_leash`, same bool-gate shape as `not_downed`), so the whole action
+     scores to zero past 20m from the player and `follow_leader` wins the very next think tick
+     instead of merely losing one activity instance.
+- **Regression-checked against Waves 20/21**: Wave 21's villager combat and Wave 20's line-of-sight
+  are both completely unaffected — Tam's own combat gate, damage constant, and target-priority slot
+  are fully separate from both. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.
