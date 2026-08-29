@@ -30,14 +30,26 @@ export const defenderState: Record<string, DefenderState> = {};
  *  in while building this wave. */
 export const DOWNED_RECOVER_MS = 45000;
 
-// Phase 24C — the captain's standing order, applied to ALL defenders at once
-// (per-defender orders are a later refinement). Session-tactical state, not
+// Phase 24C — the captain's standing order, applied to ALL defenders at once.
+// Wave 23 — per-defender overrides on top (`overrides`): the fleet order
+// stays the default every defender answers to, but any one of them can be
+// dedicated to their own standing order via the roster (VillagersPanel),
+// which wins for that defender until cleared. Session-tactical state, not
 // persisted: a reload rallies everyone back to their normal patrol.
 export type DefenderOrder = 'patrol' | 'follow' | 'attack' | 'scout';
-export const defenderOrders: { order: DefenderOrder; targetId: string | null } = {
+export const defenderOrders: { order: DefenderOrder; targetId: string | null; overrides: Record<string, DefenderOrder> } = {
   order: 'patrol',
   targetId: null,
+  overrides: {},
 };
+
+/** The order this specific defender actually obeys: their own roster
+ *  override if one is set, else the fleet's standing (radial) order. The
+ *  one place both Defenders.tsx and the HUD chip should read from — reading
+ *  `defenderOrders.order` directly would skip a defender's override. */
+export function orderFor(villagerId: string): DefenderOrder {
+  return defenderOrders.overrides[villagerId] ?? defenderOrders.order;
+}
 // scout reports: enemy ids already called out, so each hostile is announced once
 export const scoutReported = new Set<number>();
 

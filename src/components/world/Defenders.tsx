@@ -9,7 +9,7 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, lootFor, KIND_LABEL, type EnemyData } from '@/game/combat';
-import { registerDefender, defenderOrders, defenderStrike, scoutReported, type DefenderState } from '@/game/defenders';
+import { registerDefender, orderFor, defenderStrike, scoutReported, type DefenderState } from '@/game/defenders';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
 import { chestplateHp, chestplateTierOf } from '@/game/data/armor';
@@ -156,8 +156,10 @@ function DefenderFigure({ villager }: { villager: Villager }) {
 
     // Phase 24C: the captain's standing order shapes everything below. A
     // player off in another realm gets patrol behavior regardless — the
-    // defenders answer to the homestead, not a distant summons.
-    const order = useGameStore.getState().destination ? 'patrol' : defenderOrders.order;
+    // defenders answer to the homestead, not a distant summons. Wave 23:
+    // orderFor() resolves this ONE defender's own roster override first,
+    // falling back to the fleet order — see game/defenders.ts.
+    const order = useGameStore.getState().destination ? 'patrol' : orderFor(villager.id);
 
     // target selection by order: Attack converges on the threat nearest the
     // PLAYER from any distance; Follow watches the player's back; Scout sees

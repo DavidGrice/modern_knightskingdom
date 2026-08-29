@@ -6,6 +6,8 @@
 import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { mountOf, stabledHorses } from '@/game/riding';
+import { defenderOrders, orderFor } from '@/game/defenders';
+import { DEFENDER_ORDERS, setDefenderOrder } from '@/game/data/defenderOrders';
 import MenuTabs from './MenuTabs';
 import { CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, JOBS, LOADOUT_REQUIRES, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
 import { ITEMS } from '@/game/data/items';
@@ -41,6 +43,11 @@ export default function VillagersPanel() {
   // ride), so the panel needs a nudge to repaint after an assignment
   const [, setMountTick] = useState(0);
   const bumpMounts = () => setMountTick((n) => n + 1);
+  // Wave 23 · defenderOrders.overrides is the same shape of mutable leaf
+  // module as stabledHorses above, so a per-defender order pick needs the
+  // same manual repaint nudge.
+  const [, setOrderTick] = useState(0);
+  const bumpOrders = () => setOrderTick((n) => n + 1);
   const setPanel = useGameStore((s) => s.setPanel);
   const villagers = useGameStore((s) => s.villagers);
   const villagerProgress = useGameStore((s) => s.villagerProgress);
@@ -266,7 +273,35 @@ export default function VillagersPanel() {
                   <div className="xpbar" style={{ marginTop: 8 }}>
                     <div style={{ width: `${Math.round((curXp / Math.max(1, nextXp)) * 100)}%` }} />
                   </div>
-                  <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 4 }}>
+                  {/* Wave 23 · a per-defender standing order, overriding the
+                      fleet-wide radial call (T) for just this one. Placed
+                      first — "what to do" precedes "what to hold". */}
+                  <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
+                    Standing Order {defenderOrders.overrides[v.id]
+                      ? '— on their own'
+                      : `— following the fleet (${DEFENDER_ORDERS.find((o) => o.id === defenderOrders.order)?.label})`}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                    {DEFENDER_ORDERS.map((o) => {
+                      const active = orderFor(v.id) === o.id;
+                      return (
+                        <button
+                          key={o.id}
+                          className="menu-btn small"
+                          style={{
+                            margin: 0, width: 'auto', padding: '5px 10px',
+                            opacity: active ? 1 : 0.65,
+                            borderColor: active ? 'var(--gold)' : undefined,
+                          }}
+                          onClick={() => { setDefenderOrder(v.id, o.id); bumpOrders(); }}
+                          title={o.desc}
+                        >
+                          <Ico e={o.icon} /> {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
                     Loadout — weapons spend Armory stock; unarmed hits noticeably softer
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>

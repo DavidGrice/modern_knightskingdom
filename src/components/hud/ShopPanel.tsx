@@ -11,13 +11,14 @@ export default function ShopPanel() {
   const inventory = useGameStore((s) => s.inventory);
   const sellItem = useGameStore((s) => s.sellItem);
   const buyOffer = useGameStore((s) => s.buyOffer);
-  // Silver Tongue trade-off perk: +15%/−15% here mirror the exact multipliers
-  // sellItem()/buyOffer() themselves apply — shown so the price on the
-  // ticket is the price actually charged, not a stale base number, and so
-  // the Buy button's affordability check agrees with what buyOffer() will
-  // really deduct (a player with exactly enough gold for the discounted
-  // price would otherwise see it wrongly greyed out).
+  // Wit + Silver Tongue trade-off perk: the haggle terms here mirror the
+  // exact multipliers sellItem()/buyOffer() themselves apply — shown so the
+  // price on the ticket is the price actually charged, not a stale base
+  // number, and so the Buy button's affordability check agrees with what
+  // buyOffer() will really deduct (a player with exactly enough gold for the
+  // discounted price would otherwise see it wrongly greyed out).
   const silverTongue = useGameStore((s) => s.perks.includes('silver_tongue'));
+  const wit = useGameStore((s) => s.attrSpent.wit ?? 0);
   const gold = inventory.gold ?? 0;
 
   const sellables = (Object.keys(SELL_PRICES) as ItemId[]).filter((id) => (inventory[id] ?? 0) > 0);
@@ -34,7 +35,7 @@ export default function ShopPanel() {
             <div className="loading-note">Nothing in your satchel he wants today.</div>
           )}
           {sellables.map((id) => {
-            const each = silverTongue ? Math.round((SELL_PRICES[id] ?? 0) * 1.15) : SELL_PRICES[id];
+            const each = Math.round((SELL_PRICES[id] ?? 0) * (1 + wit * 0.04 + (silverTongue ? 0.15 : 0)));
             return (
               <div className="recipe-row" key={id}>
                 <div className="icon"><Ico e={ITEMS[id].icon} /></div>
@@ -51,7 +52,7 @@ export default function ShopPanel() {
         <div style={{ flex: 1 }}>
           <div className="creator-section">Buy</div>
           {BUY_OFFERS.map((o) => {
-            const cost = silverTongue ? Math.round(o.price * 0.85) : o.price;
+            const cost = Math.max(1, Math.round(o.price * (1 - wit * 0.04 - (silverTongue ? 0.15 : 0))));
             return (
               <div className="recipe-row" key={o.item}>
                 <div className="icon"><Ico e={ITEMS[o.item].icon} /></div>

@@ -24,6 +24,7 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { roomFor } from '@/game/storage';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
+import { spawnDepositFloaty } from '@/game/depositFloaties';
 import { attrsOf, SIDE_GOODS } from '@/game/data/attributes';
 import { hasTrait, HAUL_TRAIT, SIDE_TRAIT } from '@/game/data/companionTraits';
 import type { ItemId } from '@/game/types';
@@ -191,6 +192,10 @@ class HaulToDepositActivity implements Activity {
     // one completed haul stands in for tickVillagers' own "one completed
     // trip" for trade-mastery purposes — see this file's own header
     useGameStore.getState().awardTradeXp(agent.id, 10);
+    // Wave 23 · cosmetic-only confirmation, amount-accurate to what the
+    // store actually took (not the requested/doubled amount) — a full
+    // store's partial accept shows the true number, not a promise.
+    spawnDepositFloaty(agent.position.x, agent.position.y + 2.0, agent.position.z, load.resource, accepted);
     // What the villager ACTUALLY carried comes off their back first; the Might
     // bonus is what rides on top and is therefore what a nearly-full store
     // turns away. The alternative ordering would leave real, gathered goods

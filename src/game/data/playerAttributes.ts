@@ -10,7 +10,7 @@ export const PLAYER_ATTRS: { id: AttrId; label: string; icon: string; blurb: str
   { id: 'diligence', label: 'Diligence', icon: '⏳', blurb: '+4%/pt chance of bonus yield from trees and iron veins' },
   { id: 'craft', label: 'Craft', icon: '✋', blurb: '+4%/pt chance a craft turns out a double batch' },
   { id: 'courage', label: 'Courage', icon: '🦁', blurb: '+5 max stamina per point' },
-  { id: 'wit', label: 'Wit', icon: '🧠', blurb: '+4%/pt better prices selling to merchants' },
+  { id: 'wit', label: 'Wit', icon: '🧠', blurb: '+4%/pt better prices trading with merchants' },
 ];
 
 export const ATTR_POINT_EVERY = 4; // total skill levels per point

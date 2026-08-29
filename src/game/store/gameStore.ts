@@ -2245,9 +2245,13 @@ function createGameStore() {
 
     buyOffer: (item, qty, price) => {
       const st = get();
-      // Silver Tongue trade-off perk: the same +15% haggle sellItem() gives,
-      // spent the other direction — a flat discount on what the merchant asks
-      const cost = st.perks.includes('silver_tongue') ? Math.round(price * 0.85) : price;
+      // Wave 23 · Wit attribute: the same haggle sellItem() gives when
+      // selling, spent the other way here — Wit becomes a full haggle stat
+      // in both directions. Silver Tongue trade-off perk: the same ±15%
+      // haggle sellItem() gives, spent the other direction, stacking with
+      // Wit. Clamped to 1g so a maxed haggler is never handed goods for free.
+      const cost = Math.max(1, Math.round(price * (1 - (st.attrSpent.wit ?? 0) * 0.04
+        - (st.perks.includes('silver_tongue') ? 0.15 : 0))));
       if ((st.inventory.gold ?? 0) < cost) {
         st.notify('Not enough gold!');
         return;

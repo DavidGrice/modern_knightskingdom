@@ -37,3 +37,15 @@ export function giveDefenderOrder(index: number) {
     ? `Order given: ${def.label}`
     : 'You have no defenders to command — assign one in the Roster (N).');
 }
+
+/** Wave 23 — a single defender's own standing order, set from their roster
+ *  card rather than the fleet-wide radial. Picking the order the fleet is
+ *  ALREADY standing is how you rejoin it: no separate "clear override"
+ *  control, since that button already reads as "on" whenever there is no
+ *  override (see `orderFor`). A fleet-wide radial call deliberately never
+ *  touches this map — an archer dedicated to Scout stays scouting through a
+ *  horn call, the same independence Loadout/Station/Shift already have. */
+export function setDefenderOrder(villagerId: string, orderId: DefenderOrder) {
+  if (orderId === defenderOrders.order) delete defenderOrders.overrides[villagerId];
+  else defenderOrders.overrides[villagerId] = orderId;
+}
