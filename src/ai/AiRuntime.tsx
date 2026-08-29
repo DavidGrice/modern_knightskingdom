@@ -17,6 +17,7 @@ import { stepUnrenderedAgents } from './core/Locomotion';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
 import { mirrorCourtAmbientPositions, syncCourtAmbientAgents } from './courtAmbientSync';
+import { syncCompanionAgent } from './companionSync';
 // iteration 2.9 — side-effect import only: nothing here calls resolveAnchor
 // yet (phase 5's gather/haul actions are the first real caller), but it
 // needs to be in the client bundle for its own window.__kkanchor debug
@@ -75,6 +76,14 @@ export default function AiRuntime() {
     // schedule risk
     syncCourtAmbientAgents(st.completedQuests, st.destination ?? null, st.villagers);
     mirrorCourtAmbientPositions();
+    // Wave 25 — Tam, the companion squire: a single spawn/despawn toggle, not
+    // a per-id reconciliation loop (see companionSync.ts's own header for
+    // why this is a narrower shape than syncVillagerAgents/
+    // syncCourtAmbientAgents above). No mirror call: components/world/
+    // Companion.tsx drives him purely off his own Agent (stepLocomotion),
+    // the same way Npc.tsx's CourtNpc does for its own MOVE_TO/FACE branches
+    // — there is no separate mob registry for his position to drift from.
+    syncCompanionAgent(st.companionRecruited, st.destination ?? null);
     // Phase 2, iteration 2.4 — a window-mode destination grid follows the
     // player, not any individual agent (nothing spawns agents in a
     // destination yet; this keeps the grid correctly centred for whenever

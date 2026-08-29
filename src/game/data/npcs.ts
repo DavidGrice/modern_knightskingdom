@@ -6,6 +6,7 @@ import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 import { SETTLEMENT_QUESTS } from './settlementQuests';
 import { DELIVERY_QUESTS } from './deliveryQuests';
 import { GUILD_BY_ID } from './guilds';
+import { QUESTS } from './quests';
 
 // The royal court, stationed around the realm. Each NPC greets with their
 // original voice line and offers repeatable side quests from a themed pool.
@@ -29,6 +30,13 @@ export interface SideQuestDef {
    *  way." True alliance-exclusive content (a capstone errand/reward each
    *  house holds back for its own sworn knight) uses this instead. */
   needsAlliance?: Alliance;
+  /** Wave 25 · a MAIN-quest id (data/quests.ts) that must already be
+   *  completed — distinct from `requires` above, which only checks other
+   *  SIDE-quest ids against `completedSideQuests`. Introduced for Richard's
+   *  own 'r_squire' recruitment errand, gated on 'knights_arms' (the actual
+   *  knighting moment) — general enough for any future errand that needs to
+   *  wait on a real story beat rather than another side quest. */
+  needsQuest?: string;
   // 'joust' and 'duel' (Phase 20 step 4b) are location-bound by nature —
   // jousting only happens at Richard's Tourney Grounds, first-blood duels
   // only at Storm's Battle Dome — so errands using them can only be
@@ -321,6 +329,18 @@ export const NPCS: NpcDef[] = [
         id: 'r_lists', kind: 'joust', target: 'any', need: 3,
         label: 'Land 3 solid passes at the lists',
         xpSkill: 'combat', xp: 90, rewardItems: { gold: 18 },
+      },
+      // Wave 25 · Tam's recruitment errand — gated on actual knighthood
+      // ('knights_arms', the real knighting moment: see data/quests.ts),
+      // not merely on Richard being revealed. `need: 2` matches r_slay2's
+      // own precedent, the smallest kill count already offered here — a
+      // recruitment quest should read as a real, short proving errand, not
+      // a multi-stage saga.
+      {
+        id: 'r_squire', kind: 'kill', target: 'any', need: 2,
+        needsQuest: 'knights_arms',
+        label: 'Prove you can lead as well as fight — put down 2 more foes',
+        xpSkill: 'combat', xp: 70, rewardItems: { gold: 20 },
       },
     ],
   },
@@ -694,10 +714,16 @@ export function sideQuestsOf(npcId: string): SideQuestDef[] {
  *  `alliance` is optional only so call sites written before Wave 13's
  *  `needsAlliance` gate keep compiling untouched — every real caller now
  *  passes it (see gameStore's acceptSideQuest, QuestLogPanel, DialoguePanel,
- *  ParleyPanel). */
+ *  ParleyPanel). `completedQuests` (Wave 25) is NOT similarly optional: it
+ *  backs `needsQuest`, a gate real enough to need every real caller passing
+ *  it from day one, same as `completed` (completedSideQuests) itself. */
 export function sideQuestBlocker(
-  q: SideQuestDef, completed: string[], allegiance: number, alliance?: Alliance | null,
+  q: SideQuestDef, completed: string[], completedQuests: string[], allegiance: number, alliance?: Alliance | null,
 ): string | null {
+  if (q.needsQuest && !completedQuests.includes(q.needsQuest)) {
+    const name = QUESTS.find((mq) => mq.id === q.needsQuest)?.name ?? q.needsQuest;
+    return `First: ${name}`;
+  }
   if (q.requires?.length) {
     const missing = q.requires.filter((r) => !completed.includes(r));
     if (missing.length) {

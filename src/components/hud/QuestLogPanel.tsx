@@ -134,7 +134,7 @@ function GiverBlock({ npcId }: { npcId: string }) {
         // far toward which house you have to stand, or whose banner you
         // have to actually be sworn to (Wave 13's needsAlliance) before
         // this is offered
-        const blocked = sideQuestBlocker(q, completedSideQuests, allegiance, alliance);
+        const blocked = sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, alliance);
         const done = completedSideQuests.includes(q.id);
         const dest = q.kind === 'deliver' ? WORLD_DESTINATION_BY_ID[q.deliverTo ?? ''] : null;
         return (

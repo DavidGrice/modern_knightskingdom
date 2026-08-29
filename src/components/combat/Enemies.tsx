@@ -30,6 +30,8 @@ import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
 import { defenderState, DOWNED_RECOVER_MS } from '@/game/defenders';
 import { villagerCombatState } from '@/game/villagerCombat';
+import { companionCombatState } from '@/game/companion';
+import { COMPANION_ID } from '@/game/data/companion';
 import { villagerMobs } from '@/game/villagerMobs';
 import { peekCombatState, clearCombatState } from '@/ai/actions/combatState';
 import { reportAgentDamaged } from '@/ai/perception/Senses';
@@ -311,6 +313,30 @@ function Enemy({ data }: { data: EnemyData }) {
         }
       }
 
+      // Wave 25: Tam, the companion squire, is a real, always-postured
+      // combat target — a rung below a sworn defender but a real target
+      // BEFORE an incidental villager (placed between defTarget and
+      // villagerTarget below), matching the plan's own capability ordering.
+      // Unlike villagerTarget's stricter "only once already fighting" rule,
+      // this uses defTarget's own "always valid while not downed" one — Tam
+      // is combat-postured at all times (assist_leader's own `is_companion`
+      // gate has no courage/proximity check to wait on), not an incidental
+      // farmer who happened to pick a fight. Deliberately NOT gated on
+      // enemyAtHome (Tam follows the player everywhere,
+      // ai/companionSync.ts) — gated instead on this mob's own world
+      // matching Tam's own current region, the same per-instance isolation
+      // `data.world` already enforces for every other check in this file.
+      let companionTarget: { x: number; z: number } | null = null;
+      let companionD = Infinity;
+      if (data.kind !== 'storm') {
+        const tam = agentManager.get(COMPANION_ID);
+        const ccs = companionCombatState[COMPANION_ID];
+        if (tam && ccs && ccs.state !== 'downed' && (data.world ?? null) === (tam.region ?? null)) {
+          const dd = Math.hypot(tam.position.x - m.x, tam.position.z - m.z);
+          if (dd < 16) { companionD = dd; companionTarget = { x: tam.position.x, z: tam.position.z }; }
+        }
+      }
+
       // Wave 21: an ORDINARY villager who has already chosen (via the AI
       // reasoner's own `engage_threat_villager`) to fight becomes a valid
       // raider target too — one rung below a sworn defender, same shape as
@@ -371,6 +397,46 @@ function Enemy({ data }: { data: EnemyData }) {
           const nx = (defTarget.x - m.x) / defD;
           const nz = (defTarget.z - m.z) / defD;
           const sp = data.kind === 'skeleton' ? (defD > 8 ? speed * 0.7 : speed * 1.5) : speed;
+          m.x += nx * sp * dt;
+          m.z += nz * sp * dt;
+          m.yaw = Math.atan2(-nx, -nz);
+        }
+      } else if (companionTarget && companionD < d) {
+        // Wave 25: same shape as the defTarget branch above, one rung
+        // weaker — Tam gets fought back at exactly like a sworn defender
+        // does.
+        if (companionD < (data.ranged ? RANGED_RANGE : 1.7)) {
+          m.state = 'attack';
+          m.attackCd -= dt;
+          const ndx = companionTarget.x - m.x;
+          const ndz = companionTarget.z - m.z;
+          m.yaw = Math.atan2(-ndx, -ndz);
+          if (m.attackCd <= 0) {
+            m.attackCd = data.ranged ? RANGED_ATTACK_CD : ATTACK_CD[data.kind];
+            // Wave 20 parity: a ranged bandit needs a real sightline on Tam
+            // too, same as on a defender or a villager.
+            if (!data.ranged || hasLineOfSight(m.x, GROUND_LOS_Y, m.z, companionTarget.x, GROUND_LOS_Y, companionTarget.z, data.world ?? null)) {
+              const ccs = companionCombatState[COMPANION_ID];
+              if (ccs) {
+                ccs.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
+                // §6.3's damage-memory term (Senses.ts) — same AI-clock call
+                // every other damage path into this system already makes.
+                reportAgentDamaged(COMPANION_ID, agentManager.now);
+                if (ccs.hp <= 0 && ccs.state === 'ok') {
+                  ccs.state = 'downed';
+                  ccs.downedUntil = Date.now() + DOWNED_RECOVER_MS;
+                  clearCombatState(COMPANION_ID); // stop a now-stale swing/approach
+                  st.notify('Tam is knocked down defending you!');
+                }
+              }
+            }
+          }
+        } else {
+          m.state = 'chase';
+          m.attackCd = Math.max(0.4, m.attackCd - dt);
+          const nx = (companionTarget.x - m.x) / companionD;
+          const nz = (companionTarget.z - m.z) / companionD;
+          const sp = data.kind === 'skeleton' ? (companionD > 8 ? speed * 0.7 : speed * 1.5) : speed;
           m.x += nx * sp * dt;
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);

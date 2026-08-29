@@ -1,0 +1,37 @@
+{
+  "_doc": [
+    "Wave 25 — follow_leader's own geometry (src/ai/actions/followLeader.ts).",
+    "Real world metres, chosen against real reference points the same way",
+    "combat.json's own _doc already does.",
+    "",
+    "stopDistance 2.0 keeps Tam a companion's polite half-pace back rather",
+    "than jostling the player's own collision radius (PLAYER_RADIUS 0.45,",
+    "components/fps/PlayerController.tsx) — comfortably outside it, inside",
+    "conversational range.",
+    "",
+    "runDistance 6 is the point a WALKING companion would otherwise visibly",
+    "fall behind a moving player — past it he switches to a run to close the",
+    "gap, the same walk/run split every other MOVE_TO issuer in this codebase",
+    "already makes. Verification fix (post-ship): the speeds this threshold",
+    "feeds into are COMPANION_WALK_SPEED (4.4) / COMPANION_RUN_SPEED (8.5),",
+    "ai/core/Locomotion.ts's own companion-only cap — NOT the villager-tuned",
+    "WALK_SPEED (0.9) / RUN_SPEED (1.6) this comment originally (and",
+    "wrongly) compared against each other. Those two never had the player's",
+    "own real speed (PlayerController.tsx's 4 m/s walk / 7 m/s sprint) in the",
+    "comparison at all, which is exactly how a companion who can only ever",
+    "hit 1.6 m/s shipped behind a player whose slowest gait is 4.",
+    "",
+    "repathDistance 2.5 is engage_threat's own 1m re-aim margin (combat.json's",
+    "`engage` block has no named field for it — see engageThreat.ts's own",
+    "`Math.hypot(...) > 1` check), widened a little: the player moves far",
+    "more, and far more erratically (strafing, backing up, turning on a dime),",
+    "than a believed hostile's remembered position ever does, so a tighter",
+    "margin would re-issue an near-identical MOVE_TO (and re-stamp",
+    "Agent.intentSetAt) almost every think tick."
+  ],
+  "follow": {
+    "stopDistance": 2.0,
+    "runDistance": 6,
+    "repathDistance": 2.5
+  }
+}

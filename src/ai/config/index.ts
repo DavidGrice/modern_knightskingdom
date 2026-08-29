@@ -14,6 +14,7 @@ import anchorsJson from './anchors.json';
 import perceptionJson from './perception.json';
 import combatJson from './combat.json';
 import ambientJson from './ambient.json';
+import companionJson from './companion.json';
 import { POND } from '@/game/data/world';
 
 /** §3.2 — the seven drives. Order here is the order the overlay prints them.
@@ -217,11 +218,53 @@ export interface EngageVillagerConfig {
   capableTierMax: number;
 }
 
+/** Wave 25 verification fix — `engageCompanion` needs one field neither
+ *  `engage` nor `engageVillager` carries: a real distance-from-the-PLAYER
+ *  give-up. Both of those models fight where they already stand (a defender's
+ *  post, a villager's take_cover point); assist_leader is the first combat
+ *  Action that CHASES, and its only pre-existing exit condition
+ *  (`!isVisibleNow && now - lastSeenAt > loseTargetSec`) never fires against a
+ *  fleeing target crossing open ground, which is exactly the case that let
+ *  Tam be dragged indefinitely — verified live, chasing a fleeing bandit for
+ *  10+ seconds with the gap never closing and no sign of the chase ever being
+ *  abandoned. A distinct interface (rather than an optional field bolted onto
+ *  `EngageConfig`) for the same reason `EngageVillagerConfig` is its own type:
+ *  a field with no meaning on `engage`/`engageVillager` shouldn't appear to be
+ *  part of their shape. */
+export interface EngageCompanionConfig extends EngageConfig {
+  /** metres from the PLAYER (not from the target) — once Tam's own chase has
+   *  pulled him this far from the person he is meant to be companioning,
+   *  assist_leader gives up and returns SUCCESS regardless of whether the
+   *  target is still visible, handing control straight back to follow_leader
+   *  (interruptPriority 5 < 8, so it wins the very next reasoner tick with
+   *  nothing else contending). */
+  leashDistance: number;
+}
+
 export interface CombatConfig {
   cover: CoverConfig;
   alarm: AlarmConfig;
   engage: EngageConfig;
   engageVillager: EngageVillagerConfig;
+  /** Wave 25 — assist_leader's own rhythm. See `EngageCompanionConfig`'s own
+   *  comment for the one field it adds over the shared `EngageConfig` shape,
+   *  and combat.json's own `engageCompanion._doc` for why it carries none of
+   *  `engageVillager`'s extra roster-scaling gates. */
+  engageCompanion: EngageCompanionConfig;
+}
+
+/** Wave 25 — follow_leader's own geometry (combat.json's `_doc` convention,
+ *  applied to a dedicated file since this tunable belongs to the
+ *  `companion` category rather than `combat` — see companion.json's own
+ *  `_doc`). */
+export interface FollowConfig {
+  stopDistance: number;
+  runDistance: number;
+  repathDistance: number;
+}
+
+export interface CompanionConfig {
+  follow: FollowConfig;
 }
 
 /** Phase 8 (§10's build-order item 8, the "ambient" half) — `wander`'s own
@@ -300,6 +343,10 @@ export const COMBAT = combatJson as unknown as CombatConfig;
  *  two unrelated halves of one build-order item: nothing in `wander`'s geometry
  *  has any business changing when a tier threshold is retuned. */
 export const AMBIENT = ambientJson as unknown as AmbientConfig;
+
+/** Wave 25 — companion.json's tunables, same cast and reasoning as
+ *  `PERCEPTION`/`COMBAT`/`AMBIENT` above. */
+export const COMPANION = companionJson as unknown as CompanionConfig;
 
 const ANCHOR_RULES = anchorsJson as unknown as {
   nodes: Record<string, AnchorRule>;

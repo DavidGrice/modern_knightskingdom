@@ -27,6 +27,8 @@ import { fishingState, startFishing, tickFishing } from '@/game/fishing';
 import { tickBuildChallenge } from '@/game/buildChallenge';
 import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
 import { falconPos, FALCON_CALL_RANGE } from '@/game/falcon';
+import { agentManager } from '@/ai/core/AgentManager';
+import { COMPANION_ID } from '@/game/data/companion';
 import { atJoustPass } from '@/game/joust';
 import { detonate, fireCannon, quintainHit, ramCheck } from '@/game/siege';
 import { cartState, cartLivePos } from '@/game/carts';
@@ -56,7 +58,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'talk_companion';
   station?: string;
 }
 
@@ -603,6 +605,20 @@ export default function PlayerController() {
       }
       return { id: 'dismount', kind: 'dismount', label: 'Dismount', duration: 0, actionable: true };
     }
+    // Wave 25 · Tam, the companion squire, greets both at home and away —
+    // his own check placed here, in NEITHER the (home-only) block that
+    // precedes this function's real dispatch nor `st.destination`'s own
+    // block below, since each of those returns unconditionally for
+    // everything reachable inside it (a check placed inside either would
+    // silently work only half the time). Checked BEFORE the destination
+    // split, same placement rule this file already documents for the
+    // ridingState.active block just above.
+    if (st.companionRecruited) {
+      const c = agentManager.get(COMPANION_ID);
+      if (c && Math.hypot(c.position.x - pos.current.x, c.position.z - pos.current.z) < INTERACT_RANGE) {
+        return { id: COMPANION_ID, kind: 'talk_companion', duration: 0, actionable: true, label: 'Talk to Tam' };
+      }
+    }
     // away visiting a template world: residents (Phase 20 — the court, their
     // horses, Cedric's camp all live out here now) take priority when within
     // reach; anywhere else in the instance, E returns home exactly as before
@@ -1122,6 +1138,8 @@ export default function PlayerController() {
       st.notify('You mount the horse. Hold Shift to gallop!');
     } else if (t.kind === 'call_falcon') {
       st.tameFalcon();
+    } else if (t.kind === 'talk_companion') {
+      st.greetCompanion();
     } else if (t.kind === 'dungeon_relic') {
       // Wave 13 · direct mutation on the shared dungeonState leaf module,
       // same convention Enemies.tsx already uses for room.cleared/spawned —

@@ -13,6 +13,7 @@ import ResourceNodes from './ResourceNodes';
 import Grounds from './Grounds';
 import KeepAssembly from './KeepAssembly';
 import MountedHorse from './MountedHorse';
+import Companion from './Companion';
 import WorkshopBench from './WorkshopBench';
 import Buildings from './Buildings';
 import Npc from './Npc';
@@ -79,6 +80,10 @@ export default function GameWorld() {
       <Grounds />
       <KeepAssembly />
       <MountedHorse />
+      {/* Wave 25 · same unconditional, everywhere-the-player-is convention
+          as MountedHorse above — see Companion.tsx's own header for the
+          confirmed precedent. Renders nothing until st.companionRecruited. */}
+      <Companion />
       <WorkshopBench />
       <Buildings />
       {!destination && <Signpost />}
