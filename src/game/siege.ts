@@ -235,7 +235,12 @@ export function ramCheck(rammerId: string, x: number, z: number) {
     if (isDoorLike(b.type)) {
       if (st.gateOpen[b.id] ?? true) continue; // already open — nothing to ram
       st.toggleGate(b.id);
-      st.notify(b.type === 'door' ? 'The ram bursts the door off its hinges!' : 'The ram splinters the gate open!', true);
+      st.notify(
+        b.type === 'door' ? 'The ram bursts the door off its hinges!'
+          : b.type === 'window' ? 'The ram smashes the shutters open!'
+          : 'The ram splinters the gate open!',
+        true,
+      );
     } else {
       st.damageBuilding(b.id, 12, 'was rammed');
     }

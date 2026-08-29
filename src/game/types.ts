@@ -182,9 +182,19 @@ export function isBuilt(b: PlacedBuilding): boolean {
  *  barred lattice, not a plain hollow doorway) is mechanically the same thing
  *  at a smaller size, and shares `gateOpen` rather than growing a parallel
  *  `doorOpen` record — one predicate here means a future piece of this same
- *  shape reaches all of them by being added once. */
+ *  shape reaches all of them by being added once.
+ *
+ *  Wave 24 · that future piece arrived: `window` (buildables.ts, the
+ *  windows_doors 14/16_l4532xx open/closed shutter pair). A closed window is
+ *  now a solid obstacle box the same way a wall is — the shared
+ *  `forEachObstacleBox` (navgrid.ts) skips it exactly like an open door/gate
+ *  when it's open, so `hasLineOfSight` inherits the block-when-shut,
+ *  see-through-when-open rule for free, and so does every other consumer
+ *  listed above. Kept out of `isRampart` (walls.ts) on purpose by its own
+ *  declared height, not by anything here — a window furnishing doesn't need
+ *  to independently seal/breach the defense ring. */
 export function isDoorLike(type: string): boolean {
-  return type === 'gate' || type === 'door';
+  return type === 'gate' || type === 'door' || type === 'window';
 }
 
 /** true for a homestead building (world absent/null) — every homestead-only

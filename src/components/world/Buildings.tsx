@@ -263,6 +263,26 @@ function DoorFixture({ id }: { id: string }) {
   );
 }
 
+// Wave 24 · unlike GateFixture/DoorFixture above, this doesn't animate a
+// single mesh — it swaps between the two REAL meshes the mold pair already
+// is (14_l453201 closed / 16_l453202 open), which is simpler than a lift or
+// hinge lerp and shows the state directly: a sealed pane you can't see or
+// shoot through, or a hollow frame you can. `isDoorLike`/`gateOpen`
+// (types.ts) don't care what a piece looks like, only whether it's open —
+// same rule DoorFixture's own header already states, this is just a
+// different honest way to draw it.
+function WindowFixture({ id }: { id: string }) {
+  const open = useGameStore((s) => s.gateOpen[id] ?? true);
+  return (
+    <Suspense fallback={null}>
+      <PropModel
+        url={`/assets/props/windows_doors/${open ? '16_l453202' : '14_l453201'}.glb`}
+        height={0.84}
+      />
+    </Suspense>
+  );
+}
+
 function Bed() {
   return (
     <group>
@@ -430,6 +450,9 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
   }
   if (b.type === 'door') {
     return <group position={[px, y, pz]} rotation-y={yaw}><DoorFixture id={b.id} /></group>;
+  }
+  if (b.type === 'window') {
+    return <group position={[px, y, pz]} rotation-y={yaw}><WindowFixture id={b.id} /></group>;
   }
   if (b.type === 'warcart' || b.type === 'bladecart') {
     return <CartMesh b={b} def={def} yaw={yaw} originOffset={originOffset} />;
