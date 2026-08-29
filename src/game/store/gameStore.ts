@@ -34,7 +34,7 @@ import { attrsOf, tradeLevelOf, tradeXpOf, tripSpeedMult, SIDE_GOODS, type AttrI
 import { PLAYER_ATTRS, attrPointsEarned, attrPointsSpent, respecCost } from '../data/playerAttributes';
 import { bestStore, roomFor } from '../storage';
 import { COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult } from '../data/companionTraits';
-import { GUILD_BY_ID, guildEligible, SWITCH_TITHE } from '../data/guilds';
+import { GUILD_BY_ID, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE } from '../data/guilds';
 import { TALENT_BY_ID, talentBuyable } from '../data/skillTree';
 import { CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
@@ -77,6 +77,15 @@ const ZERO_STATS: LifetimeStats = {
   nodesHarvested: {}, buildingsByType: {}, killsByKind: {}, goldEarnedLifetime: 0,
   itemsCrafted: 0, dungeonsCleared: 0,
 };
+
+/** Wave 22 · true once the player carries guildId's OWN banner and has
+ *  climbed to that guild's top rank — the shared check every guild's
+ *  max-rank passive bump (below, combat.ts, fishing.ts) reads. */
+export function atGuildMaxRank(guild: string | null, guildRanks: Record<string, number>, guildId: string): boolean {
+  if (guild !== guildId) return false;
+  const def = GUILD_BY_ID[guildId];
+  return !!def && guildRankIndex(def, guildRanks[guildId] ?? 0) >= guildMaxRank(def);
+}
 
 /** seconds of active play for a wheat crop to mature */
 export const GROW_TIME = 200;
@@ -212,6 +221,22 @@ interface GameState {
   /** shift the axis and tell the player why it moved */
   shiftAllegiance: (delta: number, reason: string) => void;
   guild: string | null;          // Phase 21: primary guild id (data/guilds.ts); null = unaffiliated
+  /** Wave 22: standing accrued WITHIN the current (or a past) guild — guild
+   *  id -> accrued rank points, absent = 0. A parallel field to `reputation`
+   *  (per-NPC) and `allegiance` (the continuous house axis), deliberately
+   *  never merged with either — see data/guilds.ts's GuildDef.rankTitles
+   *  doc comment for the reasoning. Read through `guildRankIndex`. */
+  guildRanks: Record<string, number>;
+  /** Wave 22: an errand turn-in for a guild id adds here instead of to
+   *  `reputation` (see turnInSideQuest's branch); notifies + a small gold
+   *  cheer on a genuine rank-up, mirroring addReputation's own tier guard. */
+  addGuildRep: (guildId: string, amount: number) => void;
+  /** Wave 22: guild vendor purchase — re-checks real membership and looks up
+   *  the offer's own rank gate straight off data/guilds.ts (never trusting a
+   *  stale panel's own idea of what's unlocked, same defense-in-depth
+   *  convention acceptSideQuest documents), then delegates to buyOffer for
+   *  the actual gold math (Silver Tongue discount included for free). */
+  buyGuildOffer: (guildId: string, item: ItemId, qty: number, price: number) => void;
   skillTree: string[];           // Phase 21: purchased talent ids (data/skillTree.ts)
   attrSpent: Partial<Record<AttrId, number>>; // player attribute points invested (playerAttributes.ts)
   dyes: string[];                // Wave 9: palette rows opened with a brewed dye (data/dyes.ts)
@@ -947,6 +972,7 @@ function createGameStore() {
     falconTamed: false,
     betrayedCedric: false,
     guild: null,
+    guildRanks: {},
     skillTree: [],
     attrSpent: {},
     dyes: [],
@@ -1012,7 +1038,7 @@ function createGameStore() {
         notifications: [], prompt: null, actionProgress: null, dirty: true,
         timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
         gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, betrayedCedric: false, guild: null, skillTree: [], attrSpent: {}, dyes: [],
+        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
@@ -1079,6 +1105,7 @@ function createGameStore() {
         falconTamed: s.falconTamed ?? false,
         betrayedCedric: s.betrayedCedric ?? false,
         guild: s.guild ?? null,
+        guildRanks: s.guildRanks ?? {},
         skillTree: s.skillTree ?? [],
         attrSpent: s.attrSpent ?? {},
         dyes: s.dyes ?? [],
@@ -1143,6 +1170,7 @@ function createGameStore() {
         falconTamed: s.falconTamed,
         betrayedCedric: s.betrayedCedric,
         guild: s.guild,
+        guildRanks: s.guildRanks,
         skillTree: s.skillTree,
         attrSpent: s.attrSpent,
         dyes: s.dyes,
@@ -1995,6 +2023,49 @@ function createGameStore() {
       st.notify(`🏛 You now carry the banner of the ${def.name}!`, true);
     },
 
+    // Wave 22 · rank within a guild. Mirrors addReputation's own shape
+    // exactly (tier lookup, "only a step UP is a cheer" guard, a small gold
+    // reward) but writes the parallel `guildRanks` record instead — see that
+    // field's own doc comment for why this is not just addReputation keyed
+    // by a guild id.
+    addGuildRep: (guildId, amount) => {
+      const st = get();
+      const guild = GUILD_BY_ID[guildId];
+      if (!guild) return;
+      const before = st.guildRanks[guildId] ?? 0;
+      const after = before + amount;
+      set({ guildRanks: { ...st.guildRanks, [guildId]: after }, dirty: true });
+      const tierBefore = guildRankIndex(guild, before);
+      const tierAfter = guildRankIndex(guild, after);
+      if (tierAfter > tierBefore) {
+        audio.play('villager', 0.7);
+        st.notify(`${guild.name} now sees you as: ${guild.rankTitles[tierAfter].title}!`, true);
+        st.addItems({ gold: 10 }, 'grant');
+      }
+    },
+
+    // Wave 22 · guild vendor purchase. Re-checks membership AND looks the
+    // offer's own rank gate up fresh off data/guilds.ts rather than trusting
+    // whatever a (possibly stale) panel passed in, then hands off to the
+    // existing buyOffer for the actual gold math — one source of truth for
+    // that, Silver Tongue discount included for free.
+    buyGuildOffer: (guildId, item, qty, price) => {
+      const st = get();
+      const guild = GUILD_BY_ID[guildId];
+      if (!guild || st.guild !== guildId) {
+        st.notify('Only members of this guild may buy here.');
+        return;
+      }
+      const offer = guild.vendor.find((o) => o.item === item && o.qty === qty && o.price === price);
+      if (!offer) return;
+      const rank = guildRankIndex(guild, st.guildRanks[guildId] ?? 0);
+      if ((offer.minRank ?? 0) > rank) {
+        st.notify('Not trusted with that yet — rise in rank first.');
+        return;
+      }
+      st.buyOffer(item, qty, price);
+    },
+
     // Phase 19 alliance branch: a one-way pledge — no CASUAL re-swearing
     // (Wave 13 adds exactly one deliberate exception: betrayCedric below).
     // The raid system reads this to decide WHO attacks the homestead:
@@ -2052,6 +2123,15 @@ function createGameStore() {
       const st = get();
       const def = sideQuestsOf(npcId).find((q) => q.id === questId);
       if (!def || st.sideQuest) return;
+      // Wave 22 · a guild's own errand pool is for members only — re-checked
+      // here (not just threaded through sideQuestBlocker's signature, which
+      // every other caller besides GuildPanel would then have to pass a
+      // guild id into for no reason) so a stale panel can never hand one out
+      // to someone who switched banners since it was drawn.
+      if (GUILD_BY_ID[npcId] && st.guild !== npcId) {
+        st.notify('Only members of this guild are given its work.');
+        return;
+      }
       // precursor chains and allegiance/alliance gates are enforced HERE as
       // well as in the UI, so a stale panel can never hand out work you have
       // not earned
@@ -2095,7 +2175,9 @@ function createGameStore() {
       st.notify(def.kind === 'deliver'
         ? 'The load is handed over — word of it will get back to ' + sideQuestGiverName(sq.npcId) + '.'
         : `${sideQuestGiverName(sq.npcId)} thanks you for your service!`, true);
-      st.addReputation(sq.npcId, 15);
+      // Wave 22 · a guild errand builds rank within the guild, never the
+      // per-NPC reputation record — same +15 constant either way
+      if (GUILD_BY_ID[sq.npcId]) st.addGuildRep(sq.npcId, 15); else st.addReputation(sq.npcId, 15);
       // remember it, so chains can require it and it never re-offers as new
       if (!st.completedSideQuests.includes(def.id)) {
         set({ completedSideQuests: [...st.completedSideQuests, def.id] });
@@ -3329,8 +3411,11 @@ function createGameStore() {
           if (node.kind === 'tree') {
             xpSkill = 'woodcutting';
             // Woodsmen's Lodge passive + Deep Rings talent: each an
-            // independent extra-log chance; Forest Bounty doubles flowers
-            const extraChance = (st.guild === 'woodsmen' ? 0.2 : 0) + (st.skillTree.includes('woodcutting2') ? 0.15 : 0)
+            // independent extra-log chance; Forest Bounty doubles flowers.
+            // Wave 22: Warden of the Timberline (max guild rank) sharpens
+            // the base passive itself, 0.20 -> 0.30.
+            const extraChance = (st.guild === 'woodsmen' ? (atGuildMaxRank(st.guild, st.guildRanks, 'woodsmen') ? 0.3 : 0.2) : 0)
+              + (st.skillTree.includes('woodcutting2') ? 0.15 : 0)
               + (st.attrSpent.diligence ?? 0) * 0.04; // Diligence attribute
             totals.wood = (totals.wood ?? 0) + (Math.random() < extraChance ? 2 : 1);
             const flowerChance = st.skillTree.includes('woodcutting3') ? 0.36 : 0.18;
@@ -3347,8 +3432,11 @@ function createGameStore() {
               xpTotal += 16;
             } else {
               const mining = st.unlocks.includes('mining');
-              // Miners' Brotherhood passive + Ore Eye talent stack additively
-              const oreChance = (st.guild === 'miners' ? 0.65 : 0.4) + (st.skillTree.includes('mining2') ? 0.15 : 0);
+              // Miners' Brotherhood passive + Ore Eye talent stack
+              // additively. Wave 22: Warden of the Old Ruins (max guild
+              // rank) sharpens the base passive itself, 0.65 -> 0.75.
+              const oreChance = (st.guild === 'miners' ? (atGuildMaxRank(st.guild, st.guildRanks, 'miners') ? 0.75 : 0.65) : 0.4)
+                + (st.skillTree.includes('mining2') ? 0.15 : 0);
               totals.stone = (totals.stone ?? 0) + 1;
               if (mining && Math.random() < oreChance) totals.iron_ore = (totals.iron_ore ?? 0) + 1;
               xpTotal += 12;
@@ -3885,8 +3973,10 @@ function createGameStore() {
       const def = BUILDABLE_BY_ID[b.type];
       if (!def) return;
       // Builders' Guild passive + Sure Hammer/Raised Right talents — every
-      // swing bonus stacks additively (player's and builder villagers' alike)
-      const swingBonus = (st.guild === 'builders' ? 0.3 : 0)
+      // swing bonus stacks additively (player's and builder villagers' alike).
+      // Wave 22: Warden of the Siege Works (max guild rank) sharpens the
+      // base passive itself, 0.30 -> 0.45.
+      const swingBonus = (st.guild === 'builders' ? (atGuildMaxRank(st.guild, st.guildRanks, 'builders') ? 0.45 : 0.3) : 0)
         + (st.skillTree.includes('building2') ? 0.15 : 0)
         + (st.skillTree.includes('building3') ? 0.15 : 0);
       const swing = amount * (1 + swingBonus);

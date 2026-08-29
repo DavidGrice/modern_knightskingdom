@@ -5,7 +5,7 @@
 // Mutable module (like combatState/playerState) so PlayerController's frame
 // loop can drive it without store churn; HUD polls it for the bite meter.
 import { audio } from '@/lib/audio';
-import { useGameStore } from './store/gameStore';
+import { atGuildMaxRank, useGameStore } from './store/gameStore';
 
 const BITE_WINDOW = 900; // base ms to react once a fish bites
 
@@ -29,8 +29,11 @@ export function startFishing(nodeId: string, rainBoosted: boolean) {
   fishingState.phase = 'waiting';
   const base = rainBoosted ? 1200 : 2500;
   const spread = rainBoosted ? 1800 : 3500;
-  // Anglers' Circle passive (Phase 21): Read the Water — bites come sooner
-  const guildCut = useGameStore.getState().guild === 'anglers' ? 0.7 : 1;
+  // Anglers' Circle passive (Phase 21): Read the Water — bites come sooner.
+  // Wave 22: Master of the Circle (max guild rank) sharpens the base
+  // passive itself, ×0.7 -> ×0.6.
+  const gs = useGameStore.getState();
+  const guildCut = gs.guild === 'anglers' ? (atGuildMaxRank(gs.guild, gs.guildRanks, 'anglers') ? 0.6 : 0.7) : 1;
   fishingState.nextEventAt = performance.now() + (base + Math.random() * spread) * guildCut;
 }
 

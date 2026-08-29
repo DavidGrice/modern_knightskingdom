@@ -328,6 +328,11 @@ export interface SaveGame {
   alliance?: Alliance | null;
   /** Phase 21 guilds: primary guild id (data/guilds.ts); null/absent = unaffiliated */
   guild?: string | null;
+  /** Wave 22: standing accrued within a guild — guild id -> accrued rank
+   *  points, absent = 0. Parallel to `reputation` (per-NPC) and `allegiance`
+   *  (the house axis); deliberately never merged with either — see
+   *  data/guilds.ts's GuildDef.rankTitles doc comment. */
+  guildRanks?: Record<string, number>;
   /** Phase 21 talent tree: purchased talent ids (data/skillTree.ts) */
   skillTree?: string[];
   /** player attribute points invested (data/playerAttributes.ts) */
