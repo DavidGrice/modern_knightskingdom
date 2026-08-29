@@ -717,7 +717,11 @@ function GuildPanel() {
   const guildRanks = useGameStore((s) => s.guildRanks);
   const inventory = useGameStore((s) => s.inventory);
   const buyGuildOffer = useGameStore((s) => s.buyGuildOffer);
+  // Wave 23 · mirrors the exact haggle terms buyOffer() itself applies (see
+  // its own comment) — the vendor's ticket price must agree with what a
+  // purchase will really deduct, same reasoning as ShopPanel's own mirror.
   const silverTongue = useGameStore((s) => s.perks.includes('silver_tongue'));
+  const wit = useGameStore((s) => s.attrSpent.wit ?? 0);
   const g = destination ? GUILD_BY_WORLD[destination] : null;
   if (!g) return null;
   const eligible = guildEligible(g, stats);
@@ -789,7 +793,7 @@ function GuildPanel() {
 
           <div className="creator-section" style={{ marginTop: 16 }}>Guild Store</div>
           {g.vendor.map((o) => {
-            const cost = silverTongue ? Math.round(o.price * 0.85) : o.price;
+            const cost = Math.max(1, Math.round(o.price * (1 - wit * 0.04 - (silverTongue ? 0.15 : 0))));
             const locked = (o.minRank ?? 0) > rankIdx;
             return (
               <div className="recipe-row" key={o.item}>

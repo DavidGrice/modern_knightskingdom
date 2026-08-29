@@ -25,6 +25,7 @@ import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
 import BuildChallengePanel from './BuildChallengePanel';
 import FortStatus from './FortStatus';
+import OrderStatus from './OrderStatus';
 import ArenaHud from './ArenaHud';
 import OrderRadial from './OrderRadial';
 import KkIcon from '../ui/KkIcon';
@@ -356,6 +357,7 @@ export default function HUD() {
             you do WHILE building, and watching the chip appear is the clearest
             possible confirmation that the last gap is plugged */}
         <FortStatus />
+        <OrderStatus />
         <FpsReadout />
       </div>
 

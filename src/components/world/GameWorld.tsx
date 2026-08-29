@@ -19,6 +19,7 @@ import Npc from './Npc';
 import Merchant from './Merchant';
 import Villagers from './Villagers';
 import Defenders from './Defenders';
+import DepositFloaties from './DepositFloaties';
 import StarterVillage from './StarterVillage';
 import Road from './Road';
 import Emplacements from './Emplacements';
@@ -92,6 +93,7 @@ export default function GameWorld() {
         {!destination && <Merchant />}
         <Villagers />
         <Defenders />
+        <DepositFloaties />
         {!destination && <Road />}
         {/* real simulation, not decoration — its useFrame drives actual
             raid-defense fire/detonation via siege.ts and renders nothing

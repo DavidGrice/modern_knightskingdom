@@ -7381,3 +7381,56 @@ against a world where an armed combatant can't abuse ranged-through-walls.
   since the villager's position is already frozen and no position-dependent action can complete
   while downed, and is honestly documented as a known, harmless loose end rather than silently
   dropped.
+
+## Wave 23: defender command UX — per-defender orders, a HUD order chip, deposit floaty text, Wit-priced trading — SHIPPED 2026-08-28
+
+Four independently-small follow-ups from Phase 24, all shipped together since they touch related
+(but non-overlapping) parts of the defender/HUD/trading surface.
+
+- [COMPLETE] ✅ **Per-defender standing orders.** Until now `giveDefenderOrder()`'s fleet-wide radial
+  call (hold T) was the ONLY way to direct defenders — one shared order every sworn defender read.
+  The Roster panel (N) now gives each defender their own "Standing Order" row (the same
+  Loadout/Mount/Station/Shift button-row convention already used there), which — once set — wins for
+  that defender over the fleet order until cleared by picking whatever the fleet is currently
+  standing (no separate "clear" control needed). The radial itself is untouched and stays the fast,
+  hands-free fleet-wide call; a horn call deliberately does NOT stomp an individual's override, so an
+  archer you've dedicated to Scout stays scouting through a new fleet order, matching how
+  Loadout/Station/Shift already survive independent of it. **Verified live with a real behavioral
+  A/B, not just a flag check**: gave one defender an individual "Attack!" order via the real Roster
+  UI and confirmed only that defender (not a second, unmodified one) closed distance on a far enemy
+  outside normal engagement range, then continued through to a real kill (passing Wave 20's
+  line-of-sight gate correctly) — the second defender never moved, still just answering the
+  unmodified fleet order.
+- [COMPLETE] ✅ **HUD order status chip**, closing the other half of the same gap — previously the
+  only feedback on a given order was a one-shot toast, gone the moment it faded, with zero persistent
+  on-screen reminder. A small always-on chip (mirroring `FortStatus`'s exact shape/polling
+  convention) now shows the fleet's standing order plus a live count of defenders on their own
+  individual orders, hidden away from the homestead or with no defenders sworn. Verified live: text
+  and hover detail updated correctly on both an individual override and a fleet-wide order change,
+  with the override correctly surviving the fleet change.
+- [COMPLETE] ✅ **Deposit floaty text** — a brief "+N item" rise confirmation when a hauling villager
+  deposits goods, the first floaty-text mechanism of any kind in this codebase (confirmed none
+  existed before). Reuses the existing `Billboard`+`Text` in-world label primitive (`Grounds.tsx`)
+  rather than a new projection system; amount-accurate to what storage actually accepted, not the
+  requested amount. Verified live by reading the real number directly off the mounted THREE.js scene
+  graph during an actual AI-driven haul cycle, including a run where a real Might-based trip-bonus
+  roll doubled the load — the floaty showed the true doubled number, not a guess.
+- [COMPLETE] ✅ **Wit-priced trading — a real gap found, not just a stale ROADMAP label.** The
+  original follow-up note turned out half-stale: the player's Wit attribute already gave a sell-side
+  discount (shipped separately, never cross-referenced back to this note), but had **no buy-side
+  effect at all** — `buyOffer()` only ever applied Silver Tongue's perk discount. Extended Wit's
+  existing 4%-per-point haggle to the buy side too (the same mirror-image treatment Silver Tongue's
+  own ±15% already gets), stacking with Silver Tongue, clamped to a 1-gold floor so a maxed haggler
+  is never handed goods for free — applied to both the Merchant's `ShopPanel` and Wave 22's Guild
+  Store (`buyGuildOffer` delegates to the same `buyOffer`, so one fix covers both). **A second,
+  related display-only bug found and fixed while touching this code**: `ShopPanel`'s sell-side price
+  display had never included Wit's term at all (only ever mirrored Silver Tongue), so a player with
+  Wit points was shown a lower sell price than `sellItem()` actually paid — fixed for consistency
+  with the buy-side display now also being correct. **Verified live with exact-match numeric
+  evidence**: tested Wit values of 0/5/10 through real Buy/Sell clicks — buy cost dropped
+  7→6→4 gold and sell earnings rose 30→36→42 gold, matching `Math.round(price × (1 ± wit×0.04))`
+  exactly at every step, zero rounding slack.
+- **Regression-checked against Waves 20/21**: a defender with no individual override still correctly
+  answers only the fleet's default order and engages normally (line-of-sight gate unaffected,
+  untouched by this wave's diff). `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.
