@@ -263,6 +263,35 @@ const CRAFTED: Buildable[] = [
     requiresUnlock: 'building2',
   },
   {
+    // Wave 24 · ROADMAP.md deliberately deferred a window/shutter
+    // interactable "pending a mechanical reason to open one" — Wave 20's
+    // hasLineOfSight (navgrid.ts) is that reason. The windows_doors folder
+    // held a matched OPEN/CLOSED pair the whole time (14_l453201 "closed" /
+    // 16_l453202 "open" — identical declared size, identical "Window/Door
+    // 2×3" catalog name, sitting as two separate decorative bricks —
+    // gen_14_l453201/gen_16_l453202 in bricks.generated.json — that were
+    // each walkable through and did nothing). Promoted the exact way `door`
+    // above was: same predicate (isDoorLike, types.ts), same shared
+    // `gateOpen` record and `toggleGate` action, so a shut window blocks a
+    // ranged shot through hasLineOfSight/forEachObstacleBox exactly the way
+    // a wall does, and an open one lets a shot (and a body) straight
+    // through — Buildings.tsx's WindowFixture swaps between the two real
+    // meshes rather than animating one, which shows that state directly.
+    //
+    // Size held exactly at the mold's own real bbox (bricks.generated.json's
+    // gen_14/16 entries), not a rounded number — PropModel scales uniformly
+    // to declared height, so the three axes have to keep the real
+    // proportions or the collision box stops matching what's drawn. Declared
+    // height (0.84) is deliberately left under isRampart's 1.2m
+    // RAMPART_MIN_HEIGHT (walls.ts): a window furnishing shouldn't
+    // independently seal or breach your defense ring the way a real
+    // door/gate does, only affect sightlines and passage.
+    id: 'window', name: 'Window Shutters', thumb: `${P}/windows_doors/14_l453201.png`, model: `${P}/windows_doors/14_l453201.glb`,
+    category: 'walls', size: [0.77, 0.84, 1.05], snap: 1, stackable: true,
+    cost: { plank: 3 }, buildXp: 10,
+    requiresUnlock: 'building2',
+  },
+  {
     // J51 · this is the FOUNDATION, not the castle. Placing it marks out a
     // 16m courtyard with nine named sockets; the corners, wall runs and
     // bailey are then chosen and raised one at a time (game/data/keep.ts),

@@ -2304,11 +2304,18 @@ function createGameStore() {
       // they share the reference-bump above for free — what differs is only
       // what it sounds and reads like. A door has a real `door_open` sample in
       // the bank that nothing was using; a portcullis grinds.
-      const isDoor = st.buildings.find((b) => b.id === buildingId)?.type === 'door';
-      if (isDoor) audio.play('door_open', 0.75);
+      // Wave 24 · a window shutter is lighter again than either — reuses the
+      // same `door_open` sample rather than a new asset, the same honest
+      // reuse the door itself already made.
+      const type = st.buildings.find((b) => b.id === buildingId)?.type;
+      const isDoor = type === 'door';
+      const isWindow = type === 'window';
+      if (isDoor || isWindow) audio.play('door_open', 0.75);
       else audio.play(wasOpen ? 'portcullis' : 'drawbridge', 0.8);
       st.notify(
-        isDoor
+        isWindow
+          ? (wasOpen ? 'You pull the shutters closed.' : 'The shutters swing open.')
+          : isDoor
           ? (wasOpen ? 'You pull the door to.' : 'The door swings open.')
           : (wasOpen ? 'The gate grinds shut.' : 'The gate creaks open.'),
       );

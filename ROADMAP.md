@@ -1080,10 +1080,10 @@ walk from aggro) steadily closed on (0, 0) via real pathing, not a straight tele
   inside it with all four shut; raising just one door dropped the buff immediately (full 2.0 HP again),
   and re-shutting it resealed the ring (85 m² again). Deleting a wall segment outright correctly broke
   the seal too (longest run 12 → 11). Windows were deliberately left out of this pass — see below.
-- [TODO] Windows as a separate interactable (shutters/arrow slits) — the door covers the "a doorway is
-  a thing that opens" half of the original line; a window that opens wants a mechanical reason to
-  (shooting through it, light, ventilation for a future warmth system) rather than a toggle for its
-  own sake, and that is a design call, not a build task.
+- [COMPLETE] ✅ Windows as a separate interactable (shutters) — SHIPPED 2026-08-29 (Wave 24). Wave 20's
+  `hasLineOfSight()` finally gave the mechanical reason this TODO was waiting on: a closed shutter now
+  blocks a ranged shot exactly like a wall, an open one doesn't. See the Wave 24 section near the end
+  of this file for the full writeup.
 - [COMPLETE] ✅ **Building-conferred villager attribute bonuses (RTS-style)** (Wave 9 pass A): the new
   **Storehouse** (`data/buildables.ts`, 10 plank + 6 stone, `building2` gate, the same real crate mold the
   Stockpile uses at a markedly larger size) is the first piece in the game that buffs villagers just by
@@ -7434,3 +7434,87 @@ Four independently-small follow-ups from Phase 24, all shipped together since th
   answers only the fleet's default order and engages normally (line-of-sight gate unaffected,
   untouched by this wave's diff). `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 24: generalised interiors to four more buildings, and windows as a real LOS-blocking interactable — SHIPPED 2026-08-29
+
+Two items, sequenced together because the second builds on Wave 20's `hasLineOfSight()`.
+
+- [COMPLETE] ✅ **Four more generalised interiors** (`data/interiors.ts`'s `INTERIORS` table, launched
+  Wave "generalised interiors" 2026-07-30 with just `keep`/`stable`). Re-verified live first: the
+  system already places zero structural restriction on which buildable TYPE can have one — one
+  `INTERIORS` entry plus one dressing branch in `BuildingInteriorRoom.tsx` is genuinely the whole
+  cost, confirmed by tracing `enterInterior`/`exitInterior` (gameStore.ts), the interact registration
+  (PlayerController.tsx), and the movement clamp — none of them gate on type. **The plan's own two
+  suggested candidates (forge, market stall) turned out unsafe on inspection, not just unideal**: the
+  forge's crafting-station `consider()` sits right after the interior-enter block in
+  PlayerController's per-building if/continue chain, so giving it an `INTERIORS` entry would make
+  "Enter the Forge" permanently dead-code the `continue` before "Use the Forge" is ever reached — not
+  a scoring tie, a silently broken crafting station. The market stall's own trade prompt is a
+  *separate* `consider()` call that runs after the same loop, so both register, but `consider()`'s
+  tie-break is a strict `score > best.score` — identical scores for the same building tile mean
+  whichever registers first (the interior branch, being inside the earlier loop) permanently wins,
+  permanently shadowing "Trade at the Market Stall." Neither is a hypothetical; both were traced
+  through the real code. Picked four real, unlocked buildables instead, each verified by grep across
+  PlayerController/gameStore/Enemies/Defenders/Emplacements to have **zero** existing interact of any
+  kind, so none of them contest a consider() slot with anything: **Storehouse** (a walk-in stores room
+  dressed with the same real crate/barrel molds its own exterior already uses), **Jail Cell**
+  (`oc6094-2`, deliberately the smallest/barest of the four — a cramped cell with the barred-lattice
+  mold from the Portcullis mounted as a wall accent and straw bedding as a plain procedural box),
+  **Watch Tower** (`tower` — its only prior tie-in was the defender-roster "manned tower" HUD
+  assignment, not a world E-prompt; ground-floor guard room dressed with the real Weapons Rack prefab
+  and a reused `Torch`), and **Jewel Tower** (`oc6098b3`, completely inert before this — a small
+  treasure vault reusing the Keep's own Chest pattern plus the same gold-toned goblet mold the Keep's
+  banquet table already dresses with). Every one uses the exact existing mechanism byte-for-byte:
+  sealed pocket room, teleport in/out (no walk-through door), one door prompt, `pocketFor`'s
+  deterministic hash-slot placement. Tavern/inn was checked and does not exist as a buildable at all;
+  Guild Hall was checked and is fixed open-air per-destination dressing with its own `guild_hall`
+  interact kind, not a `PlacedBuilding` — correctly not eligible by construction, not forced in.
+- [COMPLETE] ✅ **Windows as a real LOS-blocking interactable.** ROADMAP's own note above deliberately
+  deferred this "pending a mechanical reason to open one" — Wave 20's `hasLineOfSight()` is that
+  reason. The `windows_doors` catalog turned out to already hold the exact asset needed and nobody
+  had used it: `14_l453201`/`16_l453202` are a matched pair (identical declared size, identical
+  "Window/Door 2×3" catalog name) sitting as two separate decorative bricks that were each walkable
+  through and did nothing — one shows a closed/glazed pane, the other the same frame fully hollow.
+  Promoted into a new `window` buildable the exact way `door` was promoted from its own mold: added
+  `type === 'window'` to the one `isDoorLike()` predicate (`game/types.ts`) and touched nothing else
+  in the mechanism — every consumer of that predicate inherited correctly for free, because they were
+  all already written against the predicate rather than a type list. That means a closed window is a
+  solid obstacle box in `forEachObstacleBox` (navgrid.ts), the exact function both the nav grid AND
+  `hasLineOfSight`'s `losBoxes()` read from — so a closed shutter blocks a ranged shot exactly like a
+  wall, and an open one lets it through, with **zero changes needed in navgrid.ts itself**. Player and
+  raider collision, `RaiderRam`'s targeting, and `siege.ts`'s "a ram bursts a closed one open" all
+  inherited the same way — verified each one live in the source, not assumed. `Buildings.tsx`'s new
+  `WindowFixture` swaps between the two REAL meshes (closed/open) rather than animating one, simpler
+  than `DoorFixture`'s lift-lerp and it shows the mechanic to the player directly: a sealed pane you
+  can't see or shoot through, or a hollow frame you can. Declared height (0.84m, the mold's own real
+  bbox) is deliberately under `isRampart`'s 1.2m `RAMPART_MIN_HEIGHT` (walls.ts) — a small window
+  furnishing doesn't independently seal or breach the "Sound Walls" fort ring the way a real door/gate
+  does, only affects sightlines and passage; this is a real, checked consequence of the height picked,
+  not a guess. **Deliberately not built**: a window-specific "firing position" bonus. `onBattlement()`
+  (combat.ts) is a pure elevation check already granting +25% ranged damage to any elevated shot
+  regardless of building identity — firing through an open window from an elevated spot (e.g. the new
+  Watch Tower interior above, or a wall walk) already gets that bonus with zero new code, so a second
+  parallel mechanic would only duplicate it. The open/close LOS toggle alone, wired through the
+  existing `isDoorLike`/`gateOpen`/`hasLineOfSight` chain, is the complete and correctly-scoped answer.
+- **Regression-checked against Waves 8/20**: the door and gate's own open/close behavior, sounds, and
+  fort-seal participation are byte-for-byte unaffected by adding a third `isDoorLike` member — every
+  branch that customizes by type (`toggleGate`'s sound/notify text, the interact noun/duration, the ram
+  message) added a `window` case alongside the existing `door`/`gate` ones rather than changing them.
+- [COMPLETE] ✅ **A real reachability bug in 2 of the 4 new interiors, found live and fixed, not
+  shipped broken.** The first cut of each `enterRange` (`data/interiors.ts`) was sized against the
+  interior room's own `halfX`/`halfZ` — but `PlayerController.tsx`'s door-prompt check compares
+  straight-line distance to the *building's* centre against `enterRange`, while real player movement
+  is stopped short of that centre by `collisionBoxesFor()`'s actual collision box, not the room size.
+  Two of the four (`oc6094-2` Jail Cell, `oc6098b3` Jewel Tower) have no entry in the generated
+  `collision.json` at all and so fall back to their FULL declared bounding box; `tower`'s real
+  voxelised shape is a hollow ring flush with that same bounding box at ground level. Once the
+  player's own collision radius (0.45) is added on top, the real stop distance on one or both axes
+  exceeded the original `enterRange` for Storehouse, Jail Cell, Watch Tower, and Jewel Tower — Jail
+  Cell and Watch Tower were **completely unreachable from any walk-up angle** (the prompt could never
+  appear), Storehouse and Jewel Tower were reachable from only 2 of 4 approach directions. Caught by
+  a live 4-direction cardinal probe in verify, not by inspection — root-caused to the size-vs-collision
+  mismatch and fixed by re-deriving each `enterRange` from the real collision half-extent (both axes,
+  covering either placement rotation) plus the player radius plus a real margin, then re-verified from
+  all 4 directions for all 4 buildings, confirming the door prompt now appears everywhere it should
+  while the existing Stable interior (untouched) continued to work exactly as before.
+  `npx tsc --noEmit` / `npm run build`: both clean, verified independently.

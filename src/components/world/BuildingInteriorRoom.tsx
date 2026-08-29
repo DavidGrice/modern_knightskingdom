@@ -163,6 +163,116 @@ function StableDressing({ def }: { def: InteriorDef }) {
   );
 }
 
+// Wave 24 · four more generalised interiors, following StableDressing's own
+// precedent immediately above: no bespoke mold exists for any of these
+// rooms, so each reuses real props already extracted for other purposes
+// rather than inventing new geometry, and stays a plain procedural shape
+// wherever nothing real fits. See data/interiors.ts's own Wave 24 comment
+// for why these four (and not the plan's original forge/market-stall picks).
+
+// Storehouse: the same real crate (l301500) and barrel (l248900) molds its
+// own exterior and the Stockpile already stand in for storage — here just
+// walked in among, dressing the room as what it actually is.
+function StorehouseDressing({ def }: { def: InteriorDef }) {
+  const { halfX, halfZ } = def;
+  return (
+    <>
+      <Suspense fallback={null}>
+        <group position={[-halfX + 0.9, 0, -halfZ + 0.9]}>
+          <PropModel url="/assets/props/scenery/l301500.glb" height={1.1} />
+        </group>
+        <group position={[halfX - 0.8, 0, -halfZ + 0.7]}>
+          <PropModel url="/assets/props/scenery/l248900.glb" height={0.9} />
+        </group>
+        <group position={[halfX - 0.8, 0, halfZ - 0.7]} rotation-y={0.6}>
+          <PropModel url="/assets/props/scenery/l248900.glb" height={0.9} />
+        </group>
+        <group position={[-halfX + 0.9, 0, halfZ - 1.0]} rotation-y={1.1}>
+          <PropModel url="/assets/props/scenery/l301500.glb" height={0.9} />
+        </group>
+      </Suspense>
+      <ambientLight intensity={0.4} color="#fff2d8" />
+    </>
+  );
+}
+
+// Jail Cell: deliberately the barest, smallest room of the four — a cell
+// should feel cramped. The barred lattice mold (the same mesh the `door`
+// buildable/Portcullis promotes, windows_doors/12_l407100) mounted flush
+// against the back wall as a barred accent; straw bedding is a plain
+// procedural box, the same "no mold exists, keep it simple" rule
+// StableDressing's own hay pile already follows.
+function JailCellDressing({ def }: { def: InteriorDef }) {
+  const { halfX, halfZ } = def;
+  return (
+    <>
+      <Suspense fallback={null}>
+        <group position={[0, 0, -halfZ + 0.05]}>
+          <PropModel url="/assets/props/windows_doors/12_l407100.glb" height={2.2} />
+        </group>
+      </Suspense>
+      <mesh position={[halfX - 0.7, 0.12, halfZ - 0.8]} castShadow receiveShadow>
+        <boxGeometry args={[1.2, 0.24, 0.8]} />
+        <meshStandardMaterial color="#c9a544" roughness={1} />
+      </mesh>
+      <ambientLight intensity={0.32} color="#cfc7b0" />
+    </>
+  );
+}
+
+// Watch Tower: a ground-floor guard room, dressed with the real Weapons
+// Rack prefab (oc6094-1, already independently placeable) plus a wall
+// torch — reusing Torch straight from this file's own import rather than a
+// second copy of it, exactly the way KeepDressing above already does.
+function TowerDressing({ def }: { def: InteriorDef }) {
+  const { halfX, halfZ } = def;
+  return (
+    <>
+      <Suspense fallback={null}>
+        <group position={[-halfX + 0.6, 0, halfZ - 0.5]}>
+          <PropModel url="/assets/props/buildings/oc6094-1.glb" height={2.0} />
+        </group>
+      </Suspense>
+      <group position={[halfX - 0.4, 0, -halfZ + 0.4]}><Torch /></group>
+      <ambientLight intensity={0.38} color="#ffe2b0" />
+    </>
+  );
+}
+
+// Jewel Tower: a small treasure vault — the same Chest pattern the Keep's
+// great hall already uses (RealPropPart id="chest"), plus the same
+// gold-toned goblet ornament the Keep's banquet table already dresses with
+// (castle_accessories/02_l626900), scattered like spilled treasure, and a
+// warm light echoing KeepDressing's own.
+function JewelTowerDressing({ def }: { def: InteriorDef }) {
+  const { halfX, halfZ } = def;
+  return (
+    <>
+      <group position={[0, 0, halfZ - 0.9]}>
+        <Suspense
+          fallback={
+            <mesh position-y={0.25} castShadow>
+              <boxGeometry args={[0.6, 0.5, 0.4]} />
+              <meshStandardMaterial color="#6b4526" roughness={0.9} />
+            </mesh>
+          }
+        >
+          <RealPropPart id="chest" height={0.55} />
+        </Suspense>
+      </group>
+      <Suspense fallback={null}>
+        <group position={[-halfX + 0.6, 0, halfZ - 1.3]}>
+          <PropModel url="/assets/props/castle_accessories/02_l626900.glb" height={0.3} />
+        </group>
+        <group position={[halfX - 0.6, 0, halfZ - 1.3]} rotation-y={0.8}>
+          <PropModel url="/assets/props/castle_accessories/02_l626900.glb" height={0.3} />
+        </group>
+      </Suspense>
+      <ambientLight intensity={0.5} color="#ffd9a8" />
+    </>
+  );
+}
+
 export default function BuildingInteriorRoom() {
   const interior = useGameStore((s) => s.interior);
   const buildings = useGameStore((s) => s.buildings);
@@ -179,6 +289,10 @@ export default function BuildingInteriorRoom() {
       <Walls def={def} />
       {building.type === 'keep' && <KeepDressing />}
       {building.type === 'stable' && <StableDressing def={def} />}
+      {building.type === 'storehouse' && <StorehouseDressing def={def} />}
+      {building.type === 'oc6094-2' && <JailCellDressing def={def} />}
+      {building.type === 'tower' && <TowerDressing def={def} />}
+      {building.type === 'oc6098b3' && <JewelTowerDressing def={def} />}
     </group>
   );
 }

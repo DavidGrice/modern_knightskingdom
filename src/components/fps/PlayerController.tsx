@@ -981,9 +981,12 @@ export default function PlayerController() {
       // full drawbridge winds up.
       if (isDoorLike(b.type)) {
         const open = st.gateOpen[b.id] ?? true;
-        const noun = b.type === 'door' ? 'Portcullis' : 'Gate';
+        // Wave 24 · a shutter is lighter still than the Portcullis — barely
+        // more than lifting a latch, not raising a lattice or a drawbridge
+        const noun = b.type === 'door' ? 'Portcullis' : b.type === 'window' ? 'Shutters' : 'Gate';
+        const duration = b.type === 'door' ? 0.5 : b.type === 'window' ? 0.4 : 1.2;
         consider(b.x, b.z, 1.6, {
-          id: b.id, kind: 'gate', duration: b.type === 'door' ? 0.5 : 1.2, actionable: true,
+          id: b.id, kind: 'gate', duration, actionable: true,
           label: `${open ? 'Close' : 'Open'} the ${noun}`,
         });
         continue;
