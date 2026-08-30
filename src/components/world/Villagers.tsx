@@ -13,6 +13,7 @@ import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
 import { isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, settlementAnchor, villagerHomeSpot } from '@/game/data/villagers';
+import { POND } from '@/game/data/world';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
@@ -399,46 +400,68 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     // stall at midday and gather round the campfire in the evening — small
     // routines that make the homestead read alive between jobs. Each takes
     // their own spot in a loose ring, offset by their id hash.
+    //
+    // Wave 28 · a third stop, mid-morning: the home pond. Unlike the stall/
+    // campfire above (player-built, may not exist yet) POND is a permanent
+    // FIXED_WORLD_PROPS landmark every game has from the start, so this is
+    // real "somewhere to be" on a save with no market stall raised yet.
+    // `ringRadius` used to be the fixed `1.8` both existing spots stand at —
+    // pulled into a variable only because POND's own 8m radius needs a much
+    // wider ring (a market stall/campfire prop is small enough that 1.8m
+    // from its center already reads as "standing beside it"; the pond is
+    // not).
     if (villager.job === 'idle') {
       const t = worldEnv.time;
       const st = useGameStore.getState();
       let rx: number | null = null;
       let rz: number | null = null;
+      let ringRadius = 1.8;
       if (t > 0.44 && t < 0.56) {
         const stall = st.buildings.find((b) => b.type === 'market_stall' && isBuilt(b) && isHomeBuilding(b));
         if (stall) { rx = stall.x; rz = stall.z; }
       } else if (t > 0.72 && t < 0.9) {
         const fire = st.buildings.find((b) => b.type === 'campfire' && isBuilt(b) && isHomeBuilding(b));
         if (fire) { rx = fire.x; rz = fire.z; }
+      } else if (t > 0.28 && t < 0.4) {
+        rx = POND.x; rz = POND.z; ringRadius = POND.radius + 1.6;
       }
       if (rx !== null && rz !== null) {
-        const tx = rx + Math.cos(homeAngle) * 1.8;
-        const tz = rz + Math.sin(homeAngle) * 1.8;
-        const { nx, nz, dist: d } = navSteer(s, tx, tz, dt);
-        if (d < 0.5) {
-          // face the gathering point and settle in
-          const desired = Math.atan2(-(rx - s.x), -(rz - s.z));
-          let diff = desired - s.yaw;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          s.yaw += diff * Math.min(1, dt * 2);
-          if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
-        } else {
-          const speed = 0.9;
-          s.x += nx * speed * dt;
-          s.z += nz * speed * dt;
-          const desired = Math.atan2(-nx, -nz);
-          let diff = desired - s.yaw;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          s.yaw += diff * Math.min(1, dt * 3);
-          if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+        const tx = rx + Math.cos(homeAngle) * ringRadius;
+        const tz = rz + Math.sin(homeAngle) * ringRadius;
+        // Wave 12's own guard (this file's wander branch below), repeated
+        // here for the same reason: the market stall/campfire ring never
+        // needed it (dry land by construction — a building can't be placed
+        // in water), but the pond ring above sits right at the water's own
+        // edge, and shoreline shape doesn't perfectly match POND.radius —
+        // decline the spot rather than risk parking someone mid-pond, and
+        // fall through to the plain wander-pause loop below instead.
+        if (!waterAt(tx, tz, 0.6)) {
+          const { nx, nz, dist: d } = navSteer(s, tx, tz, dt);
+          if (d < 0.5) {
+            // face the gathering point and settle in
+            const desired = Math.atan2(-(rx - s.x), -(rz - s.z));
+            let diff = desired - s.yaw;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            s.yaw += diff * Math.min(1, dt * 2);
+            if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+          } else {
+            const speed = 0.9;
+            s.x += nx * speed * dt;
+            s.z += nz * speed * dt;
+            const desired = Math.atan2(-nx, -nz);
+            let diff = desired - s.yaw;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            s.yaw += diff * Math.min(1, dt * 3);
+            if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+          }
+          g.position.set(s.x, 0, s.z);
+          g.rotation.y = s.yaw + Math.PI;
+          mob.x = s.x;
+          mob.z = s.z;
+          return;
         }
-        g.position.set(s.x, 0, s.z);
-        g.rotation.y = s.yaw + Math.PI;
-        mob.x = s.x;
-        mob.z = s.z;
-        return;
       }
     }
 

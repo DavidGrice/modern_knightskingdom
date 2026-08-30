@@ -7751,3 +7751,51 @@ deepen the existing one at The Old Ruins.
   created), crashing every page load before any Wave-27 code ran — fixed locally for the
   verification session only by copying both directories from the main checkout; no tracked files
   were affected.
+
+## Wave 28: ambient daily life — a third home-pond ritual anchor for unassigned villagers — SHIPPED 2026-08-30
+
+Deliberately scoped small per the plan's own text: no new assets, no new animation clips (only 15
+exist total, none of them sit/sleep/eat/use-object).
+
+- [COMPLETE] ✅ **The plan's own premise for its "smart-object anchor system" corrected live.**
+  `anchors.json`/`AnchorResolution.ts`'s system is real, but it's the AI reasoner's *work-target*
+  resolver for `gather_resource`/`haul_to_deposit`/`tend_farmplot` — not a mechanism for ambient
+  idling, and half its 8 authored rules (`bed`, `workbench`, `forge`) are unused by any action today.
+  Extending it would have been the wrong lever. `TemplatePopulation.tsx`'s decorative-actor
+  idle-fidget pattern (`useIdleFidget`/`FIDGET_CLIPS`, `RiggedFigure.tsx`) was confirmed real, but
+  those figures never move — proven only for stationary set-dressing, not "going about their day."
+  No well/bench/table/hitching-post prop exists anywhere in this codebase either, despite being
+  named as example anchors in the plan's own text — a real drift from the plan caught before
+  building anything around it.
+- [COMPLETE] ✅ **A second, more consequential correction found mid-implementation, not just
+  mid-research — and the redundant half of the design was DROPPED rather than shipped.** The
+  research pass's first plan called for giving `Villagers.tsx`'s rendered wander-pause/ritual-hold
+  branches their own local `FIDGET_CLIPS` timer, believing home villagers never get fidget variety
+  today. Implementation checked this live before building it and found it factually wrong:
+  `idle_fidget` (`ai/actions/ambient.ts`) has no tier/renderer gate at all (unlike `wander.ts`,
+  which explicitly self-documents gating itself to tier-D specifically to avoid this exact
+  collision) and already wins `Villagers.tsx`'s top-of-frame `PLAY_ANIM` intent check for any
+  rendered home villager, proven with a live ~25s trace showing a clean ~8-10s fidget cadence
+  already running. Adding a second, uncoordinated local timer would have double-driven the identical
+  visual effect for no player-visible gain — a real "one arbiter" violation this codebase's own
+  `wander.ts`/`Reasoner.ts` are otherwise careful about. Shipped only the genuinely new half.
+- [COMPLETE] ✅ **What actually shipped**: unassigned (`job: 'idle'`) villagers get a third daily
+  ritual window (mid-morning, alongside the existing market-stall-at-midday and campfire-at-evening
+  windows) that sends them to the home `POND` — a permanent `FIXED_WORLD_PROPS` landmark every save
+  has from the start, unlike the two player-built existing spots, so there's a real ambient
+  destination even before a market stall or campfire has been raised. Generalized the previously
+  hardcoded `1.8` ring-standoff into a `ringRadius` variable (unchanged for market/campfire; wider
+  for the pond's own 8m radius) and reused the existing `waterAt()` shoreline guard (same call the
+  wander branch already makes) so a shoreline mismatch falls through to plain wandering instead of
+  parking someone mid-pond. One file touched: `src/components/world/Villagers.tsx`.
+- **Verified live across the pond ritual and every existing/adjacent behavior it could plausibly
+  regress.** A synthetic idle villager was tracked for ~102s real time: distance-to-pond decreased
+  monotonically to the intended ring radius, clip alternated walk→rest correctly, and the
+  pre-existing `idle_fidget` interruptions kept firing and cleanly resuming throughout — confirmed
+  by two screenshots (a normal rest pose and a legitimate mid-gesture frame, no T-pose/stuck state).
+  Regression-checked: the existing market/campfire rituals unaffected, the generic wander-pause
+  fallback unaffected, a working lumberjack's modern Agent-driven gather path unaffected (it
+  pre-empts this legacy cascade entirely), a live NPC dialogue interaction (Alric) still opens
+  correctly, and spawning 40 simultaneous pond-eligible villagers produced no measurable FPS change
+  (60.6→60.5 over a 2s sample). Zero console/page errors across every run. `npx tsc --noEmit` /
+  `npm run build`: both clean, verified independently.
