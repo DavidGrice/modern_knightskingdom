@@ -7685,3 +7685,69 @@ deepen the existing one at The Old Ruins.
   real UI clicks, and Fenwick/template-08 was regression-tested through the same generalized code
   path with byte-identical behavior. `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 27: the Trade Caravan — a wall-clock arbitrage loop between the two owned settlements — SHIPPED 2026-08-30
+
+- [COMPLETE] ✅ **A real, honest design call: abstracted wall-clock, not a fake physical journey —
+  re-verified live rather than forced to match the plan's own wording.** The plan text suggested
+  reusing `haul.ts`'s AI hauling and `road.ts`'s `routeCells()`/`roadSegments()`; both were checked
+  directly and neither survives contact with the live code. `travelTo()` only sets `destination`/
+  `visitedWorlds` and queues a teleport — no entity of any kind crosses a scene boundary, and every
+  AI `Agent` is spawned per-world (`rosterSync.ts`), with no mechanism to exist mid-transit between
+  two instances that are not even the same coordinate space (Wave 18's scene-isolation
+  rearchitecture is real and current). `road.ts`'s network never reaches a destination at all — it
+  only connects the homestead to six home-map resource grounds; destination `origin.x/z` values are
+  non-overlapping render-space bake slots, not real relative geography. Forcing either reuse would
+  have meant building real inter-instance NPC travel as an unplanned prerequisite — exactly the
+  disproportionate-scope trap the plan itself warned against. Built the same wall-clock way
+  `foundSettlement`/`collectSettlementYield` already prove out instead: real epoch-ms timestamps, a
+  deliberate player action, works whether or not you're standing there.
+- [COMPLETE] ✅ **A second finding that reshaped the mechanic itself, not just its plumbing:**
+  settlement residents' production already flows into the *same single global* `st.inventory` as
+  home villagers, with zero transport step, today. A caravan that just "moved" items would have been
+  mechanically inert — nothing costs anything to already have everywhere. The real, honest design
+  space was a value-adding trade action instead: dispatch cargo at a markup over the flat merchant
+  rate, with a real (mitigable, never total) risk of loss, insurable for a gold fee. Deliberately
+  scoped to the one pair that makes this meaningful — Old Ruins ↔ Frozen Pass — not home↔settlement,
+  which would trade nothing of real value per the same global-inventory finding.
+- [COMPLETE] ✅ **Reuses `Villager.gear.carrier` for a genuine new purpose, not a second meaning
+  bolted onto a dead stat.** The research pass first assumed the "Hand Cart" gear item was inert
+  (no code path appeared to read it); the implementation pass traced it live and found it's actually
+  real — `carryCapacityOf()` (`attributes.ts`) already folds `gear.carrier`'s bonus into
+  `bb.carryCapacity`, read by `haul.ts`/`gather.ts`/`farm.ts` for AI trip caps. Dispatching a
+  caravan now requires at least one resident at the origin actually wearing a Hand Cart — reusing an
+  already-meaningful stat for a second real purpose, with the finding corrected in the shipped
+  code's own comments rather than silently left wrong.
+- [COMPLETE] ✅ **New mechanic, minimal new surface**: one new data file
+  (`src/game/data/caravan.ts` — routes keyed by a sorted pair so a third settlement is a data-only
+  addition later, pricing run through the exact same Wit/Silver-Tongue formula `sellItem()` already
+  uses, no second pricing table invented), one new `CaravanRun` save-state shape (mirrored through
+  all four of `settlements`' own save/load/reset touch-points), two new store actions
+  (`dispatchCaravan`/`collectCaravan`, both re-validating everything the UI already disables —
+  matching `acceptSideQuest`/`foundSettlement`'s "the store enforces it, not just the panel"
+  discipline), and one extended (not new) `DialoguePanel` block reusing the exact same "talk to the
+  settlement's own resident" access pattern Settlement Yield already uses. Zero new panels, routes,
+  or hotkeys. Deepens the delivery-quest system with 3 new quests (`ruins_want_ore`/`pass_want_grain`
+  reciprocal deliveries, `first_caravan` gated on a real `collectCaravan()` call via a new
+  `'caravan'` `SideQuestDef.kind`), each cross-`requires`ing the *other* settlement's own closing
+  quest id — confirmed live to work with zero new gating code.
+- **Verified live end to end, covering every real branch, not just the happy path.** Real Chrome
+  session (Playwright, off-screen): founded both settlements, then drove 6 separate dispatches
+  through real UI clicks — item pick, qty stepper (clamped correctly at both ends), insurance
+  checkbox, Dispatch — covering an uninsured undamaged collect (exact `SELL_PRICES × markup` payout
+  match), dispatch from one settlement collected at the *other* (proves either resident can collect,
+  not just the one who sent it), a forced-bad risk roll producing the correct partial-loss branch
+  (`round(qty × 0.5)` survivors, exact formula match), the same forced-bad roll under insurance
+  correctly bypassing the loss entirely, and a duplicate-dispatch attempt correctly refused with "A
+  caravan is already on that road." while the first was still in flight. The wall-clock gate was
+  checked both directions: an early collect attempt was refused with the real remaining-minutes
+  message and no state change, and collection succeeded once `departedAt` was fast-forwarded past
+  `etaMs`. All 3 new quests were driven end-to-end via real Accept/Turn-In clicks in dependency
+  order, each granting the correct XP/gold. Confirmed the pre-existing Settlement Yield block and
+  Alric's own Wave-13 delivery quest still render/offer correctly alongside the new block, with zero
+  console errors across the full session. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently. One environment-only, non-code finding: the isolated worktree used for this wave
+  was missing `public/assets`/`public/help` (both gitignored, not copied when the worktree was
+  created), crashing every page load before any Wave-27 code ran — fixed locally for the
+  verification session only by copying both directories from the main checkout; no tracked files
+  were affected.

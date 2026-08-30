@@ -390,6 +390,10 @@ export interface SaveGame {
    *  an empty list — the static POND is not in here and never will be, it
    *  stays a hand-authored `terrainExclusions` entry. */
   waterworks?: WaterFeature[];
+  /** Wave 27: in-flight Trade Caravan runs, keyed by caravanRouteKey(from,to)
+   *  (data/caravan.ts) — absent = none in flight. See CaravanRun's own doc
+   *  comment for the shape. */
+  caravans?: Record<string, CaravanRun>;
 }
 
 /**
@@ -424,6 +428,29 @@ export interface WaterFeature {
   /** gold paid to cut it, kept so filling it in can hand half of that back
    *  without re-deriving a price that may since have been rebalanced */
   paid: number;
+}
+
+/**
+ * Wave 27 · one in-flight Trade Caravan run between two owned settlements
+ * (see data/caravan.ts's own header for why this is a wall-clock
+ * abstraction, not a physically-simulated journey — no entity survives a
+ * travelTo() scene-swap). `from`/`to` are destination ids (data/worlds.ts);
+ * the caravan runs `from` -> `to`, but can be collected from either
+ * settlement's own resident once `etaMs` has elapsed since `departedAt`.
+ * Keyed in `SaveGame.caravans` by `caravanRouteKey(from, to)` (a sorted
+ * pair), so only one run can ever be in flight per route at a time,
+ * regardless of which direction it was dispatched.
+ */
+export interface CaravanRun {
+  from: string;
+  to: string;
+  item: ItemId;
+  amount: number;
+  /** escort fee paid up front (CARAVAN_INSURANCE_RATE) — guarantees no loss
+   *  from the risk roll on collection. */
+  insured: boolean;
+  departedAt: number;
+  etaMs: number;
 }
 
 /** a claimed template-world building plot: centered wherever the player

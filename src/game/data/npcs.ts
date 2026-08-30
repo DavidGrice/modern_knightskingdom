@@ -45,8 +45,10 @@ export interface SideQuestDef {
   // you carry it (see gameStore's bumpSideQuest, which treats a gather-kind
   // action bump as advancing a deliver-kind errand too) but can only be
   // turned in at `deliverTo`, not back with whoever handed it to you — see
-  // that field's own doc comment.
-  kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'deliver';
+  // that field's own doc comment. 'caravan' (Wave 27) is advanced by a real
+  // caravan collection (gameStore's collectCaravan), not by carrying
+  // anything yourself — see data/caravan.ts for the mechanic itself.
+  kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'deliver' | 'caravan';
   target: string;       // itemId / recipeId / buildableId / enemy kind or 'any' for kills
   need: number;
   label: string;
