@@ -7602,3 +7602,86 @@ this codebase's history.
   are both completely unaffected — Tam's own combat gate, damage constant, and target-priority slot
   are fully separate from both. `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 26: a second ownable settlement — The Frozen Pass, and two real foundational AI bugs found along the way — SHIPPED 2026-08-30
+
+The user was explicitly asked and chose to WIDEN the empire (a second settlement) rather than
+deepen the existing one at The Old Ruins.
+
+- [COMPLETE] ✅ **Candidate re-verified live, not trusted from the plan's own list.** The original
+  plan named templates 04/05/07/09 as "genuinely greenfield." Two of those turned out to be real,
+  confirmed disqualifications: template-05 is `CEDRIC_WORLD` — Cedric the Bull's own boss-camp/
+  siege territory, not empty ground — and template-09 isn't a small map, it **is the homestead**
+  (`Terrain.tsx` mounts it as `HomeMeadow` at the world origin; `TravelPanel.tsx` explicitly
+  filters it out of the travel grid). Of the two real candidates, **template-07 ("The Frozen
+  Pass") was picked over template-04** after visiting both live: template-04's walkable footprint
+  is a single, un-subdivided 96×96m rect (independently flagged elsewhere as a real terrain-
+  classification gap), while template-07 has 7 real classified rects, a dramatic mountain backdrop,
+  and — the deciding factor — already carries two independent, previously-shipped signals pointing
+  at a resource economy (an ore-flavored travel blurb, and the Woodsmen's Lodge guild already
+  stationed there with a literal wood-yield passive).
+- [COMPLETE] ✅ **A new resident, Torvald the Frozen Pass Prospector, and his own 2-quest
+  recruitment chain** (`frostpass_shelter` → `frostpass_clear`), reusing the founding pattern
+  proven at The Old Ruins. **A real design question resolved with mechanism evidence, not a coin
+  flip**: unlike template-08 (zero resource nodes, farmer/merchant/builder residents only), The
+  Frozen Pass gets real hand-placed tree/rock nodes from day one, giving it genuine lumberjack/
+  miner residents — confirmed buildable by tracing the actual `ResourceNodeState.world` plumbing
+  end to end (real since Wave 5, but never exercised with a non-null value in shipped content
+  until this wave).
+- [COMPLETE] ✅ **A real architectural generalization, not a second hardcoded copy.**
+  `foundSettlement()` and the settlement dialogue UI were confirmed single-site-hardcoded to
+  Fenwick/template-08 specifically (a literal `'settle_clear'` quest-id check, a literal
+  Bram/Ida/Tolan roster baked into the function, `npc.id === 'fenwick'` gating the UI block) —
+  calling either unchanged for a second site would have silently done nothing. Replaced with one
+  new data table, `SETTLEMENT_FOUNDING` (destId → cost/required-quest/residents), that both now
+  read from — template-08's entry holds the exact old hardcoded values, so its behavior is
+  byte-identical, while template-07 gets full support for free.
+- [COMPLETE] ✅ **Two real, foundational AI-system bugs found by verify and fixed, not shipped
+  broken — pre-existing, not introduced by this wave, but this is what finally exercised them.**
+  Verify caught that the wave's own "live-verified" claim about resident labor was wrong: Torvald's
+  lumberjack and miner never actually gathered anything, confirmed over 230+ real seconds of
+  observation across two independent runs. Root-caused to **two compounding bugs**, both required
+  to fix together:
+  1. `rosterSync.ts` spawned every roster villager's AI Agent with `region: null` regardless of
+     their real `Villager.world` — three separate pre-existing code comments (`wander.ts`,
+     `Locomotion.ts` ×2) had already named this exact landmine ("a Wave-4 settlement resident...
+     sits one config change away") without it ever being exercised. Effect: a settlement resident,
+     watched in their own world, was tiered D by the LOD system at the exact moment they were being
+     rendered — the one state the whole design assumes can't happen — so the coarse-step movement
+     validated every step against the HOME nav grid for coordinates thousands of units away,
+     always failing.
+  2. `TargetRegistry.ts`'s `nodeTarget()` separately hardcoded every resource node's own `region`
+     to `null` (stale since Wave 5 gave nodes a real `world` field), and `queryNearby`'s node scan
+     only ran `if (region === null)` at all. Fixing bug 1 alone would have made this WORSE (a real
+     non-null region would then match zero node candidates ever) — both had to be fixed together,
+     mirroring the exact per-item region filter the building-search loop right next to it already
+     used.
+  A third, related bug was found live during the fix pass itself, not in the original report:
+  `Villagers.tsx`'s "haul home" cascade sent a settlement resident toward the actual homestead's
+  literal origin for the last ~30% of every work trip (a hardcoded `HOME_X`/`HOME_Z` fallback and
+  an `isHomeBuilding`-only farmplot/stall search, both ignorant of `villager.world`) — so even
+  after bugs 1-2 were fixed, a resident would correctly walk out and start gathering, then walk
+  toward a point thousands of units away and never arrive, freezing their trip timer at 70%
+  forever. Fixed by routing both to the villager's own `settlementAnchor()` instead — a confirmed
+  no-op for every home villager. **This same latent bug would have hit Fenwick's own farmer/
+  merchant the same way**, the moment a farmplot or market stall was ever placed at their
+  settlement — never triggered in practice only because no such building has been placed there.
+- [COMPLETE] ✅ **A second real bug found and fixed: completing a settlement's first errand could
+  permanently re-offer it instead of ever surfacing the second, soft-locking the deed out of
+  reach.** `DialoguePanel`'s quest-offer rotation was keyed on completed *main*-quest count and
+  never excluded an already-completed *side* quest — for a single-slot pool where completing quest
+  1 doesn't change that index, the just-finished errand could keep re-winning the slot forever.
+  This exact 2-quest chain shape is shared byte-for-byte with Fenwick's own pre-existing
+  `settle_scout`/`settle_clear` pair — a real, pre-existing gap this wave was simply the first to
+  exercise on a fresh save. Fixed by skipping any already-completed side quest in the rotation, and
+  hardened `acceptSideQuest` itself with the same check so a stale panel can never grant duplicate
+  rewards.
+- **Verified live, twice over — first the bug, then the fix.** The original bug was reproduced via
+  a dedicated diagnostic (a resident sampled every 5s for 90s, frozen at the exact same coordinate
+  the entire time) with a control check (a separate rAF/day-clock probe) ruling out browser
+  throttling as a false-positive cause. After fixing, two independent ~300s+ sessions confirmed
+  sustained walk→swing→haul→deliver cycles with real, repeated inventory deliveries (not a single
+  lucky trip). The full recruitment→deed→resident-spawn→yield flow was re-verified end to end via
+  real UI clicks, and Fenwick/template-08 was regression-tested through the same generalized code
+  path with byte-identical behavior. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.

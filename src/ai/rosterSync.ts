@@ -32,7 +32,28 @@ const unrendered = new Set<string>();
  *  longer on the roster loses theirs. Archetype is 'villager' for all of
  *  them for now — job-specific archetype selection isn't consumed by
  *  anything until phase 5's candidate assembly exists, so there is nothing
- *  to gain by making that call before it matters. */
+ *  to gain by making that call before it matters.
+ *
+ *  Wave 26 bugfix · region is now `v.world ?? null`, not a hardcoded `null`
+ *  for everyone. This was the exact landmine wander.ts's own "belt and
+ *  braces" comment and Locomotion.ts's stepAgent/stepUnrenderedAgents
+ *  comments already named — "a Wave-4 settlement resident... sits one config
+ *  change away" — and Wave 26's Torvald residents (a lumberjack/miner who
+ *  actually need a real, sustained walk to a distant node, unlike Fenwick's
+ *  farmer/merchant/builder, whose worksites are buildings near their own
+ *  anchor) are the first to make it a real, live-reproduced bug rather than
+ *  a latent one: with `region` always `null`, a settlement resident visited
+ *  in their OWN world was tiered D (AgentManager.refreshTiers: `agent.region
+ *  !== activeRegion`) at the exact moment they were being rendered and
+ *  watched — the one state the whole LOD design assumes can't happen — so
+ *  Locomotion's tier-D coarse step validated every landing point against the
+ *  HOME nav grid (`getNavGrid(agent.region)`) for coordinates thousands of
+ *  units away in the destination, always failing, always reporting
+ *  'blocked', permanently blacklisting every node gather_resource tried.
+ *  Matching `TargetRegistry.ts`'s own Wave 26 fix (nodes now carry their own
+ *  real `region` too — see that file's header) is required alongside this:
+ *  either fix alone leaves `queryNearby`'s region filter and `agent.region`
+ *  disagreeing, finding zero candidates. */
 export function syncVillagerAgents(villagers: Villager[]) {
   if (villagers === lastVillagers) return;
   lastVillagers = villagers;
@@ -43,7 +64,7 @@ export function syncVillagerAgents(villagers: Villager[]) {
     liveIds.add(v.id);
     if (spawnedIds.has(v.id)) continue;
     const mob = villagerMobs[v.id];
-    agentManager.spawn(v.id, 'villager', mob?.x ?? 0, mob?.z ?? 0, null);
+    agentManager.spawn(v.id, 'villager', mob?.x ?? 0, mob?.z ?? 0, v.world ?? null);
     spawnedIds.add(v.id);
   }
 

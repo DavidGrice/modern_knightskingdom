@@ -23,8 +23,17 @@ export interface Target {
   kind: string;
   x: number;
   z: number;
-  /** ALWAYS null for nodes — §1.1: nodes are home-only, no destination has
-   *  any of its own yet. */
+  /** null for a homestead node/building, a destination id for one that
+   *  lives in a settlement. §1.1 originally documented this as ALWAYS null
+   *  for nodes ("nodes are home-only, no destination has any of its own
+   *  yet") — true when written, but `ResourceNodeState` gained a real
+   *  `world` field in Wave 5 for exactly the opposite case, and Wave 26's
+   *  SETTLEMENT_NODES (data/settlementQuests.ts) is the first to actually
+   *  populate it. `nodeTarget()` below now threads it through the same way
+   *  `buildingTarget()` already did for `PlacedBuilding.world` — the stale
+   *  claim here was a real bug (see rosterSync.ts's own Wave 26 comment for
+   *  the live-reproduced failure it caused: `resolveAnchor`/`getNavGrid`
+   *  validating a destination node's anchor against the HOME nav grid). */
   region: string | null;
   /** node: respawnAt === null && hitsLeft > 0. building: isBuilt(b), NOT a
    *  bare `built >= 1` check — `built` is optional and absent means
@@ -49,7 +58,8 @@ export interface Target {
 
 function nodeTarget(n: ResourceNodeState): Target {
   return {
-    id: `node:${n.id}`, source: 'node', kind: n.kind, x: n.x, z: n.z, region: null,
+    // Wave 26 fix: was hardcoded `null` — see `Target.region`'s own doc above.
+    id: `node:${n.id}`, source: 'node', kind: n.kind, x: n.x, z: n.z, region: n.world ?? null,
     available: n.respawnAt === null && n.hitsLeft > 0,
     anchorRule: anchorRuleFor('node', n.kind),
     ground: n.ground,
@@ -126,13 +136,17 @@ class TargetRegistry {
     const wantKind = kinds.length > 0 ? new Set(kinds) : null;
     const found: { ref: ResourceNodeState | PlacedBuilding; isNode: boolean; d2: number }[] = [];
 
-    if (region === null) { // every node's own region is null — see Target.region's doc
-      for (const n of st.nodes) {
-        if (wantKind && !wantKind.has(n.kind)) continue;
-        const dx = n.x - x, dz = n.z - z;
-        const d2 = dx * dx + dz * dz;
-        if (d2 <= r2) found.push({ ref: n, isNode: true, d2 });
-      }
+    // Wave 26 fix: was `if (region === null) { scan every node }` — correct
+    // only back when every node's own region really was null (see
+    // Target.region's doc above for why that stopped being true). Same
+    // per-item region filter the building loop just below already uses,
+    // rather than a second, differently-shaped rule for the other source.
+    for (const n of st.nodes) {
+      if ((n.world ?? null) !== region) continue;
+      if (wantKind && !wantKind.has(n.kind)) continue;
+      const dx = n.x - x, dz = n.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 <= r2) found.push({ ref: n, isNode: true, d2 });
     }
 
     for (const b of st.buildings) {
