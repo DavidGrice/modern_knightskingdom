@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 import type {
-  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
+  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
   LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
   WaterFeature,
 } from '../types';
@@ -27,6 +27,10 @@ import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SETTLEMENT_FOUNDING, SETTLEMENT_NODES } from '../data/settlementQuests';
+import {
+  CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_LOSS_SURVIVE_FRACTION, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
+  caravanQuoteGold, caravanRouteKey,
+} from '../data/caravan';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { resetCompanionCombat } from '../companion';
 import { SELL_PRICES } from '../data/trade';
@@ -258,6 +262,9 @@ interface GameState {
    *  yet earned. See SaveGame.settlements' own doc comment for how this
    *  differs from claimedWorlds. */
   settlements: Record<string, { since: number; lastCollectedAt: number }>;
+  /** Wave 27: in-flight Trade Caravan runs, keyed by caravanRouteKey(from,to)
+   *  (data/caravan.ts) — see CaravanRun's own doc comment (types.ts). */
+  caravans: Record<string, CaravanRun>;
   /** Empire arc, Wave 5: plot id -> the plot you actually broke and planted,
    *  absent = still wild grass. See SaveGame.cultivatedPlots. */
   cultivatedPlots: Record<string, CultivatedPlot>;
@@ -321,6 +328,16 @@ interface GameState {
   /** Empire arc, Wave 4: wall-clock settlement income, mirroring
    *  collectTaxes' own cooldown-then-flat-amount shape exactly. */
   collectSettlementYield: (destId: string) => void;
+  /** Wave 27: load cargo at `from` and dispatch it toward `to` — see
+   *  data/caravan.ts's own header for why this is a wall-clock abstraction,
+   *  not a physically-simulated journey. Debits the goods (and the
+   *  insurance fee, if taken) from inventory immediately; requires at least
+   *  one resident at `from` wearing a Hand Cart (gear.carrier === 'cart'). */
+  dispatchCaravan: (from: string, to: string, item: ItemId, amount: number, insured: boolean) => void;
+  /** Wave 27: collect a caravan run once its ETA has elapsed — pays out gold
+   *  via the same Wit/Silver-Tongue formula sellItem() uses, rolling a real
+   *  (mitigable, never total) loss chance unless insured. */
+  collectCaravan: (from: string, to: string) => void;
   /** Empire arc, Wave 5: break and plant one of the hand-authored plots
    *  (data/cultivatedPlots.ts). Seeds a sparse stage-0 cluster. */
   cultivatePlot: (plotId: string) => void;
@@ -847,7 +864,7 @@ function createGameStore() {
   return create<GameState>((set, get) => {
   // ---- internal helpers (closure-scoped, operate through set/get) ----
 
-  function bumpSideQuest(kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel', target: string, amount: number) {
+  function bumpSideQuest(kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'caravan', target: string, amount: number) {
     const sq = get().sideQuest;
     if (!sq) return;
     const def = sideQuestsOf(sq.npcId).find((q) => q.id === sq.questId);
@@ -1010,6 +1027,7 @@ function createGameStore() {
     stats: { ...ZERO_STATS },
     claimedWorlds: {},
     settlements: {},
+    caravans: {},
     cultivatedPlots: {},
     waterworks: [],
     customBlueprints: [],
@@ -1075,7 +1093,7 @@ function createGameStore() {
         gateOpen: {}, buildingHp: {}, reputation: {},
         destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
-        claimedWorlds: {}, settlements: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
+        claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
         interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
         cedricSieges: 0, cedricRouted: false,
@@ -1151,7 +1169,7 @@ function createGameStore() {
         dyes: s.dyes ?? [],
         durability: s.durability ?? {}, perks: s.perks ?? [],
         stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
-        claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
+        claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, caravans: s.caravans ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
         waterworks: loadedWater,
         customBlueprints: s.customBlueprints ?? [],
         lastTaxAt: s.lastTaxAt ?? 0,
@@ -1217,7 +1235,7 @@ function createGameStore() {
         dyes: s.dyes,
         durability: s.durability, perks: s.perks,
         stats: s.stats,
-        claimedWorlds: s.claimedWorlds, settlements: s.settlements, cultivatedPlots: s.cultivatedPlots,
+        claimedWorlds: s.claimedWorlds, settlements: s.settlements, caravans: s.caravans, cultivatedPlots: s.cultivatedPlots,
         // saved from the leaf module for the same reason `stabled` is: it is
         // the copy every consumer actually reads, so it is the one that can
         // never be a stale mirror
@@ -1661,6 +1679,97 @@ function createGameStore() {
       st.addItems({ gold: amount }, 'grant');
       audio.play('treasure', 0.7);
       st.notify(`Collected ${amount} gold from the settlement!`, true);
+    },
+
+    // Wave 27 · Trade Caravan — see data/caravan.ts's own header for why
+    // this is a wall-clock abstraction rather than a real AI-driven journey
+    // between instances. Re-validated here, not just in DialoguePanel's own
+    // disabled state, matching acceptSideQuest/foundSettlement's own "the
+    // store, not just the panel, enforces it" discipline.
+    dispatchCaravan: (from, to, item, amount, insured) => {
+      const st = get();
+      if (from === to) return;
+      if (!st.settlements[from] || !st.settlements[to]) return;
+      const key = caravanRouteKey(from, to);
+      const route = CARAVAN_ROUTES[key];
+      if (!route) return;
+      if (st.caravans[key]) {
+        st.notify('A caravan is already on that road.');
+        return;
+      }
+      // capacity is real residents actually wearing a Hand Cart at the
+      // ORIGIN — the same gear.carrier stat carryCapacityOf() already reads
+      // for real AI haul trips (attributes.ts), reused here for a new
+      // purpose rather than invented fresh.
+      const carts = Math.min(
+        CARAVAN_MAX_CARTS,
+        st.villagers.filter((v) => (v.world ?? null) === from && v.gear?.carrier === 'cart').length,
+      );
+      if (carts <= 0) {
+        st.notify('No one here is equipped with a Hand Cart.');
+        return;
+      }
+      const cap = carts * CARAVAN_CAP_PER_CART;
+      const held = st.inventory[item] ?? 0;
+      const n = Math.min(amount, cap, held);
+      if (n <= 0) return;
+      const insuranceCost = insured
+        ? Math.ceil(caravanQuoteGold(item, n, st.attrSpent.wit ?? 0, st.perks.includes('silver_tongue')) * CARAVAN_INSURANCE_RATE)
+        : 0;
+      if (insured && (st.inventory.gold ?? 0) < insuranceCost) {
+        st.notify(`Not enough gold to insure the run — ${insuranceCost} needed.`);
+        return;
+      }
+      const inv = { ...st.inventory };
+      inv[item] = held - n;
+      if (insured) inv.gold = (inv.gold ?? 0) - insuranceCost;
+      const run: CaravanRun = { from, to, item, amount: n, insured, departedAt: Date.now(), etaMs: route.etaMs };
+      set({ inventory: inv, caravans: { ...st.caravans, [key]: run }, dirty: true });
+      audio.play('canter', 0.7);
+      const etaMin = Math.round(route.etaMs / 60000);
+      st.notify(`Caravan dispatched with ${n}× ${ITEMS[item]?.name ?? item} — back in about ${etaMin}m.`, true);
+    },
+
+    collectCaravan: (from, to) => {
+      const st = get();
+      const key = caravanRouteKey(from, to);
+      const run = st.caravans[key];
+      if (!run) return;
+      const now = Date.now();
+      if (now - run.departedAt < run.etaMs) {
+        const remainMin = Math.ceil((run.etaMs - (now - run.departedAt)) / 60000);
+        st.notify(`Nothing to collect yet — check back in ${remainMin}m.`);
+        return;
+      }
+      // an uninsured run rolls the route's own risk — a bad roll is always a
+      // PARTIAL loss (mirrors HAUL_TO_DEPOSIT's "the cap must never destroy
+      // the difference" philosophy), never a total wipe, and only ever
+      // blocks the quest tick, never the gold itself.
+      let amount = run.amount;
+      let damaged = false;
+      const risk = CARAVAN_ROUTES[key]?.riskPct ?? 0;
+      if (!run.insured && Math.random() < risk) {
+        amount = Math.max(1, Math.round(amount * CARAVAN_LOSS_SURVIVE_FRACTION));
+        damaged = true;
+      }
+      const payout = caravanQuoteGold(run.item, amount, st.attrSpent.wit ?? 0, st.perks.includes('silver_tongue'));
+      const caravans = { ...st.caravans };
+      delete caravans[key];
+      set({ caravans, dirty: true });
+      st.addItems({ gold: payout }, 'grant');
+      audio.play('treasure', 0.8);
+      const itemName = ITEMS[run.item]?.name ?? run.item;
+      st.notify(
+        damaged
+          ? `Bandits hit the road — the caravan limps in with only ${amount}× ${itemName}: ${payout} gold.`
+          : `Caravan arrived — ${payout} gold for ${amount}× ${itemName}.`,
+        true,
+      );
+      // a real caravan collection is the unit that counts, not the dispatch
+      // (mirrors rollTripBonus's "a trip = one completed deposit" reasoning)
+      // — and only an undamaged delivery advances the quest, since a bandit
+      // hit is not the clean run the errand is asking for.
+      if (!damaged) bumpSideQuest('caravan', 'any', 1);
     },
 
     // Empire arc, Wave 5 — plots. `plantedAt`/`lastWateredAt` are epoch ms,

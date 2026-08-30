@@ -32,6 +32,17 @@ export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
       xpSkill: 'combat', xp: 80, rewardItems: { gold: 20 },
       requires: ['settle_scout'],
     },
+    // Wave 27 · the Trade Caravan's own delivery deepening — `requires`
+    // names the OTHER settlement's own closing quest id, which works with
+    // zero new gating code: sideQuestBlocker's `requires` check is just
+    // `completed.includes(r)` against the flat `completedSideQuests` array,
+    // indifferent to which NPC originally owned that id (confirmed live).
+    {
+      id: 'ruins_want_ore', kind: 'deliver', target: 'iron_ore', need: 8, deliverTo: 'template-08',
+      label: 'The Frozen Pass digs good ore from that mountain — bring 8 iron ore to the Old Ruins',
+      xpSkill: 'mining', xp: 60, rewardItems: { gold: 25 },
+      requires: ['settle_clear', 'frostpass_clear'],
+    },
   ],
   // Wave 26: the empire arc's second site, The Frozen Pass (template-07) —
   // Torvald's own two errands, same depth/shape as Fenwick's pool above
@@ -47,6 +58,23 @@ export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
       label: 'Clear the wildlife off the high trail before the deed is filed — defeat 6 hostiles',
       xpSkill: 'combat', xp: 80, rewardItems: { gold: 20 },
       requires: ['frostpass_shelter'],
+    },
+    // Wave 27 · same reciprocal-delivery shape as ruins_want_ore above, the
+    // other direction.
+    {
+      id: 'pass_want_grain', kind: 'deliver', target: 'wheat', need: 10, deliverTo: 'template-07',
+      label: 'Nothing grows on this mountain — bring 10 wheat up from the Old Ruins',
+      xpSkill: 'farming', xp: 60, rewardItems: { gold: 25 },
+      requires: ['frostpass_clear', 'settle_clear'],
+    },
+    // The caravan mechanic's own quest — advanced by a real collectCaravan()
+    // call (gameStore.ts), not by carrying anything yourself (see the new
+    // 'caravan' SideQuestDef.kind, npcs.ts).
+    {
+      id: 'first_caravan', kind: 'caravan', target: 'any', need: 1,
+      label: 'Run a trade caravan between your two settlements — the road will pay for itself',
+      xpSkill: 'building', xp: 40, rewardItems: { gold: 20 },
+      requires: ['settle_clear', 'frostpass_clear'],
     },
   ],
 };
