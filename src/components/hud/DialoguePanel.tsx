@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
 import { NPC_BY_ID, sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
+import { SETTLEMENT_FOUNDING } from '@/game/data/settlementQuests';
 import { ITEMS } from '@/game/data/items';
 import { audio } from '@/lib/audio';
 import { useEnemyStore, canChallengeStorm } from '@/game/combat';
@@ -90,15 +91,33 @@ export default function DialoguePanel() {
   const pool = useMemo(() => (npc ? sideQuestsOf(npc.id) : []), [npc]);
   // offer rotates daily-ish: pick by completed-quest count so it varies,
   // skipping anything currently blocked so the panel never shows a quest
-  // that would just bounce off acceptSideQuest's own guard
+  // that would just bounce off acceptSideQuest's own guard.
+  //
+  // Wave 26 bugfix: also skip anything already in `completedSideQuests` —
+  // `sideQuestBlocker` only ever checks precursor/allegiance/alliance gates,
+  // never "already done" (QuestLogPanel computes that as its own separate
+  // `done` flag, precisely so a finished errand still displays distinctly
+  // from a blocked one there — folding it into sideQuestBlocker itself would
+  // have made QuestLogPanel show a done quest as 'locked'). Without this,
+  // the rotation index is keyed on `completedQuests.length` (MAIN quests),
+  // which a side quest turn-in never changes — so a single-slot pool like
+  // Torvald's (frostpass_shelter -> frostpass_clear) kept re-offering the
+  // just-completed first errand forever, and the second one — the one that
+  // actually unlocks the deed — could never surface through the ordinary
+  // "talk to them" flow. Live-reproduced during Wave 26 verification; the
+  // exact same shape (a 2-quest chain, second `requires` the first) is
+  // shared byte-for-byte with Fenwick's settle_scout/settle_clear, so this
+  // was a real, pre-existing gap this wave was simply the first to exercise
+  // on a fresh save.
   const offer = useMemo(() => {
     if (!npc || pool.length === 0) return null;
     const start = (completedQuests.length + pool.length) % pool.length;
     for (let i = 0; i < pool.length; i++) {
       const q = pool[(start + i) % pool.length];
+      if (completedSideQuests.includes(q.id)) continue;
       if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, alliance)) return q;
     }
-    return null; // every candidate is blocked right now
+    return null; // every candidate is blocked or already done
   }, [npc, pool, completedQuests.length, completedSideQuests, allegiance, alliance]);
 
   if (!npc) return null;
@@ -252,51 +271,85 @@ export default function DialoguePanel() {
             );
           })()}
 
-          {/* Empire arc, Wave 4: Fenwick offers the settlement chain's two
-              ordinary errands through the ordinary flow above (they're just
-              entries in his own `sideQuests`) — this block is only the
-              special "close the deed" / "collect yield" actions once
-              earned, same shape as the Alric/Beda block above. */}
-          {npc.id === 'fenwick' && npc.world && !settlements[npc.world] && (
-            <div className="quest-item">
-              <div className="q-name">🚩 Found Your Settlement</div>
-              <div className="q-desc">
-                {completedSideQuests.includes('settle_clear')
-                  ? 'The ruins are cleared and the foundations are sound. File the deed and Bram, Ida and Tolan will settle here — 60 gold.'
-                  : "Shore up the foundations and clear the ruins first, and I'll see about the deed."}
-              </div>
-              {completedSideQuests.includes('settle_clear') && (
-                <>
-                  <div className="q-desc">Cost: 60× Gold (you have {inventory.gold ?? 0})</div>
+          {/* Empire arc, Wave 4: a settlement's own quest-giver (Fenwick at
+              template-08; Torvald at template-07 as of Wave 26) offers the
+              chain's ordinary errands through the ordinary flow above
+              (they're just entries in their own `sideQuests`) — this block
+              is only the special "close the deed" / "collect yield" actions
+              once earned, same shape as the Alric/Beda block above.
+              Wave 26: generalized off the old `npc.id === 'fenwick'` check
+              and the hardcoded `'settle_clear'`/`{gold:60}` literals to a
+              lookup into SETTLEMENT_FOUNDING (data/settlementQuests.ts) —
+              template-08 reads byte-identical values back out, and a second
+              site's quest-giver now gets the same UI for free. */}
+          {(() => {
+            const founding = npc.world ? SETTLEMENT_FOUNDING[npc.world] : undefined;
+            if (!founding) return null;
+            const world = npc.world!;
+            const names = founding.residents.map((r) => r.name);
+            const nameList = names.length > 1
+              ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+              : names[0];
+            if (settlements[world]) {
+              return (
+                <div className="quest-item">
+                  <div className="q-name">🏘️ Settlement Yield</div>
+                  <div className="q-desc">{nameList} send word of what the settlement has produced.</div>
                   <button
                     className="menu-btn small"
                     style={{ margin: '8px 0 0' }}
-                    disabled={!canAfford({ gold: 60 })}
-                    onClick={() => {
-                      const groundY = sampleTemplateGroundY(playerState.x, playerState.z);
-                      foundSettlement(npc.world!, playerState.x, playerState.z, groundY);
-                      setPanel('none');
-                    }}
+                    onClick={() => collectSettlementYield(world)}
                   >
-                    {canAfford({ gold: 60 }) ? 'File the Deed' : 'Not enough gold'}
+                    Collect Yield
                   </button>
-                </>
-              )}
-            </div>
-          )}
-          {npc.id === 'fenwick' && npc.world && settlements[npc.world] && (
-            <div className="quest-item">
-              <div className="q-name">🏘️ Settlement Yield</div>
-              <div className="q-desc">Bram, Ida and Tolan send word of what the settlement has produced.</div>
-              <button
-                className="menu-btn small"
-                style={{ margin: '8px 0 0' }}
-                onClick={() => collectSettlementYield(npc.world!)}
-              >
-                Collect Yield
-              </button>
-            </div>
-          )}
+                </div>
+              );
+            }
+            const ready = completedSideQuests.includes(founding.requiredQuestId);
+            const costText = Object.entries(founding.cost)
+              .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`).join(', ');
+            const afford = canAfford(founding.cost);
+            return (
+              <div className="quest-item">
+                <div className="q-name">🚩 Found Your Settlement</div>
+                <div className="q-desc">
+                  {ready
+                    ? `The work is done. File the deed and ${nameList} will settle here — ${costText}.`
+                    : "There's more to prove before I'll see about the deed."}
+                </div>
+                {ready && (
+                  <>
+                    <div className="q-desc">
+                      {/* Wave 26 polish: named per-item ("you have N× Gold"),
+                          not bare comma-joined numbers — both real founding
+                          entries (template-07/08) happen to be gold-only
+                          today, so this was cosmetically fine either way, but
+                          named it properly rather than leaving it correct by
+                          coincidence for the first future site with a mixed
+                          cost. */}
+                      Cost: {costText} (you have {
+                        Object.entries(founding.cost)
+                          .map(([id]) => `${inventory[id as ItemId] ?? 0}× ${ITEMS[id as ItemId]?.name ?? id}`)
+                          .join(', ')
+                      })
+                    </div>
+                    <button
+                      className="menu-btn small"
+                      style={{ margin: '8px 0 0' }}
+                      disabled={!afford}
+                      onClick={() => {
+                        const groundY = sampleTemplateGroundY(playerState.x, playerState.z);
+                        foundSettlement(world, playerState.x, playerState.z, groundY);
+                        setPanel('none');
+                      }}
+                    >
+                      {afford ? 'File the Deed' : 'Not enough materials'}
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {mySideQuest && mySideDef && (() => {
             const notHere = mySideDef.kind === 'deliver' && npc.world !== mySideDef.deliverTo;

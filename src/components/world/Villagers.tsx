@@ -12,7 +12,7 @@ import { HeldHelmet, Chestplate, ResourceProp, WornCarrier } from '../character/
 import { hashId, villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
-import { HOME_X, HOME_Z, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, villagerHomeSpot } from '@/game/data/villagers';
+import { isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, settlementAnchor, villagerHomeSpot } from '@/game/data/villagers';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
@@ -23,7 +23,7 @@ import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { registerVillagerCombat } from '@/game/villagerCombat';
 import { isBuilt, isHomeBuilding } from '@/game/types';
-import type { CharacterConfig, ItemId, Villager } from '@/game/types';
+import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '@/game/types';
 
 const WANDER_RADIUS = 14;
 
@@ -247,6 +247,14 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       const trip = jobDef.tripSeconds * tripSpeedMult(villager);
       const leftS = st.villagerProgress[villager.id] ?? trip;
       const frac = 1 - leftS / Math.max(1, trip);
+      // Wave 26 bugfix: the per-world equivalent of `isHomeBuilding` — a
+      // building only counts as this villager's own if it stands in the
+      // SAME world they do (null/null for a home villager, byte-identical
+      // to `isHomeBuilding` there). Shared by the farmer/merchant worksite
+      // lookups just below and the hauling-target `bestStore` call further
+      // down — see both call sites' own comments for the real, live-
+      // reproduced bug this closes.
+      const sameWorldAsVillager = (b: PlacedBuilding) => (b.world ?? null) === (villager.world ?? null);
       // the trade's worksite
       let wx: number | null = null;
       let wz: number | null = null;
@@ -254,28 +262,56 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         let best = Infinity;
         for (const n of st.nodes) {
           if (n.kind !== workedKind || n.respawnAt) continue;
+          // Wave 26 · explicit world filter, same hygiene reasoning as
+          // gameStore's villagerAtWork (this cascade's own real distance
+          // check already made a cross-world mismatch geometrically
+          // impossible, since `home` sits at the villager's own settlement
+          // anchor — but a second real per-world node consumer now exists,
+          // so an implicit guarantee is worth making an explicit rule).
+          if ((n.world ?? null) !== (villager.world ?? null)) continue;
           const d = Math.hypot(n.x - home[0], n.z - home[1]);
           if (d < best) { best = d; wx = n.x; wz = n.z; }
         }
       } else if (villager.job === 'farmer') {
-        // a bare .find() grabs array order, not distance — without the home
-        // filter, a farmplot built earlier at a remote claimed plot would
-        // silently become this farmer's worksite, sending them off toward
-        // another realm's coordinates
-        const plot = st.buildings.find((b) => b.type === 'farmplot' && isBuilt(b) && isHomeBuilding(b));
+        // a bare .find() grabs array order, not distance — without the
+        // world filter, a farmplot in ANY other world (home, or a different
+        // settlement) would silently become this farmer's worksite, sending
+        // them off toward another realm's coordinates. Wave 26 bugfix: was
+        // `isHomeBuilding(b)`, which only ever matches a HOME farmplot — so
+        // a per-world farmer (Fenwick's Bram, say) could never find their
+        // OWN settlement's farmplot at all, only ever the actual homestead's
+        // (or none). `sameWorldAsVillager` mirrors the exact fix this same
+        // wave already applied to the node search just above.
+        const plot = st.buildings.find((b) => b.type === 'farmplot' && isBuilt(b) && sameWorldAsVillager(b));
         if (plot) { wx = plot.x; wz = plot.z; }
       } else {
-        const stall = st.buildings.find((b) => b.type === 'market_stall' && isBuilt(b) && isHomeBuilding(b));
+        const stall = st.buildings.find((b) => b.type === 'market_stall' && isBuilt(b) && sameWorldAsVillager(b));
         if (stall) { wx = stall.x; wz = stall.z; }
       }
       if (wx !== null && wz !== null) {
         // Wave 9 · a Storehouse is a store too, and outranks a Stockpile —
         // one shared preference order (game/storage.ts's bestStore) so the
         // walk-to point, the "at the stores" work check and the delivery
-        // notification can never disagree about where the stores are
-        const store = bestStore(st.buildings, isHomeBuilding);
-        const hx = store ? store.x : HOME_X;
-        const hz = store ? store.z : HOME_Z;
+        // notification can never disagree about where the stores are.
+        // Wave 26 bugfix: `isHomeBuilding` (and the `HOME_X`/`HOME_Z`
+        // fallback below) hardcoded "home" regardless of `villager.world` —
+        // live-reproduced during Wave 26 verification: a per-world
+        // lumberjack/miner correctly walked out to their own settlement's
+        // node and started a real trip (this wave's OTHER fix, rosterSync.ts/
+        // TargetRegistry.ts), only to have the LAST ~30% of that same trip
+        // ("hauling" home) send them walking toward the actual homestead's
+        // origin, thousands of units away — which they of course never
+        // reach, so `villagerAtWork()`'s proximity check fails the moment
+        // they leave WORK_RANGE of the node, freezing the trip timer at 70%
+        // forever, not just slowing it down. `sameWorldAsVillager`/
+        // `settlementAnchor` route this to the villager's OWN settlement
+        // instead, exactly mirroring `home`'s own per-world anchor a few
+        // lines up — a no-op for a home villager (`settlementAnchor(null,
+        // ...)` is `{HOME_X, HOME_Z}`, byte-identical to today).
+        const store = bestStore(st.buildings, sameWorldAsVillager);
+        const anchor = settlementAnchor(villager.world, claimedWorlds);
+        const hx = store ? store.x : anchor.x;
+        const hz = store ? store.z : anchor.z;
         // merchants tend the stall the whole trip; laborers split out/back
         const hauling = villager.job !== 'merchant' && frac >= 0.7;
         const tx = hauling ? hx : wx;

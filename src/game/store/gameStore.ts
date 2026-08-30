@@ -26,6 +26,7 @@ import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
+import { SETTLEMENT_FOUNDING, SETTLEMENT_NODES } from '../data/settlementQuests';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { resetCompanionCombat } from '../companion';
 import { SELL_PRICES } from '../data/trade';
@@ -60,7 +61,7 @@ import { playerState, resetPlayerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
 import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '../data/world';
-import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN, TEMPLATE_ARRIVAL_SPAWN } from '../data/worlds';
+import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN, TEMPLATE_ARRIVAL_SPAWN, resolveDestPoint } from '../data/worlds';
 import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
 import {
@@ -654,9 +655,18 @@ function villagerAtWork(
   // how it would have come straight back.
   const nodeKind = JOB_NODE_KIND[v.job];
   if (nodeKind) {
-    const any = st.nodes.some((n) => n.kind === nodeKind && !n.respawnAt);
+    // Wave 26 · explicit `world` filter, added as cheap hygiene now that a
+    // second real per-world node consumer exists (The Frozen Pass). This was
+    // ALREADY correct by geometry alone — `near()` tests the mob's own real
+    // rendered position, and a destination's nodes sit thousands of units
+    // from the homestead's, so a home villager could never actually pass
+    // this check against a remote node or vice versa — but an implicit
+    // guarantee from distance alone is not the same as a real scoping rule,
+    // and this costs nothing to make explicit.
+    const sameWorld = (n: ResourceNodeState) => (n.world ?? null) === (v.world ?? null);
+    const any = st.nodes.some((n) => n.kind === nodeKind && !n.respawnAt && sameWorld(n));
     if (!any) return true; // nothing to work — do not stall the economy
-    return st.nodes.some((n) => n.kind === nodeKind && !n.respawnAt && near(n.x, n.z));
+    return st.nodes.some((n) => n.kind === nodeKind && !n.respawnAt && sameWorld(n) && near(n.x, n.z));
   }
   if (v.job === 'farmer') {
     const plot = worldBuildings.find((b) => b.type === 'farmplot' && isBuilt(b));
@@ -1298,6 +1308,31 @@ function createGameStore() {
       // to no deed.
       nodes.push({ id: 'fishspot', kind: 'fishing', x: FISHING_DOCK.endX, z: FISHING_DOCK.endZ, scale: 1, yaw: 0, hitsLeft: 999, respawnAt: null });
 
+      // Empire arc, Wave 26 · hand-placed destination resource nodes
+      // (SETTLEMENT_NODES, data/settlementQuests.ts) — The Frozen Pass's
+      // real ore/timber, stamped with `world` so ResourceNodes.tsx's
+      // per-destination filter and villagerAtWork's node-kind check both
+      // see them only while standing in (or working for) that instance.
+      // Hand-placed rather than run through scatterNodesInRect: that
+      // helper's WORLD_HALF gate is a home-world-only bound that rejects
+      // every destination coordinate outright (see its own header comment).
+      // Local points, resolved through the same durable resolveDestPoint
+      // convention every other hand-placed destination fixture uses.
+      for (const [destId, defs] of Object.entries(SETTLEMENT_NODES)) {
+        const dest = WORLD_DESTINATION_BY_ID[destId];
+        if (!dest) continue;
+        let treeI = 0;
+        defs.forEach((d, i) => {
+          const p = resolveDestPoint(dest, d.x, d.z);
+          nodes.push({
+            id: `${destId}_${d.kind}${i}`, kind: d.kind, variant: d.variant,
+            model: d.kind === 'tree' ? TREE_MODELS[treeI++ % 2] : undefined,
+            x: p.x, z: p.z, scale: d.scale, yaw: d.yaw,
+            hitsLeft: d.hitsLeft, respawnAt: null, world: destId,
+          });
+        });
+      }
+
       // Wave 5 · a plot you planted is RE-DERIVED here, never restored:
       // st.nodes is runtime-only and this runs on every load and every land
       // purchase, so the persisted `stage` is the one source of truth for how
@@ -1568,44 +1603,46 @@ function createGameStore() {
     },
 
     // Empire arc, Wave 4 — see this action's own interface doc comment.
+    // Wave 26: generalized off the single hardcoded Fenwick/template-08
+    // literal to a lookup into SETTLEMENT_FOUNDING (data/settlementQuests.ts)
+    // — template-08's entry there holds these exact old values, so this is
+    // byte-identical behavior for Fenwick and real support for any other
+    // destId with a table entry (The Frozen Pass, as of this wave).
     foundSettlement: (destId, x, z, groundY) => {
       const st = get();
       if (st.settlements[destId]) return;
+      const founding = SETTLEMENT_FOUNDING[destId];
+      if (!founding) return;
       // re-validated here, not just in the UI's disabled state — same
       // "a stale panel can never hand out work you have not earned"
       // discipline acceptSideQuest already applies to its own blockers
-      if (!st.completedSideQuests.includes('settle_clear')) return;
-      const cost = { gold: 60 };
-      if (!st.canAfford(cost)) {
-        st.notify('Not enough gold to file the deed — 60 gold needed.');
+      if (!st.completedSideQuests.includes(founding.requiredQuestId)) return;
+      if (!st.canAfford(founding.cost)) {
+        const costText = Object.entries(founding.cost).map(([id, n]) => `${n} ${id}`).join(', ');
+        st.notify(`Not enough to file the deed — ${costText} needed.`);
         return;
       }
       // claims the plot too if the player never used the ordinary
       // ClaimBanner for this destination — a harmless no-op if they did
       // (claimWorld's own guard short-circuits on an existing claim)
       st.claimWorld(destId, x, z, groundY);
-      const inv = { ...st.inventory };
-      inv.gold = (inv.gold ?? 0) - cost.gold;
+      st.addItems(
+        Object.fromEntries(Object.entries(founding.cost).map(([id, n]) => [id, -(n as number)])),
+      );
       const now = Date.now();
-      // farmer/merchant/builder only — lumberjack/miner are excluded on
-      // purpose: this destination has no ResourceNodeState entries yet
-      // (Wave 3's own scoping note) and villagerAtWork's tree/rock branch
-      // has no per-world node awareness, so a lumberjack/miner resident
-      // here would just stall forever with nothing to report
-      const settlerDefs: Villager[] = [
-        { id: 'settler_bram', name: 'Bram', job: 'farmer', world: destId },
-        { id: 'settler_ida', name: 'Ida', job: 'merchant', world: destId },
-        { id: 'settler_tolan', name: 'Tolan', job: 'builder', world: destId },
-      ];
+      const settlerDefs: Villager[] = founding.residents.map((r) => ({ ...r, world: destId }));
       const residents = settlerDefs.filter((r) => !st.villagers.some((v) => v.id === r.id));
       set({
-        inventory: inv,
         settlements: { ...st.settlements, [destId]: { since: now, lastCollectedAt: now } },
         villagers: [...st.villagers, ...residents],
         dirty: true,
       });
       audio.play('treasure', 0.9);
-      st.notify('The deed is filed — Bram, Ida and Tolan take up residence!', true);
+      const names = founding.residents.map((r) => r.name);
+      const nameList = names.length > 1
+        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+        : names[0];
+      st.notify(`The deed is filed — ${nameList} take up residence!`, true);
     },
 
     collectSettlementYield: (destId) => {
@@ -2163,6 +2200,16 @@ function createGameStore() {
         st.notify('Only members of this guild are given its work.');
         return;
       }
+      // Wave 26 bugfix: `sideQuestBlocker` only checks precursor/allegiance/
+      // alliance gates, never "already done" (that's QuestLogPanel's own
+      // separate `done` flag — see DialoguePanel.tsx's `offer` useMemo for
+      // the full story on why it isn't folded into the shared blocker
+      // itself). Re-accepting an already-completed errand isn't just
+      // cosmetic: it would let `turnInSideQuest` grant its XP/gold a second
+      // time for the same requirement. Checked here even though the fixed
+      // `offer` rotation should no longer serve one up, matching this
+      // store's own "the store, not just the panel, enforces it" discipline.
+      if (st.completedSideQuests.includes(questId)) return;
       // precursor chains and allegiance/alliance gates are enforced HERE as
       // well as in the UI, so a stale panel can never hand out work you have
       // not earned

@@ -557,6 +557,39 @@ export const NPCS: NpcDef[] = [
     sideQuests: SETTLEMENT_QUESTS.fenwick,
     world: 'template-08',
   },
+  // Wave 26: the empire arc's second settlement site, living at The Frozen
+  // Pass (template-07) — distinct from both Fenwick (ruins/salvage framing)
+  // and the Woodsmen already stationed at this same destination's guild
+  // hall (they ply an existing trade; he wants to found something new here).
+  // Reuses the same generic villager donor + greetSound + portrait
+  // convention as Alric/Beda/Fenwick — zero new asset dependency.
+  {
+    id: 'torvald',
+    name: 'Torvald',
+    title: 'Frozen Pass Prospector',
+    config: {
+      name: 'Torvald', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
+      armColor: 70, handColor: 18, legColor: 70, hipColor: 24,
+    },
+    // 22m east of the arrival spawn/Woodsmen's Lodge hall/claim banner
+    // (all three share that one point — see guilds.ts's WOODSMEN_HALL and
+    // worlds.ts's TEMPLATE_ARRIVAL_SPAWN) — live-verified clear of every
+    // one of their interact ranges, so a player arriving doesn't get three
+    // overlapping prompts stacked on top of each other. Local point captured
+    // live via a teleport survey and resolveDestPoint's durable convention,
+    // same as Fenwick's own NpcDef above; yaw faces back toward the hall.
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-07'], 3960, 7053.333), yaw: Math.PI / 2,
+    keepProps: false,
+    greetSound: 'villager',
+    portrait: '/assets/minifigs/minifiggenericgood00.png',
+    lines: [
+      "Wind cuts hard through this pass, but look at what it's cut INTO — timber on one side, good ore-bearing rock on the other.",
+      "The Lodge folk work the trees, and rightly, but nobody's put down real roots here yet.",
+      'Shore up a shelter against this wind and clear the trail of what prowls it, and I\'ll see about a proper deed.',
+    ],
+    sideQuests: SETTLEMENT_QUESTS.torvald,
+    world: 'template-07',
+  },
 ];
 
 export const NPC_BY_ID = Object.fromEntries(NPCS.map((n) => [n.id, n]));
