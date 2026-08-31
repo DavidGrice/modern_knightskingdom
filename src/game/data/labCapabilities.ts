@@ -131,6 +131,82 @@ export interface LabCapability {
   seedSource?: 'auto' | 'verified';
 }
 
+/**
+ * Wave 29 · a small IN-REPO patch layer over the fetched capabilities.json.
+ *
+ * That file is a build artifact (`/public/assets/`, gitignored — see the
+ * repo's own asset-pipeline note there) regenerated wholesale by
+ * scripts/prepare-assets.mjs (also gitignored) from the lab's own external
+ * PAK_ASSET_CAPABILITIES.json/PAK_CAPABILITY_OVERRIDES.json — files that live
+ * in the sibling lab repo, not here. A hand-edit straight to capabilities.json
+ * would work locally for exactly as long as nobody re-runs that pipeline on
+ * any machine, then silently vanish — not a durable fix this repo can ship.
+ * This function is the durable version of the same "override always wins"
+ * rule PAK_CAPABILITY_OVERRIDES.json itself already follows one layer up,
+ * just moved into tracked source for the handful of corrections this
+ * content-authoring wave found and could verify against real rig data
+ * (part_roles.json) but couldn't get the external lab tool to re-seed.
+ */
+function applyLocalOverrides(caps: Record<string, LabCapability>) {
+  // The Signal Cannon promotion (buildables.ts) needs `12_l3207401` to read
+  // as a real firing siege engine. Its rig is lab-verified (part_roles.json:
+  // rigClass 'cannon', status 'verified', parts base/barrel/plunger) but its
+  // capabilities.json entry was still the generic auto-seeded 'workshop'
+  // shape (kind:'workshop', rigClass:'none') — the rig layer identified it,
+  // the capability layer never got updated. Given `kind: 'vehicle'` with a
+  // real `traits.vehicle`, not the 'wall'-kind shape c3_cannon/oc6096b4 use
+  // below — see their own comment for why that shape doesn't actually work.
+  caps['12_l3207401'] = {
+    kind: 'vehicle',
+    displayName: 'Signal Cannon 12_l3207401 (compact wall gun, verified rig)',
+    rigClass: 'cannon',
+    rigStatus: 'verified',
+    traits: {
+      vehicle: {
+        isSiegeEngine: true, isStationary: true, canFire: true,
+        hasProjectile: true, damagesWalls: true, damagesVehicles: true,
+        siegeRole: 'cannon',
+      },
+    },
+    interaction: {
+      isMovable: false, isRotatable: false, isDeletable: false, isDestructible: true,
+      isPaintable: false, isDriveable: false, isSelectable: true,
+      canGrab: false, canWear: false, canSeat: false, canStandOn: false, canFire: true,
+    },
+    sockets: {
+      origin: 'root',
+      baseplate: '005_L_3207401_PART_3',
+      cannon_barrel: '015_L_3207400',
+      cannon_ball: '010_OC_6096B4_Plunger',
+    },
+    seedSource: 'verified',
+  };
+
+  // Bonus fix found while wiring the above: `c3_cannon`/`oc6096b4` (the
+  // "Cannon"/"Wall Cannon" buildables already in the game) carry an
+  // `isCannon: true` / `structureKind: 'stationary_cannon'` shape under
+  // `traits.wall` — but neither `isCannon` nor `structureKind` is read by
+  // ANY predicate in this file, and `labCanFire` only ever checks
+  // `traits.vehicle?.canFire ?? interaction.canFire` — so `oc6096b4` (which
+  // isn't the hardcoded `b.type === 'cannon'` bypass Emplacements.tsx/
+  // PlayerController.tsx special-case) never actually auto-fires or
+  // manually fires today, unlike its 8 SIEGE siblings. Adding the same real
+  // `traits.vehicle` shape the working siege engines use — additively,
+  // alongside their existing `traits.wall` data, which nothing here removes
+  // — fixes that using the exact mechanism the game already relies on for
+  // every other siege piece, rather than inventing a second one.
+  for (const id of ['c3_cannon', 'oc6096b4']) {
+    const c = caps[id];
+    if (!c) continue;
+    c.traits.vehicle = {
+      ...c.traits.vehicle,
+      isSiegeEngine: true, isStationary: true, canFire: true,
+      hasProjectile: true, damagesWalls: true, damagesVehicles: true,
+      siegeRole: 'cannon',
+    };
+  }
+}
+
 let warm: Record<string, LabCapability> = {};
 let promise: Promise<Record<string, LabCapability>> | null = null;
 
@@ -138,7 +214,11 @@ export function loadCapabilities(): Promise<Record<string, LabCapability>> {
   if (!promise) {
     promise = fetch('/assets/rigs/capabilities.json')
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: Record<string, LabCapability>) => { warm = d; return d; })
+      .then((d: Record<string, LabCapability>) => {
+        applyLocalOverrides(d);
+        warm = d;
+        return d;
+      })
       .catch(() => ({}));
   }
   return promise;

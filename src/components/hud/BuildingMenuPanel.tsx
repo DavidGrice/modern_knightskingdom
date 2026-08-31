@@ -7,15 +7,16 @@
 // this instead, and moving is one choice among several rather than the only
 // one.
 import { useGameStore } from '@/game/store/gameStore';
-import { BUILDABLE_BY_ID, labAssetId } from '@/game/data/buildables';
+import { BUILDABLE_BY_ID, costBill, labAssetId } from '@/game/data/buildables';
 import { labIsExplosive } from '@/game/data/labCapabilities';
-import { brickFor } from '@/game/data/brickResources';
-import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import { isBuilt } from '@/game/types';
 
-/** the charges the lab marks as explosive, in the order they read as a ladder */
-const CHARGES = ['l394101', 'l248901', 'l473801'];
+/** the charges the lab marks as explosive, in the order they read as a
+ *  ladder — Wave 29 adds `l4105278` ("Powder Mine"), the catalog's 4th real
+ *  Destructor model, promoted alongside its 3 already-wired siblings above
+ *  (see buildables.ts's own comment on that entry). */
+const CHARGES = ['l394101', 'l248901', 'l473801', 'l4105278'];
 
 export default function BuildingMenuPanel() {
   const id = useGameStore((s) => s.menuBuilding);
@@ -104,16 +105,20 @@ export default function BuildingMenuPanel() {
                       {already ? 'This wall already carries a charge.' : 'Arms on approach; takes the wall with it.'}
                     </div>
                     <div className="keep-option-cost">
-                      {Object.entries(c.cost).map(([item, n]) => {
-                        const brick = brickFor(item as ItemId);
-                        const have = inventory[item as ItemId] ?? 0;
+                      {/* Wave 29 · costBill() (none of these charges author a
+                          `pieces` bill, so this is byte-identical to the old
+                          Object.entries(c.cost) loop it replaces) — line.key
+                          is the real ItemId for every non-`pieces` buildable,
+                          which is what the per-line afford check needs. */}
+                      {costBill(c).map((line) => {
+                        const have = inventory[line.key as ItemId] ?? 0;
                         return (
-                          <span key={item} className={`b-cost-part${have >= (n ?? 0) ? '' : ' short'}`}>
-                            {brick
+                          <span key={line.key} className={`b-cost-part${have >= line.qty ? '' : ' short'}`}>
+                            {line.thumb
                               // eslint-disable-next-line @next/next/no-img-element
-                              ? <img className="b-cost-thumb" src={brick.thumb} alt="" />
-                              : <span>{ITEMS[item as ItemId]?.icon ?? item}</span>}
-                            {n}
+                              ? <img className="b-cost-thumb" src={line.thumb} alt="" />
+                              : <span>{line.icon}</span>}
+                            {line.qty}
                           </span>
                         );
                       })}

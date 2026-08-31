@@ -11,6 +11,7 @@ import { worldEnv, nightFactor, sampleEnv, seasonOf } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { playerState } from '@/game/playerState';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
+import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 
 export default function DayNight() {
   const shadows = useAppStore((s) => s.settings.shadows);
@@ -115,6 +116,10 @@ export default function DayNight() {
     }
 
     audio.nightMode = worldEnv.night > 0.6;
+    // Wave 29 · per-destination ambience (see audio.ts's own `ambienceBiome`
+    // doc) — this useFrame block already reads `st.destination` fresh every
+    // frame, so this is a one-line addition, not new wiring.
+    audio.ambienceBiome = WORLD_DESTINATION_BY_ID[st.destination ?? '']?.ambience ?? 'meadow';
 
     // low-frequency sync of the clock + season into the store (HUD + saves)
     syncTimer.current -= dt;

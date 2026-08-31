@@ -7,10 +7,9 @@
 // the crafting-menu overhaul established.
 import { useMemo, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
-import { BUILDABLES, BUILD_CATEGORIES, LAND_TIERS, MAX_LAND_TIER } from '@/game/data/buildables';
+import { BUILDABLES, BUILD_CATEGORIES, LAND_TIERS, MAX_LAND_TIER, costBill } from '@/game/data/buildables';
 import { STARTER_BLUEPRINTS } from '@/game/data/blueprints';
 import { buildCamState } from '@/game/buildCam';
-import { brickFor, brickLabel } from '@/game/data/brickResources';
 import { SET_PLANS, setOwning } from '@/lib/setBuild';
 import { ITEMS } from '@/game/data/items';
 import { MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
@@ -376,20 +375,21 @@ export default function BuildBar() {
                   <div className="b-name">{isLocked ? '🔒 ' : ''}{b.name}</div>
                   {/* J45 · the cost is a BILL OF PIECES: each line is the
                       actual catalogue brick it will take, with its own
-                      thumbnail, rather than an emoji and a number */}
+                      thumbnail, rather than an emoji and a number. Wave 29 ·
+                      a HAND-PICKED bill of distinct SKUs when the buildable
+                      authors one (costBill reads Buildable.pieces), else the
+                      original one-brick-per-family fallback — same call
+                      either way. */}
                   <div className="b-cost">
-                    {Object.entries(b.cost).map(([id, n]) => {
-                      const brick = brickFor(id as ItemId);
-                      return (
-                        <span className="b-cost-part" key={id} title={brickLabel(id as ItemId, ITEMS[id as ItemId]?.name ?? id)}>
-                          {brick
-                            // eslint-disable-next-line @next/next/no-img-element
-                            ? <img className="b-cost-thumb" src={brick.thumb} alt="" />
-                            : <span>{ITEMS[id as ItemId]?.icon ?? id}</span>}
-                          {n}
-                        </span>
-                      );
-                    })}
+                    {costBill(b).map((line) => (
+                      <span className="b-cost-part" key={line.key} title={line.label}>
+                        {line.thumb
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img className="b-cost-thumb" src={line.thumb} alt="" />
+                          : <span>{line.icon}</span>}
+                        {line.qty}
+                      </span>
+                    ))}
                   </div>
                 </div>
               );

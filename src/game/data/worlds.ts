@@ -106,6 +106,14 @@ export interface WorldDestination {
    *  through regardless of theme (an icy mountain pass under a summer-grass
    *  sky was the reported mismatch this fixes). */
   sky?: 'grass' | 'mountains';
+  /** Wave 29 · which ambience pool `audio.ts`'s startAmbience() loops, and
+   *  whether `<Wildlife/>`'s wild falcon/bats render at all (Wildlife.tsx).
+   *  Absent = 'meadow', the game's original single global pool/wildlife set
+   *  every destination played through regardless of theme (the same
+   *  mismatch `sky` above fixed for the skybox — birdsong and a circling
+   *  falcon over an icy mountain pass, or inside a sealed dungeon). See
+   *  audio.ts's own `ambienceBiome` doc for what each value actually plays. */
+  ambience?: 'meadow' | 'mountain' | 'ruins' | 'silent';
 }
 
 // Requested 2026-08-03: templates 01-08 (the actual travel destinations —
@@ -220,6 +228,7 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
     thumb: '/assets/worlds/thumbs/template-04.png', model: '/assets/worlds/template-04.glb',
     origin: { x: 1900, z: 1000 }, radius: 159.5, worldScale: DEST_WORLD_SCALE,
     loot: { iron_ore: 5 }, lootText: 'You pry loose iron fittings from the old siege engine (+5 iron ore).',
+    ambience: 'ruins',
   },
   {
     id: 'template-05', name: 'The Rival Castle',
@@ -241,6 +250,7 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
     thumb: '/assets/worlds/thumbs/template-07.png', model: '/assets/worlds/template-07.glb',
     origin: { x: 2800, z: 1000 }, radius: 134.5, worldScale: DEST_WORLD_SCALE, sky: 'mountains',
     loot: { iron_ore: 8 }, lootText: 'The mountain pass is rich with ore (+8 iron ore — a mining bonus!).',
+    ambience: 'mountain',
   },
   {
     id: 'template-08', name: 'The Old Ruins',
@@ -248,6 +258,7 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
     thumb: '/assets/worlds/thumbs/template-08.png', model: '/assets/worlds/template-08.glb',
     origin: { x: 3100, z: 1000 }, radius: 114, worldScale: DEST_WORLD_SCALE,
     loot: { stone: 6, iron_ore: 4 }, lootText: 'You dig a little loot out of the ruins (+6 stone, +4 iron ore).',
+    ambience: 'ruins',
   },
   {
     id: 'template-09', name: 'The Far Meadow',
@@ -363,6 +374,9 @@ export const DUNGEON_DESTINATION: WorldDestination = {
   // dungeon.ts's module doc). +30 gives real margin over REACH_LIMIT, the
   // generator's own hard cap on any room's farthest corner from the origin.
   origin: DUNGEON_ORIGIN, radius: REACH_LIMIT + 30,
+  // Wave 29 · a sealed underground ruin should not carry the same
+  // birdsong/wild-falcon/bats every open-air destination does.
+  ambience: 'silent',
 };
 
 // The endless mob arena (requested 2026-08-03) piggybacks on this same
@@ -380,6 +394,9 @@ export const ARENA_DESTINATION: WorldDestination = {
   blurb: 'A sealed pit. They keep coming until you leave, or you don’t.',
   thumb: '', model: '',
   origin: ARENA_ORIGIN, radius: ARENA_RADIUS,
+  // Wave 29 · same reasoning as the dungeon above — a sealed pit, not a
+  // meadow with birds in it.
+  ambience: 'silent',
 };
 
 // The six bonus "challenge" maps (requested 2026-08-03) — smaller warehouse

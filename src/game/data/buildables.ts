@@ -1,7 +1,9 @@
-import type { Buildable, BuildRect, ClaimedPlot, PlacedBuilding } from '../types';
+import type { Buildable, BuildRect, ClaimedPlot, ItemId, PlacedBuilding } from '../types';
 import GENERATED from './bricks.generated.json';
 import LAND_TIERS_DATA from './landTiers.generated.json';
 import { shapeFor } from '../collisionShapes';
+import { brickFor, brickLabel } from './brickResources';
+import { ITEMS } from './items';
 
 // Grid pitches in meters: big structures snap to GRID, brick-scale pieces to STUD.
 export const GRID = 2;
@@ -109,6 +111,8 @@ const CRAFTED: Buildable[] = [
     id: 'workbench', name: 'Workbench', thumb: `${P}/scenery/l301500.png`, model: `${P}/scenery/l301500.glb`,
     category: 'essentials', size: [1.1, 0.9, 1.5], snap: GRID, stackable: false,
     cost: { plank: 6 }, station: 'workbench', buildXp: 15,
+    // Wave 29 · 2× Brick 1×4 + 1× Brick 8×8 = 6 plank exactly.
+    pieces: [{ id: 'gen_12_l301000', qty: 2 }, { id: 'gen_48_l420100', qty: 1 }],
   },
   {
     id: 'forge', name: 'Forge', icon: '🏭', category: 'essentials',
@@ -159,6 +163,9 @@ const CRAFTED: Buildable[] = [
     category: 'essentials', size: [3, 2.4, 4], snap: GRID, stackable: false,
     cost: { plank: 10, stone: 6 }, buildXp: 35,
     requiresUnlock: 'building2',
+    // Wave 29 · 2× Brick 8×8 + 2× Brick 1×4 = 10 plank, 1× Wall Section 7×7
+    // = 6 stone.
+    pieces: [{ id: 'gen_48_l420100', qty: 2 }, { id: 'gen_12_l301000', qty: 2 }, { id: 'gen_24_l607200', qty: 1 }],
   },
   {
     id: 'flowerbed', name: 'Flower Bed', thumb: `${P}/scenery/l374100.png`, model: `${P}/scenery/l374100.glb`,
@@ -207,6 +214,9 @@ const CRAFTED: Buildable[] = [
     category: 'walls', size: [4, 1.6, 0.5], snap: GRID, stackable: true,
     cost: { plank: 4, stone: 1 }, buildXp: 12,
     requiresUnlock: 'building2',
+    // Wave 29 · 4× Roof Slope 2×1 (the rails) = 4 plank, 1× Wall Section
+    // 2×2 (the post footing) = 1 stone.
+    pieces: [{ id: 'gen_00_l304000', qty: 4 }, { id: 'gen_10_l235700', qty: 1 }],
   },
   {
     // was `02_l3013600` (catalog category "Brick", raw bbox depth *2×* its
@@ -221,6 +231,8 @@ const CRAFTED: Buildable[] = [
     // used to cost 6 while the identically-sized mc006 wall cost 12
     cost: { stone: 10 }, buildXp: 20,
     requiresUnlock: 'mining',
+    // Wave 29 · 2× Wall Section 2×5 + 2× Wall Section 2×2 = 10 stone.
+    pieces: [{ id: 'gen_14_l444400', qty: 2 }, { id: 'gen_10_l235700', qty: 2 }],
   },
   {
     // was `04_l609100` (also catalog category "Brick", not remotely
@@ -230,6 +242,12 @@ const CRAFTED: Buildable[] = [
     category: 'defense', size: [4, 8.16, 4], snap: GRID, stackable: true,
     cost: { stone: 10, plank: 2 }, buildXp: 35,
     requiresUnlock: 'smithing',
+    // Wave 29 · the first hand-picked bill (item 1 of the content-authoring
+    // pass): 2× Wall Section 2×5 + 2× Tower Piece 2×2 = 10 stone exactly,
+    // 2× Roof Slope 2×1 = 2 plank exactly — real bricks.generated.json SKUs
+    // whose own costs sum to this buildable's `cost` above. See
+    // Buildable.pieces (types.ts) and costBill() below for how this reads.
+    pieces: [{ id: 'gen_14_l444400', qty: 2 }, { id: 'gen_06_l394100', qty: 2 }, { id: 'gen_00_l304000', qty: 2 }],
   },
   {
     id: 'gate', name: 'Castle Gate', thumb: `${P}/windows_doors/06_l318500.png`, model: `${P}/windows_doors/06_l318500.glb`,
@@ -290,6 +308,9 @@ const CRAFTED: Buildable[] = [
     category: 'walls', size: [0.77, 0.84, 1.05], snap: 1, stackable: true,
     cost: { plank: 3 }, buildXp: 10,
     requiresUnlock: 'building2',
+    // Wave 29 · 3× its own real mold (gen_14_l453201, "Window/Door 2×3",
+    // 1 plank each) = 3 plank exactly — this piece IS the catalogue SKU.
+    pieces: [{ id: 'gen_14_l453201', qty: 3 }],
   },
   {
     // J51 · this is the FOUNDATION, not the castle. Placing it marks out a
@@ -302,6 +323,10 @@ const CRAFTED: Buildable[] = [
     category: 'defense', size: [16, 0.3, 16], snap: GRID, stackable: false,
     cost: { stone: 12, plank: 6 }, buildXp: 60,
     requiresUnlock: 'keep',
+    // Wave 29 · 2× Wall Section 7×7 = 12 stone, 2× Roof Slope 8×6 = 6
+    // plank — the biggest single SKUs in the catalogue, matching the scale
+    // of a whole courtyard's groundwork.
+    pieces: [{ id: 'gen_24_l607200', qty: 2 }, { id: 'gen_54_l451500', qty: 2 }],
   },
   {
     id: 'farmplot', name: 'Farm Plot', icon: '🌾', category: 'essentials',
@@ -313,6 +338,9 @@ const CRAFTED: Buildable[] = [
     size: [1.2, 2.3, 1.2], snap: 1, stackable: false,
     cost: { plank: 3, stone: 1 }, buildXp: 10,
     requiresUnlock: 'building2',
+    // Wave 29 · 1× Roof Slope 8×6 (the crossarm) = 3 plank, 1× Tower Piece
+    // 1×1 (the post footing) = 1 stone.
+    pieces: [{ id: 'gen_54_l451500', qty: 1 }, { id: 'gen_00_l306200', qty: 1 }],
   },
   {
     id: 'cannon', name: 'Cannon', icon: '💣', model: `${P}/cannon.glb`, category: 'defense',
@@ -337,6 +365,9 @@ const CRAFTED: Buildable[] = [
     size: [2.6, 2.4, 1.8], snap: GRID, stackable: false,
     cost: { plank: 8, stone: 4 }, buildXp: 30,
     requiresUnlock: 'smithing',
+    // Wave 29 · 2× Brick 8×8 (the counter/awning) = 8 plank, 4× Tower
+    // Piece 2×2 (the corner posts) = 4 stone.
+    pieces: [{ id: 'gen_48_l420100', qty: 2 }, { id: 'gen_06_l394100', qty: 4 }],
   },
 ];
 
@@ -466,10 +497,54 @@ const PREFABS: Buildable[] = [
   { id: 'oc6032b4', name: 'Armory Stand', thumb: `${B}/oc6032b4.png`, model: `${B}/oc6032b4.glb`,
     category: 'prefab', size: [1.4, 2.2, 0.9], snap: GRID, stackable: false,
     cost: { wood: 4, iron_bar: 2 }, buildXp: 18 },
+  // Wave 29 · arches/rounded-piece audit (item 2). Nine real "Arch" catalog
+  // pieces sat generically in the decor bricks tab the whole time; the rig
+  // lab (part_roles.json) charts `16_l302721` (the tallest, 4.34m) as
+  // carrying a genuine second sub-mesh — `005_L_604600: 'portcullis'` — a
+  // real lattice gate built into the arch, not just an open archway. That
+  // makes it a gatehouse, not garden decor, and its walkable-hole collision
+  // is already real (scripts/gen-collision.mjs voxelized it: 25 boxes,
+  // confirmed live in public/assets/collision.json) — see COLLISION_ALIAS
+  // below for why THIS id still resolves to that same voxel data even
+  // though it isn't the generic `gen_16_l302721` id the voxelizer keyed it
+  // under. Priced/gated alongside the Drawbridge Front above, its natural
+  // sibling (both are "a whole castle front", not a wall segment).
+  { id: 'gatehouse_arch', name: 'Gatehouse Arch', thumb: `${P}/arches/16_l302721.png`, model: `${P}/arches/16_l302721.glb`,
+    category: 'prefab', size: [1.4, 4.34, 4.2], snap: GRID, stackable: false,
+    cost: { stone: 18, iron_bar: 2 }, buildXp: 55, requiresUnlock: 'keep' },
+  // its shorter sibling (2.52m, arch only — the lab charts no portcullis
+  // sub-mesh on this one, `part_roles.json`'s `14_l302720` is a single plain
+  // "body" part) — a cheaper, ungated decor promotion rather than a second
+  // gatehouse.
+  { id: 'garden_arch', name: 'Garden Arch', thumb: `${P}/arches/14_l302720.png`, model: `${P}/arches/14_l302720.glb`,
+    category: 'decor', size: [1.4, 2.52, 4.2], snap: GRID, stackable: false,
+    cost: { stone: 6 }, buildXp: 15 },
   { id: 'banner', name: 'War Banner', thumb: `${P}/castle_accessories/18_l7196300.png`, model: `${P}/castle_accessories/18_l7196300.glb`,
     category: 'decor', size: [1.2, 2.4, 0.4], snap: 1, stackable: false,
     cost: { wood: 2, flowers: 1 }, buildXp: 8 },
 ];
+
+// Wave 29 · a hand-authored buildable that reuses a GENERATED_BUILDABLES
+// mesh under its OWN id (a fresh promotion, not the generic `gen_` entry)
+// still needs the SAME real voxelized collision that generic entry already
+// has — scripts/gen-collision.mjs (local-only, gitignored — see the repo's
+// own asset-pipeline note in .gitignore) keys its output by buildable id,
+// and only ever ran against the ids present in buildables.ts/
+// bricks.generated.json at the time it was last run, which does not include
+// ids invented in this pass. Hand-duplicating the entry into
+// public/assets/collision.json isn't durable either — that file is itself
+// gitignored/regenerated, so a hand edit would be silently lost on the next
+// asset-pipeline run on any machine. Aliasing the LOOKUP back to the real
+// `gen_` id the geometry is actually voxelized under is: real data, still
+// git-tracked (this table lives in source), and survives a pipeline rerun.
+const COLLISION_ALIAS: Record<string, string> = {
+  gatehouse_arch: 'gen_16_l302721',
+  garden_arch: 'gen_14_l302720',
+  signal_cannon: 'gen_12_l3207401',
+};
+function shapeForBuildable(type: string) {
+  return shapeFor(COLLISION_ALIAS[type] ?? type);
+}
 
 // Siege engines and explosives (2026-07-20), promoted straight from the rig
 // lab's verified capability pass. These meshes were sitting unused in the
@@ -547,6 +622,42 @@ const SIEGE: Buildable[] = [
   { id: 'l394101', name: 'Powder Charge', thumb: `${L}/l394101.png`, model: `${L}/l394101.glb`,
     category: 'siege', size: [0.8, 0.48, 0.8], snap: 1, stackable: false,
     cost: { wood: 2, stone: 2 }, buildXp: 12, requiresUnlock: 'smithing' },
+  // Wave 29 · unused-asset audit (item 3). The catalog's raw "Destructor"
+  // tag names exactly 4 explosive-charge models; the first 3 were already
+  // wired above as l248901/l473801/l394101. `l4105278` is the 4th — fully
+  // lab-verified (capabilities.json: kind:'explosive', isExplosive,
+  // damagesWalls, damagesVehicles — the same trait shape as its 3 wired
+  // siblings) and already appears once as static set-dressing at
+  // template-05 (mapPopulation.generated.json), but was never offered to
+  // the player. Its real bbox reads flat and low (16.007×3.2×8.0 raw at the
+  // family's own k=0.05 -> 0.8×0.16×0.4m), distinct from the barrel/chest/
+  // upright-charge shapes already used — a buried mine, not a standing keg.
+  { id: 'l4105278', name: 'Powder Mine', thumb: `${L}/l4105278.png`, model: `${L}/l4105278.glb`,
+    category: 'siege', size: [0.8, 0.16, 0.4], snap: 1, stackable: false,
+    cost: { wood: 1, stone: 1 }, buildXp: 8, requiresUnlock: 'smithing' },
+  // Wave 29 · the genuinely distinct, unused second cannon (NOT the "Cannon"/
+  // "Wall Cannon" pair — those two are byte-identical files used twice, see
+  // this wave's own research). `gen_12_l3207401` sat generically catalogued
+  // as "Ornament 4×9" the whole time; the rig lab (part_roles.json) charts a
+  // real cannon rig on it — base/barrel/plunger parts, `rigClass: 'cannon'`,
+  // status 'verified' — but capabilities.json's own entry for it never got
+  // updated to match (still generic `kind:'workshop'`), so nothing in the
+  // game recognized it. `labCapabilities.ts`'s LOCAL_OVERRIDES (this wave)
+  // fixes that AND gives it a `traits.vehicle`-shaped capability (kind
+  // 'vehicle', not 'wall') — verified live that the existing 'wall'-kind
+  // shape c3_cannon/oc6096b4 both use is NEVER actually read by labCanFire
+  // (it checks `traits.vehicle.canFire`/`interaction.canFire` only; neither
+  // cannon capability entry sets either), so mirroring THAT shape here would
+  // have promoted a second cannon that silently never fires, same as its
+  // 50KB-smaller original — see that module's own comment for the full
+  // finding and the (also fixed, as a bonus) oc6096b4/c3_cannon patch.
+  // A smaller mesh than Wall Cannon (50KB vs 194KB, confirmed by file size)
+  // reads as a compact alternative, priced and sized to match — its own
+  // real bricks.generated.json bbox, not the wall-family's k=0.05 (this is
+  // a 'siege'-category promotion, not a wall piece needing GRID alignment).
+  { id: 'signal_cannon', name: 'Signal Cannon', thumb: `${P}/castle_accessories/12_l3207401.png`, model: `${P}/castle_accessories/12_l3207401.glb`,
+    category: 'siege', size: [1.4, 2.03, 2.975], snap: GRID, stackable: false,
+    cost: { stone: 4, iron_bar: 1 }, buildXp: 24, requiresUnlock: 'smithing' },
 ];
 
 export const BUILDABLES: Buildable[] = [...CRAFTED, ...PREFABS, ...SIEGE, ...GENERATED_BUILDABLES];
@@ -576,6 +687,45 @@ export function buildableForLabAsset(labId: string): string | null {
   if (BUILDABLE_BY_ID[labId]) return labId;
   for (const b of BUILDABLES) if (b.model && labAssetId(b.id) === labId) return b.id;
   return null;
+}
+
+/** one line of a rendered cost bill — see costBill() below */
+export interface CostBillLine {
+  key: string;
+  thumb: string | null;
+  icon?: string;
+  label: string;
+  qty: number;
+}
+
+/**
+ * Wave 29 · the cost as an actual bill of distinct catalogue pieces when a
+ * buildable hand-authors one (`Buildable.pieces` — see that field's own doc
+ * comment in types.ts), falling back to J45's original one-canonical-brick-
+ * per-family display (`brickFor`) for every buildable that hasn't been given
+ * a bill yet — identical output to what the two render sites (BuildBar.tsx,
+ * BuildingMenuPanel.tsx) used to compute inline. Purely a render helper:
+ * canAfford/addItems/refunds/maxHpFor all keep reading `def.cost`, the real
+ * family totals, unchanged — this never changes what a piece costs, only how
+ * the cost READS.
+ */
+export function costBill(def: Buildable): CostBillLine[] {
+  if (def.pieces && def.pieces.length) {
+    return def.pieces.map((p) => {
+      const piece = BUILDABLE_BY_ID[p.id];
+      return { key: p.id, thumb: piece?.thumb ?? null, label: piece?.name ?? p.id, qty: p.qty };
+    });
+  }
+  return Object.entries(def.cost).map(([id, n]) => {
+    const brick = brickFor(id as ItemId);
+    return {
+      key: id,
+      thumb: brick?.thumb ?? null,
+      icon: brick ? undefined : (ITEMS[id as ItemId]?.icon ?? id),
+      label: brickLabel(id as ItemId, ITEMS[id as ItemId]?.name ?? id),
+      qty: n ?? 0,
+    };
+  });
 }
 
 export const BUILD_CATEGORIES: { id: Buildable['category']; label: string; icon: string }[] = [
@@ -701,7 +851,7 @@ const solidOffsetCache: Record<string, [number, number]> = {};
 export function solidOffset(type: string): [number, number] {
   const cached = solidOffsetCache[type];
   if (cached) return cached;
-  const shape = shapeFor(type);
+  const shape = shapeForBuildable(type);
   let out: [number, number] = [0, 0];
   if (shape && shape.length) {
     let vol = 0; let cx = 0; let cz = 0;
@@ -735,7 +885,7 @@ export function collisionBoxesFor(type: string, rot: number): CollisionBox[] {
   // actual hole instead of being a solid slab you cannot walk under. The
   // boxes are authored in the piece's UNROTATED local frame, so a quarter
   // turn swaps the axes exactly the way sizeFor already swaps the footprint.
-  const shape = shapeFor(type);
+  const shape = shapeForBuildable(type);
   if (shape && shape.length) {
     const quarter = ((rot % 4) + 4) % 4;
     // re-centre on the solid (L65) before turning, so the volumes move with

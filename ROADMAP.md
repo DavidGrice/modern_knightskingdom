@@ -7799,3 +7799,89 @@ exist total, none of them sit/sleep/eat/use-object).
   correctly, and spawning 40 simultaneous pond-eligible villagers produced no measurable FPS change
   (60.6→60.5 over a 2s sample). Zero console/page errors across every run. `npx tsc --noEmit` /
   `npm run build`: both clean, verified independently.
+
+## Wave 29: a content-authoring batch — hand-picked SKU costs, an arch/cannon audit, per-destination ambience — SHIPPED 2026-08-31
+
+Five catalog/config items, batched because they're all the same flavor of work: sit down and go
+through the asset/data catalog rather than write new systems. Every item was re-verified live
+against real code/asset data before touching anything — the research pass's own wording drifted
+from live code on two of the five, in opposite directions from what a shallower read would guess.
+
+- [COMPLETE] ✅ **Hand-picked SKU building costs — a genuinely bounded, mechanically-verified batch
+  of 9, not a guess.** `Buildable.cost` stays the sole economy truth (`canAfford`/`addItems`/
+  refunds/`maxHpFor` all read it unchanged) — a new optional `pieces?: {id,qty}[]` field and a
+  `costBill()` helper (`buildables.ts`) are purely a render layer, wired into the two real
+  buildable-cost UIs (`BuildBar.tsx`, `BuildingMenuPanel.tsx`'s charge-mount cost). The catalogue
+  itself set the real scope: every `bricks.generated.json` SKU is priced in `wood`/`stone`/`plank`
+  only — zero SKUs cost `iron_bar`/`iron_ore`/`flowers`/`gold` — so only buildables costed purely in
+  those two-and-a-half families can get an exact bill without guessing a piece that doesn't exist.
+  That's `tower`, `stonewall`, `keep`, `market_stall`, `storehouse`, `palisade`, `quintain`,
+  `window`, `workbench` — 9 hand-authored bills, each verified by script to sum EXACTLY to the
+  buildable's existing cost (`window`'s bill is literally 3× its own real mold). `gate`/`door`/
+  `cannon`/`warcart`/`bladecart` and the rest stay on the family-total fallback, named here as the
+  honest, larger follow-up rather than forced.
+- [COMPLETE] ✅ **Arches audit — the suspected bug mostly didn't exist; the real find was a
+  buried gatehouse.** Walkable-archway collision already shipped correctly (voxelized per-piece,
+  `scripts/gen-collision.mjs`); the 3 short "Arch" pieces that fall back to a solid bbox are all
+  0.42m knee-height variants where a walkable hole wouldn't matter anyway, not a live bug. The real
+  find: `gen_16_l302721` ("Arch 4×12", 4.34m) is rig-verified (`part_roles.json`) to carry a genuine
+  built-in portcullis sub-mesh — a real gatehouse sitting anonymously in the decor tab for 6 stone.
+  Promoted to `gatehouse_arch` (stone 18 + iron_bar 2, gated like its sibling Drawbridge Front) and
+  its shorter arch-only sibling to `garden_arch` (cheap, ungated decor). **A real gap the plan didn't
+  anticipate, caught and fixed before shipping**: a fresh buildable id doesn't inherit the generic
+  `gen_` id's voxelized collision (`scripts/gen-collision.mjs`/`collision.json` are both gitignored,
+  regenerated pipeline output keyed by the *old* id) — fixed with a small in-source
+  `COLLISION_ALIAS` table (`buildables.ts`) that redirects the lookup back to the real voxel data,
+  durable across a pipeline rerun rather than a hand-edit to a file that would silently lose it.
+- [COMPLETE] ✅ **Unused-asset audit — one real gap wired, one real asset promoted, one stale
+  fact corrected rather than forced.** `l4105278` ("Powder Mine") was the genuinely unused 4th
+  Destructor model — already lab-verified, already set-dressing at template-05, never offered to the
+  player; wired in alongside its 3 already-shipped siblings. The "second cannon" claim turned out to
+  be about the WRONG pair — "Cannon" and "Wall Cannon" are byte-identical files used twice, not two
+  unused cannons — but a real, distinct, unused cannon mesh (`gen_12_l3207401`, 50KB vs 194KB,
+  rig-verified base/barrel/plunger) was sitting generically catalogued as "Ornament 4×9". Promoted
+  to `signal_cannon`. **A second real gap found and fixed while wiring it, not by blindly following
+  the plan's own suggested capability shape**: mirroring the existing Cannon/Wall Cannon pair's
+  `traits.wall`-kind capability shape would have shipped a second cannon that silently never fires —
+  traced `labCanFire` line by line and confirmed it only ever reads `traits.vehicle.canFire`, which
+  neither existing cannon capability entry sets, so `oc6096b4` ("Wall Cannon") itself doesn't
+  actually auto-fire or manually fire today despite being a real placeable SIEGE buildable. Gave the
+  new cannon (and, as a bonus fix, its two existing relatives) the real `traits.vehicle` shape every
+  other working siege engine uses instead — verified end-to-end against `Emplacements.tsx`'s
+  auto-fire scan and `PlayerController.tsx`'s manual-fire prompt, both of which now light up for all
+  three. Also corrected a stale animal count: the plan's "2 unused Animal models" is off by one — the
+  lab's own `isAnimal` flag names exactly one genuinely unused creature (`l3010301`, the bat-swarm
+  mesh), not two; documented rather than forcing a second use that doesn't exist.
+- [COMPLETE] ✅ **`LEARNED_PART_LEXICON.json` — confirmed it doesn't even live in this repo, and
+  left unconsumed, correctly.** It exists only in the sibling lab repo, never copied across by
+  `prepare-assets.mjs`. Read directly: it's a coarse family-average bootstrapping aid for a human
+  *labeling* new, unverified rig subjects, not gameplay ground truth. Every consumer the plan named
+  (`walls.ts`'s wall-connection logic, `labCapabilities.ts`, `minifigRig.ts`'s spatial fallback)
+  already runs on strictly better, fully-populated, per-piece verified data — using the lexicon's
+  coarser family-average priors there would be a downgrade, not a fix. No code changed for this item;
+  its real, correct future use (seeding a human labeler's guesses when NEW warehouse assets are
+  imported) is named for whenever that day comes, not built speculatively now.
+- [COMPLETE] ✅ **Per-realm ambience/wildlife audit — confirmed real, and fixed at its actual
+  root.** `audio.ts`'s ambience loop was one hardcoded global pool with no destination parameter at
+  all, and `<Falcon/>`/`<Bat>` (`Wildlife.tsx`) had no destination gate whatsoever — unlike `<Horse>`
+  right next to them, which already checks `world === destination`. Added `WorldDestination.ambience`
+  (`worlds.ts`: `'meadow' | 'mountain' | 'ruins' | 'silent'`, absent = today's behavior everywhere),
+  hand-tagged by real content (Frozen Pass → mountain; Siege Camp/Old Ruins → ruins; dungeon/arena →
+  silent), and a biome-aware `audio.ambienceBiome` (re-read live each loop beat, same pattern as the
+  existing `nightMode`) wired from the one place that already touches `audio` off live destination
+  state every frame (`DayNight.tsx`) — all four pools built from sounds already in `SOUNDS`, no new
+  audio assets. **One deliberate deviation from the plan's literal wording**: the TAMED falcon (a
+  real companion whose resource-node pings are explicitly designed to work "away from home") stays
+  visible everywhere, exactly like Tam the squire or the player's own horse — only the untamed,
+  purely-ambient bird (and the 3 ambient bats, which have no companion state) got the meadow gate.
+  Gating the companion too would have silently regressed an already-shipped feature to satisfy the
+  letter of "hide the falcon everywhere" rather than its actual intent.
+- **Verified via full type-check and production build, not just a read-through.** `npx tsc --noEmit`:
+  exit 0, zero output. `npm run build`: exit 0, compiled successfully, its own lint+type pass clean,
+  all 14 routes/static pages generated with no errors or warnings beyond Next's pre-existing
+  workspace-root notice (unrelated, present before this wave). Every hand-authored cost bill
+  script-verified to sum exactly to its buildable's real cost before being hardcoded; every new/
+  patched asset id (`gen_16_l302721`, `gen_14_l302720`, `gen_12_l3207401`, `l4105278`, and their
+  `.glb`/`.png` pairs) confirmed to exist on disk; the cannon-firing fix traced end-to-end through
+  both `Emplacements.tsx` (auto-fire) and `PlayerController.tsx` (manual-fire prompt) against the
+  real predicate chain rather than assumed from the capability shape alone.
