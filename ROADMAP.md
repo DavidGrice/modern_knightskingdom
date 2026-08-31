@@ -7885,3 +7885,52 @@ from live code on two of the five, in opposite directions from what a shallower 
   `.glb`/`.png` pairs) confirmed to exist on disk; the cannon-firing fix traced end-to-end through
   both `Emplacements.tsx` (auto-fire) and `PlayerController.tsx` (manual-fire prompt) against the
   real predicate chain rather than assumed from the capability shape alone.
+
+## Wave 30: destination terrain-classification audit — a real walkable-area gap found and fixed at template-04, two others re-confirmed correct — SHIPPED 2026-08-31
+
+Three items, all re-verified live against the real classification tooling and raw layout data
+rather than trusted from the plan's own wording — one confirmed a real, measurable bug; two
+re-confirmed the existing classification was already correct.
+
+- [COMPLETE] ✅ **template-04 ("The Siege Camp") was walled off from ~94% of its own diorama by a
+  genuine, measured classification gap, not a coordinate pick — found, fixed, and live-verified.**
+  The bake's layout data has exactly 2 `kind:"terrain"` groups: a 4×4 lab-meter core clearing
+  (`terrain_green_flat`) and a 14.8×16.1m rolling mound (`terrain_green_mound`, height range
+  0.32–2.02m) that fully contains it. Only the flat patch was ever classified walkable — the mound
+  sits squarely in the same height band the project's own 2026-08-21 correction pass already used to
+  fix the identical "small core patch nested inside a larger base plate" shape on 4 other templates,
+  but template-04 is one of only 3 destinations with no resident NPC, so the live-raycast regression
+  check that caught this exact mistake elsewhere never ran here. `guilds.ts`'s own 2026-08-21 comment
+  had already flagged this as a known, deferred follow-up. **Measured, not theoretical, effect**: the
+  real per-frame walkable clamp in `PlayerController.tsx` hard-walled the player back from solid,
+  textured ground 45+ world units outside the old ~300×300-unit rect — the Siege Camp was by far the
+  smallest walkable destination of the 8, purely from this oversight. Fixed by adding
+  `terrain_green_mound` to the real classification tooling (`scripts/generate-walkable-footprint.mjs`,
+  gitignored/local-only) and regenerating the committed `templateWalkableFootprint.generated.json` —
+  additive-only, every other template's output byte-identical. Verified live: 7 points scattered
+  across the newly-reachable mound area all accept with exactly 0.000 clamp displacement (previously
+  walled back into the old rect); a negative-control point placed outside the entire new union still
+  correctly displaces 1181 units back to the nearest edge, proving the clamp itself wasn't
+  accidentally disabled; the original arrival spawn and Builders' Guild-hall prompt are completely
+  unaffected; clean textured terrain at multiple sampled points, zero console errors. `guilds.ts`'s
+  2026-08-21 comment updated with a dated addendum so the flagged follow-up no longer reads as open.
+- [COMPLETE] ✅ **template-01's `terrain_steep` and template-07's `mountain_c`/`mountain_snow_a`:
+  re-checked with materially better tooling than was available when first classified, and
+  re-confirmed correct — no change made.** All three groups' bboxes are fully nested inside (or, for
+  template-07's pair, fully covered by the union of) already-walkable neighboring groups — hand-
+  authored detail sub-features of an already-correct landmass, not orphaned classifications. Verified
+  independently from the raw source layout JSONs (exact bbox containment math, not just re-reading
+  the prior pass's own conclusion) and live: dense multi-point raycast grids confirm real, continuous
+  terrain with no voids; photo-mode screenshots at bbox centers and several scattered points show
+  real hillside/mountain-backdrop vistas, never a floating island; and — a genuinely new fact this
+  pass surfaced — destinations have **no slope-based movement gate at all** in `PlayerController.tsx`
+  (`floorY` is set directly from ground height every frame, no max-climb-rate check), so "steep"
+  classification carries zero gameplay-mechanical weight beyond the already-correct XZ boundary.
+  Wave 26's Frozen Pass content (Torvald, the Woodsmen's Lodge) was regression-checked directly at
+  template-07 and confirmed completely unaffected — neither NPC nor claim point sits anywhere near
+  either mountain group's bbox.
+- **Verified live and via independent raw-source re-derivation, not just re-reading the research/
+  implementation reports.** `npx tsc --noEmit` / `npm run build`: both exit 0. Every one of the three
+  items' bbox claims was independently re-derived from the raw external layout JSONs rather than
+  trusted from the prior pass's summary. Full live session through onboarding, all three destinations,
+  multiple teleports/screenshots per item — zero console errors throughout.

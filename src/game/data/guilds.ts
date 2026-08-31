@@ -72,6 +72,12 @@ export const SWITCH_TITHE = 25; // gold to change banners after first joining
 //   rect — a separate, pre-existing classification gap, not something a
 //   coordinate pick can fix, and already flagged as its own follow-up).
 //
+// WAVE 30 (2026-08-31) follow-up done: template-04's missing terrain_
+// green_mound group is now classified walkable too (see generate-walkable-
+// footprint.mjs's own WAVE 30 header comment) — BUILDERS_HALL's spot below
+// is unaffected (still deep inside the original small rect) but the
+// diorama's walkable ground is no longer just that one rect.
+//
 // 2026-08-25: every hallX/hallZ below (anglers' included — it broke too at
 // the second halving) converted from a hand-typed world x/z to a durable
 // LOCAL point resolved via `resolveDestPoint` (worlds.ts) — see that
