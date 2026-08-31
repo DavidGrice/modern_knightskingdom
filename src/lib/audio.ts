@@ -109,13 +109,37 @@ class AudioManager {
   /** day: birds and breezes · night: owls and wind */
   nightMode = false;
 
+  /**
+   * Wave 29 · per-destination ambience audit. `startAmbience()` used to play
+   * one hardcoded pool everywhere — the same birdsong at an icy mountain
+   * pass, the same owl at a sealed dungeon door, forever. Re-read fresh each
+   * loop iteration, same live pattern as `nightMode` above (set once per
+   * frame by DayNight.tsx off `st.destination`, not baked in when the loop
+   * started) — a destination change mid-ambience picks up the new pool on
+   * its very next beat rather than waiting for a restart.
+   *  - 'meadow'   (default/unset): today's original day/night pools, unchanged.
+   *  - 'mountain': wind only, day and night — no birdsong at altitude.
+   *  - 'ruins':    an owl by day too, no bird1/2/3 — eerie, abandoned,
+   *                distinct from meadow without inventing a new sample.
+   *  - 'silent':   no loop at all (a sealed dungeon, the arena pit).
+   * Every pool is built from sounds already in SOUNDS above — no new audio
+   * assets needed for this pass.
+   */
+  ambienceBiome: 'meadow' | 'mountain' | 'ruins' | 'silent' = 'meadow';
+
   startAmbience() {
     this.stopAmbience();
     const loop = () => {
-      const pool: SoundName[] = this.nightMode
-        ? ['owl', 'wind1', 'wind2', 'owl']
-        : ['bird1', 'bird2', 'bird3', 'wind1', 'wind2'];
-      this.play(pool[Math.floor(Math.random() * pool.length)], 0.35);
+      if (this.ambienceBiome !== 'silent') {
+        const pool: SoundName[] = this.ambienceBiome === 'mountain'
+          ? ['wind1', 'wind2']
+          : this.ambienceBiome === 'ruins'
+            ? ['owl', 'wind1', 'wind2']
+            : this.nightMode
+              ? ['owl', 'wind1', 'wind2', 'owl']
+              : ['bird1', 'bird2', 'bird3', 'wind1', 'wind2'];
+        this.play(pool[Math.floor(Math.random() * pool.length)], 0.35);
+      }
       this.ambientTimer = setTimeout(loop, 4000 + Math.random() * 7000);
     };
     this.ambientTimer = setTimeout(loop, 1500);

@@ -14,9 +14,20 @@ import { falconPos, falconSpotLabel, FALCON_SPOT_RANGE } from '@/game/falcon';
 import { useGameStore } from '@/game/store/gameStore';
 import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
 import { sampleTemplateGroundY } from './TemplateWorld';
+import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 
 const C = '/assets/props/creatures';
 const L = '/assets/props/lab';
+
+/** Wave 29 · per-realm ambience/wildlife audit. `<Horse>` below already
+ *  checks `world === destination`, but the wild falcon and the 3 ambient
+ *  bats had no such gate at all — the same falcon circled and the same bats
+ *  flew at every destination in the game, homestead included, since neither
+ *  read `destination`. True only where the destination's own `ambience`
+ *  (worlds.ts, absent = 'meadow') says wildlife belongs. */
+function isMeadow(destination: string | null | undefined): boolean {
+  return (WORLD_DESTINATION_BY_ID[destination ?? '']?.ambience ?? 'meadow') === 'meadow';
+}
 
 function distVol(x: number, z: number, max = 34): number {
   const d = Math.hypot(playerState.x - x, playerState.z - z);
@@ -142,6 +153,13 @@ function Falcon() {
   // why the tamed flag itself is read straight from the store rather than
   // mirrored into a leaf module the way ridingState.active is.
   const tamed = useGameStore((s) => s.falconTamed);
+  // Wave 29 · the WILD bird only — once tamed it's a real companion
+  // (game/falcon.ts's resource-node pings work specifically "away from
+  // home, where Minimap.tsx draws no resource nodes at all"), so a tamed
+  // falcon keeps following the player everywhere, exactly like Tam the
+  // squire or the player's own horse. Only the untamed, purely-ambient bird
+  // gets confined to meadow destinations.
+  const destination = useGameStore((s) => s.destination);
   const pingIn = useRef(30 + Math.random() * 20);
   const lastPinged = useRef<string | null>(null);
 
@@ -152,7 +170,7 @@ function Falcon() {
     // hide. A tamed companion stays with you regardless of the hour — beyond
     // the flight path itself, the one other visible sign this is no longer
     // the ambient bird.
-    g.visible = tamed || worldEnv.night < 0.6;
+    g.visible = tamed || (worldEnv.night < 0.6 && isMeadow(destination));
     if (!g.visible) return;
     if (tamed) {
       // a tight, quick orbit a couple of metres over your head, distinct
@@ -235,11 +253,14 @@ function Bat({ seed }: { seed: number }) {
   const group = useRef<THREE.Group>(null);
   const t = useRef(seed * 17.3);
   const soundIn = useRef(8 + seed * 6);
+  // Wave 29 · same meadow gate as the wild falcon above — bats are purely
+  // ambient, no tamed/companion state to preserve.
+  const destination = useGameStore((s) => s.destination);
 
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
-    g.visible = worldEnv.night > 0.62;
+    g.visible = worldEnv.night > 0.62 && isMeadow(destination);
     if (!g.visible) return;
     t.current += dt * (0.9 + seed * 0.25);
     const cx = -12 + seed * 14;

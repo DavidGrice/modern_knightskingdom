@@ -108,6 +108,19 @@ export interface Buildable {
   requiresUnlock?: string;
   station?: 'workbench' | 'forge' | 'campfire'; // marks placed object as a crafting station
   buildXp: number;
+  /** Wave 29 · a hand-picked bill of real bricks.generated.json catalogue
+   *  SKUs (each `qty` at that piece's own real cost) whose costs SUM EXACTLY
+   *  to this buildable's own `cost` above — "2× Wall Section 2×5, 2× Tower
+   *  Piece 2×2" instead of one generic family total. Display-only: `cost` is
+   *  still the sole economy truth (canAfford/addItems/refunds/maxHpFor all
+   *  read it unchanged), and only a handful of buildables have one so far —
+   *  every ItemId a piece could ever cost by resource FAMILY has a real
+   *  catalogue SKU (see brickResources.ts's BRICK_RESOURCES), but the
+   *  catalogue itself never authored a SKU costed in `iron_bar`/`iron_ore`/
+   *  `flowers`/`gold`, so a buildable priced in any of those has no exact
+   *  bill and correctly falls back to the old one-canonical-brick-per-family
+   *  display (see buildables.ts's `costBill`) rather than a guessed one. */
+  pieces?: { id: string; qty: number }[];
 }
 
 /** Wave 9 · which tool the aerial build view's left button is holding.
