@@ -14,6 +14,7 @@ import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
+import { destinationGroundY, homeGroundY } from './TemplateWorld';
 
 const COUNT = 900;
 const AREA = 44;
@@ -161,7 +162,16 @@ export default function Weather() {
     const profile = GRAPHICS_PROFILES[useAppStore.getState().settings.graphicsQuality];
     const activeCount = Math.max(1, Math.round(COUNT * profile.particleDensity));
     p.geometry.setDrawRange(0, activeCount);
-    p.position.set(camera.position.x, 0, camera.position.z);
+    // Wave 31 · a REAL, ALREADY-LIVE bug independent of anything else this
+    // wave adds: this whole field was pinned to world Y=0, following only
+    // the camera's X/Z — rain already clipped straight through the existing
+    // Downs hill before this fix. Sampled once per frame at the camera's own
+    // (x, z); the particle field's own [0, HEIGHT] local range still falls
+    // relative to this, so precipitation hovers above whatever ground the
+    // camera is currently over instead of the meadow's flat height.
+    const gy = (destination ?? null) === null ? homeGroundY(camera.position.x, camera.position.z)
+      : destinationGroundY(camera.position.x, camera.position.z);
+    p.position.set(camera.position.x, gy, camera.position.z);
     const attr = p.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = attr.array as Float32Array;
     const fall = (snowing ? 5 : 21) * dt;

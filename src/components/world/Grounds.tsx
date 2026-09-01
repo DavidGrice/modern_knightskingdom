@@ -13,6 +13,7 @@ import { distanceToRoad, ROAD_REACH, ROAD_TILE, roadGateFor, routeCells } from '
 import { useGameStore } from '@/game/store/gameStore';
 import { deedName } from '@/game/data/grounds';
 import { InstancedProp, type InstancedNode } from './InstancedProps';
+import { homeGroundY } from './TemplateWorld';
 
 // O8 · supersedes N75. The boundary used to be flat coloured plane strips —
 // clear enough as a debug marker, but not something a holding would build.
@@ -118,14 +119,20 @@ export default function Grounds() {
     for (const { g, open } of rings) {
       const tint = open ? OPEN_TINT : LOCKED_TINT;
       fencePosts(g).forEach((p, i) => {
-        out.push({ key: `${g.id}_f${i}`, x: g.x + p.x, z: g.z + p.z, yaw: p.yaw, scale: 1, color: tint });
+        const x = g.x + p.x;
+        const z = g.z + p.z;
+        // Wave 31 · this component is home-only (see the `if (destination)
+        // return null` below), so homeGroundY rather than the full ternary.
+        out.push({ key: `${g.id}_f${i}`, x, z, y: homeGroundY(x, z), yaw: p.yaw, scale: 1, color: tint });
       });
     }
     for (const def of CULTIVATED_PLOTS) {
       if ((def.world ?? null) !== null) continue; // homestead plots only
       const tint = cultivatedPlots[def.id] ? OPEN_TINT : LOCKED_TINT;
       fencePosts(def).forEach((p, i) => {
-        out.push({ key: `${def.id}_f${i}`, x: def.x + p.x, z: def.z + p.z, yaw: p.yaw, scale: 1, color: tint });
+        const x = def.x + p.x;
+        const z = def.z + p.z;
+        out.push({ key: `${def.id}_f${i}`, x, z, y: homeGroundY(x, z), yaw: p.yaw, scale: 1, color: tint });
       });
     }
     return out;
@@ -146,8 +153,9 @@ export default function Grounds() {
       <InstancedProp url={FENCE_URL} height={FENCE_HEIGHT} nodes={fenceNodes} frustumCulled={false} />
       {rings.map(({ g, open, gate }) => (
         // a boundary stone at the ground's gate, with the ground's name
-        // and — while it is beyond your deed — what buys it
-        <group key={g.id} position={[gate.x, 0, gate.z]}>
+        // and — while it is beyond your deed — what buys it. homeGroundY:
+        // Grounds is home-only (see the early return above).
+        <group key={g.id} position={[gate.x, homeGroundY(gate.x, gate.z), gate.z]}>
           <mesh position-y={0.6} castShadow>
             <boxGeometry args={[0.55, 1.2, 0.4]} />
             <meshStandardMaterial color={open ? '#9a9287' : '#6f747c'} roughness={0.95} />
@@ -170,7 +178,7 @@ export default function Grounds() {
         const live = cultivatedPlots[def.id];
         const stake = plotStakeAt(def);
         return (
-          <group key={def.id} position={[stake.x, 0, stake.z]}>
+          <group key={def.id} position={[stake.x, homeGroundY(stake.x, stake.z), stake.z]}>
             <mesh position-y={0.5} castShadow>
               <cylinderGeometry args={[0.07, 0.09, 1, 6]} />
               <meshStandardMaterial color={live ? '#8a6234' : '#6f747c'} roughness={1} />

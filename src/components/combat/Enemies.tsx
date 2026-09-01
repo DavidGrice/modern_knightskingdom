@@ -644,16 +644,17 @@ function Enemy({ data }: { data: EnemyData }) {
     // real terrain (Storm's Sister Keep duel ring, Cedric's Rival Castle
     // camp, the dungeon's own floor all raycast against the mounted root)
     //
-    // Wave 12 · and the home branch is no longer a literal 0. This is the ONE
-    // NPC-side y=0 the elevation prototype touches, and only because raiders
-    // are the one kind of walker that can actually get to the North Downs:
-    // they chase whatever is within 26m of them, so a player who pulls a raid
-    // and runs north takes the whole pack up the hill with them. Villagers,
-    // court NPCs and defenders are all anchored inside the holding, ~90m short
-    // of the box and outside the nav grid entirely — their hardcoded 0 is out
-    // of reach rather than merely unlikely, and is deliberately left alone.
-    // `homeGroundY` is 0 everywhere but the prototype's own square, so this
-    // changes nothing anywhere else in the world.
+    // Wave 12 · and the home branch is no longer a literal 0. This was the
+    // FIRST NPC-side site the elevation prototype touched, and for a reason
+    // specific to raiders: they chase whatever is within 26m of them, so a
+    // player who pulls a raid and runs north takes the whole pack up the
+    // hill with them, while Villagers/court NPCs/defenders stayed anchored
+    // ~90m short of any terrain region and outside the (then ±56m) nav grid
+    // entirely — their own hardcoded 0 was out of reach rather than merely
+    // unlikely. Wave 31 converted those other sites too (Villagers.tsx,
+    // Npc.tsx, Defenders.tsx, RaiderRam.tsx, Merchant.tsx, Wildlife.tsx),
+    // closing the gap this comment used to describe rather than leaving it
+    // — see terrainRegions.ts for the now data-driven region list.
     g.position.set(m.x, enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z), m.z);
     g.rotation.y = m.yaw + Math.PI;
 

@@ -23,6 +23,7 @@ import { bestStore } from '@/game/storage';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { registerVillagerCombat } from '@/game/villagerCombat';
+import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '@/game/types';
 
@@ -79,6 +80,17 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   // first is harmless.
   const vc = useMemo(() => registerVillagerCombat(villager.id), [villager.id]);
 
+  // Wave 31 · the canonical home/destination ternary (already proven in
+  // Enemies.tsx/Companion.tsx) applied for real here: a settlement resident
+  // (villager.world set) already rendered at a claimed destination plot
+  // before this wave, and NEITHER ground function was ever called for them —
+  // every settlement villager floated/sank on any non-flat destination bake
+  // regardless of anything this wave adds to the homestead. Genuine bonus
+  // fix, not just future-proofing for home's own new terrain regions.
+  const groundY = (x: number, z: number) => (
+    (villager.world ?? null) === null ? homeGroundY(x, z) : destinationGroundY(x, z)
+  );
+
   useFrame((_, dt) => {
     const s = state.current;
     const g = group.current;
@@ -134,7 +146,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       s.x = agent.position.x;
       s.z = agent.position.z;
       s.yaw = agent.yaw;
-      g.position.set(s.x, 0, s.z);
+      g.position.set(s.x, groundY(s.x, s.z), s.z);
       g.rotation.y = s.yaw + Math.PI;
       mob.x = s.x;
       mob.z = s.z;
@@ -154,7 +166,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       s.x = agent.position.x;
       s.z = agent.position.z;
       s.yaw = agent.yaw;
-      g.position.set(s.x, 0, s.z);
+      g.position.set(s.x, groundY(s.x, s.z), s.z);
       g.rotation.y = s.yaw + Math.PI;
       mob.x = s.x;
       mob.z = s.z;
@@ -177,7 +189,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       s.x = agent.position.x;
       s.z = agent.position.z;
       s.yaw = agent.yaw;
-      g.position.set(s.x, 0, s.z);
+      g.position.set(s.x, groundY(s.x, s.z), s.z);
       g.rotation.y = s.yaw + Math.PI;
       mob.x = s.x;
       mob.z = s.z;
@@ -207,7 +219,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         s.yaw += diff * Math.min(1, dt * 3);
         if (clip !== 'anim_c_walk') setClip('anim_c_walk');
       }
-      g.position.set(s.x, 0, s.z);
+      g.position.set(s.x, groundY(s.x, s.z), s.z);
       g.rotation.y = s.yaw + Math.PI;
       mob.x = s.x;
       mob.z = s.z;
@@ -338,7 +350,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           s.yaw += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         }
-        g.position.set(s.x, 0, s.z);
+        g.position.set(s.x, groundY(s.x, s.z), s.z);
         g.rotation.y = s.yaw + Math.PI;
         mob.x = s.x;
         mob.z = s.z;
@@ -388,7 +400,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           s.yaw += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         }
-        g.position.set(s.x, 0, s.z);
+        g.position.set(s.x, groundY(s.x, s.z), s.z);
         g.rotation.y = s.yaw + Math.PI;
         mob.x = s.x;
         mob.z = s.z;
@@ -456,7 +468,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
             s.yaw += diff * Math.min(1, dt * 3);
             if (clip !== 'anim_c_walk') setClip('anim_c_walk');
           }
-          g.position.set(s.x, 0, s.z);
+          g.position.set(s.x, groundY(s.x, s.z), s.z);
           g.rotation.y = s.yaw + Math.PI;
           mob.x = s.x;
           mob.z = s.z;
@@ -500,7 +512,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         if (clip !== 'anim_c_walk') setClip('anim_c_walk');
       }
     }
-    g.position.set(s.x, 0, s.z);
+    g.position.set(s.x, groundY(s.x, s.z), s.z);
     g.rotation.y = s.yaw + Math.PI;
     mob.x = s.x;
     mob.z = s.z;

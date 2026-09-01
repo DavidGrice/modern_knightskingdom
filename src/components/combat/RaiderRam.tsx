@@ -21,6 +21,7 @@ import { raiderRamState } from '@/game/raiderRam';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { isDoorLike } from '@/game/types';
 import RiggedProp, { setPropTravel } from '../world/RiggedProp';
+import { homeGroundY } from '../world/TemplateWorld';
 
 const RAM_SPEED = 1.3; // roughly a slow determined trudge, matching the player's own push pace
 /** id RiggedProp keys its per-instance animation state on */
@@ -51,7 +52,9 @@ export default function RaiderRam() {
       }
       const tip = Math.min(1, raiderRamState.wreckT / 0.9);
       g.visible = true;
-      g.position.set(raiderRamState.x, -0.15 * tip, raiderRamState.z);
+      // Wave 31 · homeGroundY — this is a home-only raid mechanic — with the
+      // tip-and-settle sink (-0.15*tip) staying a relative offset on top.
+      g.position.set(raiderRamState.x, homeGroundY(raiderRamState.x, raiderRamState.z) - 0.15 * tip, raiderRamState.z);
       g.rotation.set(0, yaw.current, tip * 0.5);
       return;
     }
@@ -75,7 +78,7 @@ export default function RaiderRam() {
     setPropTravel(RAM_ID, raiderRamState.travel);
     ramCheck(RAM_ID, raiderRamState.x, raiderRamState.z);
     g.visible = true;
-    g.position.set(raiderRamState.x, 0, raiderRamState.z);
+    g.position.set(raiderRamState.x, homeGroundY(raiderRamState.x, raiderRamState.z), raiderRamState.z);
     g.rotation.set(0, yaw.current, 0);
   });
 

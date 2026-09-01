@@ -4,7 +4,18 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { InstancedProp, InstancedSubMeshes, type InstancedNode, type SubMesh } from './InstancedProps';
 import { FISHING_DOCK } from '@/game/data/world';
+import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import type { ResourceNodeState } from '@/game/types';
+
+// Wave 31 · the one ground-height rule every group below shares — a node
+// knows its own region (ResourceNodeState.world, already used for the
+// instance-separation filter in the default export below), so this is the
+// same canonical ternary Enemies.tsx/Companion.tsx already use, not a new
+// pattern. Closes a pre-existing float-on-slope bug on destinations too (see
+// InstancedProps.tsx's own doc on InstancedNode.y).
+function nodeGroundY(n: ResourceNodeState): number {
+  return (n.world ?? null) === null ? homeGroundY(n.x, n.z) : destinationGroundY(n.x, n.z);
+}
 
 // A stopped/chopped tree just leaves a stump — rare and transient (respawns
 // in ~35s), so it stays a plain individual mesh rather than instanced.
@@ -35,7 +46,7 @@ function TreeGroup({ url, nodes }: { url: string; nodes: ResourceNodeState[] }) 
     // shrink slightly as it takes damage
     const health = n.hitsLeft / 3;
     return {
-      key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * health), color: tint,
+      key: n.id, x: n.x, z: n.z, y: nodeGroundY(n), yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * health), color: tint,
     };
   });
   // frustumCulled=false: one ground's living trees are a small, compact
@@ -113,7 +124,7 @@ function RockGroup({ nodes, iron }: { nodes: ResourceNodeState[]; iron: boolean 
   const subMeshes = useMemo(() => buildRockSubMeshes(iron), [iron]);
   const instances: InstancedNode[] = useMemo(
     () => nodes.map((n) => ({
-      key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * (n.hitsLeft / 4)),
+      key: n.id, x: n.x, z: n.z, y: nodeGroundY(n), yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * (n.hitsLeft / 4)),
     })),
     [nodes],
   );
@@ -135,7 +146,7 @@ const HERB_URL = '/assets/props/scenery/l374100.glb';
 // was always there.
 function HerbGroup({ nodes }: { nodes: ResourceNodeState[] }) {
   const instances: InstancedNode[] = useMemo(
-    () => nodes.map((n) => ({ key: n.id, x: n.x, z: n.z, yaw: n.yaw, scale: n.scale })),
+    () => nodes.map((n) => ({ key: n.id, x: n.x, z: n.z, y: nodeGroundY(n), yaw: n.yaw, scale: n.scale })),
     [nodes],
   );
   // frustumCulled=false: one meadow's herbs are a small, compact cluster —

@@ -9,8 +9,8 @@ import { landHalf, landSouthHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, sampleEnv, seasonOf } from '@/game/env';
-import { DOWNS, downsSurfaceY } from '@/game/data/downs';
-import { normalizeTemplateBake, registerHomeGroundRoot, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
+import { TERRAIN_REGIONS, regionSurfaceY, type TerrainRegion } from '@/game/data/terrainRegions';
+import { homeGroundY, normalizeTemplateBake, registerHomeGroundRoot, TEMPLATE_WORLD_SCALE } from './TemplateWorld';
 
 /** Spring/Summer/Autumn/Winter grass tints — winter reads pale/frost-dusted
  *  rather than switching to a wholly separate snow-covered ground state. */
@@ -287,11 +287,15 @@ function Stream() {
  *
  * Drawn exactly the way the natural POND below is drawn — a sandy bank plate
  * with a rippling water plate a few centimetres above it, both lying ON the
- * flat meadow — because the home ground is one GLB bake and nothing in this
+ * meadow — because the home ground is one GLB bake and nothing in this
  * project performs runtime geometry surgery on it. What is genuinely real
  * about a dug waterway is everything except the hole: it blocks pathing, it
  * stops the player and the raiders, it refuses buildings, it costs gold and it
- * saves. The visible sinking of it waits on the terrain-height work.
+ * saves. Wave 31 · the group itself now sits at `homeGroundY(w.x, w.z)`
+ * rather than always y=0, so a cut anywhere near a terrain region's rim reads
+ * as lying ON that slope instead of floating at the meadow's own height — an
+ * elevation-FOLLOWING overlay, still not a true excavated hole in the mesh
+ * (see terrainRegions.ts's own header for why that stays out of scope).
  *
  * The ripple is loaded ONCE and cloned per cut, rather than shared outright:
  * `repeat` lives on the texture, so one shared instance would stretch a single
@@ -340,7 +344,11 @@ function DugWater() {
   return (
     <group>
       {patches.map(({ w, tex }) => (
-        <group key={w.id} position={[w.x, 0, w.z]}>
+        // Wave 31 · sampled once per cut rather than assumed flat — a single
+        // point per rectangle, the same accepted simplification a claimed
+        // destination plot's own ground level already uses. BANK_Y/WATER_Y
+        // stay relative offsets laid on top of this, unchanged.
+        <group key={w.id} position={[w.x, homeGroundY(w.x, w.z), w.z]}>
           {/* the dug earth thrown up round the cut, exactly the pond's own sand
               ring generalised from a circle to a rectangle */}
           <mesh rotation-x={-Math.PI / 2} position-y={BANK_Y} receiveShadow>
@@ -359,15 +367,20 @@ function DugWater() {
   );
 }
 
-// 1.42m cells (4608 triangles). Measured, not guessed: the triangulated
-// surface never strays more than 2.3cm from the field it was built from, and
-// the error is quadratic in the cell size — doubling the segments would buy a
-// centimetre nobody can see and double what every per-frame probe has to walk.
+// 1.42m cells (4608 triangles per region). Measured, not guessed: the
+// triangulated surface never strays more than 2.3cm from the field it was
+// built from, and the error is quadratic in the cell size — doubling the
+// segments would buy a centimetre nobody can see and double what every
+// per-frame probe has to walk. Two regions at this density is 9,216
+// triangles total — a 2x increase over the original single-Downs prototype,
+// nowhere near the ~34x a whole-map heightfield at the same density would
+// cost (see terrainRegions.ts's own header for why that stayed out of scope).
 const DOWNS_SEGMENTS = 48;
 
 /**
- * Wave 12 · The North Downs — the homestead's one piece of real terrain
- * (game/data/downs.ts owns the field, the box and the reasoning behind both).
+ * Wave 12 · The North Downs. Wave 31 · generalized to every entry in
+ * TERRAIN_REGIONS, West Fell included (game/data/terrainRegions.ts owns the
+ * field, the boxes and the reasoning behind both).
  *
  * A displaced plane rather than another bake, and that is the decision the rest
  * of the pass hangs off: because the field is authored, the mesh can be
@@ -379,15 +392,14 @@ const DOWNS_SEGMENTS = 48;
  * on cannot drift from the ground you can see, which is precisely the failure
  * a parallel "and here is the height, cheaply" query would invite.
  *
- * The whole mesh sits DOWNS_SINK below the meadow, so its flat outer margin is
+ * Each mesh sits DOWNS_SINK below the meadow, so its flat outer margin is
  * buried and the hill's visible foot is the line where it climbs out — see that
  * constant for why a hill cannot simply be laid on top of the bake instead.
  */
-function HomesteadDowns() {
-  const surface = useRef<THREE.Mesh>(null);
+function TerrainKnollSurface({ region }: { region: TerrainRegion }) {
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const geometry = useMemo(() => {
-    const g = new THREE.PlaneGeometry(DOWNS.half * 2, DOWNS.half * 2, DOWNS_SEGMENTS, DOWNS_SEGMENTS);
+    const g = new THREE.PlaneGeometry(region.half * 2, region.half * 2, DOWNS_SEGMENTS, DOWNS_SEGMENTS);
     // lay it flat FIRST: a PlaneGeometry is authored in XY, and rotating the
     // geometry (not the mesh) means the displacement below is a plain world-Y
     // write and the raycast hits real world-space triangles with no transform
@@ -395,7 +407,7 @@ function HomesteadDowns() {
     g.rotateX(-Math.PI / 2);
     const pos = g.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
-      pos.setY(i, downsSurfaceY(DOWNS.x + pos.getX(i), DOWNS.z + pos.getZ(i)));
+      pos.setY(i, regionSurfaceY(region, region.x + pos.getX(i), region.z + pos.getZ(i)));
     }
     pos.needsUpdate = true;
     g.computeVertexNormals();
@@ -404,16 +416,8 @@ function HomesteadDowns() {
     // while the plane was still flat would be a quietly wrong one
     g.computeBoundingSphere();
     return g;
-  }, []);
+  }, [region]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  // the SURFACE, not the group around it. Everything a probe hits under this
-  // root is treated as the ground you are standing on, so the cairn below must
-  // not be inside it — walking into a rock heap would otherwise lift the player
-  // silently onto its top with no slope to have climbed.
-  useEffect(() => {
-    registerHomeGroundRoot(surface.current);
-    return () => registerHomeGroundRoot(null);
-  }, []);
   // the same seasonal lerp the meadow's own materials get, off the same table —
   // a hill that stayed high summer while the field around it went to frost
   // would read as a hole in the season rather than as ground
@@ -427,37 +431,36 @@ function HomesteadDowns() {
     m.color.b += (target[2] - m.color.b) * k;
   });
   return (
-    <group position={[DOWNS.x, 0, DOWNS.z]}>
-      <mesh ref={surface} geometry={geometry} receiveShadow castShadow>
-        <meshStandardMaterial ref={mat} color="#4d8138" roughness={1} />
-      </mesh>
-      <Cairn />
-    </group>
+    <mesh position={[region.x, 0, region.z]} geometry={geometry} receiveShadow castShadow>
+      <meshStandardMaterial ref={mat} color="#4d8138" roughness={1} />
+    </mesh>
   );
 }
 
 /** A weathered cairn on the crown — the same procedural dodecahedron rocks the
  *  brook's spring is dressed with, so it costs no asset and reads as the same
- *  world.
+ *  world. Reused verbatim per region (Wave 31): zero new asset cost, and it
+ *  gives West Fell the same "something to walk to" the original Downs prototype
+ *  already wanted.
  *
  *  It earns its place twice. It gives the walk north somewhere to be walking
  *  TO, which a bare hill in an empty quadrant does not; and each stone sits on
- *  `downsSurfaceY` rather than on y=0, which is the whole thing a raised
- *  quadrant has to be able to do for anything to ever stand on it. Static
+ *  `regionSurfaceY` rather than on y=0, which is the whole thing a raised
+ *  region has to be able to do for anything to ever stand on it. Static
  *  scenery placed once may read the authoring field directly — the mesh is
  *  generated from that same field and never differs from it by more than 2.3cm,
  *  which is less than one of these pebbles. Anything that MOVES must go through
  *  the raycast instead; see homeGroundY. */
-function Cairn() {
+function Cairn({ region }: { region: TerrainRegion }) {
   const stones: [number, number, number][] = [
     [0, 0, 1.5], [1.3, 0.5, 1.0], [-1.1, -0.7, 1.15], [0.4, -1.4, 0.85], [-0.5, 1.2, 0.7],
   ];
   return (
-    <group>
+    <group position={[region.x, 0, region.z]}>
       {stones.map(([lx, lz, s], i) => (
         <mesh
           key={i}
-          position={[lx, downsSurfaceY(DOWNS.x + lx, DOWNS.z + lz) + s * 0.34, lz]}
+          position={[lx, regionSurfaceY(region, region.x + lx, region.z + lz) + s * 0.34, lz]}
           rotation={[i * 0.7, i * 1.3, i * 0.4]}
           castShadow
           receiveShadow
@@ -467,6 +470,37 @@ function Cairn() {
         </mesh>
       ))}
     </group>
+  );
+}
+
+/**
+ * Wave 31 · the wrapper that used to be one hand-typed `HomesteadDowns()` —
+ * now a data-driven loop over TERRAIN_REGIONS, so a third region is a
+ * one-line append in terrainRegions.ts and zero further code here.
+ *
+ * Owns the registered group, and it matters WHICH group: `surfaceGroup`
+ * holds every region's real walkable mesh and nothing else. Everything a
+ * probe hits under this root is treated as the ground you are standing on,
+ * so a region's Cairn is rendered as a sibling, deliberately OUTSIDE it —
+ * walking into a rock heap would otherwise lift the player silently onto its
+ * top with no slope to have climbed. One shared registration (not one per
+ * region) because `homeGroundY`/`raycastGroundY` are a single probe over a
+ * single root — see TemplateWorld.tsx's own comment on why the homestead's
+ * elevated ground lives in that one slot rather than growing a second query.
+ */
+function TerrainRegions() {
+  const surfaceGroup = useRef<THREE.Group>(null);
+  useEffect(() => {
+    registerHomeGroundRoot(surfaceGroup.current);
+    return () => registerHomeGroundRoot(null);
+  }, []);
+  return (
+    <>
+      <group ref={surfaceGroup}>
+        {TERRAIN_REGIONS.map((region) => <TerrainKnollSurface key={region.id} region={region} />)}
+      </group>
+      {TERRAIN_REGIONS.map((region) => <Cairn key={region.id} region={region} />)}
+    </>
   );
 }
 
@@ -539,12 +573,13 @@ export default function Terrain() {
       >
         <HomeMeadow />
       </Suspense>
-      {/* Wave 12 · and the one corner of it that is not flat. Outside the
-          Suspense above deliberately: it is generated, not loaded, so it is
-          ready the instant Terrain mounts — and the player's floor reads it
-          through a raycast, which would silently answer "flat" for as long as
-          it was suspended. */}
-      <HomesteadDowns />
+      {/* Wave 12 · and the corners of it that are not flat (Wave 31: now a
+          data-driven list, TERRAIN_REGIONS). Outside the Suspense above
+          deliberately: it is generated, not loaded, so it is ready the
+          instant Terrain mounts — and the player's floor reads it through a
+          raycast, which would silently answer "flat" for as long as it was
+          suspended. */}
+      <TerrainRegions />
       <Stream />
       {/* homestead dirt patch — pinned at the homestead's true (fixed) centre,
           same reasoning as villagers.ts's HOME_X/HOME_Z: `regionCz` is the

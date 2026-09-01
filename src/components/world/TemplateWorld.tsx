@@ -39,10 +39,17 @@ import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
 import { getLocalWalkableRects } from '@/game/data/templateWalkableFootprint';
 import { BATTLE_DOME } from '@/game/data/world';
-import { inDowns } from '@/game/data/downs';
 import { arenaState } from '@/game/arena';
+// Wave 31 hotfix · homeGroundY/registerHomeGroundRoot moved to their own leaf
+// module (src/game/homeGround.ts) — see that file's header for why. Imported
+// AND re-exported below (the `export { ... }` further down) so every existing
+// `from './TemplateWorld'` call site (Defenders.tsx, Villagers.tsx, Terrain.tsx,
+// etc.) keeps working unchanged — only gameStore.ts's own import needed to move.
+import { homeGroundY, registerHomeGroundRoot } from '@/game/homeGround';
 import DungeonScene from './DungeonScene';
 import ArenaScene from './ArenaScene';
+
+export { homeGroundY, registerHomeGroundRoot };
 
 // The mounted template scene's root, for PlayerController to raycast against
 // (terrain height varies a lot across these bakes — a hillside castle spans
@@ -56,15 +63,13 @@ const mountedRoot: { current: THREE.Object3D | null } = { current: null };
 // geometry. mountedRoot is a single global ref; only one destination is ever
 // mounted at a time.
 const mountedRegion: { current: string | null } = { current: null };
-// Wave 12 · the homestead's own elevated ground (Terrain.tsx's HomesteadDowns)
-// registers HERE rather than in mountedRoot, and the reason is structural, not
-// tidiness: Terrain is mounted the ENTIRE time, destination visit included (see
-// GameWorld.tsx — the home meadow is never unmounted when you travel), so the
-// one-at-a-time slot above genuinely cannot hold both. Two roots, one probe:
-// raycastGroundY below is the single implementation both go through, which is
-// the whole point of putting the home terrain here instead of growing a second
-// height query somewhere else.
-const homeGroundRoot: { current: THREE.Object3D | null } = { current: null };
+// Wave 12 · the homestead's own elevated ground height (Terrain.tsx's
+// TerrainRegions) used to register and raycast HERE too, sharing this file's
+// raycastGroundY. Wave 31 hotfix moved that half out to src/game/homeGround.ts
+// (a genuine leaf module, so gameStore.ts can read it without closing a
+// circular import back onto itself — see that file's header). This file keeps
+// the destination-only half (mountedRoot/raycastGroundY/sampleTemplateGroundY
+// below); homeGroundY/registerHomeGroundRoot are imported and re-exported above.
 const raycaster = new THREE.Raycaster();
 const rayOrigin = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -98,36 +103,6 @@ export function sampleTemplateGroundY(x: number, z: number, fallback = lastGroun
   if (y === null) return fallback;
   lastGroundY = y;
   return y;
-}
-
-/** Wave 12 · Terrain.tsx hands its North Downs mesh over here on mount, and
- *  takes it back on unmount. Same "register the geometry, then everyone
- *  raycasts it" contract TemplateWorldRoot has always had with mountedRoot. */
-export function registerHomeGroundRoot(root: THREE.Object3D | null): void {
-  homeGroundRoot.current = root;
-}
-
-/**
- * Wave 12 · Ground height on the HOMESTEAD, which is 0 everywhere except
- * inside the North Downs prototype (game/data/downs.ts) — the one patch of home
- * that is not flat.
- *
- * The bounds test comes FIRST and is the load-bearing line. It is what keeps
- * this affordable (a raycast against several thousand triangles, otherwise
- * paid by every actor every frame, everywhere in the world), and it is also the
- * prototype's contract stated in one place: outside the box, home is flat, and
- * this function says so without consulting anything.
- *
- * Sub-zero hits floor at 0 because the knoll mesh is deliberately sunk into the
- * meadow (DOWNS_SINK): below y=0 it is buried, and the bake above it is the
- * ground you would actually be standing on.
- */
-export function homeGroundY(x: number, z: number): number {
-  if (!inDowns(x, z, 1)) return 0;
-  const root = homeGroundRoot.current;
-  if (!root) return 0; // the knoll has not mounted yet — flat meadow, correctly
-  const y = raycastGroundY(root, x, z);
-  return y === null || y < 0 ? 0 : y;
 }
 
 /** reset the held-ground fallback whenever a fresh destination mounts, so a
@@ -601,8 +576,8 @@ if (typeof window !== 'undefined') {
   // sampler (iteration 2.5's own verification).
   (window as unknown as Record<string, unknown>).__kkworld = {
     // Wave 12 adds homeGroundY, for the same reason: a smoke test can now
-    // cross-check the North Downs mesh's real triangles against the field
-    // game/data/downs.ts authored them from, without a build step.
+    // cross-check a raised region's real triangles against the field
+    // game/data/terrainRegions.ts authored them from, without a build step.
     sampleTemplateGroundY, destinationGroundY, getMountedRegion, getBakeOffset, homeGroundY,
   };
 }

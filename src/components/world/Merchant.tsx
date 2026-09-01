@@ -9,6 +9,7 @@ import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
 import { roadEntry } from '@/game/data/road';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
+import { homeGroundY } from './TemplateWorld';
 import type { CharacterConfig } from '@/game/types';
 
 const MERCHANT_CONFIG: CharacterConfig = {
@@ -111,7 +112,7 @@ export default function Merchant() {
       s.x = MERCHANT_SPOT.x;
       s.z = MERCHANT_SPOT.z;
       s.yaw = MERCHANT_SPOT.yaw;
-      g.position.set(s.x, 0, s.z);
+      g.position.set(s.x, homeGroundY(s.x, s.z), s.z);
       // RiggedFigure convention (see Villagers.tsx) — the same +Math.PI the
       // arriving/leaving branch below already applies; missing here meant
       // the merchant stood backwards (back to the player) the entire time
@@ -138,7 +139,7 @@ export default function Merchant() {
     } else if (gaitSpeed !== 0) {
       setGaitSpeed(0);
     }
-    g.position.set(s.x, 0, s.z);
+    g.position.set(s.x, homeGroundY(s.x, s.z), s.z);
     g.rotation.y = s.yaw + Math.PI; // RiggedFigure convention (see Villagers.tsx)
   });
 

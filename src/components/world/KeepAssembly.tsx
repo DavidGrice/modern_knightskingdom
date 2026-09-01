@@ -50,7 +50,10 @@ export default function KeepAssembly() {
 
   return (
     <group
-      position={[keep.x, 0, keep.z]}
+      // Wave 31 · keep.y (was hardcoded 0 — see gameStore.ts's foundKeep for
+      // where it's now actually threaded through). Always 0 in practice
+      // today (see KeepState.y's own doc), real infrastructure regardless.
+      position={[keep.x, keep.y ?? 0, keep.z]}
       // L72's click-to-open-menu, extended to the foundation itself — the
       // keep's own PlacedBuilding (game/store/gameStore.ts's foundKeep) is
       // deliberately not rendered by Buildings.tsx (KeepAssembly already
@@ -92,11 +95,21 @@ export default function KeepAssembly() {
               {built >= 1
                 ? <PropModel url={part.model} height={part.height} />
                 : (
+                  // Wave 31 · worldY has to match the outer group's own
+                  // elevation, not stay pinned at 0 — ConstructionSite.tsx's
+                  // clip plane is a THREE.Plane.constant, evaluated in
+                  // ABSOLUTE WORLD SPACE (see that file's own header comment),
+                  // never transformed by this socket's parent group. Once
+                  // the outer <group> above carries keep.y, the model mesh
+                  // rises with it for free, but the clip plane would stay
+                  // silently pinned to world Y=0 unless worldY is ALSO
+                  // keep.y — the identical pattern Buildings.tsx already uses
+                  // (`worldY={y}`, matching its own group's `position-y={y}`).
                   <ConstructionSiteModel
                     url={part.model}
                     size={[4, part.height, 4]}
                     progress={built}
-                    worldY={0}
+                    worldY={keep.y ?? 0}
                   />
                 )}
             </Suspense>

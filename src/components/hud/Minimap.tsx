@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { BUILD_REGION } from '@/game/data/buildables';
-import { DOWNS, DOWNS_PEAK, downsSurfaceY } from '@/game/data/downs';
+import { TERRAIN_REGIONS, REGION_PEAK, regionSurfaceY } from '@/game/data/terrainRegions';
 import { BATTLE_DOME, CEDRIC_CAMP, CEDRIC_WORLD, KEEP_INTERIOR, POND, STORM_WORLD, WORLD_HALF } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
@@ -165,21 +165,23 @@ export default function Minimap() {
         // it is ground and everything else stands on it. Bands rather than an
         // outline: every other thing on this map is a rectangle or a ring, and
         // a hill drawn as one more outline reads as another fenced rectangle
-        // instead of as the only place on the homestead that goes up. Sampled
-        // from the field rather than handed the shape, so re-authoring the
-        // hill never leaves a stale drawing of the old one here. It is also
-        // the only reason the prototype is findable: nothing else in the game
-        // points 90m north.
-        {
+        // instead of as one of the places on the homestead that goes up.
+        // Sampled from the field rather than handed the shape, so
+        // re-authoring a hill never leaves a stale drawing of the old one
+        // here. Wave 31 · looped over every TERRAIN_REGIONS entry (West Fell
+        // joins the Downs) instead of one hardcoded box — this is also the
+        // only reason either prototype is findable at all: nothing else in
+        // the game points north.
+        for (const region of TERRAIN_REGIONS) {
           const cells = 22;
-          const step = (DOWNS.half * 2) / cells;
+          const step = (region.half * 2) / cells;
           for (let i = 0; i < cells; i++) {
             for (let j = 0; j < cells; j++) {
-              const wx = DOWNS.x - DOWNS.half + (i + 0.5) * step;
-              const wz = DOWNS.z - DOWNS.half + (j + 0.5) * step;
-              const h = downsSurfaceY(wx, wz);
+              const wx = region.x - region.half + (i + 0.5) * step;
+              const wz = region.z - region.half + (j + 0.5) * step;
+              const h = regionSurfaceY(region, wx, wz);
               if (h <= 0) continue; // still buried under the meadow — not ground you can see
-              ctx.fillStyle = `rgba(122, 98, 56, ${(0.22 + (h / DOWNS_PEAK) * 0.5).toFixed(3)})`;
+              ctx.fillStyle = `rgba(122, 98, 56, ${(0.22 + (h / REGION_PEAK[region.id]) * 0.5).toFixed(3)})`;
               ctx.fillRect(px(wx - step / 2), pz(wz - step / 2), step * k + 1, step * k + 1);
             }
           }
@@ -217,11 +219,11 @@ export default function Minimap() {
         }
       } else {
         // this destination's real measured extent, shaded by real sampled
-        // elevation — the Downs' own sampled-grid technique above, extended
-        // to a real destination bake: downsSurfaceY (an authored analytic
-        // field with a known DOWNS_PEAK) swapped for sampleTemplateGroundY
-        // (a live raycast against the actual mounted mesh —
-        // TemplateWorld.tsx). Real terrain boundaries (2026-08-21): the
+        // elevation — the home regions' own sampled-grid technique above,
+        // extended to a real destination bake: regionSurfaceY (an authored
+        // analytic field with a known REGION_PEAK) swapped for
+        // sampleTemplateGroundY (a live raycast against the actual mounted
+        // mesh — TemplateWorld.tsx). Real terrain boundaries (2026-08-21): the
         // circular crop this replaced only ever matched the OLD artificial
         // wander bound — the raster now fills the destination's entire
         // measured bounding box (rasterMinX/Z..rasterMaxX/Z, cached above

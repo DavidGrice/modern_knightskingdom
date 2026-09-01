@@ -26,6 +26,7 @@ import { heightOf } from '@/game/data/buildables';
 import { hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from './Villagers';
+import { homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import { POND } from '@/game/data/world';
 import { pushOutOfWater } from '@/game/waterworks';
@@ -105,9 +106,14 @@ function DefenderFigure({ villager }: { villager: Villager }) {
     : station?.type === 'tower' && !!station && isBuilt(station);
   const postX = keepSocket && keep ? keep.x + keepSocket.x : station ? station.x : HOME_X + Math.cos(h) * 5;
   const postZ = keepSocket && keep ? keep.z + keepSocket.z : station ? station.z : HOME_Z + Math.sin(h) * 5;
+  // Wave 31 · a home-only mechanic (defenders never post at a destination —
+  // see `order` below), so only the two non-elevated (ground-level) branches
+  // need homeGroundY; the elevated ones already carry their own real base
+  // (keepPart.walkway is keep-relative, station.y already comes from
+  // evalPlacement's own now-elevation-aware base).
   const postY = keepSocket && keep
-    ? (elevated ? keepPart!.walkway! : 0)
-    : elevated ? (station!.y ?? 0) + heightOf('tower') : 0;
+    ? (elevated ? keepPart!.walkway! : homeGroundY(postX, postZ))
+    : elevated ? (station!.y ?? 0) + heightOf('tower') : homeGroundY(postX, postZ);
 
   const ds = useMemo(() => registerDefender(villager.id, postX, postY, postZ), [villager.id]); // eslint-disable-line react-hooks/exhaustive-deps
   ds.postX = postX; ds.postY = postY; ds.postZ = postZ; ds.elevated = elevated;
