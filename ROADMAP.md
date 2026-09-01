@@ -7934,3 +7934,135 @@ re-confirmed the existing classification was already correct.
   items' bbox claims was independently re-derived from the raw external layout JSONs rather than
   trusted from the prior pass's summary. Full live session through onboarding, all three destinations,
   multiple teleports/screenshots per item — zero console errors throughout.
+
+## Wave 31: home elevation — the systemic fix, plus a second authored region (West Fell) — SHIPPED 2026-09-01
+
+The single largest item in the whole 15-wave plan, done as INFRASTRUCTURE for the whole home map,
+exercised on two regions instead of converting the whole map in one pass: everything genuinely
+map-wide is fixed completely, for every actor, everywhere — only the newly-authored terrain content
+itself stays small.
+
+- [COMPLETE] ✅ **`game/data/downs.ts` → `game/data/terrainRegions.ts`: the single hardcoded North
+  Downs box generalized into a data-driven `TERRAIN_REGIONS` list, and a second region (West Fell,
+  x:-100 z:-94 half:34 — the Downs box translated 100m in x, same z-depth/size) authored on it.**
+  Every numeric safety margin the Downs box already proved (clear of the build fence and dig reach —
+  both z-only tests that transfer regardless of x; well inside the 200m nav grid with 66m of margin;
+  clear of every GROUNDS entry/road, all at z ≥ 18) transfers automatically. Verified, not assumed:
+  a standalone numeric replica of the module's own dev-mode gradient/rim self-check confirmed West
+  Fell's crown (r=28, h=5.6) reaches a max gradient of 0.314 — under DOWNS_MAX_GRADIENT=0.34, with
+  margin comparable to the Downs' own 0.335 — before the numbers were committed, exactly as the plan
+  required ("these are starting numbers to be confirmed silent-on-first-load"). `Terrain.tsx`'s
+  `HomesteadDowns()` became `TerrainRegions()` (one shared registered root — a `surfaceGroup` holding
+  only real walkable mesh, never a region's Cairn landmark, which stays a raycast-excluded sibling)
+  rendering one `TerrainKnollSurface`/`Cairn` pair per `TERRAIN_REGIONS` entry; `homeGroundY`
+  (TemplateWorld.tsx), Minimap.tsx's height bands, and navTerrain.ts's exclusion list all now derive
+  from the array instead of one hardcoded box — a third region is a one-line data append with zero
+  further code changes anywhere in those files.
+- [COMPLETE] ✅ **Every hardcoded flat-ground NPC/villager/prop site at home converted to the real
+  elevation query, not just the sites the original Downs prototype happened to touch.** Villagers.tsx
+  (8 sites, via a per-figure `villager.world`-gated ternary — also a genuine BONUS BUG FIX: a
+  settlement resident at a claimed destination plot was calling neither ground function before this,
+  floating/sinking on any sloped destination bake regardless of anything home-specific), Npc.tsx
+  (its already-ternary site plus 4 provably-home-only sites, confirmed via `npcSync.ts`'s own
+  `scheduledCourtNpcs` gate), Wildlife.tsx's grazing horses (swapped to the canonical wrapped
+  functions, picking up `destinationGroundY`'s Battle Dome floor-clamp for free), RaiderRam.tsx,
+  Merchant.tsx, Grounds.tsx's boundary stones/plot stakes, and Defenders.tsx's `postY` computation
+  (only its two non-elevated branches — the elevated branches' own bases were already correct and
+  independently verified: `keepPart.walkway` is keep-relative, `station.y` already flows from
+  evalPlacement's now-elevation-aware base). `PlayerController.tsx`/Enemies.tsx/Companion.tsx were
+  already correct (confirmed live, no change) — Enemies.tsx's own comment claiming to be "the ONE
+  NPC-side y=0 the elevation prototype touches" was updated, since Wave 31 is exactly what closes
+  that gap for the sites it used to correctly describe as deliberately left alone.
+- [COMPLETE] ✅ **InstancedProps.tsx's one real render choke point fixed once, not four separate call
+  sites patched.** Added optional `InstancedNode.y`, defaulted to 0 at the single `<Instance
+  position={[n.x, n.y ?? 0, n.z]}>` line; ResourceNodes.tsx's tree/rock/herb groups and Grounds.tsx's
+  fence nodes (the only callers positioned to know their own region) now compute it. Confirmed a
+  second, PRE-EXISTING bug closed for free: every instanced tree/rock/herb already floated on any
+  non-flat DESTINATION bake, home terrain aside, since this path never read a ground height at all.
+  DungeonScene.tsx's `wallNodes` deliberately left untouched — its own flat, bespoke floor convention
+  is unrelated to home/destination terrain.
+- [COMPLETE] ✅ **Two real structural gaps closed: `evalPlacement`'s flat build-region floor, and the
+  keep's completely missing elevation.** `evalPlacement` now computes `homeGroundY(x, z)` for the
+  home branch instead of a hardcoded `groundY: 0` (the claimed-destination-plot branch is untouched,
+  a deliberate existing simplification) — confirmed self-contained, since that field is read only
+  inside `evalPlacement` itself. `KeepState` had no `y` field at all: `placeBuilding`'s keep branch
+  computed a correct `y` via `evalPlacement` and then silently discarded it, calling `foundKeep(x, z)`
+  with no `y`, which itself hardcoded `y: 0` on the synthetic `PlacedBuilding`. Fixed end-to-end:
+  `foundKeep(x, z, y)`, `KeepState.y`, `keepWalkwayAt` folding in `keep.y` only when a real walkway
+  applies (its "no walkway" sentinel stays EXACTLY 0 — callers depend on that meaning "no override"),
+  `KeepAssembly.tsx`'s outer group position, and — the subtle one, independently verified against the
+  real source before being touched — `ConstructionSiteModel`'s `worldY` prop, which feeds a raw
+  `THREE.Plane.constant` clip plane evaluated in ABSOLUTE WORLD SPACE per that file's own header
+  comment, never transformed by the parent group. Without that last fix, an in-progress keep piece on
+  elevated ground would rise correctly but clip at the wrong absolute height. All of this is real
+  infrastructure with **zero observable behavior change today**: the keep can only ever be placed
+  inside the buildable fence, which never overlaps a `TERRAIN_REGIONS` box (the dev-mode fence check
+  in terrainRegions.ts guarantees it), so `keep.y` is always 0 in practice — plumbed correctly for
+  whenever that stops being true, not a hardcoded assumption papered over.
+- [COMPLETE] ✅ **Road plates and dug-water overlays now follow real elevation; the rain/snow field's
+  own already-live bug fixed first and independently, as instructed.** Road.tsx's plates sample
+  `homeGroundY(t.x, t.z) + 0.02` instead of a fixed `0.02`; `DugWater`'s group samples
+  `homeGroundY(w.x, w.z)` with `BANK_Y`/`WATER_Y` staying relative offsets on top — both systemic,
+  zero visible change today since no road leg or diggable waterway sits near a terrain region.
+  Weather.tsx's rain/snow particle field was a REAL, independently-live bug: pinned to world Y=0
+  following only the camera's X/Z, so rain already clipped through the existing Downs hill before
+  this wave touched anything else — fixed to sample `homeGroundY`/`destinationGroundY` each frame,
+  verified first per the plan's own explicit sequencing.
+- [COMPLETE] ✅ **navTerrain.ts's exclusion list generalized to `TERRAIN_REGIONS.map(...)`** — West
+  Fell is unroutable by construction the moment it exists in the data array, zero new logic beyond
+  what the Downs already proved; the module's own dev-mode assertion (checking every region actually
+  resolves 'blocked') generalized the same way.
+- **Explicitly deferred, named rather than silently dropped, per the plan's own instruction:** AI
+  pathfinding height-awareness at home (real slope-based step-cutting) — three independent structural
+  blockers in `navgrid.ts` (a hard `mode==="window"` gate in `ensureHeights()`, a destination-only
+  mounted-root singleton `rasterizeHeights()` reads with no getter for home's separate always-mounted
+  terrain root, and a fixed grid's permanent-no-op `recentre()`) plus an unquantified ~34x
+  whole-map-heightfield rasterization-cost question — `navgrid.ts` itself was NOT touched this wave,
+  confirmed by `git status`. A visual "paint elevation" world-editor tool — no existing procedural
+  heightfield generator to extend (`scripts/prepare-assets.mjs` never references
+  `grounds.generated.json`/`landTiers.generated.json`; they are hand-edited data despite the filename
+  convention), stays its own future project. True carved water (an excavated hole in the mesh, vs.
+  the elevation-following overlay this wave ships). `terrainConflict()`'s missing slope check and the
+  build aerial camera's flat mouse-raycast catcher plane in BuildController.tsx — both confirmed
+  live, provably unreachable given where the two terrain regions actually sit (their box always lies
+  entirely outside `landHalf(MAX_LAND_TIER) + DIG_OUTSKIRT` = 56m on the z-axis alone, regardless of
+  x — the same z-only guarantee that makes West Fell's own placement safe).
+- [COMPLETE] ✅ **A genuine BLOCKER found by live verification and fixed: importing `homeGroundY`
+  into `gameStore.ts` for Part 4 (above) closed a real circular import that crashed the entire game
+  on first load, in both `next dev` and a production `next build` + `next start`.** `npx tsc --noEmit`
+  and `npm run build` both reported exit 0 throughout — this is a runtime module-evaluation-order bug,
+  invisible to either check, only observable on a real page load in a real browser (exactly why this
+  wave's own verification instructions required driving one). Root cause traced exactly:
+  `gameStore.ts → TemplateWorld.tsx → DungeonScene.tsx → Buildings.tsx → siege.ts → combat.ts →
+  difficulty.ts`, and `difficulty.ts` calls `useGameStore.subscribe(refresh)` at its own module scope
+  (not deferred) — closing a cycle back onto `gameStore.ts`'s own not-yet-initialized `useGameStore`
+  binding. Confirmed live: `ReferenceError: Cannot access 'useGameStore' before initialization` on
+  the very first page load; confirmed via an identical test against unmodified `main` that the crash
+  does not exist without this wave's changes. This is the same class of bug `src/ai/core/
+  AgentManager.ts`'s own header already documents hitting once before, via a different edge into the
+  identical `DungeonScene → Buildings → siege → combat → difficulty` chain — fixed there, and here, by
+  inverting the dependency rather than reasoning a new edge was safe. **Fix**: `homeGroundY` and
+  `registerHomeGroundRoot` were pulled into a new, genuine leaf module, `src/game/homeGround.ts`
+  (imports only `three` and the pure-data `terrainRegions.ts` — independently confirmed, transitively,
+  to have zero path back to `gameStore.ts` through any of its own dependencies). `TemplateWorld.tsx`
+  now imports from that leaf module and re-exports both names, so every pre-existing
+  `from './TemplateWorld'` call site (Villagers.tsx, Defenders.tsx, Terrain.tsx, Weather.tsx, etc.)
+  kept working completely unchanged — only `gameStore.ts`'s own import needed to move.
+- **Verified live end-to-end, not just via `tsc`/`build`, and independently re-confirmed a second
+  time during final review.** Full session through real character creation into the live game world
+  (headless Chrome, off-screen, `--use-angle=d3d11`) confirmed: zero console/page errors in both
+  `next dev` and a clean production `next build`+`next start`; `window.__kkworld.homeGroundY(0,-94)` =
+  `5.5` (Downs) and `homeGroundY(-100,-94)` = `4.7` (West Fell) — both exactly matching the numbers
+  the fix pass independently reported; the generalized `[terrainRegions]`/`[navTerrain]` dev-mode
+  self-checks silent throughout; `window.__kknav.navBlocked` confirms both region centers blocked and
+  the open meadow clear, with correct behavior right at a region's edge boundary; a keep founded via
+  the real store API threads a real, non-hardcoded `y` end-to-end. One additional real gap found during
+  this final review, not caught by the wave's own verify/fix passes: `BuildController.tsx`'s aerial
+  build camera's `cam.lookAt(c.x, 0, c.z)` — a distinct, real fix the plan asked for in Part 4c,
+  separate from the deliberately-deferred mouse-raycast catcher plane above, that had been silently
+  conflated with that deferral and dropped. Fixed to `cam.lookAt(c.x, lookY, c.z)`, sampling
+  `destinationGroundY`/`homeGroundY` depending on whether a claimed destination plot or the homestead
+  is being built on (`destination` was already read in this component) — cosmetic (no gameplay-
+  blocking effect today, since the build fence never reaches elevated ground), but real, and now
+  closed rather than left as a quiet gap. `npx tsc --noEmit`: exit 0, zero output, re-confirmed after
+  this addition.

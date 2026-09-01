@@ -17,6 +17,26 @@ import { KEEP_PART_BY_ID, KEEP_SIZE, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, m
 import { brickLabel } from '../data/brickResources';
 import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
 import { stabledHorses } from '../riding';
+// Wave 31 hotfix · this used to import `homeGroundY` from
+// '@/components/world/TemplateWorld' directly, reasoning that
+// TemplateWorld.tsx's own two `useGameStore` reads are both inside component
+// bodies, never at module-evaluation time. That check only looked at
+// TemplateWorld.tsx's own direct calls and missed its transitive import
+// chain: TemplateWorld -> DungeonScene -> Buildings -> siege -> combat ->
+// difficulty, and difficulty.ts calls `useGameStore.subscribe(refresh)` at
+// ITS OWN module scope. Importing TemplateWorld.tsx from this file therefore
+// closed a real cycle back onto this module's own `useGameStore` — confirmed
+// live as "ReferenceError: Cannot access 'useGameStore' before
+// initialization" on the very first page load, in both `next dev` and a real
+// production build (see src/ai/core/AgentManager.ts's header for the
+// identical class of bug hit before, via a different edge into the same
+// chain). `homeGroundY` now lives in its own leaf module
+// (src/game/homeGround.ts) that imports only `three` and the pure-data
+// terrainRegions.ts — no path back to gameStore.ts, so no cycle regardless of
+// import order. navgrid.ts's own getMountedRoot/getMountedRegion import from
+// TemplateWorld.tsx remains fine specifically because gameStore.ts never
+// imports navgrid.ts, so that edge never re-enters this module's own loading.
+import { homeGroundY } from '@/game/homeGround';
 import { agentManager } from '@/ai/core/AgentManager';
 import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { resetNpcAgentSync } from '@/ai/npcSync';
@@ -526,8 +546,10 @@ interface GameState {
    *  Returns how many actually went down. One undo entry for the lot. */
   placeRow: (type: string, cells: { x: number; z: number }[], rot: 0 | 1 | 2 | 3) => number;
   constructBuilding: (id: string, amount: number) => void;
-  /** J51 · lay the castle foundation at (x, z) — sockets open once it exists */
-  foundKeep: (x: number, z: number) => void;
+  /** J51 · lay the castle foundation at (x, z, y) — sockets open once it
+   *  exists. Wave 31 adds `y`: the caller (placeBuilding) already computed a
+   *  real elevation via evalPlacement and used to discard it here. */
+  foundKeep: (x: number, z: number, y: number) => void;
   /** open the socket panel for one named socket */
   openKeepSocket: (socketId: string) => void;
   /** L72 · open the action menu for a placed building */
@@ -3827,6 +3849,16 @@ function createGameStore() {
       const region = activeBuildRegion(st.destination ? st.claimedWorlds[st.destination] : null, st.landTier);
       if (x - hx < region.minX || x + hx > region.maxX) return invalid;
       if (z - hz < region.minZ || z + hz > region.maxZ) return invalid;
+      // Wave 31 · home's own build region used to hand out one flat scalar
+      // (region.groundY: 0) for the entire holding regardless of where in it
+      // (x, z) actually fell — real for a claimed destination plot (one
+      // sampled level per claim, a deliberate, unchanged simplification), but
+      // wrong the instant a terrain region ever overlapped a buildable
+      // square. It never has (see terrainRegions.ts's own dev-mode fence
+      // check), so this is systemic correctness, not a behavior change today
+      // — computed once and used everywhere `region.groundY` used to be read
+      // below.
+      const baseY = st.destination ? region.groundY : homeGroundY(x, z);
       // Wave 12 · nothing stands in the player's own water. A plain footprint
       // test rather than a nav-grid question: placement is asked about this one
       // rectangle, live, long before the 1Hz rebuild has seen a fresh cut. Home
@@ -3846,7 +3878,7 @@ function createGameStore() {
       // stacking: rest on the tallest overlapped piece (stackable pieces only) —
       // starts from the plot's leveled ground height away from home, instead
       // of always assuming a flat y=0 base
-      let y = region.groundY;
+      let y = baseY;
       if (def.stackable) {
         for (const b of st.buildings) {
           if (b.id === ignoreId) continue;
@@ -3855,7 +3887,7 @@ function createGameStore() {
           if (overlapsXZ(b)) y = Math.max(y, topOf(b));
         }
       }
-      if (y - region.groundY + h > MAX_STACK_HEIGHT) return invalid;
+      if (y - baseY + h > MAX_STACK_HEIGHT) return invalid;
 
       // 3D overlap check against everything
       for (const b of st.buildings) {
@@ -3865,7 +3897,7 @@ function createGameStore() {
         if (y < topOf(b) - 0.02 && y + h > by + 0.02) return invalid;
       }
       // ground pieces keep clear of resource nodes near the region edge
-      if (y < region.groundY + 0.5) {
+      if (y < baseY + 0.5) {
         for (const n of st.nodes) {
           if (n.kind === 'fishing') continue;
           if (Math.abs(n.x - x) < hx + 1.2 && Math.abs(n.z - z) < hz + 1.2) return invalid;
@@ -3903,7 +3935,10 @@ function createGameStore() {
           return false;
         }
         set({ inventory: inv });
-        get().foundKeep(x, z);
+        // Wave 31 · `y` above is a real evalPlacement-computed elevation —
+        // used to be discarded here, leaving the keep permanently at y:0
+        // regardless of what evalPlacement actually said.
+        get().foundKeep(x, z, y);
         return true;
       }
       // Phase 19 build-then-construct: placement marks the site (materials
@@ -4080,7 +4115,7 @@ function createGameStore() {
       st.notify(`${def.name} mounted on the wall — it arms itself when a raider comes close.`, true);
     },
 
-    foundKeep: (x, z) => {
+    foundKeep: (x, z, y) => {
       const st = get();
       if (st.keep) { st.notify('Your foundation is already laid.'); return; }
       // a real PlacedBuilding, `type: 'keep'`, alongside the socket-tracking
@@ -4091,8 +4126,11 @@ function createGameStore() {
       // regardless of this refactor. Built immediately — the FOUNDATION reads
       // as already laid the moment it's placed; the individual socket pieces
       // on top keep their own separate construction time (workKeepPart).
-      const placed: PlacedBuilding = { id: `b${buildSeq++}`, type: 'keep', x, z, y: 0, rot: 0, built: 1, world: null };
-      set({ keep: { x, z, parts: {}, built: {} }, buildings: [...st.buildings, placed], dirty: true });
+      // Wave 31 · `y` threaded through from placeBuilding's own
+      // evalPlacement result rather than hardcoded — see KeepState.y and
+      // keepWalkwayAt (data/keep.ts) for where it's read back.
+      const placed: PlacedBuilding = { id: `b${buildSeq++}`, type: 'keep', x, z, y, rot: 0, built: 1, world: null };
+      set({ keep: { x, z, y, parts: {}, built: {} }, buildings: [...st.buildings, placed], dirty: true });
       audio.play('brick_link', 0.8);
       st.notify('Foundation laid. Choose a corner and raise something on it.', true);
     },

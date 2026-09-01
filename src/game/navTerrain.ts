@@ -21,7 +21,7 @@
 // convention road.ts/carts.ts already use for exactly this reason.
 
 import { POND } from './data/world';
-import { DOWNS } from './data/downs';
+import { TERRAIN_REGIONS } from './data/terrainRegions';
 import { waterworks } from './waterworks';
 
 export interface TerrainExclusion {
@@ -44,18 +44,22 @@ export const terrainExclusions: TerrainExclusion[] = [
   // Wave 17 #6 · the home nav grid widened from ±56m to ±200m (see
   // navgrid.json's own note) so villagers can actually route to the real
   // GROUNDS (up to ~197m out) instead of beelining the whole trip. The Downs
-  // (data/downs.ts) sit at z:[-128,-60] — well inside ±200m now — but every
-  // home-world walker still draws at a hardcoded y=0 (Villagers.tsx/Npc.tsx);
-  // that prototype was kept walkable-proof by living OUTSIDE the grid, not by
-  // any terrain check, so widening the grid alone would let a walker route
-  // straight onto a hillside it cannot climb. This entry is the replacement
-  // guarantee — see the dev-mode assertion below that checks it is actually
-  // there, and data/downs.ts's own header for the full history.
-  {
-    id: 'downs', region: null,
-    shape: { kind: 'aabb', x: DOWNS.x, z: DOWNS.z, hx: DOWNS.half, hz: DOWNS.half },
+  // (data/terrainRegions.ts) sit at z:[-128,-60] — well inside ±200m now —
+  // and every home-world walker draws at real elevation now (Wave 31), but
+  // that only reaches the ground UNDER a walker, not whether A* would ever
+  // route one across a slope it cannot climb. Each region below is the
+  // replacement guarantee an earlier wave gave the Downs alone — see the
+  // dev-mode assertion further down that checks every region is actually
+  // covered, and data/terrainRegions.ts's own header for the full history.
+  // Wave 31 · derived from TERRAIN_REGIONS rather than one hand-written
+  // entry, so a newly-authored region (West Fell, this same wave) is
+  // unroutable by construction the moment it is appended there — zero new
+  // logic here beyond what the Downs already proved.
+  ...TERRAIN_REGIONS.map((r): TerrainExclusion => ({
+    id: r.id, region: null,
+    shape: { kind: 'aabb', x: r.x, z: r.z, hx: r.half, hz: r.half },
     traversal: 'blocked',
-  },
+  })),
 ];
 
 if (process.env.NODE_ENV !== 'production' && terrainExclusions.length === 0) {
@@ -120,13 +124,20 @@ export function terrainBlocks(x: number, z: number, region: string | null): bool
 // (navgrid.json) so hauls can reach the real GROUNDS put the box 140m inside
 // it instead, so that proof moved here: this IS the entry that now keeps it
 // unreachable, so checking its own centre resolves 'blocked' is the same
-// "asserted rather than remembered" guard downs.ts used to run itself, aimed
-// at the one way this could actually go stale — the 'downs' entry above being
-// deleted or its region/traversal edited, not DOWNS.x/z/half drifting (this
-// file reads those live, so drift there re-derives correctly on its own).
-if (process.env.NODE_ENV !== 'production' && !terrainBlocks(DOWNS.x, DOWNS.z, null)) {
-  // eslint-disable-next-line no-console
-  console.warn('[navTerrain] DOWNS is not covered by a \'blocked\' exclusion — the home nav grid '
-    + 'reaches ±200m now (Wave 17 #6) and would let a walker route straight onto the hillside that '
-    + 'Villagers.tsx/Npc.tsx still draw every one of them at a hardcoded y=0.');
+// "asserted rather than remembered" guard the region file used to run itself,
+// aimed at the one way this could actually go stale — a region's own
+// exclusion entry above being deleted or its region/traversal edited, not
+// TerrainRegion.x/z/half drifting (this file reads those live off
+// TERRAIN_REGIONS, so drift there re-derives correctly on its own). Wave 31 ·
+// generalized to loop over every region, so a newly-authored one gets the
+// identical guarantee checked for free.
+if (process.env.NODE_ENV !== 'production') {
+  for (const r of TERRAIN_REGIONS) {
+    if (!terrainBlocks(r.x, r.z, null)) {
+      // eslint-disable-next-line no-console
+      console.warn(`[navTerrain] ${r.id} is not covered by a 'blocked' exclusion — the home nav grid `
+        + 'reaches ±200m now (Wave 17 #6) and would let a walker route straight onto a hillside that '
+        + 'every home-world walker only samples the height of, not the slope of.');
+    }
+  }
 }

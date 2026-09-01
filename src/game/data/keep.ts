@@ -135,7 +135,14 @@ const WALK_RUN_HALF = 4;      // 8m wall run, along its own length
 const WALK_DEEP_HALF = 1.2;   // …and 2.4m across it
 
 /** Height of the wall walk at a world point, or 0 where there is none.
- *  Feet-Y, the same convention `walkway` itself and `playerState.y` use. */
+ *  Feet-Y, the same convention `walkway` itself and `playerState.y` use.
+ *  `best` is compared and returned in PART-relative units throughout (a
+ *  socket's own `walkway` height above the foundation) — Wave 31 folds in
+ *  the foundation's own elevation (`keep.y`) only at the very end, and only
+ *  when a real walkway actually applies. The "no walkway" sentinel must stay
+ *  EXACTLY 0: callers (PlayerController.tsx) depend on that meaning "no
+ *  override" — `(keep.y ?? 0) + 0` would turn a merely-elevated foundation
+ *  with no walkway into a phantom knee-high step everywhere inside it. */
 export function keepWalkwayAt(keep: KeepState | null | undefined, x: number, z: number): number {
   if (!keep) return 0;
   const lx = x - keep.x;
@@ -152,7 +159,7 @@ export function keepWalkwayAt(keep: KeepState | null | undefined, x: number, z: 
     if (Math.abs(lx - s.x) > hx || Math.abs(lz - s.z) > hz) continue;
     best = part.walkway;
   }
-  return best;
+  return best > 0 ? (keep.y ?? 0) + best : 0;
 }
 
 /** a keep as it is stored: where its foundation sits, and what is in each
@@ -160,6 +167,14 @@ export function keepWalkwayAt(keep: KeepState | null | undefined, x: number, z: 
 export interface KeepState {
   x: number;
   z: number;
+  /** Wave 31 · the foundation's own ground elevation (evalPlacement's
+   *  computed y at the moment it was laid — see gameStore.ts's foundKeep).
+   *  Absent on saves from before this field existed, same convention `hp`
+   *  below already uses; read as `keep.y ?? 0`. Always 0 in practice today
+   *  (the keep can only be placed inside the buildable fence, which never
+   *  overlaps a TERRAIN_REGIONS box — see terrainRegions.ts's own dev-mode
+   *  check), but real infrastructure rather than a hardcoded assumption. */
+  y?: number;
   /** socket id -> part id */
   parts: Record<string, string>;
   /** socket id -> 0..1 construction progress, same hammer work as any site */

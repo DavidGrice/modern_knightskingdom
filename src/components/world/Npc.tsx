@@ -19,7 +19,7 @@ import { NIGHT_GATHER_SPOT } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
 import { registerNpcMob } from '@/game/npcMobs';
-import { destinationGroundY } from './TemplateWorld';
+import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
@@ -119,7 +119,12 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x - originOffset.x, 0, loc.z - originOffset.z);
+      // Wave 31 · a real Agent only ever exists for a SCHEDULED court NPC
+      // (npcSync.ts's own syncNpcAgents reads scheduledCourtNpcs, which
+      // requires `!def.world`), so this branch — and the PLAY_ANIM/FACE
+      // branches below it — are provably home-only. homeGroundY, not the
+      // full ternary Villagers.tsx needs.
+      g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -139,7 +144,7 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x - originOffset.x, 0, loc.z - originOffset.z);
+      g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -157,7 +162,7 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x - originOffset.x, 0, loc.z - originOffset.z);
+      g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -167,11 +172,13 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
 
     if (!schedule) {
       // residents stand on their bake's real terrain (these hillside scenes
-      // vary meters in relief); home NPCs stay on the flat meadow at y=0.
-      // destinationGroundY(def.x, def.z) stays the full ABSOLUTE value — see
-      // this file's own ZERO_OFFSET comment — only the final position.set
-      // write below is shifted into this group's local (origin-offset) space.
-      const gy = def.world ? destinationGroundY(def.x, def.z) : 0;
+      // vary meters in relief); a home NPC now reads the homestead's own
+      // terrain regions the same way (Wave 31 — previously a hardcoded 0).
+      // destinationGroundY(def.x, def.z)/homeGroundY(def.x, def.z) stay the
+      // full ABSOLUTE value — see this file's own ZERO_OFFSET comment — only
+      // the final position.set write below is shifted into this group's
+      // local (origin-offset) space.
+      const gy = def.world ? destinationGroundY(def.x, def.z) : homeGroundY(def.x, def.z);
       g.position.set(def.x - originOffset.x, gy, def.z - originOffset.z);
       mob.x = def.x; mob.z = def.z;
       return;
@@ -194,8 +201,9 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     // reachable only for home NPCs (schedule requires !def.world, so
     // originOffset is always ZERO_OFFSET here today) — offset-subtracted
     // anyway for the same defensive-parity reason as the other three
-    // useFrame branches above.
-    g.position.set(p.x - originOffset.x, 0, p.z - originOffset.z);
+    // useFrame branches above. homeGroundY, not the full ternary, for the
+    // same home-only reason those branches use it.
+    g.position.set(p.x - originOffset.x, homeGroundY(p.x, p.z), p.z - originOffset.z);
     mob.x = p.x;
     mob.z = p.z;
     // only steer the walk/idle animation when not mid-greet — a wave in

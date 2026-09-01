@@ -227,9 +227,9 @@ function floorHeightAt(
   // Wave 12 · the ground itself, at last. This used to be a literal `let
   // floor = 0` — the single line that made the homestead flat by construction
   // rather than by convention, since nothing below it ever looked at terrain.
-  // `homeGroundY` is 0 everywhere except inside the North Downs prototype
-  // (game/data/downs.ts), so this is exactly the old behaviour with one 68m
-  // square carved out of it.
+  // `homeGroundY` is 0 everywhere except inside a TERRAIN_REGIONS entry
+  // (game/data/terrainRegions.ts — Wave 31: the North Downs plus West Fell),
+  // so this is exactly the old behaviour with those boxes carved out of it.
   //
   // Terrain is the BASELINE, not a candidate: a building top has to be within
   // STEP_UP to be climbed onto, but you cannot fail to step onto the earth.

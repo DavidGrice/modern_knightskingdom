@@ -22,6 +22,7 @@ import { WATER_BANK, snapDigRect } from '@/game/waterworks';
 import { WORLD_HALF } from '@/game/data/world';
 import { buildCamState } from '@/game/buildCam';
 import { playerState } from '@/game/playerState';
+import { destinationGroundY, homeGroundY } from '@/components/world/TemplateWorld';
 import type { ItemId } from '@/game/types';
 
 const REGION_CX = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
@@ -378,7 +379,12 @@ export default function BuildController() {
       // sense for a camera staring straight down the Y axis.
       cam.position.set(c.x + Math.sin(az) * CAM_BACK, CAM_H, c.z + Math.cos(az) * CAM_BACK);
       cam.up.set(0, 1, 0);
-      cam.lookAt(c.x, 0, c.z);
+      // Wave 31 · was a fixed y=0 lookAt target — panning far enough to bring
+      // an elevated terrain region (home) or a sloped bake (a claimed
+      // destination plot) into view kept the camera aimed at the old flat
+      // ground plane instead of the terrain actually under the cursor.
+      const lookY = destination ? destinationGroundY(c.x, c.z) : homeGroundY(c.x, c.z);
+      cam.lookAt(c.x, lookY, c.z);
     }
 
     // hold-to-place: hold LMB over a valid spot to commit a fresh piece or

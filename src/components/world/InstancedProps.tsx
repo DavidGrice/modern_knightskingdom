@@ -92,6 +92,16 @@ export interface InstancedNode {
   key: string;
   x: number;
   z: number;
+  /** Wave 31 · ground height, in world y. Optional and defaulted to 0 at the
+   *  single render choke point below rather than a per-caller migration — the
+   *  handful of callers positioned to know their own region (ResourceNodes.tsx's
+   *  tree/rock/herb groups; Grounds.tsx's fence nodes) add it; DungeonScene.tsx's
+   *  wallNodes deliberately does not (dungeon interiors have their own flat,
+   *  bespoke floor convention unrelated to home/destination terrain). Closes a
+   *  PRE-EXISTING bug on sloped destinations too, not just a home-specific one:
+   *  every instanced tree/rock/herb already floated on any non-flat destination
+   *  bake, since this render path never read a ground height at all before now. */
+  y?: number;
   yaw: number;
   scale: number;
   /** multiplied against the sub-mesh's own baked material color — used for
@@ -194,7 +204,7 @@ export function InstancedSubMeshes({ subMeshes, nodes, frustumCulled }: { subMes
           {nodes.map((n) => (
             <Instance
               key={n.key}
-              position={[n.x, 0, n.z]}
+              position={[n.x, n.y ?? 0, n.z]}
               rotation={[0, n.yaw, 0]}
               scale={n.scale}
               color={n.color ?? '#ffffff'}

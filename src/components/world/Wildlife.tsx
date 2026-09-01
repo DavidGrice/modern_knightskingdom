@@ -13,7 +13,7 @@ import { riddenByAlly, registerHorse } from '@/game/riding';
 import { falconPos, falconSpotLabel, FALCON_SPOT_RANGE } from '@/game/falcon';
 import { useGameStore } from '@/game/store/gameStore';
 import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
-import { sampleTemplateGroundY } from './TemplateWorld';
+import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 
 const C = '/assets/props/creatures';
@@ -122,7 +122,11 @@ function Horse({ id, url, home, world }: { id: string; url: string; home: [numbe
       const v = distVol(s.x, s.z);
       if (v > 0.05) audio.play(Math.random() < 0.4 ? 'whinny' : 'graze', v * 0.7);
     }
-    g.position.set(s.x, world ? sampleTemplateGroundY(s.x, s.z) : 0, s.z);
+    // Wave 31 · the canonical wrapped functions, not the raw sampler — this
+    // also picks up destinationGroundY's Battle Dome floor-clamp for a horse
+    // stabled inside that ring, and homeGroundY's own terrain-region gate for
+    // one grazing on the meadow.
+    g.position.set(s.x, world ? destinationGroundY(s.x, s.z) : homeGroundY(s.x, s.z), s.z);
     g.rotation.y = s.yaw;
   });
 

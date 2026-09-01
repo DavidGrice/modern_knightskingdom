@@ -19,6 +19,7 @@
 import { useMemo } from 'react';
 import { PIECES, ROAD_TILE, rotMask, routeCells, N, E, So, W } from '@/game/data/road';
 import PropModel from './PropModel';
+import { homeGroundY } from './TemplateWorld';
 
 const S = '/assets/props/scenery';
 
@@ -52,9 +53,14 @@ export default function Road() {
   return (
     <group>
       {tiles.map((t) => (
-        // the plates are 1.6mm thick — rendered at a hair above the ground so
-        // they never z-fight with the terrain they lie on
-        <PropModel key={t.key} url={t.url} height={0.08} position={[t.x, 0.02, t.z]} yaw={t.yaw} />
+        // the plates are 1.6mm thick — rendered a hair above the ground
+        // (home-only: the road has no destination equivalent) so they never
+        // z-fight with the terrain they lie on. Wave 31 · that "the ground"
+        // now samples homeGroundY instead of assuming y=0, so a leg that
+        // ever ran near a terrain region's rim would read as lying ON it —
+        // no leg does today (terrainRegions.ts's own dev-mode check), so
+        // this is systemic correctness, not a visible change yet.
+        <PropModel key={t.key} url={t.url} height={0.08} position={[t.x, homeGroundY(t.x, t.z) + 0.02, t.z]} yaw={t.yaw} />
       ))}
     </group>
   );
