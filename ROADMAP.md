@@ -8066,3 +8066,66 @@ itself stays small.
   blocking effect today, since the build fence never reaches elevated ground), but real, and now
   closed rather than left as a quiet gap. `npx tsc --noEmit`: exit 0, zero output, re-confirmed after
   this addition.
+
+## Wave 32: progression & economy polish — talent respec, merchant/builder trait depth, calling starter perks — SHIPPED 2026-09-02
+
+Three independent items. The third was a real design fork the plan explicitly flagged for a direct
+ask rather than a default pick — the user was asked and chose to add real content, reversing an
+earlier deliberate design decision.
+
+- [COMPLETE] ✅ **Talent-tree respec — the exact mirror `respecAttributes` (Wave 9) never got.**
+  `talentRespecCost()` (`skillTree.ts`) reuses `RESPEC_BASE_GOLD`/`RESPEC_GOLD_PER_POINT` verbatim
+  rather than inventing a second pricing model — one respec economy in the whole game, not two.
+  `respecTalents()` (`gameStore.ts`) is a full reset only (no per-node refund), a deliberate choice
+  that's even more apt here than for attributes: talents are tier/prerequisite-chained, so a partial
+  refund would have to validate which nodes can be dropped without orphaning a child tier, and a full
+  wipe sidesteps that entirely. UI: the same two-click arm/confirm button `AttributesSection()`
+  already uses, added to `TalentTree()`.
+- [COMPLETE] ✅ **Merchant/builder trait-pool depth brought up to the established 3-slot standard.**
+  Every gathering job (lumberjack/miner/farmer/herbalist/fisherman) plus defender already had 3 slots
+  (a flat-haul trait, a side-goods trait, a Swift-Return trait); merchant had 2, builder had 1.
+  Building has no per-trip structure the way gathering does, so the new traits' shapes were reasoned
+  from the mechanic each job actually has, not copy-pasted: **Windfall** (merchant's missing
+  side-goods slot) rolls the same craft-scaled chance every other side-goods trait uses, paid out as
+  bonus gold on a trade run since merchants have no second item to bring home. **Extra Hands**
+  (builder) adds a flat +0.5 to a builder's own construction "weight," mirroring the flat, non-
+  percentage shape of jobs' "+1 X every trip" traits rather than duplicating Steady Hands' own
+  multiplier. **Salvage Eye** (builder) rolls its chance once per COMPLETED construction piece — the
+  closest honest analog to "once per trip" for a job that has no trips — detected via a real
+  before/after `built` threshold check around the existing `constructBuilding` call, not a new timer.
+- [COMPLETE] ✅ **Calling starter perks — a real design fork put to the user directly, and answered
+  toward reversing an earlier deliberate decision.** Every one of the 8 callings' `kit` field has been
+  a genuinely empty object since a 2026-07-20 rework that intentionally removed starting gear
+  ("creation was never meant to hand out a head start"), and the character-creation screen still told
+  the player exactly that. Asked directly whether to keep that design or add real differentiation;
+  the user chose to add it. Built as a NEW `passiveLabel`/`passiveDesc` field pair (not a repurposed
+  `kit`, and not a literal item grant — the same shape `GuildDef`'s own passives already use), one
+  small always-on mechanical nudge per calling in its own signature skill, each deliberately
+  calibrated SMALLER than the matching guild passive and the matching tier-1 talent where one exists
+  (a lifelong knack, not a substitute for earning a guild's respect or a talent). Wired into 7 real
+  mechanics: `harvestNode` (Woodsman wood chance, Quarryman ore chance), `plantPlot`/`tendPlot`
+  (Farmhand grow time), `constructBuilding` (Artisan swing weight), `useTool` (Smith's Prentice wear),
+  `biteWindowMs` (Angler reaction window), and `playerAttack` (Page — deliberately hung on stamina
+  cost rather than flat damage, since the Knights' Order guild and a combat talent already own that
+  axis; a same-magnitude damage bump would read as tying an earned bonus, not undercutting it). The
+  Wanderer (no signature skill) gets its own small universal haggle nudge on both `sellItem` and
+  `buyOffer` instead of a forced skill hook. `CharacterCreator.tsx`'s copy updated honestly — the old
+  "never a head start" framing is gone, replaced with real, specific per-calling text.
+- **Verified live with real measurements, not a vibe check.** Real Chrome session driving the actual
+  compiled runtime through the game's own debug hooks (`window.__kk`/`__kkAttack`/`__kkc`/etc.), not
+  mocks: 43 assertions across 4 real character creations. Talent respec: bought real talents, confirmed
+  the button's exact cost (55 gold for 2 points, matching `25+15×2`), confirmed it refuses at 0 gold,
+  confirmed a funded respec wipes the tree and deducts the exact cost, confirmed a clean rebuy after,
+  confirmed the pre-existing attribute respec is completely unaffected. Trait pools: confirmed live
+  Roster-panel slot counts (merchant 2→3, builder 1→3), granted all new traits, and measured each
+  effect in isolation against a no-trait control — Windfall raised average merchant gold/trip over 300
+  trips matching the formula's expected value, Extra Hands raised construction rate from 0.04 to 0.06
+  built/sec (exact +0.5-weight match), Salvage Eye roughly doubled scrap recovered over 150 completed
+  pieces. Calling perks: 7 of 8 hooks measured live and isolated via same-character classId toggling —
+  Woodsman/Quarryman via Monte Carlo sampling (n=500), Farmhand/Artisan/Prentice/Page/Wanderer via
+  exact deterministic math matches (e.g. `plantPlot` grow time 200→192 = exactly ×0.96); the 8th
+  (Angler's fishing bite-window) could not be captured via a real 3D fishing interaction in headless
+  Playwright (this codebase's own history already documents pointer-lock fishing as unreliable to
+  simulate) and was instead confirmed via direct source read of the shared, already-proven
+  `callingSignature()` helper plus a clean build — flagged honestly as a code-path confirmation, not a
+  live capture. `npx tsc --noEmit` / `npm run build`: both clean, verified independently.

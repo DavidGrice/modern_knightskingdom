@@ -1,5 +1,6 @@
 import type { SkillId } from '../types';
 import { totalSkillLevel, levelFromXp } from './ranks';
+import { RESPEC_BASE_GOLD, RESPEC_GOLD_PER_POINT } from './playerAttributes';
 
 // The Talent Tree (Phase 21): each of the seven skills carries a three-tier
 // branch of permanent talents. Points are earned by playing — one per total
@@ -97,4 +98,19 @@ export function talentBuyable(
   const unspent = talentPointsEarned(xp) - talentPointsSpent(tree);
   if (unspent < t.cost) return { ok: false, why: `Needs ${t.cost} unspent point${t.cost > 1 ? 's' : ''}.` };
   return { ok: true, why: '' };
+}
+
+// --- respec (Wave 32) -------------------------------------------------------
+// Attributes got a full-reset respec in Wave 9 (see playerAttributes.ts); the
+// talent tree never got its mirror. Reusing RESPEC_BASE_GOLD/RESPEC_GOLD_PER_POINT
+// verbatim rather than inventing talent-specific constants keeps exactly one
+// respec-pricing model in the game — talent costs (1-3 per node) are the same
+// rough magnitude as attribute points, so a second scale would be a distinction
+// without a difference. Full reset only, and more apt here than for attributes:
+// talents are tier/prerequisite-chained, so a partial refund would have to
+// validate which nodes can be dropped without orphaning a child tier — a full
+// wipe sidesteps that entirely.
+export function talentRespecCost(pointsSpent: number): number {
+  if (pointsSpent <= 0) return 0;
+  return RESPEC_BASE_GOLD + RESPEC_GOLD_PER_POINT * pointsSpent;
 }

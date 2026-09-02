@@ -6,12 +6,19 @@
 // loop can drive it without store churn; HUD polls it for the bite meter.
 import { audio } from '@/lib/audio';
 import { atGuildMaxRank, useGameStore } from './store/gameStore';
+import { callingSignature } from './data/classes';
 
 const BITE_WINDOW = 900; // base ms to react once a fish bites
 
-/** the live reaction window — the Steady Line talent stretches it 300ms */
+/** the live reaction window — the Steady Line talent stretches it 300ms, the
+ *  Angler calling's small River Instinct passive (Wave 32) another 100ms —
+ *  a third of the talent's own bonus, matching the "smaller than the real
+ *  investment" rule every calling passive follows. */
 export function biteWindowMs(): number {
-  return BITE_WINDOW + (useGameStore.getState().skillTree.includes('fishing2') ? 300 : 0);
+  const gs = useGameStore.getState();
+  const talent = gs.skillTree.includes('fishing2') ? 300 : 0;
+  const calling = callingSignature(gs.character?.classId, 'fishing') ? 100 : 0;
+  return BITE_WINDOW + talent + calling;
 }
 const MAX_RANGE = 6; // wander this far from the cast spot and the line resets
 
