@@ -6,10 +6,12 @@
 // toggle and drag-to-rotate.
 //
 // The mockup's kit hints ("+ axe", "+ coal") describe a game that hands
-// out starting gear. This one deliberately doesn't — every calling
-// begins bare-handed and the only lasting difference is +10% XP in one
-// skill (see data/classes.ts). The hints say that instead of inventing
-// a kit the game will not grant.
+// out starting gear. This one deliberately doesn't — no calling grants a
+// single starting item, and every character still begins bare-handed.
+// What a calling DOES grant, permanently: +10% XP in its signature skill,
+// and (Wave 32, on direct user instruction) one small always-on passive
+// in that same trade — a lifelong knack, not a head start in gear. See
+// data/classes.ts's own header for the full reasoning and every real hook.
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore } from '@/game/store/gameStore';
@@ -190,7 +192,7 @@ export default function CharacterCreator() {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
                 <span className="kk-forge-label" style={{ marginBottom: 6 }}>Calling</span>
                 <span style={{ font: '400 10.5px/1 var(--kk-font)', color: 'rgba(240,220,176,.45)' }}>
-                  a lifelong knack, never a head start — everyone begins bare-handed
+                  a lifelong knack, not a starting kit — everyone still begins bare-handed
                 </span>
               </div>
               <div className="kk-callings">
@@ -199,17 +201,19 @@ export default function CharacterCreator() {
                     key={c.id}
                     className={`kk-calling ${classId === c.id ? 'on' : ''}`}
                     onClick={() => setClassId(c.id)}
-                    title={c.desc}
+                    title={`${c.desc} — ${c.passiveLabel}: ${c.passiveDesc}`}
                   >
                     <KkIcon name={CALLING_ICON[c.id] ?? 'k-star'} size={19} />
                     <span className="nm">{c.name}</span>
                     <span className="kit">
-                      {c.signature ? `+10% ${SKILL_LABEL[c.signature] ?? c.signature}` : 'no ties'}
+                      {c.signature ? `+10% ${SKILL_LABEL[c.signature] ?? c.signature}` : 'no ties'} · {c.passiveLabel}
                     </span>
                   </button>
                 ))}
               </div>
-              <div className="kk-parchment">{calling.desc}</div>
+              <div className="kk-parchment">
+                {calling.desc} <strong>{calling.passiveLabel}:</strong> {calling.passiveDesc}
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>

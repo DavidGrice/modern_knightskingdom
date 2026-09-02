@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { audio } from '@/lib/audio';
 import { atGuildMaxRank, useGameStore } from './store/gameStore';
+import { callingSignature } from './data/classes';
 import { playerState } from './playerState';
 import { ridingState } from './riding';
 import { damageRaiderRam, raiderRamState, RAM_RADIUS } from './raiderRam';
@@ -692,8 +693,13 @@ export function playerAttack(): boolean {
   const kind = activeMelee();
   // deliberately not named `w` — that is this module's window handle
   const wp = MELEE[kind];
-  if (combatState.stamina < wp.stamina) return false;
-  combatState.stamina -= wp.stamina;
+  // Wave 32 · Page calling's small Battle-Ready passive: swings cost a touch
+  // less stamina, armed or not — a training-economy nudge, deliberately NOT
+  // more flat damage (Knights' Order and Heavy Hand already own that slot).
+  const staminaCost = callingSignature(st.character?.classId, 'combat')
+    ? Math.max(1, wp.stamina - 1) : wp.stamina;
+  if (combatState.stamina < staminaCost) return false;
+  combatState.stamina -= staminaCost;
   combatState.attackAt = performance.now();
   const held = (st.inventory[kind] ?? 0) > 0;
   // a worn-out weapon still swings, just softer — durability is a nudge

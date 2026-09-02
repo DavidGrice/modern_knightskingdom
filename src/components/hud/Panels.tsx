@@ -38,7 +38,7 @@ import { PERKS, PERK_BY_ID } from '@/game/data/perks';
 import { sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
 import { CHALLENGES, challengeProgress } from '@/game/data/challenges';
 import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE } from '@/game/data/guilds';
-import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable } from '@/game/data/skillTree';
+import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable, talentRespecCost } from '@/game/data/skillTree';
 import { PLAYER_ATTRS, ATTR_POINT_EVERY, attrPointsEarned, attrPointsSpent, respecCost } from '@/game/data/playerAttributes';
 import { BULK_GOODS, isBulkGood, storageCapacity } from '@/game/storage';
 import type { ItemId, Recipe } from '@/game/types';
@@ -908,8 +908,16 @@ function TalentTree() {
   const xp = useGameStore((s) => s.xp);
   const skillTree = useGameStore((s) => s.skillTree);
   const buyTalent = useGameStore((s) => s.buyTalent);
+  const respecTalents = useGameStore((s) => s.respecTalents);
+  const gold = useGameStore((s) => s.inventory.gold ?? 0);
+  // Wave 32 · same two-click arm/confirm pattern as AttributesSection's respec
+  // button — local state on purpose, it resets the moment the panel closes.
+  const [arming, setArming] = useState(false);
   const earned = talentPointsEarned(xp);
-  const unspent = earned - talentPointsSpent(skillTree);
+  const spent = talentPointsSpent(skillTree);
+  const unspent = earned - spent;
+  const respecGold = talentRespecCost(spent);
+  const canRespec = spent > 0 && gold >= respecGold;
   return (
     <>
       <div className="creator-section" style={{ marginTop: 16 }}>
@@ -953,6 +961,35 @@ function TalentTree() {
           </div>
         ))}
       </div>
+      {spent > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            className="menu-btn small"
+            style={{
+              margin: 0, width: 'auto', padding: '5px 12px',
+              opacity: canRespec ? 1 : 0.45,
+              borderColor: arming ? 'var(--gold)' : undefined,
+              color: arming ? 'var(--gold)' : undefined,
+            }}
+            disabled={!canRespec}
+            title={`Hands all ${spent} learned talent point${spent > 1 ? 's' : ''} back so you can spend them differently. Costs ${respecGold} gold (you have ${gold}).`}
+            onClick={() => {
+              if (!arming) { setArming(true); return; }
+              setArming(false);
+              respecTalents();
+            }}
+          >
+            {arming ? `✓ Confirm — ${respecGold} gold` : `↺ Rethink your training — ${respecGold} gold`}
+          </button>
+          <span style={{ fontSize: 11.5, color: 'var(--parchment-dark)' }}>
+            {arming
+              ? 'Click again to take all your talent points back.'
+              : gold >= respecGold
+                ? `Returns all ${spent} learned point${spent > 1 ? 's' : ''} to the pool.`
+                : `You need ${respecGold - gold} more gold.`}
+          </span>
+        </div>
+      )}
     </>
   );
 }

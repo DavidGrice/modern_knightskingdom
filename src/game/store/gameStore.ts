@@ -57,13 +57,13 @@ import { SELL_PRICES } from '../data/trade';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
-import { CLASS_BY_ID } from '../data/classes';
+import { CLASS_BY_ID, callingSignature } from '../data/classes';
 import { attrsOf, tradeLevelOf, tradeXpOf, tripSpeedMult, SIDE_GOODS, type AttrId } from '../data/attributes';
 import { PLAYER_ATTRS, attrPointsEarned, attrPointsSpent, respecCost } from '../data/playerAttributes';
 import { bestStore, roomFor } from '../storage';
 import { COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult } from '../data/companionTraits';
 import { GUILD_BY_ID, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE } from '../data/guilds';
-import { TALENT_BY_ID, talentBuyable } from '../data/skillTree';
+import { TALENT_BY_ID, talentBuyable, talentPointsSpent, talentRespecCost } from '../data/skillTree';
 import { CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
 import { RECIPES } from '../data/recipes';
@@ -444,6 +444,9 @@ interface GameState {
   betrayCedric: () => void;
   joinGuild: (guildId: string) => void;
   buyTalent: (talentId: string) => void;
+  /** Wave 32 · hand every learned talent back for gold (cost from
+   *  data/skillTree's talentRespecCost). No-op when nothing is learned. */
+  respecTalents: () => void;
   spendAttrPoint: (id: AttrId) => void;
   /** Wave 9 · hand every invested attribute point back for gold (cost from
    *  data/playerAttributes' respecCost). No-op when nothing is invested. */
@@ -2063,6 +2066,9 @@ function createGameStore() {
       if (before <= 0) return;
       let wear = st.perks.includes('steady_hands') ? 1.4 : 2;
       if (st.skillTree.includes('smithing2')) wear *= 0.8; // Tempered Edges talent
+      // Wave 32: Smith's Prentice calling's small Forge-Scarred passive —
+      // less than half of Tempered Edges' own cut, stacks with it.
+      if (callingSignature(st.character?.classId, 'smithing')) wear *= 0.92;
       const after = Math.max(0, before - wear);
       set({ durability: { ...st.durability, [id]: after }, dirty: true });
       if (after <= 0) st.notify(`Your ${ITEMS[id].name} is worn out — repair it at the workbench.`);
@@ -2133,6 +2139,28 @@ function createGameStore() {
       set({ skillTree: [...st.skillTree, talentId], dirty: true });
       audio.play('treasure', 0.7);
       st.notify(`✦ Talent learned: ${def.name} — ${def.desc}`, true);
+    },
+
+    // Wave 32 · the talent tree's mirror of respecAttributes (Wave 9) — full
+    // reset for a scaling gold fee, same pricing model (see data/skillTree's
+    // talentRespecCost for why). `skillTree` is read live everywhere
+    // (`st.skillTree.includes(...)`), so wiping it needs no invalidation step.
+    respecTalents: () => {
+      const st = get();
+      const spent = talentPointsSpent(st.skillTree);
+      if (spent <= 0) {
+        st.notify('You have learned nothing to take back.');
+        return;
+      }
+      const cost = talentRespecCost(spent);
+      if ((st.inventory.gold ?? 0) < cost) {
+        st.notify(`Rethinking your training costs ${cost} gold.`);
+        return;
+      }
+      st.addItems({ gold: -cost });
+      set({ skillTree: [], dirty: true });
+      audio.play('unlock', 0.7);
+      st.notify(`↺ ${spent} talent point${spent > 1 ? 's' : ''} returned to you for ${cost} gold — learn them anew.`, true);
     },
 
     // companion traits (AI-wave-2 batch): a villager's own mini skill tree —
@@ -2445,9 +2473,12 @@ function createGameStore() {
       inv[item] = held - n;
       // Wit attribute: a sharper tongue haggles +4% per point. Silver Tongue
       // trade-off perk: a flat +15% on top (its own downside lives in
-      // Storm's own duel cooldown — see Enemies.tsx's 'storm' branch).
+      // Storm's own duel cooldown — see Enemies.tsx's 'storm' branch). Wave
+      // 32: the Wanderer's own small Fair Dealer passive — no signature
+      // skill to hang a nudge off, so it gets a tiny universal haggle instead.
       const take = Math.round(price * n * (1 + (st.attrSpent.wit ?? 0) * 0.04
-        + (st.perks.includes('silver_tongue') ? 0.15 : 0)));
+        + (st.perks.includes('silver_tongue') ? 0.15 : 0)
+        + (st.character?.classId === 'wanderer' ? 0.02 : 0)));
       inv.gold = (inv.gold ?? 0) + take;
       set({
         inventory: inv,
@@ -2464,8 +2495,11 @@ function createGameStore() {
       // in both directions. Silver Tongue trade-off perk: the same ±15%
       // haggle sellItem() gives, spent the other direction, stacking with
       // Wit. Clamped to 1g so a maxed haggler is never handed goods for free.
+      // Wave 32: the Wanderer's small Fair Dealer passive, the same tiny cut
+      // sellItem() gives as a bonus, spent the other direction here.
       const cost = Math.max(1, Math.round(price * (1 - (st.attrSpent.wit ?? 0) * 0.04
-        - (st.perks.includes('silver_tongue') ? 0.15 : 0))));
+        - (st.perks.includes('silver_tongue') ? 0.15 : 0)
+        - (st.character?.classId === 'wanderer' ? 0.02 : 0))));
       if ((st.inventory.gold ?? 0) < cost) {
         st.notify('Not enough gold!');
         return;
@@ -2482,6 +2516,9 @@ function createGameStore() {
       if ((st.plots[buildingId] ?? -1) >= 0) return;
       let growTime = st.perks.includes('green_thumb') ? GROW_TIME * 0.85 : GROW_TIME;
       if (st.skillTree.includes('farming2')) growTime *= 0.88; // Rich Soil talent
+      // Wave 32: Farmhand calling's small Green-Fingered passive — a third
+      // of Rich Soil's own cut, stacks with it and with the perk.
+      if (callingSignature(st.character?.classId, 'farming')) growTime *= 0.96;
       set({ plots: { ...st.plots, [buildingId]: growTime }, dirty: true });
       audio.play('graze', 0.5);
       st.notify('Wheat planted. Give it time and sunshine.');
@@ -3208,8 +3245,16 @@ function createGameStore() {
         // from what the night bed-seek behavior (Villagers.tsx) implies is
         // happening: a villager "asleep" in bed was still, mechanically,
         // finishing your keep.
+        // Wave 32 · a builder's weight is base 1, +0.25 for Steady Hands'
+        // speed multiplier, +0.5 flat for the new Extra Hands trait — kept as
+        // one small helper so the "who's assigned" total right below and the
+        // "who's actually standing there" total (atSite, further down) can't
+        // drift out of step the way two hand-copied ternaries did pre-Wave-32.
+        const builderWeightOf = (v: Villager) => 1
+          + (hasTrait(v, 'bui_steady') ? 0.25 : 0)
+          + (hasTrait(v, 'bui_hands') ? 0.5 : 0);
         const builderWeight = !isWorkingHours(worldEnv.time) ? 0 : roster.reduce(
-          (t, v) => (v.job === 'builder' ? t + (hasTrait(v, 'bui_steady') ? 1.25 : 1) : t), 0);
+          (t, v) => (v.job === 'builder' ? t + builderWeightOf(v) : t), 0);
         if (builderWeight > 0) {
           const site = worldBuildings.find((b) => !isBuilt(b));
           // L66 · only builders STANDING AT the site do any building. The pass
@@ -3217,13 +3262,34 @@ function createGameStore() {
           // so a villager still walking across the map — or parked at a
           // worksite a hundred metres off — raised the walls all the same.
           if (site) {
-            const atSite = roster.reduce((t, v) => {
-              if (v.job !== 'builder') return t;
+            const atSiteBuilders = roster.filter((v) => {
+              if (v.job !== 'builder') return false;
               const m = villagerMobs[v.id];
-              if (!m || Math.hypot(m.x - site.x, m.z - site.z) > WORK_RANGE) return t;
-              return t + (hasTrait(v, 'bui_steady') ? 1.25 : 1);
-            }, 0);
-            if (atSite > 0) st.constructBuilding(site.id, dt * 0.04 * atSite);
+              return !!m && Math.hypot(m.x - site.x, m.z - site.z) <= WORK_RANGE;
+            });
+            const atSite = atSiteBuilders.reduce((t, v) => t + builderWeightOf(v), 0);
+            if (atSite > 0) {
+              const before = site.built ?? 0;
+              st.constructBuilding(site.id, dt * 0.04 * atSite);
+              // Salvage Eye (Wave 32): the builder side-goods analog. Building
+              // has no discrete "trip" to roll this once-per like gathering
+              // does, so it fires once per completed PIECE instead — the
+              // closest honest equivalent to "once per finished unit of work".
+              // Every builder present rolls it (matching the generic
+              // side-goods shape: it's a baseline craft-scaled chance the
+              // trait doubles, not something the trait switches on from zero).
+              if (before < 1 && (get().buildings.find((b) => b.id === site.id)?.built ?? 0) >= 1) {
+                for (const v of atSiteBuilders) {
+                  const attrs = attrsOf(v.id);
+                  const sideChance = attrs.craft * (hasTrait(v, 'bui_salvage') ? 2 : 1);
+                  if (Math.random() * 25 < sideChance) {
+                    const mat: ItemId = Math.random() < 0.5 ? 'wood' : 'stone';
+                    st.addItems({ [mat]: 1 }, 'gather');
+                    st.notify(`♻️ ${v.name} salvages scrap from the build — +1 ${mat}.`);
+                  }
+                }
+              }
+            }
           }
         }
         for (const v of roster) {
@@ -3266,7 +3332,16 @@ function createGameStore() {
           const attrs = attrsOf(v.id);
           let haul = jobDef.perTrip;
           if (Math.random() * 20 < attrs.might) haul *= 2;
-          if (v.job === 'merchant') haul += Math.round(attrs.wit / 3) + (hasTrait(v, 'mer_silver') ? 2 : 0);
+          if (v.job === 'merchant') {
+            haul += Math.round(attrs.wit / 3) + (hasTrait(v, 'mer_silver') ? 2 : 0);
+            // Windfall (Wave 32): the merchant's side-goods analog — same
+            // craft-scaled roll shape as the generic side-goods chance below,
+            // just paid out as bonus gold on this trip's haul, since a
+            // merchant has no second item to bring home (SIDE_GOODS has no
+            // 'gold' entry, by design — see attributes.ts).
+            const windfallChance = attrs.craft * (hasTrait(v, 'mer_windfall') ? 2 : 1);
+            if (Math.random() * 25 < windfallChance) haul += 3;
+          }
           const haulTrait = HAUL_TRAIT[v.job];
           if (haulTrait && hasTrait(v, haulTrait)) haul += 1;
           gains[jobDef.produces] = (gains[jobDef.produces] ?? 0) + haul;
@@ -3652,10 +3727,13 @@ function createGameStore() {
             // Woodsmen's Lodge passive + Deep Rings talent: each an
             // independent extra-log chance; Forest Bounty doubles flowers.
             // Wave 22: Warden of the Timberline (max guild rank) sharpens
-            // the base passive itself, 0.20 -> 0.30.
+            // the base passive itself, 0.20 -> 0.30. Wave 32: the Woodsman
+            // calling's own small Forest-Raised passive stacks on top too —
+            // a third of the guild's base rate, since it needs no membership.
             const extraChance = (st.guild === 'woodsmen' ? (atGuildMaxRank(st.guild, st.guildRanks, 'woodsmen') ? 0.3 : 0.2) : 0)
               + (st.skillTree.includes('woodcutting2') ? 0.15 : 0)
-              + (st.attrSpent.diligence ?? 0) * 0.04; // Diligence attribute
+              + (st.attrSpent.diligence ?? 0) * 0.04 // Diligence attribute
+              + (callingSignature(st.character?.classId, 'woodcutting') ? 0.05 : 0);
             totals.wood = (totals.wood ?? 0) + (Math.random() < extraChance ? 2 : 1);
             const flowerChance = st.skillTree.includes('woodcutting3') ? 0.36 : 0.18;
             if (Math.random() < flowerChance) totals.flowers = (totals.flowers ?? 0) + 1;
@@ -3673,9 +3751,12 @@ function createGameStore() {
               const mining = st.unlocks.includes('mining');
               // Miners' Brotherhood passive + Ore Eye talent stack
               // additively. Wave 22: Warden of the Old Ruins (max guild
-              // rank) sharpens the base passive itself, 0.65 -> 0.75.
+              // rank) sharpens the base passive itself, 0.65 -> 0.75. Wave
+              // 32: the Quarryman calling's own small Stone-Bred passive
+              // stacks on top too, no membership required.
               const oreChance = (st.guild === 'miners' ? (atGuildMaxRank(st.guild, st.guildRanks, 'miners') ? 0.75 : 0.65) : 0.4)
-                + (st.skillTree.includes('mining2') ? 0.15 : 0);
+                + (st.skillTree.includes('mining2') ? 0.15 : 0)
+                + (callingSignature(st.character?.classId, 'mining') ? 0.05 : 0);
               totals.stone = (totals.stone ?? 0) + 1;
               if (mining && Math.random() < oreChance) totals.iron_ore = (totals.iron_ore ?? 0) + 1;
               xpTotal += 12;
@@ -3757,6 +3838,7 @@ function createGameStore() {
         // narrate every furrow, unlike the player's own deliberate action.
         let growTime = st.perks.includes('green_thumb') ? GROW_TIME * 0.85 : GROW_TIME;
         if (st.skillTree.includes('farming2')) growTime *= 0.88;
+        if (callingSignature(st.character?.classId, 'farming')) growTime *= 0.96; // Wave 32 Green-Fingered
         set({ plots: { ...st.plots, [buildingId]: growTime }, dirty: true });
         return 'planted';
       }
@@ -4230,10 +4312,13 @@ function createGameStore() {
       // Builders' Guild passive + Sure Hammer/Raised Right talents — every
       // swing bonus stacks additively (player's and builder villagers' alike).
       // Wave 22: Warden of the Siege Works (max guild rank) sharpens the
-      // base passive itself, 0.30 -> 0.45.
+      // base passive itself, 0.30 -> 0.45. Wave 32: the Artisan calling's own
+      // small Builder's Eye passive stacks in too — every swing on ANY site
+      // counts a little extra, no membership required.
       const swingBonus = (st.guild === 'builders' ? (atGuildMaxRank(st.guild, st.guildRanks, 'builders') ? 0.45 : 0.3) : 0)
         + (st.skillTree.includes('building2') ? 0.15 : 0)
-        + (st.skillTree.includes('building3') ? 0.15 : 0);
+        + (st.skillTree.includes('building3') ? 0.15 : 0)
+        + (callingSignature(st.character?.classId, 'building') ? 0.05 : 0);
       const swing = amount * (1 + swingBonus);
       const before = b.built ?? 0;
       const after = Math.min(1, before + swing);

@@ -44,11 +44,28 @@ export const COMPANION_TRAITS: CompanionTraitDef[] = [
   { id: 'fis_deepwater', job: 'fisherman', name: 'Deep Water', icon: '🎣', desc: '+1 fish every trip' },
   { id: 'fis_netcast', job: 'fisherman', name: 'Net Cast', icon: '🕸️', desc: 'double side-goods chance' },
   { id: 'fis_swift', job: 'fisherman', name: 'Swift Return', icon: '💨', desc: 'trips 12% faster' },
-  // merchant
+  // merchant — Wave 32 adds the missing third (side-goods) slot. A merchant
+  // has no separate item to bring home the way a lumberjack brings home
+  // flowers (SIDE_GOODS has no 'gold' entry, by design — see attributes.ts),
+  // so the side-goods analog lands as a chance of extra coin on the same
+  // stall trip instead of a second item: same craft-scaled roll every other
+  // job's side-goods trait uses, just paid out in the resource merchants
+  // actually deal in.
   { id: 'mer_silver', job: 'merchant', name: 'Silver Tongue', icon: '🪙', desc: '+2 gold every stall trip' },
+  { id: 'mer_windfall', job: 'merchant', name: 'Windfall', icon: '🎁', desc: 'chance of extra coin on a trade run' },
   { id: 'mer_swift', job: 'merchant', name: 'Quick Deals', icon: '💨', desc: 'trips 12% faster' },
-  // builder
+  // builder — Wave 32 fills the two missing slots. Building has no separate
+  // trip-duration/yield-quantity split the way gathering jobs do (one weight
+  // number per tick drives everything), so the haul/side-goods distinction
+  // is preserved as flat-additive vs probabilistic rather than by target:
+  // Extra Hands adds a deterministic flat bonus to that builder's own weight
+  // (mirrors "+1 wood every trip"'s flat, non-percentage shape, distinct from
+  // Steady Hands' multiplier), Salvage Eye rolls its chance once per
+  // completed piece — the closest builder analog to "once per completed
+  // trip" gathering's side-goods roll uses, since building has no trips.
   { id: 'bui_steady', job: 'builder', name: 'Steady Hands', icon: '👷', desc: 'builds 25% faster' },
+  { id: 'bui_hands', job: 'builder', name: 'Extra Hands', icon: '👐', desc: '+0.5 extra builder weight on site' },
+  { id: 'bui_salvage', job: 'builder', name: 'Salvage Eye', icon: '♻️', desc: 'chance to recover scrap material when a piece is finished' },
 ];
 
 export const COMPANION_TRAIT_BY_ID: Record<string, CompanionTraitDef> =
