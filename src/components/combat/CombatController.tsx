@@ -24,7 +24,7 @@ import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_H
 import { useGameStore } from '@/game/store/gameStore';
 import { crewState } from '@/game/crew';
 import { touchState } from '@/game/touchInput';
-import { GAMEPAD_BUTTONS } from '@/game/data/gamepadInput';
+import { useAppStore } from '@/game/store/appStore';
 import { noteInputDevice } from '@/game/inputMode';
 
 let attackCd = 0;
@@ -164,7 +164,9 @@ export default function CombatController() {
     // touch block above — RT/LT (attack/block) mirror the mouse's LMB/RMB
     // double duty exactly (see startAttack/startBlock), and Y mirrors
     // keyboard Q via the same cycleWeapon() GameScreen.tsx's switch now
-    // calls too. See game/data/gamepadInput.ts for why these three indices.
+    // calls too. See game/data/gamepadInput.ts for why these three indices
+    // (the defaults; Wave 33 made them rebindable — see the settings read
+    // below).
     // No document.pointerLockElement check here either, for the same reason
     // the touch block skips it — a controller's right stick already drives
     // the camera with zero pointer-lock dependency (PlayerController's
@@ -178,9 +180,13 @@ export default function CombatController() {
     {
       const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
       const gp = pads?.[0];
-      const attackDown = !!gp?.buttons[GAMEPAD_BUTTONS.attack]?.pressed;
-      const blockDown = !!gp?.buttons[GAMEPAD_BUTTONS.block]?.pressed;
-      const swapDown = !!gp?.buttons[GAMEPAD_BUTTONS.swapWeapon]?.pressed;
+      // Wave 33: read the live (possibly rebound) button indices from the
+      // settings store each frame, not the frozen DEFAULT_GAMEPAD_BUTTONS
+      // constant — a rebind takes effect the very next frame, no reload.
+      const gpBtn = useAppStore.getState().settings.gamepadButtons;
+      const attackDown = !!gp?.buttons[gpBtn.attack]?.pressed;
+      const blockDown = !!gp?.buttons[gpBtn.block]?.pressed;
+      const swapDown = !!gp?.buttons[gpBtn.swapWeapon]?.pressed;
       const guarded = st.buildMode || st.panel !== 'none';
       if (attackDown && !padAttackPrev && !guarded) startAttack(st);
       if (!attackDown && padAttackPrev) releaseAttack();

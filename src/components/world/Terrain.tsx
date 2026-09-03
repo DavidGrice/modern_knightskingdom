@@ -3,6 +3,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
+import { useKtx2ExtendLoader } from '@/game/gltfKtx2';
 import { WORLD_HALF, POND, BROOK } from '@/game/data/world';
 import { BANK_Y, WATER_BANK, WATER_Y } from '@/game/waterworks';
 import { landHalf, landSouthHalf } from '@/game/data/buildables';
@@ -159,7 +160,8 @@ export function GameSky({ variant = 'grass' }: { variant?: string }) {
 // current season's ratio-to-spring, so the meadow pales in winter the same
 // way the old procedural plane did.
 function HomeMeadow() {
-  const { scene } = useGLTF('/assets/worlds/template-09.glb');
+  const extendKtx2 = useKtx2ExtendLoader();
+  const { scene } = useGLTF('/assets/worlds/template-09.glb', true, true, extendKtx2);
   const { gl } = useThree();
   const { group, tintables } = useMemo(() => {
     // 'origin' anchor, not the shared default — see normalizeTemplateBake's

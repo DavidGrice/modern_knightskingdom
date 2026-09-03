@@ -35,6 +35,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
+import { useKtx2ExtendLoader } from '@/game/gltfKtx2';
 import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATION_BY_ID, type WorldDestination } from '@/game/data/worlds';
 import { getLocalWalkableRects } from '@/game/data/templateWalkableFootprint';
@@ -404,7 +405,8 @@ export function getBakeOffset(): THREE.Vector3 {
 }
 
 function NormalizedTemplateScene({ url, scale, flipY, destId }: { url: string; scale?: number; flipY?: boolean; destId?: string }) {
-  const { scene } = useGLTF(url);
+  const extendKtx2 = useKtx2ExtendLoader();
+  const { scene } = useGLTF(url, true, true, extendKtx2);
   const { group, offset } = useMemo(() => normalizeTemplateBake(scene, scale, 'bboxMin', flipY, destId), [scene, scale, flipY, destId]);
   useEffect(() => {
     bakeOffset.copy(offset);

@@ -8129,3 +8129,79 @@ earlier deliberate design decision.
   simulate) and was instead confirmed via direct source read of the shared, already-proven
   `callingSignature()` helper plus a clean build — flagged honestly as a code-path confirmation, not a
   live capture. `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+## Wave 33 (FINAL): performance & platform completion — gamepad rebinding, KTX2/Basis pipeline, a real destination-AI pathfinding bug — SHIPPED 2026-09-02
+
+The last wave of the 15-wave "Wave 19 onward" plan. All three items diverged from the plan's own
+wording, in three different directions — re-verified live rather than trusted, per this whole
+batch's established discipline.
+
+- [COMPLETE] ✅ **Gamepad button rebinding — the real, in-scope half built; the real, out-of-scope
+  half named honestly.** `gamepadInput.ts`'s own header comment saying rebinding is "a real, separate
+  project" turned out to be about a different, harder problem than the plan implied: folding gamepad
+  buttons into `keybinds.ts`'s keydown-**event** table (the 14 panel actions, and PlayerController's
+  own hardcoded jump/interact/sprint/d-pad reads) genuinely would need either polymorphic binds or a
+  rewritten frame-polled switch — that stays unbuilt, named as real future work. But the 8 actions
+  `GAMEPAD_BUTTONS` already owned (`attack`/`block`/`swapWeapon`/`pause`/`cancel`/3 menu toggles) were
+  **already** frame-polled with hand-rolled edge detection in their only two consumers — making those
+  genuinely rebindable was real, in-scope work, done via the exact same default-table + settings-
+  override + merge-on-load pattern `keybinds.ts` already uses. `RESERVED_GAMEPAD_BUTTONS` (the 7
+  indices PlayerController hardcodes) blocks a player from stealing e.g. "A" away from jump. A real
+  correctness subtlety caught and fixed: `GamepadMenuController.tsx`'s `TOGGLE_PANEL` array used to be
+  built once at module-load time — a rebind would have needed a page reload without resolving live
+  button indices every frame instead.
+- [COMPLETE] ✅ **Texture compression (KTX2/Basis) — the runtime half fully built and positive-path
+  verified; the encoder half honestly blocked on a real, undocumented external gap.** Confirmed live
+  that `gltf-transform` genuinely installs and runs, but its KTX2 commands shell out to a separate
+  `ktx` CLI binary (KTX-Software project) that isn't an npm package and isn't in this machine's
+  package managers — a real external-tooling gap the plan's "buildable today with existing tooling"
+  didn't call out. What shipped: a shared `useKtx2ExtendLoader()` hook (self-hosted transcoder,
+  `public/basis/basis_transcoder.{js,wasm}` copied byte-for-byte from `three`'s own npm package, not
+  a CDN dependency) wired into all 4 real `useGLTF()` call sites, and a pipeline step chained onto
+  `npm run prepare-assets` that degrades gracefully (prints an actionable message, exits 0, touches
+  nothing) when the encoder binary is missing rather than breaking the build for anyone without it.
+  The loader is a genuine no-op today (zero current assets declare `KHR_texture_basisu`) — but
+  verify built a temporary harness against a real official Khronos `KHR_texture_basisu` sample GLB
+  and got a correctly-textured positive-path render, real proof the wiring itself works, not just an
+  absence-of-error check. Producing an actual compressed game asset is named explicit future work,
+  blocked on installing the external `ktx` binary by hand.
+- [COMPLETE] ✅ **Destination AI nav-grid fidelity — the plan's specific claim didn't hold, but two
+  real, more serious bugs were found and fixed in its place.** "Reuse road geometry at destinations"
+  turned out to have no data to reuse from — checked the real map-layout JSON for both claimable
+  settlements directly: zero road/path groups, undifferentiated terrain only. Home's own Wave 17 #6
+  fix was grid-widening, not road-following; the road-cost-preference mechanism is deliberately
+  home-only (destination coordinates don't correspond to any road polyline). Instead, live
+  investigation found: (1) `Villagers.tsx`'s legacy per-frame steering state never set `.region`, so
+  `navSteer` always resolved every settlement resident to the **home** nav grid — always out of
+  bounds at real settlement coordinates (~2800-3100 units out), so `findPath` always returned `null`
+  and every settlement resident beelined straight through walls and buildings, 100% of the time (the
+  other half of the exact bug class Wave 26 already fixed on the reasoner/Agent side — this is the
+  older parallel legacy-cascade system that fix never touched). Fixed with one line,
+  `region: villager.world ?? null`, provably a no-op for home villagers. (2) Found incidentally while
+  fixing (1): the settlement builder branch had no world filter at all — a settlement's own builder
+  could target an unrelated unbuilt site anywhere in the save. Fixed with the same world-match guard
+  already used elsewhere in the same file. **A third, more fundamental bug found during verify itself,
+  not disclosed by the initial implementation's own report**: a destination/window-mode `NavGrid`'s
+  `rebuild()` — the method that bakes real buildings into obstacle data — is never called anywhere in
+  the app for any non-home, non-dungeon region (only `homeGrid` and the dungeon grid get one). So even
+  with region resolution fixed, a settlement resident's path correctly targeted the right grid but
+  that grid's obstacle data was permanently empty — a real building placed at a settlement was
+  invisible to pathfinding. Fixed by piggybacking on `Enemies.tsx`'s existing 1Hz nav-tick (the exact
+  guard `AiRuntime.tsx` already uses for the same call), a genuine no-op on the common case since
+  `rebuild()` itself already short-circuits on unchanged building-array identity. The road-preference
+  gap itself is real but is a content-authoring gap (no road ever hand-placed at either settlement
+  diorama), not an architecture one — named as explicit future work, not attempted.
+- **Verified live, and verify pushed past the initial implementation's own claims rather than
+  rubber-stamping them — exactly the discipline this whole 15-wave batch has followed throughout.**
+  `npx tsc --noEmit` / `npm run build`: clean, twice over (implementation and post-fix). Gamepad:
+  fully verified end-to-end with a simulated virtual gamepad overriding `navigator.getGamepads` (the
+  real API the game itself polls) — rebind flow, `localStorage` persistence surviving a fresh page
+  load, and the rebind actually being respected by the real per-frame polling code, confirmed
+  repeatably. KTX2: independently re-confirmed the `ktx` binary gap via two separate real install
+  attempts (both failed for real, documented reasons), then proved the runtime loader's positive path
+  against a genuine external sample asset. Nav-grid: measured the real bug's live effect
+  (`findPath` returning an identical straight line through an injected, correctly world-scoped
+  obstacle before the fix's rebuild ever ran; a real 4-8-waypoint detour appearing after), with a
+  same-shaped control test at home confirming the obstacle geometry and A* itself were never the
+  problem. Zero console errors across every live session. This closes the "Wave 19 onward" plan in
+  full — all 15 waves (19-33) shipped, merged, documented, and independently reviewed.

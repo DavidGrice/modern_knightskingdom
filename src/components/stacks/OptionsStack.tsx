@@ -9,9 +9,10 @@
 // "Colourblind-friendly minimap" moves from Graphics into Interface (an
 // accessibility/UI setting, not a render-cost one) — both small, justified
 // cleanups made while reorganizing anyway, not scope creep.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore, UI_THEMES } from '@/game/store/appStore';
 import { KEYBIND_GROUPS, codeLabel, rebindState } from '@/game/data/keybinds';
+import { GAMEPAD_ACTION_GROUPS, RESERVED_GAMEPAD_BUTTONS, gamepadButtonLabel, type GamepadAction } from '@/game/data/gamepadInput';
 import { GRAPHICS_PROFILES, GRAPHICS_QUALITY_LIST } from '@/game/graphicsProfiles';
 import { AA_MODES } from '@/game/aaModes';
 
@@ -61,6 +62,68 @@ function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
         onClick={() => setListening((l) => !l)}
       >
         {listening ? 'PRESS A KEY' : codeLabel(code)}
+      </button>
+    </div>
+  );
+}
+
+/** Wave 33 — the gamepad counterpart to KeybindRow above. A Gamepad object
+ *  has no native "down"/"up" event to addEventListener on (unlike
+ *  KeyboardEvent), so capturing "the next button press" has to be a
+ *  requestAnimationFrame poll instead of a listener — same hand-rolled-
+ *  edge-detection idiom CombatController/GamepadMenuController already use
+ *  every frame, just running here for one button instead of eight. Safe to
+ *  poll from a plain component (not useFrame/an R3F Canvas) specifically
+ *  because the whole Canvas unmounts while Options is on screen — confirmed
+ *  via App.tsx's screen switch, which renders GameScreen XOR OptionsStack,
+ *  never both, so nothing else is reading gamepad state at the same time. */
+function GamepadButtonRow({ actionId, label }: { actionId: GamepadAction; label: string }) {
+  const index = useAppStore((s) => s.settings.gamepadButtons[actionId]);
+  const setGamepadButton = useAppStore((s) => s.setGamepadButton);
+  const [listening, setListening] = useState(false);
+
+  useEffect(() => {
+    if (!listening) return;
+    let raf = 0;
+    let cancelled = false;
+    // Escape backs out without binding anything, mirroring KeybindRow's own
+    // "Escape cancels rather than binds" carve-out.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') { e.preventDefault(); setListening(false); }
+    };
+    const tick = () => {
+      if (cancelled) return;
+      const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
+      const gp = pads?.[0];
+      if (gp) {
+        for (let i = 0; i < gp.buttons.length; i++) {
+          if (gp.buttons[i]?.pressed && !RESERVED_GAMEPAD_BUTTONS.has(i)) {
+            setGamepadButton(actionId, i);
+            setListening(false);
+            return;
+          }
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [listening, actionId, setGamepadButton]);
+
+  return (
+    <div className="kk-key-row">
+      <span>{label}</span>
+      <button
+        className={`kk-cap ${listening ? 'listening' : ''}`}
+        style={{ border: 0, cursor: 'pointer' }}
+        onClick={() => setListening((l) => !l)}
+      >
+        {listening ? 'PRESS A BUTTON' : gamepadButtonLabel(index)}
       </button>
     </div>
   );
@@ -126,8 +189,10 @@ export default function OptionsStack() {
   const settings = useAppStore((s) => s.settings);
   const update = useAppStore((s) => s.updateSettings);
   const resetKeybinds = useAppStore((s) => s.resetKeybinds);
+  const resetGamepadButtons = useAppStore((s) => s.resetGamepadButtons);
   const pop = useAppStore((s) => s.pop);
   const [tab, setTab] = useState<Tab>('sound');
+  const [keybindDevice, setKeybindDevice] = useState<'keyboard' | 'gamepad'>('keyboard');
 
   return (
     <div className={`kk-screen kk-screen-${settings.uiTheme}`}>
@@ -263,20 +328,56 @@ export default function OptionsStack() {
               <div className="kk-rule-head" style={{ marginBottom: 10 }}>
                 <span>Keybinds</span>
                 <span className="rule" />
-                <button className="kk-link-btn" onClick={resetKeybinds}>Reset to default</button>
+                <button
+                  className="kk-link-btn"
+                  onClick={keybindDevice === 'keyboard' ? resetKeybinds : resetGamepadButtons}
+                >
+                  Reset to default
+                </button>
               </div>
-              <div className="kk-keys">
-                {KEYBIND_GROUPS.map((group) => (
-                  <div key={group.label}>
-                    <div style={{ font: '600 9.5px/1 var(--kk-font)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--kk-text-faint)', margin: '8px 0 5px' }}>
-                      {group.label}
+              {/* Wave 33: keyboard binds were the only device this tab covered
+                  before gamepad rebinding shipped — reuses the same .kk-seg
+                  segmented control every other Options tab already uses for a
+                  two-or-more-way choice, zero new CSS. */}
+              <Segmented
+                label="Device"
+                options={[
+                  { id: 'keyboard' as const, label: 'Keyboard' },
+                  { id: 'gamepad' as const, label: 'Gamepad' },
+                ]}
+                value={keybindDevice}
+                onChange={setKeybindDevice}
+              />
+              {keybindDevice === 'keyboard' ? (
+                <div className="kk-keys" style={{ marginTop: 10 }}>
+                  {KEYBIND_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <div style={{ font: '600 9.5px/1 var(--kk-font)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--kk-text-faint)', margin: '8px 0 5px' }}>
+                        {group.label}
+                      </div>
+                      {group.actions.map((a) => (
+                        <KeybindRow key={a.id} actionId={a.id} label={a.label} />
+                      ))}
                     </div>
-                    {group.actions.map((a) => (
-                      <KeybindRow key={a.id} actionId={a.id} label={a.label} />
-                    ))}
+                  ))}
+                </div>
+              ) : (
+                <div className="kk-keys" style={{ marginTop: 10 }}>
+                  <div className="kk-opt-note">
+                    Movement, jump, interact and sprint aren&rsquo;t remappable yet — only the eight actions below.
                   </div>
-                ))}
-              </div>
+                  {GAMEPAD_ACTION_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <div style={{ font: '600 9.5px/1 var(--kk-font)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--kk-text-faint)', margin: '8px 0 5px' }}>
+                        {group.label}
+                      </div>
+                      {group.actions.map((a) => (
+                        <GamepadButtonRow key={a.id} actionId={a.id} label={a.label} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

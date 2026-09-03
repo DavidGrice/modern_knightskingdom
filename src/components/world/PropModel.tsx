@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
+import { useKtx2ExtendLoader } from '@/game/gltfKtx2';
 
 /**
  * Assets the rig lab flagged under `material_followups.alpha_mask_tex_as_basecolor`:
@@ -67,7 +68,8 @@ function fixAlphaMasks(root: THREE.Object3D) {
 const normalizedPropCache = new Map<string, THREE.Group>();
 
 export function useNormalizedProp(url: string, targetHeight: number): THREE.Group {
-  const { scene } = useGLTF(url);
+  const extendKtx2 = useKtx2ExtendLoader();
+  const { scene } = useGLTF(url, true, true, extendKtx2);
   return useMemo(() => {
     const cacheKey = `${url}::${targetHeight}`;
     const cached = normalizedPropCache.get(cacheKey);

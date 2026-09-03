@@ -67,9 +67,23 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     [villager.id, villager.world, claimedWorlds],
   );
 
+  // Wave 33 bugfix, live-reproduced: this steering state's `region` was never
+  // set, so navSteer's `agent.region ?? null` (navgrid.ts) always resolved to
+  // the HOME grid (±200m around 0,0) for every settlement resident too — a
+  // per-world villager's real coordinates (~2800-3100 units out at either
+  // claimed settlement) are always out of that grid's bounds, so
+  // NavGrid.findPath always returned null and every settlement resident got
+  // a raw, obstacle-blind beeline through every wall/building at their own
+  // settlement, 100% of the time. `villager.world` is null/undefined for a
+  // home villager, identical to today — this is a no-op for them, and a real
+  // fix only for a claimed settlement's own residents (Fenwick's/Torvald's
+  // farmer/merchant/builder/lumberjack/miner). Mirrors the fix Wave 26 made
+  // to the reasoner-driven Agent side of this exact class of bug
+  // (rosterSync.ts's own header) — this is the other half, in the older
+  // parallel legacy-cascade system that fix never touched.
   const state = useRef({
     x: home[0], z: home[1], tx: home[0], tz: home[1],
-    yaw: homeAngle, pause: (h % 7),
+    yaw: homeAngle, pause: (h % 7), region: villager.world ?? null,
   });
   const mob = useMemo(() => registerVillagerMob(villager.id, home[0], home[1]), [villager.id, home]);
   // Wave 21 — an ordinary villager's own combat state (HP/downed), the same
@@ -379,7 +393,15 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     // window this legacy cascade has no other way to know about, since it
     // does not read the reasoner's own scoring.
     if (villager.job === 'builder' && isWorkingHours(worldEnv.time)) {
-      const site = useGameStore.getState().buildings.find((b) => !isBuilt(b));
+      // Wave 33 bugfix, found incidentally while fixing this file's own
+      // navSteer `region` bug above: this had no world filter at all, so a
+      // settlement's own builder (e.g. Tolan) could pick the first unbuilt
+      // site in the ENTIRE save — home or the other settlement — and walk
+      // toward it. Same guard shape as `sameWorldAsVillager` two sections up
+      // (out of scope here, a different block), null/null for a home builder
+      // so this is a no-op for them.
+      const site = useGameStore.getState().buildings
+        .find((b) => !isBuilt(b) && (b.world ?? null) === (villager.world ?? null));
       if (site) {
         const { nx, nz, dist: d } = navSteer(s, site.x, site.z, dt);
         if (d < 1.8) {
