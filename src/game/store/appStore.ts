@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { ScreenName } from '../types';
 import { DEFAULT_KEYBINDS } from '../data/keybinds';
+import { DEFAULT_GAMEPAD_BUTTONS, type GamepadAction } from '../data/gamepadInput';
 import { suggestGraphicsQuality } from '../deviceProfile';
 import type { AaMode } from '../aaModes';
 import type { InputDevice } from '../inputMode';
@@ -57,6 +58,12 @@ export interface Settings {
   minimapDefaultSize: 'small' | 'large';
   uiTheme: UiTheme;
   keybinds: Record<string, string>;
+  /** Wave 33: the 8 GAMEPAD_BUTTONS actions (gamepadInput.ts), now
+   *  rebindable via Options > Keybinds > Gamepad — same table-of-indices
+   *  shape as `keybinds` above, just button indices instead of KeyboardEvent
+   *  codes. PlayerController's own jump/interact/sprint/d-pad stay out of
+   *  this table entirely (see gamepadInput.ts's header). */
+  gamepadButtons: Record<string, number>;
   /** Wave 15: which device's prompt text/glyphs the HUD should show.
    *  'auto' (default) follows whichever device actually produced the last
    *  real input event (game/inputMode.ts's live, NOT persisted, tracker) —
@@ -93,6 +100,7 @@ const DEFAULT_SETTINGS: Settings = {
   minimapDefaultSize: 'small',
   uiTheme: 'glass',
   keybinds: DEFAULT_KEYBINDS,
+  gamepadButtons: DEFAULT_GAMEPAD_BUTTONS,
   inputMode: 'auto',
 };
 
@@ -135,6 +143,10 @@ function loadSettings(): Settings {
       ...saved,
       ...(migrated ? { graphicsQuality: migrated } : {}),
       keybinds: { ...DEFAULT_KEYBINDS, ...(saved.keybinds ?? {}) },
+      // same merge-by-action reasoning as keybinds above — a save from
+      // before gamepad rebinding shipped (or before a given action existed)
+      // still has every button bound
+      gamepadButtons: { ...DEFAULT_GAMEPAD_BUTTONS, ...(saved.gamepadButtons ?? {}) },
     };
   } catch {
     return {
@@ -161,6 +173,8 @@ interface AppState {
   updateSettings: (patch: Partial<Settings>) => void;
   setKeybind: (action: string, code: string) => void;
   resetKeybinds: () => void;
+  setGamepadButton: (action: GamepadAction, index: number) => void;
+  resetGamepadButtons: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -190,6 +204,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().updateSettings({ keybinds: { ...get().settings.keybinds, [action]: code } });
   },
   resetKeybinds: () => get().updateSettings({ keybinds: { ...DEFAULT_KEYBINDS } }),
+  setGamepadButton: (action, index) => {
+    get().updateSettings({ gamepadButtons: { ...get().settings.gamepadButtons, [action]: index } });
+  },
+  resetGamepadButtons: () => get().updateSettings({ gamepadButtons: { ...DEFAULT_GAMEPAD_BUTTONS } }),
 }));
 
 export const currentScreen = (s: AppState) => s.screens[s.screens.length - 1];

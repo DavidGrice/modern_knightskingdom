@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Instances, Instance } from '@react-three/drei';
 import { worldEnv } from '@/game/env';
+import { useKtx2ExtendLoader } from '@/game/gltfKtx2';
 
 /** O6's self-illumination baseline — see its own comment below for why it
  *  exists at all. */
@@ -24,7 +25,8 @@ export interface SubMesh {
 }
 
 function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boolean): SubMesh[] {
-  const { scene } = useGLTF(url);
+  const extendKtx2 = useKtx2ExtendLoader();
+  const { scene } = useGLTF(url, true, true, extendKtx2);
   return useMemo(() => {
     const inner = scene.clone(true);
     inner.rotation.x = Math.PI; // stand upright (see PropModel.tsx)

@@ -32,16 +32,24 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import { useGameStore, type PanelId } from '@/game/store/gameStore';
-import { GAMEPAD_BUTTONS } from '@/game/data/gamepadInput';
+import { useAppStore } from '@/game/store/appStore';
+import type { GamepadAction } from '@/game/data/gamepadInput';
 
 /** LB / Back-Select / Left-stick-click — matches KEYBIND_GROUPS' own
  *  "Panels" ordering (Inventory, Crafting, Quests are its first three). Only
  *  three: the research pass's own scoping call, not every panel a keyboard
- *  can reach — a deliberately small, honest slice. */
-const TOGGLE_PANEL: { button: number; panel: PanelId }[] = [
-  { button: GAMEPAD_BUTTONS.menuInventory, panel: 'inventory' },
-  { button: GAMEPAD_BUTTONS.menuCrafting, panel: 'crafting' },
-  { button: GAMEPAD_BUTTONS.menuQuests, panel: 'quests' },
+ *  can reach — a deliberately small, honest slice.
+ *
+ *  Wave 33: `action` (not a raw button index) — the actual index is now
+ *  rebindable, so it's resolved live from the settings store every frame
+ *  inside useFrame below instead of being baked in here at module-load time.
+ *  This array itself only had to change shape, not location: it was already
+ *  built once at import time, which is exactly the staleness a rebind would
+ *  have hit without this. */
+const TOGGLE_PANEL: { action: GamepadAction; panel: PanelId }[] = [
+  { action: 'menuInventory', panel: 'inventory' },
+  { action: 'menuCrafting', panel: 'crafting' },
+  { action: 'menuQuests', panel: 'quests' },
 ];
 
 export default function GamepadMenuController() {
@@ -65,12 +73,16 @@ export default function GamepadMenuController() {
     };
 
     const st = useGameStore.getState();
+    // Wave 33: live (possibly rebound) button indices, read fresh every
+    // frame — see TOGGLE_PANEL's own comment above for why this can't be
+    // hoisted to module scope.
+    const gpBtn = useAppStore.getState().settings.gamepadButtons;
 
     // Start: mirrors Escape's own cascade exactly (GameScreen.tsx) — close
     // whatever panel is open, else exit build mode, else toggle pause — so
     // the one gamepad "menu" button does what a keyboard player already
     // expects Esc to do.
-    if (edge(GAMEPAD_BUTTONS.pause)) {
+    if (edge(gpBtn.pause)) {
       if (st.panel !== 'none') st.setPanel('none');
       else if (st.buildMode) st.setBuildMode(false);
       else st.setPaused(!st.paused);
@@ -81,7 +93,7 @@ export default function GamepadMenuController() {
     // cascade) — B mirrors the ubiquitous controller "back" verb for the one
     // thing every panel already has a keyboard (Escape) and mouse
     // equivalent for.
-    if (edge(GAMEPAD_BUTTONS.cancel) && st.panel !== 'none') {
+    if (edge(gpBtn.cancel) && st.panel !== 'none') {
       st.setPanel('none');
     }
 
@@ -98,8 +110,8 @@ export default function GamepadMenuController() {
     // unpaused frame reads `was[button]` as undefined — falsy — and a button
     // that was already being held reads as a brand-new press, popping a
     // panel open the player never actually pressed since unpausing.
-    for (const { button, panel } of TOGGLE_PANEL) {
-      if (edge(button) && !st.paused) st.setPanel(st.panel === panel ? 'none' : panel);
+    for (const { action, panel } of TOGGLE_PANEL) {
+      if (edge(gpBtn[action]) && !st.paused) st.setPanel(st.panel === panel ? 'none' : panel);
     }
 
     prev.current = now;
