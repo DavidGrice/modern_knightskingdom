@@ -19,6 +19,7 @@
 // path in coarse steps" because it has no renderer to step it at all.
 
 import { getNavGrid, navSteer, type NavAgent } from '@/game/navgrid';
+import { roadSpeedMult } from '@/game/data/road';
 import { LOD, type Tier } from '../config';
 import type { Agent } from './Agent';
 import { targetRegistry } from './TargetRegistry';
@@ -341,9 +342,21 @@ function stepAgent(agent: Agent, dt: number): void {
   // a villager work-trip mechanic (Agent.think's own live read) that never
   // applies to a companion, so it's simply skipped on this branch rather than
   // folded in for a value that can never be anything but 1.
+  // Wave 34 (G6.6) · road.ts's own module doc flagged this exact gap: a
+  // villager Agent got the A* PATHING preference for the road (navgrid.ts's
+  // ROAD_STEP_MULT) but never moved any FASTER while standing on it, unlike
+  // the player. Gated on `agent.region === null` (home) — road.ts's road
+  // network is fixed homestead-coordinate geometry, and an agent can be
+  // ticked from any world (a settlement resident, a companion who followed
+  // the player through a portal), so calling it against an unrelated
+  // world's coordinates would be a false read. Left off the companion
+  // branch on purpose: COMPANION_WALK_SPEED/RUN_SPEED are already tuned
+  // with real margin specifically to keep pace with the player, not tied to
+  // road preference.
   const speed = agent.archetype === 'companion'
     ? (intent.speed === 'run' ? COMPANION_RUN_SPEED : COMPANION_WALK_SPEED)
-    : intent.speed === 'run' ? RUN_SPEED : Math.min(WALK_SPEED / mult, RUN_SPEED);
+    : (intent.speed === 'run' ? RUN_SPEED : Math.min(WALK_SPEED / mult, RUN_SPEED))
+      * (agent.region === null ? roadSpeedMult(agent.position.x, agent.position.z) : 1);
 
   if (agent.steering === 'teleport') {
     // §8, verbatim: "jump along their path in coarse steps". Capped so a long

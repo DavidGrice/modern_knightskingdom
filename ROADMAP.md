@@ -8205,3 +8205,148 @@ batch's established discipline.
   same-shaped control test at home confirming the obstacle geometry and A* itself were never the
   problem. Zero console errors across every live session. This closes the "Wave 19 onward" plan in
   full — all 15 waves (19-33) shipped, merged, documented, and independently reviewed.
+
+## Wave 34: real axe weapon mold, castle-catalog & correctness batch (G1 + G6) — SHIPPED 2026-09-03
+
+First wave of the new 27-wave "Wave 34 onward" plan. Every claim was re-verified live against real
+files/data before building (part_roles.json, capabilities.json, real GLB accessor bounds, a
+sibling-repo orientation catalog) — several small drifts from the plan's own wording turned up, and
+two genuinely new bugs (beyond what the plan named) were found and fixed in G6.8.
+
+- [COMPLETE] ✅ **G1 · a real axe weapon mold.** `part_roles.json` really does chart a real,
+  rig-verified `axe` role — re-counted live at 19 exact `axe`/`axe_L`/`axe_R` hits across 11 donors
+  (the plan's "21 across 12" folded in two `axe_holder`/`axe_holder_brick` mount parts that aren't
+  the axe itself — a small wording drift, not a wrong conclusion). Diffed the two minifig
+  candidates' raw OBJ blocks byte-for-byte: `minifigcedricbull04.033_shape17` and
+  `minifiggilbertbad01.031_shape15` share identical 56-vertex/36-face geometry and the same
+  `glit042_s50t0` material — a real tie, broken by `preload.ts`'s `ENEMY_DONORS` already warming
+  Gilbert's donor (a live enemy) but not Cedric's `04` variant, so picking Gilbert costs zero new
+  asset fetches. Wired into `weaponParts.ts` with the exact same donor/role/grip-derivation shape
+  every other weapon there uses (no changes to `loadWeapon()` itself), `length: 0.58` (a one-handed,
+  shield-paired reading, closer to the sword's own 0.62 than the mold's literal ~0.83m scale-up).
+  `Viewmodel.tsx`'s procedural `<Axe/>` placeholder is now a `<RealWeapon id="axe">` sibling reusing
+  `MOUNT.tool`'s existing rotation, with `<Axe/>` kept only as the loading-state fallback. Corrected
+  the same now-false "no mold exists" premise everywhere it was repeated:
+  `Viewmodel.tsx`'s tool-block comment and `armor.ts`'s procedural-precedent list (which was about
+  armor, not weapons, but had copied the same claim).
+- [COMPLETE] ✅ **G6.1 · `mc002`/`mc008` promoted to placeable Buildables.** Both confirmed
+  `rigStatus:"verified"` real wall pieces in `capabilities.json`, previously only static decoration.
+  Real GLB accessor bounds confirm `mc002` is byte-identical raw geometry to the already-promoted
+  `mc001` (a banded-corner variant) and `mc008` is byte-identical to `mc006`/`mc009` (a windowed
+  straight, no `hasHole`/`isRuined` — an intact piece), so both got that twin's exact size/cost.
+  Bonus finding along the way: checked `collision.json` (the newer per-piece voxel pipeline) and
+  found it already covers `mc001`/`mc005`/`mc006`/`mc009`/`mc010`/`stonewall`, which take priority
+  over the older `WALL_CORE` table — meaning `mc008`'s existing `WALL_CORE` entry was **dead** until
+  this promotion made it live (and correct), not stale in the way the plan worried. Added the same
+  entry for `mc002` (no `collision.json` shape exists for it either).
+- [COMPLETE] ✅ **G6.2 · `oc6095-1`/`oc6096b5` real interactables — the plan's own framing corrected
+  along the way.** Both traits confirmed live (`hasSkeleton`/`hasStandSpot`/`hasFlags` on one,
+  `hasSpringboard`/`canLaunch`/`launchPartUncertain` on the other). But the plan's "promote the
+  existing decoration to interactable" isn't literally possible: computed each one's actual rendered
+  position with the real runtime bake-centering + scale-compensation math and found both sit deep in
+  unreachable background diorama scenery (~4.4× and ~3.1× past their template's own radius) — the
+  same "distant procession figure" failure mode this codebase already documents for the King Leo
+  marker. Fixed the same way G2-G5 already did for `oc6094-1`/`oc6032b4`: a real, placeable Buildable
+  copy (leaving the unreachable decoration and its `gen_` brick duplicate untouched), with a real
+  interaction wired onto the placed instance — a repeatable flavor-text examine for the skeleton
+  display (`markLoreSeen`/`loreSeen` was the plan's suggested reuse, but that array is genuinely
+  NPC-lore-scoped by its own doc comment, so this uses a plain repeatable `notify` instead rather
+  than putting a building id in an "NPC ids" array), and a real jump-boost (`vel.current.y = 11`,
+  reusing the exact fall/landing physics a normal jump already has) for the springboard — framed as a
+  player boost rather than a fired projectile specifically because the lab flags
+  `launchPartUncertain`. New `labCanLaunch()` predicate mirrors `labCanFire`'s shape so any future
+  `canLaunch` piece lights up for free.
+- [COMPLETE] ✅ **G6.3 · enemies spawning inside a building's own footprint.** Confirmed live:
+  `Enemies.tsx`'s night-skeleton spawn reroll only checked `insideWalls()` (the outer wall boundary),
+  genuinely blind to a building placed inside that yard. One-line fix, exactly as cheap as the prior
+  research predicted — added `navBlocked()` (already exported, already cheap, already rebuilt from
+  every placed building's real collision boxes) to the same reroll's condition.
+- [DOCUMENTED, NOT REPRODUCED] **G6.4 · building-placement first-load stutter.** Confirmed live that
+  `preloadCommonAssets()` warms **every** current Buildable's GLB unconditionally at every graphics
+  tier — there is no such thing as an un-warmed buildable model in this codebase today, closing off
+  the "cold cache, unwarmed piece" branch entirely (also means this wave's own new mc002/mc008/
+  oc6095-1/oc6096b5 pieces get preloaded for free, zero extra wiring). The one theory still standing
+  is a narrow timing race — a large, rarely-touched model (Siege Tower class) placed in the first 1-2
+  seconds of a session, before the async warm-up promise resolves — not reproduced this pass (would
+  need a genuinely cold browser profile deliberately racing session start, out of scope for this
+  batch). Left as a documented conclusion with a concrete, narrower next step rather than a forced
+  fix for an unreproduced bug.
+- [DOCUMENTED, NOT SOLVED] **G6.5 · Blender-rotation vs. Y-mirror orientation math.** Still
+  genuinely open, as the plan anticipated — but this pass added a real, checkable result: read the
+  sibling repo's `PAK_ORIENTATION_CATALOG.json` directly and confirmed (264/264 entries) that
+  `final_root_euler_deg`'s Y-component is 0 in every single case, across exactly 7 distinct (X, Z)
+  values — the "unsolved" correction space is really just an (X, Z) pair, never Y, a genuine
+  simplification nobody had surfaced. Worked the conjugation algebra for a pure-Y-mirror composition
+  (`M·Rx(α)·M = Rx(-α)`, `M·Rz(γ)·M = Rz(-γ)`, `M·Ry(β)·M = Ry(β)` unchanged) — checkable, but resting
+  on an unverified assumption (whether this repo's mirror and the lab's own up-axis rotation relate
+  by a bare Y-mirror with no further axis relabeling) that needs tracing `rig_lib.py` itself (Python,
+  sibling repo, outside this codebase's own tooling). Empirically cross-referenced every currently-
+  wired buildable (27, including every G6.1/G6.2 target here) against the catalog: all fall in the
+  `X=-90` family, and the one structurally odd-one-out (`l302100`, the sole `[180,0,-90]` non-minifig
+  entry) renders correctly today, checked side-by-side against the lab's own reference still. No live
+  defect found in any concretely-checkable case — left as a documented non-fix, with its urgency
+  downgraded rather than forced into a wrong-looking fix.
+- [COMPLETE] ✅ **G6.6 · `ROAD_SPEED_MULT` extended to villager/merchant/raider steering.** Confirmed
+  live this is a real, separate gap from `navgrid.ts`'s `ROAD_STEP_MULT` (an A* path-cost discount,
+  already NPC-facing) — `road.ts`'s own module comment already flagged it, and `Locomotion.ts`'s
+  shared per-frame speed formula had no road check at all. New `roadSpeedMult(x, z)` helper in
+  `road.ts`, wired into `Locomotion.ts` (every Agent-driven roster member — gated on
+  `agent.region === null`, since the road network is fixed home-coordinate geometry and an agent can
+  be ticked from any world), `Villagers.tsx` (5 separate inlined speed constants, gated the same way
+  via the exact home/destination ternary `groundY` already uses), `Merchant.tsx` (his whole walk is
+  along the road by design — also fixed `gaitSpeed` to track the real post-multiplier speed, so the
+  horse team's own trot animation doesn't slide out of sync with a faster walk), and `Enemies.tsx`'s
+  raider `approaching` branch only (the general combat-chase speed further down was deliberately left
+  alone — chasing off the road isn't a road-preference scenario). The region-gating on `Locomotion.ts`/
+  `Villagers.tsx` is a correctness addition beyond the plan's own terse code snippet, found live-
+  checking `villager.world`/`agent.region`'s existing home/destination split — without it, a
+  settlement resident's or portal-following companion's raw coordinates could read as "on the road"
+  against an entirely unrelated coordinate space.
+- [COMPLETE] ✅ **G6.7 · seated-rider animation for mounted defenders.** Confirmed all 15 real
+  animation clips are ground-walk/combat/gesture poses — no seated-rider clip exists, and the rig has
+  no knee joint to bend independently (7 joints, one rigid leg segment each). Built the "pose from an
+  existing clip's rest frame" fallback the plan anticipated: a new `seatedLegPose` prop on
+  `RiggedFigure` forces `leftleg`/`rightleg` into a fixed straddle-bend rotation, applied every frame
+  immediately AFTER the clip drives the rig (so head/body/arms/hips stay fully clip-driven — a
+  mounted defender still swings a sword normally) — wired onto `Defenders.tsx`'s mounted branch, and
+  onto `MountedHorse.tsx`'s byte-identical player-facing defect too (currently invisible there by
+  design, but free to fix). The two pose constants (`SEATED_LEG_X`/`SEATED_LEG_SPLAY`) are a starting
+  estimate flagged for a live screenshot-and-tune pass — no in-repo 3D preview harness exists to
+  verify the exact angles without one.
+- [COMPLETE] ✅ **G6.8 · gather-vs-craft quest bugs — 5 real instances fixed, not the 3 the plan
+  named.** Confirmed `bd_timber`/`k_iron_levy` and corrected the plan's own "q_feast" to the real id
+  `k_feast` — but a live grep of every `kind: 'gather'` quest target across `allegianceQuests.ts`/
+  `npcs.ts` against every craft-only recipe output (`recipes.ts`) turned up two more genuine instances
+  of the identical bug the plan never named: `q_relief` (queen's allegiance quest, target `bread`) and
+  `ced_iron` (Cedric's war-council errand, target `iron_bar`). All 5 confirmed unwinnable by the same
+  mechanism (`bumpQuestCounters('gather', ...)` only ever fires from the raw-harvest path, which never
+  produces plank/iron_bar/bread) and fixed the same way: relabeled `kind: 'craft'`, a pure relabel
+  since every craft already bumps `kind:'craft'` counters with `target: recipe.id`, which equals these
+  targets exactly. Corrected the stale "q_feast" naming in `npcs.ts`'s own explanatory comment while
+  there.
+
+**Verified live throughout, matching this whole multi-wave project's established discipline.**
+`npx tsc --noEmit` / `npm run build`: both clean, exit 0, verified independently. Every capability/
+geometry claim above was re-derived from the real, on-disk `part_roles.json`/`capabilities.json`/
+`collision.json`/real GLB accessor bounds/the sibling repo's real `PAK_ORIENTATION_CATALOG.json` —
+not trusted from the incoming plan — and two of the plan's own numbers (the axe's "21 parts / 12
+donors" count, and G6.8's "q_feast" id) were real, if small, drifts from what the data actually
+shows. G6.8's two extra bugs were found by generalizing the plan's own check into a full sweep rather
+than only re-verifying the 3 named ids. A real headless-Chrome session (off-screen, `--use-angle=
+d3d11`) drove every live-testable item end to end: chopped a real tree with the tool in `'axe'` state
+and screenshotted the real molded axe blade in-hand through multiple swing frames (not the old
+procedural placeholder), with the existing sword confirmed unaffected; placed `mc002`/`mc008` and
+confirmed the real fort wall-connectivity graph (`longestRun`) recognizes them as joined to their
+neighbors; placed and interacted with both the Skeleton Display (real flavor-text notify) and the
+Springboard (a real physics jump arc, player Y tracked 0→4.22→…→1.06 across frames, `grounded:false`
+throughout); froze `Math.random` to deterministically force every one of the night-skeleton reroll's
+6 tries onto a placed building's own footprint and confirmed the spawn correctly fell back to
+`roadEntry()` instead of landing inside it; measured a real spawned raider's steady-state speed
+on-road vs. off-road across multiple multi-second samples (~1.25-1.33× ratio, matching
+`ROAD_SPEED_MULT=1.3`, converging cleanly once a short, frame-jitter-noisy single sample was
+discarded as a methodology artifact, not a defect); and crafted real plank/iron-bar/bread to accept
+and fully turn in `bd_timber`/`k_iron_levy`/`k_feast` end to end, confirming each now genuinely
+completes. G6.7's seated-leg pose was diff-reviewed against the real, confirmed-correct joint-name
+API but not itself screenshotted (no mounted-defender test rig was stood up this pass) — its two
+angle constants remain a starting estimate flagged for a follow-up tuning pass, the one honest gap
+left in an otherwise fully live-verified wave. Zero console errors across every live session.

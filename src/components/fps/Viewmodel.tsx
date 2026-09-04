@@ -32,7 +32,7 @@ function Axe() {
 
 // Procedural builder's mallet — no dedicated hammer mold exists in the
 // extraction, same "procedural where the original has no equivalent" rule
-// as the axe/pickaxe/rod.
+// as the pickaxe/rod (Wave 34: the axe now has a real mold — weaponParts).
 function Hammer() {
   return (
     <group>
@@ -284,10 +284,13 @@ const MOUNT = {
   spear: [-1.28, 0.06, 0] as [number, number, number],
   //   tool — H34. There is no pickaxe or hammer mold anywhere in the
   //          extraction (the lab's only `pickaxe` is a trait on a defence
-  //          tower, not a held part), so these four stay procedural. What
-  //          was wrong was the POSE: their hafts sat nearly upright while
-  //          the hand angles in toward the camera, so the head pointed up
-  //          and away instead of out in front where a swing starts. Pitched
+  //          tower, not a held part), so pickaxe/hammer/rod stay procedural
+  //          (Wave 34: the axe moved off this shared rotation onto its own
+  //          real mold, but reuses the exact same pitch below — both
+  //          conventions carry the haft along +Y swung forward). What was
+  //          wrong was the POSE: their hafts sat nearly upright while the
+  //          hand angles in toward the camera, so the head pointed up and
+  //          away instead of out in front where a swing starts. Pitched
   //          forward to lie along the forearm.
   tool: [-0.78, 0.12, -0.16] as [number, number, number],
 };
@@ -559,14 +562,22 @@ export default function Viewmodel() {
             statement of where that weapon should POINT in view space,
             rather than an offset tuned by eye per weapon. */}
         <group position={handMount} scale={0.78}>
-          {/* procedural tools (no mold exists for these in the extraction —
+          {/* pickaxe/hammer/rod (no mold exists for these in the extraction —
               see weaponParts) keep the shared haft-up-and-forward pose */}
           <group rotation={MOUNT.tool}>
-            {tool === 'axe' && <Axe />}
             {tool === 'pickaxe' && <Pickaxe />}
             {tool === 'hammer' && <Hammer />}
             {tool === 'rod' && <Rod />}
           </group>
+          {/* Wave 34 · the axe now has a real mold (weaponParts) — reuses the
+              same haft-up-and-forward MOUNT.tool pitch the procedural axe it
+              replaces was already tuned to, since both conventions carry the
+              haft along +Y swung forward for a chop. */}
+          {tool === 'axe' && (
+            <group rotation={MOUNT.tool}>
+              <RealWeapon id="axe" fallback={<Axe />} />
+            </group>
+          )}
           {/* blade up and angled forward, as a sword is carried at the ready */}
           {tool === 'sword' && (
             <group rotation={MOUNT.sword}>

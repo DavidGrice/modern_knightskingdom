@@ -15,7 +15,7 @@ import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
 import { measureHitBoxes } from '@/lib/minifigRig';
 import { registerHitbox, unregisterHitbox } from '@/game/hitbox';
-import { findPath, rebuildNav, getNavGrid, hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
+import { findPath, rebuildNav, getNavGrid, hasLineOfSight, GROUND_LOS_Y, navBlocked } from '@/game/navgrid';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import HealthBillboard from './HealthBillboard';
 import type { RiggedMinifig } from '@/lib/minifigRig';
@@ -25,7 +25,7 @@ import { ITEMS } from '@/game/data/items';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD, POND, WORLD_HALF } from '@/game/data/world';
 import { sizeFor } from '@/game/data/buildables';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
-import { roadEntry } from '@/game/data/road';
+import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
 import { defenderState, DOWNED_RECOVER_MS } from '@/game/defenders';
@@ -220,8 +220,16 @@ function Enemy({ data }: { data: EnemyData }) {
           const ad = Math.hypot(aimX - m.x, aimZ - m.z) || 1;
           const nx = (aimX - m.x) / ad;
           const nz = (aimZ - m.z) / ad;
-          m.x += nx * speed * dt;
-          m.z += nz * speed * dt;
+          // Wave 34 (G6.6) · a raider walking in from roadEntry() is exactly
+          // the "on the road" case ROAD_SPEED_MULT was made for — the
+          // player already gets this boost on the same road, so a raider
+          // shouldn't be slower on it just because nobody wired it. The
+          // general combat-chase `speed` further below is deliberately left
+          // alone: chasing the player off the road isn't a road-preference
+          // scenario.
+          const approachSpeed = speed * roadSpeedMult(m.x, m.z);
+          m.x += nx * approachSpeed * dt;
+          m.z += nz * approachSpeed * dt;
           m.yaw = Math.atan2(-nx, -nz);
           // same pack-separation nudge the shared tail applies to chase/
           // attack — duplicated rather than shared since this branch
@@ -875,13 +883,20 @@ export default function Enemies() {
           // footprint is small against that; if every try still lands
           // inside, fall back to the same road-entry treatment dusk raiders
           // already get rather than spawning somewhere unchecked.
+          // Wave 34 (G6.3) · insideWalls only floods the outer wall
+          // boundary, so it stayed blind to a BUILDING placed inside that
+          // yard — a ring point could still land inside a house/workshop's
+          // own footprint. navBlocked (navgrid.ts) already rebuilds from
+          // every placed building's real collision boxes, not just walls,
+          // and is already this cheap (one grid lookup), so it's a one-line
+          // addition to the same reroll rather than a new pass.
           let sx = 0, sz = 0, placed = false;
           for (let tries = 0; tries < 6; tries++) {
             const a = Math.random() * Math.PI * 2;
             const r = 26 + Math.random() * 12;
             const cx = playerState.x + Math.cos(a) * r;
             const cz = playerState.z + Math.sin(a) * r;
-            if (!insideWalls(cx, cz)) { sx = cx; sz = cz; placed = true; break; }
+            if (!insideWalls(cx, cz) && !navBlocked(cx, cz)) { sx = cx; sz = cz; placed = true; break; }
           }
           if (!placed) {
             const entry = roadEntry();

@@ -445,6 +445,20 @@ const PREFABS: Buildable[] = [
     // the 8m walls and the 4m corner/turret rather than half-straddling a cell
     category: 'walls', size: [4, 3.84, 4], snap: GRID, stackable: true,
     cost: { stone: 6 }, buildXp: 26, requiresUnlock: 'mining' },
+  // Wave 34 (G6.1) · mc002/mc008 sat verified in capabilities.json
+  // (rigStatus:"verified", real wallRole/canConnectAsWall traits) the whole
+  // time as static decoration only (mapPopulation.generated.json), never a
+  // placeable Buildable. Real GLB geometry confirms both are same-footprint
+  // siblings of an already-promoted piece: mc002 is byte-for-byte mc001's
+  // raw size (a banded-corner variant), mc008 is byte-for-byte mc006/mc009's
+  // raw size (a windowed straight, no hasHole/isRuined — an intact piece,
+  // not a damage phase), so both are priced/sized identically to that twin.
+  { id: 'mc002', name: 'Wall Corner (Banded)', thumb: `${B}/mc002.png`, model: `${B}/mc002.glb`,
+    category: 'walls', size: [4, 3.84, 4], snap: GRID, stackable: true,
+    cost: { stone: 6 }, buildXp: 26, requiresUnlock: 'mining' },
+  { id: 'mc008', name: 'Castle Wall (Windowed)', thumb: `${B}/mc008.png`, model: `${B}/mc008.glb`,
+    category: 'walls', size: [8, 5.28, 2.4], snap: GRID, stackable: true,
+    cost: { stone: 10 }, buildXp: 40, requiresUnlock: 'mining' },
   { id: 'mc003', name: 'Wall Turret', thumb: `${B}/mc003.png`, model: `${B}/mc003.glb`,
     // same mesh and footprint as the Watch Tower in Defense — that one is the
     // stationable version (a defender can be posted on it); this one is the
@@ -497,6 +511,22 @@ const PREFABS: Buildable[] = [
   { id: 'oc6032b4', name: 'Armory Stand', thumb: `${B}/oc6032b4.png`, model: `${B}/oc6032b4.glb`,
     category: 'prefab', size: [1.4, 2.2, 0.9], snap: GRID, stackable: false,
     cost: { wood: 4, iron_bar: 2 }, buildXp: 18 },
+  // Wave 34 (G6.2) · oc6095-1 (hasSkeleton/hasStandSpot) and oc6096b5
+  // (hasSpringboard/canLaunch) each exist today as exactly ONE static
+  // decoration instance (mapPopulation.generated.json), sitting deep in
+  // unreachable background diorama scenery — the same "distant procession
+  // figure" placement TemplateWorld.tsx/prepare-assets.mjs already document
+  // for the King Leo marker. That instance can never actually be walked up
+  // to, so promoting it in place isn't possible; the real fix (same move as
+  // oc6094-1/oc6032b4 above) is a placeable copy the player can put
+  // somewhere reachable and actually interact with. The unreachable
+  // decoration and its `gen_` generic-brick duplicate are left untouched.
+  { id: 'oc6095-1', name: 'Skeleton Display', thumb: `${B}/oc6095-1.png`, model: `${B}/oc6095-1.glb`,
+    category: 'prefab', size: [4.8, 7.12, 3.63], snap: GRID, stackable: false,
+    cost: { stone: 6, wood: 2 }, buildXp: 25, requiresUnlock: 'building2' },
+  { id: 'oc6096b5', name: 'Springboard', thumb: `${B}/oc6096b5.png`, model: `${B}/oc6096b5.glb`,
+    category: 'prefab', size: [5.22, 4.44, 9.2], snap: GRID, stackable: false,
+    cost: { wood: 10, plank: 4 }, buildXp: 35, requiresUnlock: 'building2' },
   // Wave 29 · arches/rounded-piece audit (item 2). Nine real "Arch" catalog
   // pieces sat generically in the decor bricks tab the whole time; the rig
   // lab (part_roles.json) charts `16_l302721` (the tallest, 4.34m) as
@@ -803,10 +833,17 @@ export interface WallCoreBox {
 const WALL_CORE: Record<string, WallCoreBox> = {
   mc006: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
   mc007: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
+  // this entry was dead until Wave 34 (G6.1) promoted mc008 to a real
+  // Buildable id — no collision.json voxel data exists for mc008, so this is
+  // (correctly) the collision shape it now actually gets.
   mc008: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
   mc009: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
   mc010: { coreHeight: 2.0, depthFrac: 0.5, widthFrac: 0.95 },
   mc001: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
+  // Wave 34 (G6.1) · mc002 is byte-identical raw geometry to mc001 (same
+  // corner-piece shaft), so it gets the same core box rather than falling to
+  // the full-footprint default every previously-unlisted piece used.
+  mc002: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
   mc004: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
   mc005: { coreHeight: 2.0, depthFrac: 0.7, widthFrac: 0.7 },
   mc003: { coreHeight: 2.0, depthFrac: 0.8, widthFrac: 0.8 },

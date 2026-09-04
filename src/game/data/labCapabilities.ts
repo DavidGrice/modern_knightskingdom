@@ -34,6 +34,8 @@ export interface LabInteraction {
   canSeat?: boolean;
   canStandOn?: boolean;
   canFire?: boolean;
+  /** Wave 34 (G6.2) · the springboard prop oc6096b5's own flag */
+  canLaunch?: boolean;
 }
 
 export interface LabWallTraits {
@@ -52,6 +54,18 @@ export interface LabWallTraits {
   /** 1 = intact … N = rubble, within a piece's own destruction chain */
   destructionPhase?: number;
   destructionPhaseCount?: number;
+  // Wave 34 (G6.2) · the skeleton-display prop oc6095-1 and the springboard
+  // oc6096b5, promoted from static decoration to real interactables.
+  hasSkeleton?: boolean;
+  hasStandSpot?: boolean;
+  hasFlags?: boolean;
+  hasFlames?: boolean;
+  hasSpringboard?: boolean;
+  /** the lab itself isn't sure which part is the actual launch mechanism on
+   *  oc6096b5 — the player-jump-boost interaction sidesteps this by never
+   *  needing to identify or animate a specific launching part */
+  launchPartUncertain?: boolean;
+  rigScope?: string;
 }
 
 export interface LabMinifigTraits {
@@ -252,6 +266,13 @@ export function labIsDestructible(assetId: string | undefined, fallback = true):
 
 export function labIsPaintable(assetId: string | undefined, fallback = false): boolean {
   return capOf(assetId)?.interaction.isPaintable ?? fallback;
+}
+
+/** a prop the rig lab found a real launch mechanism on (oc6096b5's
+ *  springboard) — mirrors labCanFire's shape so any future piece the lab
+ *  charts the same way lights up automatically, without a per-id branch. */
+export function labCanLaunch(assetId: string | undefined): boolean {
+  return !!capOf(assetId)?.interaction.canLaunch;
 }
 
 export function labCanConnectAsWall(assetId: string | undefined): boolean {

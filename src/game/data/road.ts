@@ -120,10 +120,11 @@ const SZ = Math.round(SIGNPOST.z / ROAD_TILE); //  3
  * entire trip with zero obstacle avoidance the moment the grid ran out. Every
  * leg below now sits inside the grid, so A* genuinely prefers the printed
  * road for the whole walk (ROAD_STEP_MULT's ~40% discount comfortably beats
- * the road's own detour over a beeline) — though AI agents still never get
- * the player's ROAD_SPEED_MULT itself (Locomotion.ts has no onRoad check), so
- * the win is a villager that visibly follows the road and dodges obstacles
- * the whole way, not a faster one.
+ * the road's own detour over a beeline) — and, since Wave 34 (G6.6),
+ * `roadSpeedMult()` below wires the player's own ROAD_SPEED_MULT into the
+ * villager/merchant/raider movement code too, so the win is a villager that
+ * both follows the road AND actually moves faster while on it, not just one
+ * that dodges obstacles along the way.
  */
 const LEGS: [number, number][][] = [
   // 1 · the run out of the homestead, past the signpost.
@@ -349,6 +350,21 @@ export function onRoad(x: number, z: number): boolean {
  *  building passively grants a bonus just by existing on the grid") is the
  *  natural home for a future per-tile version of this same mechanic. */
 export const ROAD_SPEED_MULT = 1.3;
+
+/** Wave 34 (G6.6) · the same road-speed perk above, as a plain multiplier
+ *  rather than an if/else at every call site. This file's own module doc
+ *  already flagged the gap this closes: AI agents got the A* road-cost
+ *  PATHING preference (navgrid.ts's ROAD_STEP_MULT) but never the player's
+ *  own SPEED boost while actually standing on the road — a villager/
+ *  merchant/raider that visibly followed the road without ever moving any
+ *  faster on it. Callers outside the home world must gate this themselves
+ *  (this function has no region awareness — the road network is fixed
+ *  homestead-coordinate geometry, so calling it against an unrelated
+ *  world's coordinates would be a false read, not a fast/slow judgment
+ *  call). */
+export function roadSpeedMult(x: number, z: number): number {
+  return onRoad(x, z) ? ROAD_SPEED_MULT : 1;
+}
 
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkroadEntry = roadEntry;

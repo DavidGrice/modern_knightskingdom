@@ -210,13 +210,20 @@ export const NPCS: NpcDef[] = [
     revealAfterQuest: 'knights_arms',
     // kingdom-scale levies, befitting the crown's own seat (Phase 20 4b)
     sideQuests: [
+      // Wave 34 (G6.8) · both used to be `kind: 'gather'`, but iron_bar/
+      // bread are craft-only recipe outputs (recipes.ts) — the raw-harvest
+      // path that feeds a `gather`-kind counter (gameStore.ts) never
+      // produces either, so neither objective could ever actually complete.
+      // Every craft already bumps `kind: 'craft'` counters with
+      // `target: recipe.id`, which equals these targets exactly — a pure
+      // relabel, no new wiring.
       {
-        id: 'k_iron_levy', kind: 'gather', target: 'iron_bar', need: 3,
+        id: 'k_iron_levy', kind: 'craft', target: 'iron_bar', need: 3,
         label: 'The crown levies 3 iron bars for the armory',
         xpSkill: 'smithing', xp: 40, rewardItems: { gold: 22 },
       },
       {
-        id: 'k_feast', kind: 'gather', target: 'bread', need: 3,
+        id: 'k_feast', kind: 'craft', target: 'bread', need: 3,
         label: 'Provision the royal table with 3 loaves',
         xpSkill: 'farming', xp: 30, rewardItems: { gold: 16 },
       },
@@ -603,7 +610,10 @@ export const NPC_BY_ID = Object.fromEntries(NPCS.map((n) => [n.id, n]));
 // goes through sideQuestsOf() instead of NPC_BY_ID directly.
 export const CEDRIC_WAR_QUESTS: SideQuestDef[] = [
   {
-    id: 'ced_iron', kind: 'gather', target: 'iron_bar', need: 2,
+    // Wave 34 (G6.8) · same bug as k_iron_levy above — iron_bar is a
+    // craft-only recipe output, never raw-harvested, so a `gather`-kind
+    // objective against it could never complete.
+    id: 'ced_iron', kind: 'craft', target: 'iron_bar', need: 2,
     label: 'Smuggle 2 iron bars to the rebellion’s forges',
     xpSkill: 'smithing', xp: 45, rewardItems: { gold: 24 },
   },
@@ -629,9 +639,12 @@ export const CEDRIC_WAR_QUESTS: SideQuestDef[] = [
 // deliberately uses `kind: 'craft'` with `target` = the recipe id, NEVER
 // `kind: 'gather'` — bumpSideQuest's matchesKind (gameStore.ts) never
 // cross-matches craft<->gather, so a gather-kind errand aimed at a craft-only
-// item can never have its counter incremented (a real, pre-existing bug
-// already shipped on bd_timber/k_iron_levy/q_feast, out of this wave's
-// scope to fix, but the reason every NEW errand here avoids repeating it).
+// item can never have its counter incremented. Wave 34 (G6.8) fixed the five
+// real instances this had already shipped with: bd_timber/q_relief
+// (allegianceQuests.ts, target plank/bread), k_iron_levy/k_feast (this
+// file's own king's sideQuests, above), and ced_iron (CEDRIC_WAR_QUESTS,
+// just above this comment, target iron_bar). This comment used to say
+// "q_feast", which was never a real id — the actual one is k_feast.
 export const GUILD_QUESTS: Record<string, SideQuestDef[]> = {
   woodsmen: [
     {

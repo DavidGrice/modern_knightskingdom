@@ -28,6 +28,21 @@ const _worldPos = new THREE.Vector3();
  *  changes when the player actually moves. */
 const _playerPos = new THREE.Vector3();
 
+// Wave 34 (G6.7) · a mounted rider's legs float above the saddle playing
+// whatever ground-walk clip the FSM picked (anim_c_walk/run, anim_r_restpose,
+// anim_g_swordswish) — there is no seated-rider clip anywhere in the
+// extraction (all 15 clips under public/assets/anims/ are ground-walk/
+// combat/gesture poses), and the rig has no knee joint to bend independently
+// (minifigRig.ts's 7 joints stop at leftleg/rightleg, one rigid segment
+// each). So this is a static bone-pose override applied AFTER the clip drives
+// the figure each frame, not a new animation: head/body/arms/hips stay fully
+// clip-driven (a mounted defender still swings a sword normally), and only
+// the two leg joints get forced into a straddle bend. The angles are a
+// starting estimate, not measured against a render — this mold has no
+// in-repo 3D preview harness — and want one live screenshot-and-tune pass.
+const SEATED_LEG_X = 1.15;    // forward hip-flexion — thighs raised toward the horse's back
+const SEATED_LEG_SPLAY = 0.4; // outward roll per leg, to clear the horse's barrel
+
 export default function RiggedFigure({
   config,
   height = 1.75,
@@ -38,6 +53,7 @@ export default function RiggedFigure({
   onReady,
   keepProps = false,
   lodExempt = false,
+  seatedLegPose = false,
 }: {
   config: CharacterConfig;
   height?: number;
@@ -59,6 +75,10 @@ export default function RiggedFigure({
    *  Npc.tsx's CourtNpc — every entry in the NPCS table has mandatory
    *  lines/sideQuests, so all of them qualify). */
   lodExempt?: boolean;
+  /** Wave 34 (G6.7) · force the leg joints into a straddle bend every frame,
+   *  after the clip has posed everything else. For a rider seated on a
+   *  mount — see SEATED_LEG_X/SEATED_LEG_SPLAY's own comment above. */
+  seatedLegPose?: boolean;
 }) {
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
   const endRef = useRef(onClipEnd);
@@ -148,7 +168,16 @@ export default function RiggedFigure({
     // skips both the draw call (three.js doesn't recurse into invisible
     // subtrees, so portaled equipment on rig.joints.* is correctly skipped
     // too) and the bone/skinning update cost below
-    if (!culled.current) rig.animator.update(Math.min(dt, 0.06));
+    if (!culled.current) {
+      rig.animator.update(Math.min(dt, 0.06));
+      // Wave 34 (G6.7) · applied AFTER the clip so it wins over whatever
+      // ground-walk pose the animator just wrote to these two joints this
+      // frame; every other joint (head/body/arms/hips) is untouched.
+      if (seatedLegPose) {
+        rig.joints.leftleg.rotation.set(SEATED_LEG_X, 0, SEATED_LEG_SPLAY);
+        rig.joints.rightleg.rotation.set(SEATED_LEG_X, 0, -SEATED_LEG_SPLAY);
+      }
+    }
   });
 
   if (!rig) return null;

@@ -435,7 +435,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
         </Suspense>
       )}
       <group position-y={mountAsset ? SADDLE_Y : 0}>
-      <RiggedFigure config={config} height={1.7} clip={clip} timeScale={clip === 'anim_g_swordswish' ? 1.6 : 1} onReady={setRig} onClipEnd={() => setClip('anim_r_restpose')} />
+      <RiggedFigure config={config} height={1.7} clip={clip} timeScale={clip === 'anim_g_swordswish' ? 1.6 : 1} onReady={setRig} onClipEnd={() => setClip('anim_r_restpose')} seatedLegPose={!!mountAsset} />
       {rig && loadout === 'sword_shield' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
       {rig && loadout === 'sword_shield' && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
       {rig && loadout === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}

@@ -85,7 +85,9 @@ export default function MountedHorse() {
       {/* rider, seated astride behind the horse's neck — sunk down from a
           standing rest-pose height so the hips land at saddle height instead
           of the whole figure standing above it (no dedicated seated clip
-          exists in the extraction to pose the legs bent around the barrel).
+          exists in the extraction to pose the legs bent around the barrel —
+          Wave 34 added a `seatedLegPose` bone-pose fallback for exactly this,
+          reused here even though the figure is invisible below).
           Local offset, so it rides correctly regardless of BODY_FORWARD.
           Invisible, not removed (2026-08-03): riding always renders
           first-person now (PlayerController.tsx forces it regardless of the
@@ -98,7 +100,7 @@ export default function MountedHorse() {
       {character && (
         <Suspense fallback={null}>
           <group position={[0, 0.55, -0.15]} scale={0.96} visible={false}>
-            <RiggedFigure config={character} height={1.75} clip="anim_r_restpose" />
+            <RiggedFigure config={character} height={1.75} clip="anim_r_restpose" seatedLegPose />
           </group>
         </Suspense>
       )}

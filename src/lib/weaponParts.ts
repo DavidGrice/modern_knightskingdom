@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { loadDonor } from './minifig';
 import { loadPartRoles, partRolesFor } from './rigParts';
 
-export type WeaponId = 'sword' | 'halberd' | 'spear' | 'crossbow' | 'bow' | 'arrow' | 'bolt';
+export type WeaponId = 'sword' | 'halberd' | 'spear' | 'crossbow' | 'bow' | 'arrow' | 'bolt' | 'axe';
 
 interface WeaponDef {
   donor: string;
@@ -38,6 +38,16 @@ const WEAPONS: Record<WeaponId, WeaponDef> = {
   arrow: { donor: 'minifigjohnmayne01', role: 'arrow', length: 0.72, straight: true },
   // and the crossbow donor carries its own bolt
   bolt: { donor: 'minifiggilbertbad03', role: 'crossbow_bolt', length: 0.34, straight: true },
+  // Wave 34 · a real one-handed axe, held in a fist next to a shield —
+  // part_roles.json charts this exact mold (byte-identical geometry and
+  // material) on TWO minifig donors, minifiggilbertbad01 and
+  // minifigcedricbull04. Picked Gilbert: his donor is already warmed by
+  // preload.ts's ENEMY_DONORS (he's a live combat enemy), while Cedric's
+  // `04` variant is not (only `minifigcedricbull00`, a different pose, is),
+  // so this adds zero new asset fetches. Scaled toward the sword's own 0.62
+  // rather than the mold's literal ~0.83m reading — this is a one-handed,
+  // shield-paired weapon like the sword, not a two-handed haft.
+  axe: { donor: 'minifiggilbertbad01', role: 'axe', length: 0.58 },
 };
 
 // King Leo's shield. `022_shape10` (the old pick) sits dead-center over the

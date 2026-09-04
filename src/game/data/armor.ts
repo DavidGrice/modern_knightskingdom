@@ -17,7 +17,9 @@
 // So the tiers are rendered the way this game already renders a chestplate:
 // PROCEDURALLY. `Chestplate()` (components/character/Equipment.tsx) has always
 // been a hand-built plate — "procedural where the original has no equivalent",
-// the same rule the axe, pickaxe, campfire, forge and bed follow — and each
+// the same rule the pickaxe, campfire, forge and bed follow (Wave 34: the axe
+// weapon now has a real mold — weaponParts.ts — so it no longer belongs on
+// this list; armor has no such mold of its own) — and each
 // tier is now a distinct plate-and-emblem built from that same primitive. The
 // decal is real geometry raised off the plate rather than a texture, which is
 // both what the pipeline supports and what reads at minifig scale.

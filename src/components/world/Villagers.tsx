@@ -14,6 +14,7 @@ import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
 import { isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, settlementAnchor, villagerHomeSpot } from '@/game/data/villagers';
 import { POND } from '@/game/data/world';
+import { roadSpeedMult } from '@/game/data/road';
 import { tripSpeedMult } from '@/game/data/attributes';
 import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
@@ -103,6 +104,13 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   // fix, not just future-proofing for home's own new terrain regions.
   const groundY = (x: number, z: number) => (
     (villager.world ?? null) === null ? homeGroundY(x, z) : destinationGroundY(x, z)
+  );
+  // Wave 34 (G6.6) · same home/destination gate as groundY above — road.ts's
+  // road network is fixed homestead-coordinate geometry, so a settlement
+  // resident's own coordinates (an entirely different space) must never be
+  // read against it.
+  const roadMult = (x: number, z: number) => (
+    (villager.world ?? null) === null ? roadSpeedMult(x, z) : 1
   );
 
   useFrame((_, dt) => {
@@ -223,7 +231,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       if (d < 1.2) {
         mob.arriving = false;
       } else {
-        const speed = 1.25;
+        const speed = 1.25 * roadMult(s.x, s.z);
         s.x += nx * speed * dt;
         s.z += nz * speed * dt;
         const desired = Math.atan2(-nx, -nz);
@@ -354,7 +362,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           const wanted = hauling ? 'anim_r_restpose' : 'anim_g_swordswish';
           if (clip !== wanted) setClip(wanted);
         } else {
-          const speed = hauling ? 0.95 : 1.1; // a full sack slows the stride
+          const speed = (hauling ? 0.95 : 1.1) * roadMult(s.x, s.z); // a full sack slows the stride
           s.x += nx * speed * dt;
           s.z += nz * speed * dt;
           const desired = Math.atan2(-nx, -nz);
@@ -412,7 +420,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           s.yaw += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
         } else {
-          const speed = 1.1;
+          const speed = 1.1 * roadMult(s.x, s.z);
           s.x += nx * speed * dt;
           s.z += nz * speed * dt;
           const desired = Math.atan2(-nx, -nz);
@@ -480,7 +488,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
             s.yaw += diff * Math.min(1, dt * 2);
             if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
           } else {
-            const speed = 0.9;
+            const speed = 0.9 * roadMult(s.x, s.z);
             s.x += nx * speed * dt;
             s.z += nz * speed * dt;
             const desired = Math.atan2(-nx, -nz);
@@ -519,7 +527,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         // another few seconds; the next one lands on dry ground.
         if (!waterAt(tx, tz, 0.6)) { s.tx = tx; s.tz = tz; }
       } else {
-        const speed = 0.85;
+        const speed = 0.85 * roadMult(s.x, s.z);
         s.x += nx * speed * dt;
         s.z += nz * speed * dt;
         // yaw -> facing is (-sin, -cos) by this codebase's convention
