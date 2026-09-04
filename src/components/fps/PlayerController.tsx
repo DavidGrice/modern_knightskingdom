@@ -42,7 +42,7 @@ import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { destinationGroundY, homeGroundY, getBakeOffset, getMountedRegion, TEMPLATE_WORLD_SCALE } from '../world/TemplateWorld';
 import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
-import { labCanFire, labCanOccupy, labCanStandOn, labIsExplosive, labIsLadder, labOccupyMode } from '@/game/data/labCapabilities';
+import { labCanFire, labCanLaunch, labCanOccupy, labCanStandOn, labIsExplosive, labIsLadder, labOccupyMode } from '@/game/data/labCapabilities';
 import { aimState, resolveAim } from '@/game/targeting';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
@@ -58,7 +58,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'talk_companion';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'talk_companion' | 'examine_skeleton' | 'launch';
   station?: string;
 }
 
@@ -948,6 +948,26 @@ export default function PlayerController() {
         });
         continue;
       }
+      // Wave 34 (G6.2) · the skeleton-display prop's flavor-text examine.
+      // Bespoke content (the notify text is hand-written), so this checks
+      // the placed piece's own id directly rather than a generic lab-trait
+      // predicate — the same shape `quintain` above uses.
+      if (b.type === 'oc6095-1') {
+        consider(b.x, b.z, 1.2, {
+          id: b.id, kind: 'examine_skeleton', duration: 0.6, actionable: true,
+          label: 'Examine the skeleton display',
+        });
+        continue;
+      }
+      // the springboard: any piece the lab charts a real launch mechanism on
+      // (traits.interaction.canLaunch) lights up here, mirroring how
+      // labCanFire above generalizes the siege engines.
+      if (labCanLaunch(labAssetId(b.type))) {
+        consider(b.x, b.z, 1.4, {
+          id: b.id, kind: 'launch', duration: 0, actionable: true, label: 'Launch!',
+        });
+        continue;
+      }
       // anything the rig lab marked as able to shoot works like the cannon —
       // the nine siege engines from `traits.vehicle.canFire` all light up here
       // without needing a per-piece branch (2026-07-20 lab integration)
@@ -1189,6 +1209,24 @@ export default function PlayerController() {
       audio.play('graze', 0.5);
     } else if (t.kind === 'quintain') {
       quintainHit(t.id, ridingState.active);
+    } else if (t.kind === 'examine_skeleton') {
+      // Wave 34 (G6.2) · flavor text only — the lab's `hasSkeleton`/
+      // `hasStandSpot` traits describe a display piece, not a mechanic, so
+      // this is deliberately a repeatable notify rather than a one-time
+      // state flag (loreSeen is documented as NPC voiced-lore ids; a
+      // building id doesn't belong in that array).
+      st.notify('A knight’s bones, picked clean and mounted as a warning to raiders.');
+    } else if (t.kind === 'launch') {
+      // Wave 34 (G6.2) · the springboard (oc6096b5, traits.interaction.
+      // canLaunch). The lab itself flags `launchPartUncertain` — which part
+      // actually launches is unclear — so this is framed as a player
+      // jump-boost rather than firing a projectile from a specific part,
+      // sidestepping that uncertainty entirely. Reuses the exact same
+      // fall/landing physics a normal jump already has (this file's own
+      // `vel.current.y = 5` on a grounded jump, below), just a taller arc.
+      vel.current.y = 11;
+      grounded.current = false;
+      st.notify('You spring into the air!');
     } else if (t.kind === 'joust') {
       st.joustRichard();
     } else if (t.kind === 'push_cart') {

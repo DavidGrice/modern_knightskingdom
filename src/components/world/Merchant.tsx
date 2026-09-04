@@ -7,7 +7,7 @@ import RiggedFigure from '../character/RiggedFigure';
 import RiggedProp from './RiggedProp';
 import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
-import { roadEntry } from '@/game/data/road';
+import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { homeGroundY } from './TemplateWorld';
 import type { CharacterConfig } from '@/game/types';
@@ -127,15 +127,21 @@ export default function Merchant() {
     const [tx, tz] = stage === 'arriving' ? [MERCHANT_SPOT.x, MERCHANT_SPOT.z] : [OFF_STAGE.x, OFF_STAGE.z];
     const { nx, nz, dist } = navSteer(s, tx, tz, dt);
     if (dist > 0.5) {
-      s.x += nx * WALK_SPEED * dt;
-      s.z += nz * WALK_SPEED * dt;
+      // Wave 34 (G6.6) · the merchant's whole walk is along the printed
+      // road by design (his timing is tuned against the roadEntry() ->
+      // MERCHANT_SPOT distance), so this is a real target for the road
+      // speed perk, not just a mechanical extension — flagged for a live
+      // check against that tuned arrival timing.
+      const speed = WALK_SPEED * roadSpeedMult(s.x, s.z);
+      s.x += nx * speed * dt;
+      s.z += nz * speed * dt;
       const desired = Math.atan2(-nx, -nz);
       let diff = desired - s.yaw;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       s.yaw += diff * Math.min(1, dt * 3);
       if (clip !== 'anim_c_walk') setClip('anim_c_walk');
-      if (gaitSpeed !== WALK_SPEED) setGaitSpeed(WALK_SPEED);
+      if (gaitSpeed !== speed) setGaitSpeed(speed);
     } else if (gaitSpeed !== 0) {
       setGaitSpeed(0);
     }

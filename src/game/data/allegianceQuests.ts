@@ -51,7 +51,14 @@ export const EXTRA_SIDE_QUESTS: Record<string, SideQuestDef[]> = {
   ],
   miller_beda: [
     {
-      id: 'bd_timber', kind: 'gather', target: 'plank', need: 5,
+      // Wave 34 (G6.8) · this used to be `kind: 'gather'`, but plank is a
+      // craft-only recipe output (recipes.ts) — bumpQuestCounters('gather',
+      // ...) only ever fires from the raw-harvest path (gameStore.ts), which
+      // never produces plank, so this could never actually be completed.
+      // Every craft already bumps `kind: 'craft'` counters with
+      // `target: recipe.id` (recipe.id === 'plank' here), so this is a pure
+      // relabel, no new wiring.
+      id: 'bd_timber', kind: 'craft', target: 'plank', need: 5,
       label: 'The mill wants 5 planks for a new sluice',
       xpSkill: 'building', xp: 28, rewardItems: { gold: 10, bread: 1 },
     },
@@ -107,7 +114,12 @@ export const EXTRA_SIDE_QUESTS: Record<string, SideQuestDef[]> = {
   ],
   queen: [
     {
-      id: 'q_relief', kind: 'gather', target: 'bread', need: 5,
+      // Wave 34 (G6.8) · same bug as bd_timber above, found live-checking
+      // this whole file for the same pattern: bread is a craft-only recipe
+      // output, never a raw-harvest one, so a `gather`-kind objective
+      // against it could never complete. Not one of the 3 ids the original
+      // finding named, but the identical bug.
+      id: 'q_relief', kind: 'craft', target: 'bread', need: 5,
       label: 'The winter stores are short — 5 loaves for the almshouse',
       xpSkill: 'farming', xp: 40, rewardItems: { gold: 24 },
       allegiance: 5,
