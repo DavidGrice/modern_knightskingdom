@@ -472,6 +472,36 @@ const PREFABS: Buildable[] = [
   { id: 'mc010', name: 'Ruined Wall', thumb: `${B}/mc010.png`, model: `${B}/mc010.glb`,
     category: 'walls', size: [8, 5.28, 2.4], snap: GRID, stackable: true,
     cost: { stone: 5 }, buildXp: 15, requiresUnlock: 'mining' },
+  // Wave 35 (G4) · four matched corner towers, confirmed live as one real
+  // coherent set — not just a shared `oc6098` prefix: capabilities.json
+  // gives all four the same `castleSet:'oc6098'`, `placement:
+  // 'corner_on_base_plate'`, `sitsOnBasePlate:'oc6098-1'` (the Drawbridge
+  // Front prefab above IS that base plate). Two carry a real fire
+  // capability (oc6098-3's catapult, oc6098-5's crossbows — wired via
+  // labCapabilities.ts's WALL_FIRE_OVERRIDES, Wave 35 G3/G4); the other two
+  // are plain/ornate corners with no weapon. None has a part_roles.json rig
+  // of its own, so oc6098-3's catapult fires (sound + stone) without a
+  // visible arm swing — honest, not broken; its sibling oc6098b1 (G3) DOES
+  // have a rig and will swing. Kept together in Walls, mc002's own real
+  // precedent ("Wall Corner (Banded)") for a named wall-family corner piece,
+  // rather than splitting the two firing ones into Siege and stranding the
+  // other two elsewhere — that keeps the matched family visible as one
+  // group in the catalog. Sizes are bricks.generated.json's own real bbox
+  // for each (gen_oc6098-3/4/5/6), held verbatim.
+  { id: 'oc6098-3', name: 'Corner Tower (Catapult)', thumb: `${B}/oc6098-3.png`, model: `${B}/oc6098-3.glb`,
+    category: 'walls', size: [2.8, 6.93, 4.63], snap: GRID, stackable: true,
+    cost: { wood: 10, plank: 6, stone: 4, iron_bar: 2 }, buildXp: 45, requiresUnlock: 'smithing' },
+  { id: 'oc6098-4', name: 'Corner Tower (Plain)', thumb: `${B}/oc6098-4.png`, model: `${B}/oc6098-4.glb`,
+    category: 'walls', size: [2.8, 4.34, 3.85], snap: GRID, stackable: true,
+    cost: { stone: 8 }, buildXp: 30, requiresUnlock: 'mining' },
+  // real collision.json only voxelizes THIS corner (`gen_oc6098-5`) — see
+  // COLLISION_ALIAS below.
+  { id: 'oc6098-5', name: 'Corner Tower (Crossbow)', thumb: `${B}/oc6098-5.png`, model: `${B}/oc6098-5.glb`,
+    category: 'walls', size: [4.677, 2.726, 3.739], snap: GRID, stackable: true,
+    cost: { wood: 8, plank: 5, stone: 4, iron_bar: 2 }, buildXp: 42, requiresUnlock: 'smithing' },
+  { id: 'oc6098-6', name: 'Corner Tower (Ornate)', thumb: `${B}/oc6098-6.png`, model: `${B}/oc6098-6.glb`,
+    category: 'walls', size: [2.8, 10.22, 3.22], snap: GRID, stackable: true,
+    cost: { stone: 8, plank: 2 }, buildXp: 32, requiresUnlock: 'mining' },
   { id: 'oc6094-1', name: 'Weapons Rack', thumb: `${B}/oc6094-1.png`, model: `${B}/oc6094-1.glb`,
     category: 'prefab', size: [0.9, 2.4, 1], snap: GRID, stackable: false,
     cost: { wood: 3, iron_bar: 1 }, buildXp: 15 },
@@ -571,6 +601,9 @@ const COLLISION_ALIAS: Record<string, string> = {
   gatehouse_arch: 'gen_16_l302721',
   garden_arch: 'gen_14_l302720',
   signal_cannon: 'gen_12_l3207401',
+  // Wave 35 (G4) · same pattern — real voxelized collision exists (only for
+  // this one of the four corners) under the generic `gen_` id.
+  'oc6098-5': 'gen_oc6098-5',
 };
 function shapeForBuildable(type: string) {
   return shapeFor(COLLISION_ALIAS[type] ?? type);
@@ -688,6 +721,70 @@ const SIEGE: Buildable[] = [
   { id: 'signal_cannon', name: 'Signal Cannon', thumb: `${P}/castle_accessories/12_l3207401.png`, model: `${P}/castle_accessories/12_l3207401.glb`,
     category: 'siege', size: [1.4, 2.03, 2.975], snap: GRID, stackable: false,
     cost: { stone: 4, iron_bar: 1 }, buildXp: 24, requiresUnlock: 'smithing' },
+  // Wave 35 (G3) · three dormant manual-turret structures, zero-referenced
+  // anywhere in src/ before this — the exact `labCanFire`/`labCanOccupy`
+  // Signal Cannon mechanism above, wired for three more real pieces via
+  // labCapabilities.ts's WALL_FIRE_OVERRIDES (they're `kind:'wall'`, so the
+  // fire capability needed the same additive `traits.vehicle` fix). Sizes
+  // are bricks.generated.json's own real bbox for each, held verbatim —
+  // same precedent as Signal Cannon's own note just above.
+  //
+  // oc6098b1 fires as an ordinary catapult (its rig's `catapult_arm`/
+  // `catapult_stone` roles ARE recognized by RiggedProp) — its second,
+  // distinct `hasChestLauncher`/`canLaunchChest` payload mechanism is real
+  // data but genuinely unbuilt this wave: no `chest_arm`/`chest_basket`
+  // role exists in RiggedProp's THROW_ROLES/THROW_FOLLOWERS, and
+  // siege.ts's fireCannon() only ever spawns a stone Cannonball — wiring a
+  // second projectile type and a chest-throw animation is new renderer/
+  // projectile code, out of scope for a capability-wiring wave.
+  { id: 'oc6098b1', name: 'Catapult Turret', thumb: `${B}/oc6098b1.png`, model: `${B}/oc6098b1.glb`,
+    category: 'siege', size: [7.871, 6.16, 4.625], snap: GRID, stackable: false,
+    cost: { wood: 14, plank: 8, iron_bar: 2 }, buildXp: 58, requiresUnlock: 'smithing' },
+  // oc6098b2 is data-confirmed the CENTERPIECE of the same `oc6098`
+  // castle set as the four G4 corner towers above (`castleSet:'oc6098'`,
+  // `placement:'center_on_base_plate'`) — a real, distinct fire-capable
+  // turret in its own right, kept in Siege rather than folded into the
+  // Walls-category corner family since it isn't a corner.
+  { id: 'oc6098b2', name: 'Castle Centerpiece', thumb: `${B}/oc6098b2.png`, model: `${B}/oc6098b2.glb`,
+    category: 'siege', size: [8.4, 11.62, 7.35], snap: GRID, stackable: false,
+    cost: { stone: 14, plank: 8, iron_bar: 3 }, buildXp: 70, requiresUnlock: 'smithing' },
+  // oc6032b1 has no part_roles.json rig at all (no arm/bolt animation), and
+  // its "hasCrossbows" is inferred from `sockets.weapon_A/weapon_B:
+  // 'crossbow'` rather than a named lab flag — the model visibly carries
+  // two crossbows, which is the real evidence this promotion rests on. Its
+  // `hasThroneSeat`/`canUseAsTurret` shape becomes the SECOND
+  // `occupyMode:'seated'` piece in the game (labCapabilities.ts).
+  { id: 'oc6032b1', name: 'Throne Turret', thumb: `${B}/oc6032b1.png`, model: `${B}/oc6032b1.glb`,
+    category: 'siege', size: [4.55, 4.681, 2.339], snap: GRID, stackable: false,
+    cost: { stone: 6, wood: 6, iron_bar: 2 }, buildXp: 38, requiresUnlock: 'smithing' },
+  // Wave 35 (G5) · two dormant siege VEHICLES (kind:'vehicle', not 'wall'),
+  // zero-referenced anywhere in src/ — but pushable/hitchable rather than
+  // fire-and-forget. Their `traits.vehicle.canDrive`/`canPush` is the
+  // generic AUTO-SEEDED shape every `kind:'vehicle'` asset gets (verified
+  // live: byte-identical to warcart/bladecart's own capability entries),
+  // not a real per-asset signal, and "driving" has zero functional
+  // consumers anywhere in this codebase (game/crew.ts's own comment: the
+  // real siege engines are all `canDrive:false`). So these wire into the
+  // exact same hardcoded push_cart/hitch_cart mechanism warcart/bladecart
+  // already use (PlayerController.tsx) rather than a new "driving"
+  // mechanic — oc6096-1 has a literal battering_head/ram_horns rig, so it
+  // pushes; oc6032b3 is a mobile catapult/crossbow rig, not a ram, so it
+  // hitches (fireable-while-stationary is a real, separate future item, not
+  // built here). Both sit in `category:'defense'` alongside warcart/
+  // bladecart — the actual push/hitch precedent — rather than 'siege',
+  // where no other pushable piece lives.
+  //
+  // No bricks.generated.json entry exists for either (never ran through
+  // that pipeline) — sizes computed directly from real OBJ vertex bounds at
+  // this family's own k=0.05 (objrig/oc6096-1.obj raw 197.08×237.08×86.40;
+  // oc6032b3 raw 92.80×69.33×124.00), the same scale convention validated
+  // against oc6096-3/oc6096-4/oc1289's own declared sizes above.
+  { id: 'oc6096-1', name: 'Siege Ram Tower', thumb: `${L}/oc6096-1.png`, model: `${L}/oc6096-1.glb`,
+    category: 'defense', size: [9.85, 11.85, 4.32], snap: GRID, stackable: false,
+    cost: { wood: 26, plank: 16, iron_bar: 5 }, buildXp: 95, requiresUnlock: 'keep' },
+  { id: 'oc6032b3', name: 'Mobile Mangonel', thumb: `${L}/oc6032b3.png`, model: `${L}/oc6032b3.glb`,
+    category: 'defense', size: [4.64, 3.47, 6.2], snap: GRID, stackable: false,
+    cost: { wood: 14, plank: 8, iron_bar: 3 }, buildXp: 55, requiresUnlock: 'smithing' },
 ];
 
 export const BUILDABLES: Buildable[] = [...CRAFTED, ...PREFABS, ...SIEGE, ...GENERATED_BUILDABLES];

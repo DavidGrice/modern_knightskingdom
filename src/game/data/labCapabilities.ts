@@ -219,6 +219,40 @@ function applyLocalOverrides(caps: Record<string, LabCapability>) {
       siegeRole: 'cannon',
     };
   }
+
+  // Wave 35 (G3/G4) · three dormant manual-turret structures (oc6098b1,
+  // oc6098b2, oc6032b1) plus the two firing corners of the oc6098
+  // castle-corner family (oc6098-3's catapult, oc6098-5's crossbows) — all
+  // five real, verified `kind:'wall'` pieces (capabilities.json) that DO
+  // carry a genuine fire capability (`hasCatapult`/`canFireCatapult`,
+  // `hasCrossbows`/`canFireCrossbow`, or oc6032b1's `canUseAsTurret` +
+  // `hasThroneSeat`), but that capability lives under `traits.wall`/
+  // `interaction.canFire*` — fields `labCanFire`/`labCanOccupy` never read
+  // (see c3_cannon/oc6096b4's own comment above for the first time this
+  // exact nesting mismatch was found). Same additive fix, applied per-piece
+  // rather than in one shared loop since each needs its own siegeRole/
+  // occupyMode: oc6032b1 is the SECOND `occupyMode:'seated'` piece in the
+  // game (the wheeled crossbow oc4806b2 is the first and, until now, only
+  // one — see labOccupyMode's own comment), the rest stand like the other
+  // eight standing engines.
+  const WALL_FIRE_OVERRIDES: Record<string, Partial<LabVehicleTraits>> = {
+    oc6098b1: { siegeRole: 'catapult', occupyMode: 'standing' },
+    oc6098b2: { siegeRole: 'crossbow_emplacement', occupyMode: 'standing' },
+    oc6032b1: { siegeRole: 'turret', occupyMode: 'seated' },
+    'oc6098-3': { siegeRole: 'catapult', occupyMode: 'standing' },
+    'oc6098-5': { siegeRole: 'crossbow_emplacement', occupyMode: 'standing' },
+  };
+  for (const [id, role] of Object.entries(WALL_FIRE_OVERRIDES)) {
+    const c = caps[id];
+    if (!c) continue;
+    c.traits.vehicle = {
+      ...c.traits.vehicle,
+      isSiegeEngine: true, isStationary: true, canFire: true,
+      hasProjectile: true, damagesWalls: true, damagesVehicles: true,
+      canOccupy: true,
+      ...role,
+    };
+  }
 }
 
 let warm: Record<string, LabCapability> = {};
