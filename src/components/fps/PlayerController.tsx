@@ -100,6 +100,32 @@ const PLAYER_RADIUS = 0.45;
 const STEP_UP = 0.55; // max ledge height climbed without jumping
 const STICK_DEADZONE = 0.25;
 
+// Wave 35 verify-fix · man_engine/cannon/push_cart/hitch_cart all used the
+// flat default INTERACT_RANGE regardless of the piece's own footprint. That
+// silently worked for every engine so far because they all happened to be
+// small enough — but oc6098b2 (Wave 35's own biggest single piece, no
+// collision.json entry so it falls back to one full-size box) is genuinely
+// UNREACHABLE from every angle: the physical collision box alone keeps the
+// player back (footprint half-extent + PLAYER_RADIUS) past 3.4m on its
+// SHORTER axis, let alone its longer one, so its own labCanOccupy:true
+// promise (labCapabilities.ts) could never actually be triggered
+// (live-confirmed: distAtPress pinned at 4.125m, prompt always null).
+// oc6032b3's hitch prompt had the same shape one notch down — reachable
+// from the side, but not head-on the way a player naturally approaches a
+// vehicle (live-confirmed: side 2.77m worked, front/back 3.55m didn't).
+//
+// Rather than hand-tune a range per new piece, this grows the interact
+// range to whatever the piece's OWN declared footprint demands so it is
+// reachable from any facing the player might reasonably try — including
+// the wider axis, not just the narrowest one a min-based fix would still
+// have left half-blind. Math.max means it can only ever widen an already-
+// working piece's range, never narrow it, so nothing that worked before
+// this can regress.
+function reachRangeFor(type: string, rot: number): number {
+  const [sx, sz] = sizeFor(type, rot);
+  return Math.max(INTERACT_RANGE, Math.max(sx, sz) / 2 + PLAYER_RADIUS + 0.5);
+}
+
 // Standard-mapping gamepad -> the same action codes keyboard uses, written
 // into a separate `pad` record (not `keys`) so a stick returning to neutral
 // can't be confused with "the keyboard key was never pressed" — the two
@@ -977,16 +1003,17 @@ export default function PlayerController() {
         // engines the lab found a crew position on are MANNED first — you
         // step aboard, then aim and shoot from where the crew stands. The
         // ones with no crew position (oc1289) stay fire-in-place.
+        const range = reachRangeFor(b.type, b.rot);
         if (labCanOccupy(labAssetId(b.type))) {
           consider(b.x, b.z, 1.0, {
             id: b.id, kind: 'man_engine', duration: 0, actionable: true,
             label: `Man the ${label}`,
-          });
+          }, range);
         } else {
           consider(b.x, b.z, 1.0, {
             id: b.id, kind: 'cannon', duration: 0, actionable: hasStone,
             label: hasStone ? `Fire ${label} (1 stone)` : `${label} needs a stone ball`,
-          });
+          }, range);
         }
         continue;
       }
@@ -1055,15 +1082,24 @@ export default function PlayerController() {
       // already-engaged carts are handled as an early return above (letting
       // go / unhitching shouldn't depend on which way you happen to be
       // facing) — here we only need to offer starting one
-      if (b.type === 'warcart') {
+      // Wave 35 (G5) · oc6096-1 (a bigger battering-ram/siege-tower combo,
+      // literal battering_head/ram_horns rig) and oc6032b3 (a mobile
+      // catapult/crossbow wagon, not a ram) extend the same two hardcoded
+      // checks rather than a new predicate — `traits.vehicle.canPush`/
+      // `canDrive` is the generic auto-seeded shape EVERY `kind:'vehicle'`
+      // asset gets (verified identical to warcart/bladecart's own entries),
+      // so it can't discriminate which pieces should actually push or
+      // hitch; there is no `labCanPush()` because none of this is data-
+      // driven today (see labCapabilities.ts's Wave 35 G5 comment).
+      if (b.type === 'warcart' || b.type === 'oc6096-1') {
         if (cartState.pushingId !== b.id) {
-          consider(b.x, b.z, 1.6, { id: b.id, kind: 'push_cart', duration: 0, actionable: true, label: 'Push the Battering Ram' });
+          consider(b.x, b.z, 1.6, { id: b.id, kind: 'push_cart', duration: 0, actionable: true, label: 'Push the Battering Ram' }, reachRangeFor(b.type, b.rot));
         }
         continue;
       }
-      if (b.type === 'bladecart') {
+      if (b.type === 'bladecart' || b.type === 'oc6032b3') {
         if (cartState.hitchedId !== b.id) {
-          consider(b.x, b.z, 1.6, { id: b.id, kind: 'hitch_cart', duration: 0, actionable: true, label: 'Hitch the Cart' });
+          consider(b.x, b.z, 1.6, { id: b.id, kind: 'hitch_cart', duration: 0, actionable: true, label: 'Hitch the Cart' }, reachRangeFor(b.type, b.rot));
         }
         continue;
       }

@@ -454,7 +454,13 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
   if (b.type === 'window') {
     return <group position={[px, y, pz]} rotation-y={yaw}><WindowFixture id={b.id} /></group>;
   }
-  if (b.type === 'warcart' || b.type === 'bladecart') {
+  // Wave 35 (G5) · oc6096-1/oc6032b3 push/hitch through the same
+  // PlayerController mechanism as warcart/bladecart (cartState/cartLivePos,
+  // game/carts.ts) and need the SAME live-position render path, or the
+  // mesh would stay frozen at its placed b.x/b.z while cartState tracks it
+  // moving — CartMesh already reads cartLivePos generically, keyed by
+  // building id, so routing here is the only change this needs.
+  if (b.type === 'warcart' || b.type === 'bladecart' || b.type === 'oc6096-1' || b.type === 'oc6032b3') {
     return <CartMesh b={b} def={def} yaw={yaw} originOffset={originOffset} />;
   }
   if (b.type === 'market_stall') {

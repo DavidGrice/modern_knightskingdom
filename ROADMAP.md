@@ -8350,3 +8350,77 @@ completes. G6.7's seated-leg pose was diff-reviewed against the real, confirmed-
 API but not itself screenshotted (no mounted-defender test rig was stood up this pass) — its two
 angle constants remain a starting estimate flagged for a follow-up tuning pass, the one honest gap
 left in an otherwise fully live-verified wave. Zero console errors across every live session.
+
+## Wave 35: 3 dormant manual turrets, 4 castle corner towers, 2 siege vehicles (G3 + G4 + G5) — SHIPPED 2026-09-04
+
+Second wave of the new 27-wave plan. Found a real, cross-cutting structural gap before building
+anything: `labCanFire()`/`labCanOccupy()` only ever read `traits.vehicle.canFire`/`canOccupy`, but
+all 9 of this wave's assets are `kind:'wall'` pieces whose real fire/seat data lives under
+`traits.wall`/`interaction` instead — the exact nesting mismatch Wave 34 first had to patch for the
+Signal Cannon, now proven to be a recurring pattern rather than a one-off.
+
+- [COMPLETE] ✅ **G3 · three dormant manual turrets wired as real crewable emplacements.**
+  `oc6098b1` ("Catapult Turret"), `oc6098b2` ("Castle Centerpiece" — data-confirmed the actual
+  centerpiece of the same `oc6098` castle set as G4's 4 corners, not a stray piece), and `oc6032b1`
+  ("Throne Turret," the game's second-ever `occupyMode:'seated'` piece) all promoted to real
+  `Buildable`s with a new `WALL_FIRE_OVERRIDES` map in `labCapabilities.ts` (the same additive
+  `traits.vehicle` fix Wave 34 proved for the Signal Cannon, generalized). `oc6098b1`'s second,
+  distinct `hasChestLauncher` payload mechanism is real capability data but honestly left unbuilt —
+  no chest-throw role or projectile type exists in `RiggedProp.tsx`/`siege.ts`, so it fires as an
+  ordinary catapult instead of inventing new renderer code for a capability-wiring wave.
+- [COMPLETE] ✅ **G4 · four castle corner towers promoted as a matched Buildable family.** Real
+  `capabilities.json` data confirms all 4 share `castleSet:'oc6098'`/`placement:'corner_on_base_
+  plate'` — a genuinely coherent set, not just a shared id prefix. Two carry real fire capability
+  (`oc6098-3` catapult, `oc6098-5` crossbow, via the same `WALL_FIRE_OVERRIDES`); the other two are
+  plain/ornate corners. Kept all 4 in the `walls` category (mc002's own "Wall Corner (Banded)"
+  precedent) rather than splitting the firing pair into `siege` and stranding the rest — a correction
+  to the plan's own suggested category. `oc6098-5` is the only one of the 4 with real voxelized
+  collision (`collision.json`); wired via a new `COLLISION_ALIAS` entry, the exact pattern Wave 29
+  proved for the Signal Cannon/gatehouse arch.
+- [COMPLETE] ✅ **G5 · two dormant siege vehicles wired as pushable/hitchable engines.** Confirmed
+  live that `canDrive`/`canPush` is the generic auto-seeded shape every `kind:'vehicle'` asset gets
+  (byte-identical to warcart/bladecart's own entries) — not a real per-asset signal — and that
+  "driving" has zero functional consumers anywhere in this codebase. Extended the exact hardcoded
+  `b.type === 'warcart'`/`'bladecart'` checks (`PlayerController.tsx`) to also match `oc6096-1`
+  ("Siege Ram Tower," a literal battering-ram rig — pushed) and `oc6032b3` ("Mobile Mangonel," a
+  towed catapult/crossbow wagon — hitched), correctly placed in `category:'defense'` alongside the
+  actual push/hitch precedent rather than the plan's literally-stated `siege` category, where no
+  other pushable piece lives. **A real gap found during implementation, beyond the research's own
+  file list**: `Buildings.tsx`'s cart-mesh render routing was still hardcoded to the original two ids
+  only — without extending it, both new vehicles would have updated their live position data
+  correctly while the rendered mesh stayed frozen in place. Fixed in the same pass.
+- **A genuine blocker found by live verification and fixed properly, not patched around.** Verify
+  caught that `oc6098b2`'s own `labCanOccupy:true` promise was **100% unreachable from any angle** —
+  its real collision footprint (no `collision.json` entry, so a full-size box) puts the closest
+  possible approach past the flat `INTERACT_RANGE=3.4m` default even on its shorter axis, live-
+  measured at a pinned `distAtPress: 4.125m` with the prompt never appearing. `oc6032b3`'s hitch
+  prompt had the identical shape one notch down (reachable from the side at 2.77m, but not head-on at
+  3.55m — the way a player naturally approaches a vehicle). Root cause: `man_engine`/`cannon`/
+  `push_cart`/`hitch_cart` all used the flat default interact range regardless of the target's own
+  footprint, which happened to silently work for every engine built so far only because they were all
+  small enough. Fixed with a new `reachRangeFor(type, rot)` helper (`PlayerController.tsx`) that grows
+  the interact range to whatever a piece's own declared footprint demands, using the wider axis (not
+  just the narrower one a minimal fix would still leave half-blind) — `Math.max` against the existing
+  default means it can only ever widen an already-working piece's range, never narrow one, so nothing
+  that worked before this can regress. Verified live: both prompts now appear and complete correctly,
+  and the same fix pass's full regression re-run confirmed the Signal Cannon, Watch Tower, warcart,
+  and bladecart are all unchanged.
+- **Verified live and thoroughly, including a real, pre-existing (non-regressing) quirk correctly
+  distinguished from a new bug.** A real Chrome session placed and fully constructed all 9 new pieces
+  (plus 4 existing control pieces) via the actual `placeBuilding()`/`constructBuilding()` calls the
+  UI itself uses, drove real held-E interactions for occupy/fire/push/hitch, and polled the live
+  Three.js scene for real cannonball meshes (not a single late check, since a shot's ~0.9s flight can
+  complete and despawn first) to confirm all 5 fire-capable pieces genuinely auto-fire and that 4 of
+  them can be physically manned (3 standing, `oc6032b1` correctly seated). The two plain corners
+  correctly show no fire prompt. Both vehicles push/hitch through the real mechanism, with
+  `cartLivePos` confirmed genuinely tracking the player (the exact data `Buildings.tsx`'s own fix
+  renders from). One live-confirmed oddity was correctly identified as pre-existing, not a
+  regression: walking straight toward a cart you've just grabbed produces zero net movement (the
+  live "glued" position is cosmetic while the actual collision-checked position stays frozen until
+  release) — an isolated repro proved this reproduces byte-for-byte identically on the untouched,
+  original `warcart`, so it's inherited shared-mechanism behavior this wave didn't introduce. A
+  mid-session `npm run build` run while a stale `npm run dev` was still live corrupted `.next`
+  exactly as this project's own standing convention warns against — recognized immediately as the
+  known gotcha (not a code regression), fixed by killing the stale process and rebuilding clean, and
+  every check re-confirmed afterward. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.
