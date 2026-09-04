@@ -8424,3 +8424,67 @@ Signal Cannon, now proven to be a recurring pattern rather than a one-off.
   known gotcha (not a code regression), fixed by killing the stale process and rebuilding clean, and
   every check re-confirmed afterward. `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 36: a second independent dragon (A8) + a mounted-raider enemy on Cedric's own chargers (A3 half) — SHIPPED 2026-09-04
+
+Third wave of the new 27-wave plan. A byte-level asset investigation turned this wave into something
+materially better than either the plan or the research assumed, and verify's own live hitbox math
+caught a real correctness gap that would have shipped a genuinely unfightable-at-range enemy.
+
+- [COMPLETE] ✅ **A8 · the Black Dragon — Cedric's own beast, not a degraded copy.** The plan assumed
+  a second dragon mesh (`l7517401`) sitting unused; live investigation went further and diffed both
+  dragons' real GLB geometry at the byte level (accessor bounding boxes, vertex counts) and found
+  `l7517401` is the **same underlying digital model as the shipped dragon, recolored** — identical
+  wing/tail/eye/accent geometry, only the body material's real `Kd` value changes from green to a
+  charcoal black. This meant the black dragon didn't need a rigid, unarticulated prop treatment as a
+  fallback — `loadDragonRig()` (`DragonOmen.tsx`) was generalized to a `variant` parameter that still
+  parses the one real named-shape OBJ (the only file that makes wing/tail/head slicing possible at
+  all) and recolors the resulting meshes by material name for the `'black'` variant, giving it full
+  wing-beat/tail-sway/head-scan articulation genuinely equivalent to the original. New
+  `BlackDragonSiege.tsx` duplicates `DragonSiege.tsx`'s own proven state-machine shape — the same
+  "duplicate for a second boss" precedent `CedricSiege.tsx` already set, deliberately not folded into
+  a shared generic framework since that's explicitly its own later item (A1, Wave 38) and retrofitting
+  scaling onto the *existing*, already-tuned dragon here would have risked it. Gated behind the
+  difficulty curve's ceiling tier AND having already routed the first dragon (reusing the existing
+  `dragonRouted` flag rather than a new precondition) — a real escalation for players who've already
+  proven they can win the fight, with real stakes on rout (gold/materials/XP) unlike the original,
+  which grants only achievements. A mutual `busy` guard on both sieges prevents them ever firing
+  together.
+- [COMPLETE] ✅ **A3 (mounted-charger half) · a real mounted-raider enemy kind riding Cedric's own
+  tethered chargers.** New `EnemyKind: 'mountedRaider'` reuses `Defenders.tsx`'s own shipped mounted-
+  rider pattern end to end: a `RiggedProp` horse (`l7339231`/`l7339232`, real four-legged rig data
+  confirmed in `part_roles.json`) with a displacement-measured `ridePace` driving its gait, a rider
+  wrapped in a `MOUNT_SEAT_Y` saddle offset, and Wave 34's own `seatedLegPose` override applied
+  cleanly onto an enemy rig for the first time outside its original defender use. Moves at a real
+  horse's pace (base speed × the same 1.9× multiplier a mounted defender already gets), carries a
+  couched spear + shield (a real, previously-unused donor variant, `minifiggilbertbad02`, confirmed
+  to mold a spear part), and joins Cedric's own war party as 2 of its existing 4 plain-bandit slots
+  once the player reaches the difficulty ceiling — an escalation layered on an already-tuned
+  encounter, not part of its first unlock. Every `Record<EnemyKind,...>` table in the combat system
+  (`KIND_HP`/`KIND_XP`/`ATTACK_DMG`/loot/bestiary/etc.) was extended with TypeScript's own
+  exhaustiveness check enforcing nothing was silently missed.
+- [COMPLETE] ✅ **A real correctness gap found and fixed before it could ship broken: mounted enemies
+  would have been unfightable at range.** `hitTestCharacter()`'s per-part hitboxes are tested in the
+  rig's own local frame using a `groundY` parameter — and both of its real call sites (the player's
+  bolt-collision path in `combat.ts`, and the aim-reticle/crosshair path in `targeting.ts`) hardcoded
+  `groundY = 0`. A mounted raider rendered a full saddle-height higher than a standing enemy would
+  have had its hitbox tested a saddle-height too low — a shot aimed at the visible rider would sail
+  over an empty box positioned as if standing on the ground. This was never triggered by the existing
+  mounted-*defender* pattern this wave reused, since the player never fights defenders through this
+  system. Fixed with a new exported `MOUNT_SEAT_Y` constant threaded through both call sites (a small
+  optional callback added to `targeting.ts`'s dependency-free `resolveAim`, defaulting to 0 for every
+  existing caller, so nothing regresses). Verified live via exact aim-point math: fired a bolt at the
+  precise world-space center of the rider's own hitbox using the fix's `MOUNT_SEAT_Y`, and confirmed
+  it dealt real damage — the identical aim point mapped to a local Y outside the rig entirely under
+  the old hardcoded-0 code, which would have missed every time.
+- **Verified live and thoroughly, including a direct scene-graph check of the recolor itself.**
+  Forced the black dragon's gate open via the real store/difficulty state and confirmed
+  `dragonAirBlack` populated with a real, distinct flight; traversed the live `THREE.Scene` directly
+  and found the rendered mesh's real material color was the exact charcoal value the fix claims — not
+  just present in source, genuinely applied to what's on screen. Spawned a mounted raider via the
+  real enemy-store API, confirmed it closed to melee and damaged the player, then killed it with
+  bolts and watched it despawn through the same loot/XP pipeline every other kind uses. Regression-
+  checked: an ordinary bandit still dies in the same 2 hits through the unmodified `groundY=0` branch,
+  and the original green dragon still fires correctly on its own when the black dragon's gate is
+  closed, with the new mutual-busy guard confirmed not to block it. `npx tsc --noEmit` / `npm run
+  build`: both clean, verified independently.

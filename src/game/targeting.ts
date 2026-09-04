@@ -93,6 +93,14 @@ export function resolveAim(
    *  becoming a defender — the id alone isn't enough to know which store is
    *  live, so the caller (which has the real Villager.job) says so. */
   villagerIds: { id: string; isDefender: boolean }[] = [],
+  /** Wave 36 (A3): a mounted raider's rig sits MOUNT_SEAT_Y off the ground
+   *  (Enemies.tsx's own saddle wrap) — this module stays a dependency-free
+   *  leaf (importing combat.ts's MOUNT_SEAT_Y here would cycle, the same
+   *  reason `enemies`/`maxHpOf` above are passed in rather than imported),
+   *  so the caller supplies the answer exactly like it already does for
+   *  `maxHpOf`/`nameOfEnemy`. Defaults to 0 (every non-mounted kind) for any
+   *  existing caller that hasn't been updated. */
+  mountSeatYOf: (kind: string) => number = () => 0,
 ): AimTarget | null {
   let best: AimTarget | null = null;
   let bestT = Infinity;
@@ -106,7 +114,7 @@ export function resolveAim(
     // foes carry real per-part volumes (game/hitbox.ts), so the readout
     // appears only when the crosshair is genuinely on them
     const hit = hitboxes[String(e.id)]
-      ? hitTestCharacter(String(e.id), e.mob.x, e.mob.z, e.mob.yaw, 0, ox, oy, oz, ex, ey, ez)
+      ? hitTestCharacter(String(e.id), e.mob.x, e.mob.z, e.mob.yaw, mountSeatYOf(e.kind), ox, oy, oz, ex, ey, ez)
       : null;
     const t = hit
       ? hit.t * AIM_RANGE

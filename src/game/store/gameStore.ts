@@ -310,6 +310,8 @@ interface GameState {
   dragonSeen: boolean;            // witnessed the dragon's night flyover (drives its Deed)
   dragonSieges: number;           // dragonfire sieges weathered (Flame and Stone deed)
   dragonRouted: boolean;          // ever drove the beast off with bolts (Sting the Sky)
+  blackDragonSieges: number;      // Wave 36 (A8): the black dragon's own siege count
+  blackDragonRouted: boolean;     // Wave 36 (A8): ever drove HIM off with bolts
   cedricSieges: number;           // Cedric's homestead sieges weathered (The Bull at the Gate deed)
   cedricRouted: boolean;          // ever drove his war party off before the timer (Gore for Gore)
   timeOfDay: number;             // low-frequency mirror of worldEnv.time (HUD/saves)
@@ -409,6 +411,9 @@ interface GameState {
   greetCompanion: () => void;
   markDragonSeen: () => void;
   recordDragonSiege: (routed: boolean) => void;
+  /** Wave 36 (A8): the black dragon's own siege resolution. Mirrors
+   *  recordDragonSiege exactly. */
+  recordBlackDragonSiege: (routed: boolean) => void;
   /** Cedric's Siege: a homestead siege ended — routed before the timer, or
    *  endured to its end. Mirrors recordDragonSiege exactly. */
   recordCedricSiege: (routed: boolean) => void;
@@ -1066,6 +1071,8 @@ function createGameStore() {
     dragonSeen: false,
     dragonSieges: 0,
     dragonRouted: false,
+    blackDragonSieges: 0,
+    blackDragonRouted: false,
     cedricSieges: 0,
     cedricRouted: false,
     timeOfDay: 0.3,
@@ -1121,6 +1128,7 @@ function createGameStore() {
         claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
         interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
+        blackDragonSieges: 0, blackDragonRouted: false,
         cedricSieges: 0, cedricRouted: false,
       });
       worldEnv.time = 0.3;
@@ -1203,6 +1211,7 @@ function createGameStore() {
         armory: s.armory ?? {},
         interior: null, enteredInteriorPos: null, treasureOpened: s.treasureOpened ?? false, dragonSeen: s.dragonSeen ?? false,
         dragonSieges: s.dragonSieges ?? 0, dragonRouted: s.dragonRouted ?? false,
+        blackDragonSieges: s.blackDragonSieges ?? 0, blackDragonRouted: s.blackDragonRouted ?? false,
         cedricSieges: s.cedricSieges ?? 0, cedricRouted: s.cedricRouted ?? false,
       });
       worldEnv.time = s.timeOfDay ?? 0.3;
@@ -1273,6 +1282,8 @@ function createGameStore() {
         dragonSeen: s.dragonSeen,
         dragonSieges: s.dragonSieges,
         dragonRouted: s.dragonRouted,
+        blackDragonSieges: s.blackDragonSieges,
+        blackDragonRouted: s.blackDragonRouted,
         cedricSieges: s.cedricSieges,
         cedricRouted: s.cedricRouted,
       };
@@ -3385,6 +3396,8 @@ function createGameStore() {
         dragonSeen: st.dragonSeen,
         dragonSieges: st.dragonSieges,
         dragonRouted: st.dragonRouted,
+        blackDragonSieges: st.blackDragonSieges,
+        blackDragonRouted: st.blackDragonRouted,
         cedricSieges: st.cedricSieges,
         cedricRouted: st.cedricRouted,
         defeatedCedric: st.defeatedCedric,
@@ -3445,6 +3458,16 @@ function createGameStore() {
       set({
         dragonSieges: st.dragonSieges + 1,
         dragonRouted: st.dragonRouted || routed,
+        dirty: true,
+      });
+      get().checkDeeds();
+    },
+
+    recordBlackDragonSiege: (routed) => {
+      const st = get();
+      set({
+        blackDragonSieges: st.blackDragonSieges + 1,
+        blackDragonRouted: st.blackDragonRouted || routed,
         dirty: true,
       });
       get().checkDeeds();

@@ -1,13 +1,19 @@
 'use client';
-// The Dragonfire Siege: once the omen has been witnessed, deep-night rolls
-// can bring the beast DOWN — it circles the homestead making low passes and
-// breathes fire on wooden structures (stone shrugs the flames off — the
-// top-tier reason to build in stone). The player's counterplay is real:
-// crossbow/longbow bolts that pass near the beast wound it, and enough
-// stings rout it early ("Sting the Sky" deed). A Castle Wall prefab caught
-// in the fire degrades through its labeled damage-state molds (mc006 →
-// mc009 breached → mc010 ruined — see damageBuilding). Survive either way
-// for "Flame and Stone".
+// Wave 36 (A8) · The Black Dragon: Cedric's own beast, l7517401 — a second,
+// fully independent dragon siege, mirroring DragonSiege.tsx's own
+// nightly-roll shape exactly (the same "duplicate the state machine for a
+// second entity" precedent CedricSiege.tsx already set for Cedric's own
+// homestead assault). A real generalized boss-encounter framework spanning
+// Cedric/Storm/the dragon is its own later item — retrofitting scaling onto
+// the EXISTING, already-tuned green dragon here would blur into that job and
+// risk the shipped encounter, so this is a sibling file instead.
+//
+// Gated well past the first dragon (game/difficulty.ts's blackDragonAllowed:
+// the curve's ceiling tier AND having already routed the green dragon at
+// least once) — this is what the realm sends once a player has proven they
+// can already beat one dragon, not a second copy of the same unlock. Unlike
+// the original (which grants nothing on rout — only achievements), this one
+// has real stakes: Cedric's beast carries a real haul.
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -17,17 +23,16 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt } from '@/game/types';
-import { dragonAllowed } from '@/game/difficulty';
+import { blackDragonAllowed, difficultyState } from '@/game/difficulty';
 import { dragonAir, dragonAirBlack, loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
-const BREATH_EVERY = 6;   // seconds between fire passes
-const BREATH_DAMAGE = 14;
-const HITS_TO_ROUT = 5;
-const CIRCLE_R = 30;
-const ROLL_CHANCE = 0.25;
+const BREATH_EVERY = 5;   // a shade quicker than the green dragon's own 6s
+const BREATH_DAMAGE = 18;
+const CIRCLE_R = 26;
+const ROLL_CHANCE = 0.18;
 
-/** wood burns, stone holds — judged by what the piece is mostly built from */
+/** wood burns, stone holds — same judgement DragonSiege.tsx makes */
 function flammable(type: string): boolean {
   const def = BUILDABLE_BY_ID[type];
   if (!def) return false;
@@ -35,18 +40,18 @@ function flammable(type: string): boolean {
   return wood > (def.cost.stone ?? 0);
 }
 
-function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
+function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (routed: boolean) => void }) {
   const [rig, setRig] = useState<DragonRig | null>(null);
   useEffect(() => {
     let live = true;
-    loadDragonRig().then((r) => { if (live) setRig(r); });
+    loadDragonRig('black').then((r) => { if (live) setRig(r); });
     return () => { live = false; };
   }, []);
   const group = useRef<THREE.Group>(null);
   const fire = useRef<THREE.PointLight>(null);
   const fireBall = useRef<THREE.Mesh>(null);
   const t = useRef(0);
-  const breathCd = useRef(3.5);
+  const breathCd = useRef(3);
   const hits = useRef(0);
   const fireT = useRef(0);
   const stoneNote = useRef(false);
@@ -66,24 +71,22 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
     t.current += dt;
     if (t.current >= SIEGE_SECONDS) { finish(false); return; }
 
-    // low menacing circles over the homestead, dipping between passes
-    const a = t.current * 0.32;
-    g.position.set(Math.cos(a) * CIRCLE_R, 15 + Math.sin(t.current * 0.85) * 6, Math.sin(a) * CIRCLE_R);
-    // G26 · publish where it is, so ground defenders can engage it
-    dragonAir.hostile = true;
-    dragonAir.x = g.position.x;
-    dragonAir.y = g.position.y;
-    dragonAir.z = g.position.z;
-    // face along the tangent (velocity direction)
+    // low menacing circles, a touch tighter and faster than the green dragon's
+    const a = t.current * 0.36;
+    g.position.set(Math.cos(a) * CIRCLE_R, 14 + Math.sin(t.current * 0.9) * 6, Math.sin(a) * CIRCLE_R);
+    dragonAirBlack.hostile = true;
+    dragonAirBlack.x = g.position.x;
+    dragonAirBlack.y = g.position.y;
+    dragonAirBlack.z = g.position.z;
     const vx = -Math.sin(a);
     const vz = Math.cos(a);
     g.rotation.y = Math.atan2(-vx, -vz) + Math.PI;
-    g.rotation.z = 0.22; // banked into the turn
-    const beat = Math.sin(t.current * 4.2);
+    g.rotation.z = 0.24;
+    const beat = Math.sin(t.current * 4.6);
     rig.wingL.rotation.z = beat * 0.55;
     rig.wingR.rotation.z = -beat * 0.55;
-    rig.tail.rotation.x = Math.sin(t.current * 4.2 - 0.9) * 0.16;
-    rig.head.rotation.y = Math.sin(t.current * 0.8) * 0.35;
+    rig.tail.rotation.x = Math.sin(t.current * 4.6 - 0.9) * 0.16;
+    rig.head.rotation.y = Math.sin(t.current * 0.85) * 0.35;
 
     // dragonfire: pick a standing wooden structure and scorch it
     breathCd.current -= dt;
@@ -92,14 +95,14 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
       const targets = st.buildings.filter((b) => isBuilt(b) && flammable(b.type));
       if (targets.length) {
         const b = targets[Math.floor(Math.random() * targets.length)];
-        st.damageBuilding(b.id, BREATH_DAMAGE, 'scorched by dragonfire');
+        st.damageBuilding(b.id, BREATH_DAMAGE, "scorched by the black dragon's flame");
         audio.playAt('flame', b.x, b.z, 0.9);
         fireT.current = 1.4;
         if (fire.current) fire.current.position.set(b.x, 2.2, b.z);
         if (fireBall.current) fireBall.current.position.set(b.x, 1.2, b.z);
       } else if (!stoneNote.current) {
         stoneNote.current = true;
-        st.notify('The flames find nothing to catch — stone holds against dragonfire!');
+        st.notify('The flames find nothing to catch — stone holds against the black dragon!');
       }
     }
     if (fireT.current > 0) {
@@ -113,12 +116,12 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
     }
 
     // anything on the ground that can reach it lands a hit through here —
-    // the player's bolts below, and a defender's arrows (G26)
-    dragonAir.hit = (source: string) => {
+    // the player's bolts below, and a defender's arrows (mirrors dragonAir)
+    dragonAirBlack.hit = (source: string) => {
       hits.current += 1;
       audio.play('thud', 0.9);
-      if (hits.current >= HITS_TO_ROUT) { finish(true); return; }
-      st.notify(`${source} strikes the beast! (${hits.current}/${HITS_TO_ROUT})`, true);
+      if (hits.current >= hitsToRout) { finish(true); return; }
+      st.notify(`${source} strikes the black beast! (${hits.current}/${hitsToRout})`, true);
     };
 
     // counterplay: any bolt/arrow passing near the beast stings it
@@ -129,11 +132,11 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
         remove(b.id);
         hits.current += 1;
         audio.play('thud', 0.9);
-        if (hits.current >= HITS_TO_ROUT) {
+        if (hits.current >= hitsToRout) {
           finish(true);
           return;
         }
-        st.notify(`🏹 A bolt strikes the beast! (${hits.current}/${HITS_TO_ROUT})`, true);
+        st.notify(`🏹 A bolt strikes the black beast! (${hits.current}/${hitsToRout})`, true);
       }
     }
   });
@@ -141,7 +144,7 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
   if (!rig) return null;
   return (
     <>
-      <group ref={group} position={[CIRCLE_R, 15, 0]}>
+      <group ref={group} position={[CIRCLE_R, 14, 0]}>
         <primitive object={rig.root} />
       </group>
       <pointLight ref={fire} color="#ff7a2a" intensity={0} distance={26} decay={2} />
@@ -153,32 +156,40 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
   );
 }
 
-export default function DragonSiege() {
+export default function BlackDragonSiege() {
   const destination = useGameStore((s) => s.destination);
   const [active, setActive] = useState(false);
   const lastNightChecked = useRef(-1);
+  // captured once per roll, not re-read live — a fight in progress must not
+  // get harder out from under the player if their tier ticks over mid-siege
+  // (mirrors EnemyData.scale's own "fixed at spawn" rule, combat.ts)
+  const hitsToRoutRef = useRef(6);
   const endRef = useRef<(routed: boolean) => void>(() => {});
 
   const end = (routed: boolean) => {
-    dragonAir.busy = false;
-    dragonAir.hostile = false;
-    dragonAir.hit = null;
+    dragonAirBlack.busy = false;
+    dragonAirBlack.hostile = false;
+    dragonAirBlack.hit = null;
     setActive(false);
     const st = useGameStore.getState();
-    st.recordDragonSiege(routed);
+    st.recordBlackDragonSiege(routed);
+    if (routed) {
+      st.addItems({ gold: 50, iron_bar: 3, plank: 4 }, 'grant');
+      st.addXp('combat', 60);
+    }
     st.notify(
       routed
-        ? '🐉 Stung and shrieking, the dragon breaks off into the dark — the homestead stands!'
-        : '🐉 The dragon wheels away, sated… for now. The homestead endures.',
+        ? '🐉 Stung and shrieking, the black dragon breaks off into the dark — the homestead stands!'
+        : '🐉 The black dragon wheels away, sated… for now. The homestead endures.',
       true,
     );
     audio.play('horn', 0.8);
   };
   endRef.current = end;
 
-  // test hook, same convention as the rest of window.__kk*
+  // test hook, same convention as __kkSiege/__kkCedricSiege
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).__kkSiege = {
+    (window as unknown as Record<string, unknown>).__kkBlackSiege = {
       get active() { return active; },
       end: (routed: boolean) => endRef.current(routed),
     };
@@ -187,22 +198,19 @@ export default function DragonSiege() {
   useFrame(() => {
     if (destination || active) return;
     const st = useGameStore.getState();
-    // the siege only comes after the omen has been seen, deep at night, to a
-    // homestead worth burning — one roll per night, never two dragons at once.
-    // Wave 36 (A8): !dragonAirBlack.busy too, now that Cedric's own black
-    // dragon (BlackDragonSiege.tsx) is a second, independent beast — this is
-    // the green dragon's own half of that mutual guard.
-    if (worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current && !dragonAir.busy && !dragonAirBlack.busy) {
-      // O7 · the gate used to be `builtBuildings < 2`, which clears in the
-      // first minutes — long before a bow or a single arrow is craftable, so
-      // the first dragon was an unwinnable fight. It now reads the shared
-      // threat tier (game/difficulty.ts), which also requires the player to
-      // actually own a ranged weapon AND ammunition for it.
-      if (!st.dragonSeen || !dragonAllowed()) return;
+    // deep night, once per day, never stacked with the green dragon
+    if (
+      worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current
+      && !dragonAir.busy && !dragonAirBlack.busy
+    ) {
+      if (!blackDragonAllowed(st)) return;
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < ROLL_CHANCE) {
-        dragonAir.busy = true;
-        st.notify('🐉 DRAGONFIRE! The beast descends upon your homestead — to arms!', true);
+        // new code, no legacy behaviour to preserve — scales with tier from
+        // day one, unlike the green dragon's own flat HITS_TO_ROUT
+        hitsToRoutRef.current = 6 + Math.max(0, difficultyState.tier - 5);
+        dragonAirBlack.busy = true;
+        st.notify("🐉 THE BLACK DRAGON! Cedric's own beast descends upon your homestead — to arms!", true);
         audio.play('horn', 0.95);
         audio.play('warcry', 0.7);
         setActive(true);
@@ -213,7 +221,7 @@ export default function DragonSiege() {
   if (!active || destination) return null;
   return (
     <Suspense fallback={null}>
-      <SiegeFlight onDone={end} />
+      <SiegeFlight hitsToRout={hitsToRoutRef.current} onDone={end} />
     </Suspense>
   );
 }

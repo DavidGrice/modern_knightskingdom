@@ -32,6 +32,20 @@ export const DRAGON_TIER = 3;
  *  escalation rather than a coincident threat (game/cedricSiege.ts). */
 export const CEDRIC_SIEGE_TIER = 4;
 
+/** Wave 36 (A8) · the tier at which Cedric's OWN black dragon (l7517401,
+ *  BlackDragonSiege.tsx) is allowed to come at all — the curve's ceiling,
+ *  same as blackDragonAllowed's own dragonRouted requirement below: this is
+ *  what the realm sends once a player has both maxed the difficulty curve
+ *  AND already proven they can beat a dragon, not a second copy of the
+ *  first beast's own unlock. */
+export const BLACK_DRAGON_TIER = 5;
+
+/** Wave 36 (A3) · Cedric's own two chargers (l7339231/l7339232) enter his war
+ *  party as mounted raiders only once the player has climbed to the same
+ *  ceiling tier — an escalation layered ON TOP of the already-tuned tier-4
+ *  war party (CEDRIC_SIEGE_TIER above), not part of its first unlock. */
+export const MOUNTED_RAIDER_TIER = 5;
+
 export interface TierRule {
   tier: number;
   /** lifetime structures raised */
@@ -143,6 +157,16 @@ if (typeof window !== 'undefined') {
  *  Both, deliberately: a tier-3 player with no bow is still a spectator. */
 export function dragonAllowed(): boolean {
   return difficultyState.tier >= DRAGON_TIER && difficultyState.rangedReady;
+}
+
+/** Wave 36 (A8) · may the BLACK dragon come at all? The tier/rangedReady gate
+ *  above, plus `dragonRouted` — the flag DragonSiege.tsx's own recordDragonSiege
+ *  already sets, once, the first time a player drives the green dragon off
+ *  with bolts. Reusing it (rather than a fresh "beaten N dragons" counter of
+ *  its own) is the whole point: a harder beast only shows up once the player
+ *  has already proven they can win this exact fight. */
+export function blackDragonAllowed(st: GameState): boolean {
+  return difficultyState.tier >= BLACK_DRAGON_TIER && difficultyState.rangedReady && !!st.dragonRouted;
 }
 
 /** Scales raid pressure off the same curve, so raiders and the dragon can no

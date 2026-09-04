@@ -31,6 +31,7 @@ import TemplatePopulation from './TemplatePopulation';
 import GuildHalls from './GuildHalls';
 import DragonOmen from './DragonOmen';
 import DragonSiege from './DragonSiege';
+import BlackDragonSiege from './BlackDragonSiege';
 import CedricSiege from './CedricSiege';
 import BuildingInteriorRoom from './BuildingInteriorRoom';
 import Signpost from './Signpost';
@@ -114,6 +115,7 @@ export default function GameWorld() {
         <GuildHalls />
         <DragonOmen />
         <DragonSiege />
+        <BlackDragonSiege />
         <CedricSiege />
       </Suspense>
       {buildMode ? <BuildController /> : <PlayerController />}

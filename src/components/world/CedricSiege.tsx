@@ -10,7 +10,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
-import { useEnemyStore } from '@/game/combat';
+import { useEnemyStore, type EnemyKind } from '@/game/combat';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { isBuilt, isHomeBuilding } from '@/game/types';
@@ -22,6 +22,7 @@ import { resetRaiderRam, raiderRamState } from '@/game/raiderRam';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { dragonAir } from './DragonOmen';
 import { cedricSiegeAllowed, cedricWarState } from '@/game/cedricSiege';
+import { difficultyState, MOUNTED_RAIDER_TIER } from '@/game/difficulty';
 import RiggedProp, { fireProp } from './RiggedProp';
 
 /** final stand: seconds after the escort arrives before a single wave-2
@@ -198,9 +199,17 @@ export default function CedricSiege() {
         audio.playVoice('greeting_cedric', 0.9);
         const [gx, gz] = warPos(1, 6);
         useEnemyStore.getState().spawn('gilbert', gx, gz, true, undefined, true);
+        // Wave 36 (A3): once the player has climbed to the game's current
+        // difficulty ceiling, two of the four plain-bandit slots ride
+        // Cedric's own tethered chargers instead — literally HIS war party
+        // on HIS own two named horses (l7339231/l7339232, faction:'cedric'
+        // in the rig lab's own capability data), a real escalation on top of
+        // an already-tuned encounter rather than part of its first unlock.
+        const mounted = difficultyState.tier >= MOUNTED_RAIDER_TIER;
         for (let i = 2; i < 6; i++) {
           const [sx, sz] = warPos(i, 6);
-          useEnemyStore.getState().spawn('bandit', sx, sz, true, undefined, true);
+          const kind: EnemyKind = mounted && i < 4 ? 'mountedRaider' : 'bandit';
+          useEnemyStore.getState().spawn(kind, sx, sz, true, undefined, true);
         }
         // his vehicles, plural, guaranteed — not the ordinary raid's 40% coin-flip
         resetRaiderRam(entry.x + 10, entry.z);

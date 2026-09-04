@@ -330,6 +330,10 @@ export interface SaveGame {
   /** dragonfire sieges weathered / ever driven off with bolts (Deeds) */
   dragonSieges?: number;
   dragonRouted?: boolean;
+  /** Wave 36 (A8) · the black dragon's own siege count / rout flag —
+   *  mirrors dragonSieges/dragonRouted exactly, one level up the escalation */
+  blackDragonSieges?: number;
+  blackDragonRouted?: boolean;
   /** Cedric's homestead sieges weathered / ever driven off before the timer (Deeds) */
   cedricSieges?: number;
   cedricRouted?: boolean;
