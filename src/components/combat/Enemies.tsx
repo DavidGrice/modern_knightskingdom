@@ -2,11 +2,12 @@
 // Enemy spawning + AI + rendering. Skeletons rise at night and crumble at
 // dawn; bandit raiding parties hit the homestead at dusk once it's worth
 // raiding. Defeated minifigs pop apart into their parts, LEGO-style.
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ArmShield, HeldCrossbow, HeldHalberd, HeldSword } from '../character/Equipment';
-import { useEnemyStore, damagePlayer, resolveDuel, combatState, ATTACK_DMG, ATTACK_CD, type EnemyData } from '@/game/combat';
+import { ArmShield, HeldCrossbow, HeldHalberd, HeldSpear, HeldSword } from '../character/Equipment';
+import { useEnemyStore, damagePlayer, resolveDuel, combatState, ATTACK_DMG, ATTACK_CD, MOUNT_SEAT_Y, type EnemyData } from '@/game/combat';
+import RiggedProp from '../world/RiggedProp';
 import type { SoundName } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
@@ -83,6 +84,16 @@ const CONFIGS: Record<string, CharacterConfig> = {
     name: 'Royal Knight', headDonor: 'minifigrichardstrong02', bodyDonor: 'minifigrichardstrong02',
     armColor: 26, handColor: 18, legColor: 150, hipColor: 26,
   },
+  // Wave 36 (A3): one of Cedric's own war party, riding his tethered chargers
+  // (see the render tail's mount wrap below). minifiggilbertbad02 is a real,
+  // verified, previously-unused donor variant that molds a spear+shield —
+  // fitting for couched-lance cavalry — though the mold itself is never kept
+  // (keepProps={false} below, same as every other enemy): the rider carries
+  // a real, separately-portalled HeldSpear/ArmShield instead.
+  mountedRaider: {
+    name: 'Mounted Raider', headDonor: 'minifiggilbertbad02', bodyDonor: 'minifiggilbertbad02',
+    armColor: 38, handColor: 18, legColor: 38, hipColor: 24,
+  },
 };
 
 /** crossbow-armed bandits (`data.ranged`): hold at range and hit-scan
@@ -94,7 +105,7 @@ const RANGED_DMG = 1.2;
 /** J51 follow-up: structural damage per hit against a keep piece — a
  *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
  *  pool), closer to what the player's own ram/cannon already deal it */
-const RAID_SIEGE_DMG: Record<string, number> = { bandit: 9, gilbert: 12, cedric: 18, royal: 12 };
+const RAID_SIEGE_DMG: Record<string, number> = { bandit: 9, gilbert: 12, cedric: 18, royal: 12, mountedRaider: 11 };
 /** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
  *  every appearance except his own sanctioned final stand — a real fight
  *  first, then he bails, same shape as the bandit morale-break below */
@@ -117,6 +128,14 @@ function Enemy({ data }: { data: EnemyData }) {
   // to recompute, and where the target was when we last did
   const path = useRef({ pts: [] as { x: number; z: number }[], i: 0, t: 0, tx: 0, tz: 0 });
   const [clip, setClip] = useState('anim_c_walk');
+  // Wave 36 (A3): how fast a mounted raider is ACTUALLY travelling, fed to
+  // its horse's own walk cycle — measured from real displacement rather than
+  // read off any one behaviour branch, same K54 technique Defenders.tsx uses
+  // for its own mounted patrols (chase/approach/flee/wander all move `m.x/z`
+  // by their own rules, and all of them should make the horse walk). A no-op
+  // ref/state pair for every other kind (never updated below).
+  const pace = useRef({ x: data.mob.x, z: data.mob.z, v: -1 });
+  const [ridePace, setRidePace] = useState(0);
   const remove = useEnemyStore((s) => s.remove);
   // Wave 18 #5 bugfix: THIS enemy's own home-ness, not the player's current
   // `st.destination` — Enemies() now keeps home enemies mounted even while
@@ -138,6 +157,11 @@ function Enemy({ data }: { data: EnemyData }) {
       // Storm's approach speed climbs with reputation — escalating rematches
       // are about how hard she is to out-time, not extra hit points.
       : data.kind === 'storm' ? 2.6 + Math.min(1.2, (useGameStore.getState().reputation['storm'] ?? 0) * 0.01)
+      // Wave 36 (A3): a real horse's pace, not a cosmetic mount — the same
+      // 1.9x a mounted DEFENDER already gets over its own on-foot speed
+      // (Defenders.tsx), applied to the plain bandit base this donor's
+      // war-party slot would otherwise use
+      : data.kind === 'mountedRaider' ? 2.7 * 1.9
       : 2.7;
   // requested 2026-08-03: the active arena environment's own enemySpeedMult
   // (game/arena.ts) — read once at mount like baseSpeed itself, since the
@@ -151,6 +175,14 @@ function Enemy({ data }: { data: EnemyData }) {
     if (!g) return;
     const m = data.mob;
     if (st.paused) return;
+
+    if (data.mountAsset) {
+      const pc = pace.current;
+      const moved = Math.hypot(m.x - pc.x, m.z - pc.z) / Math.max(dt, 1 / 240);
+      pc.x = m.x; pc.z = m.z;
+      const want = moved > 0.4 ? Math.min(moved, 6) : 0;
+      if (Math.abs(want - pc.v) > 0.55) { pc.v = want; setRidePace(want); }
+    }
 
     if (m.state === 'dying') {
       // LEGO pop-apart: fling the rig's joints outward, then despawn
@@ -675,55 +707,78 @@ function Enemy({ data }: { data: EnemyData }) {
 
   return (
     <group ref={group} position={[data.mob.x, 0, data.mob.z]}>
-      <RiggedFigure
-        config={CONFIGS[data.kind]}
-        height={1.72}
-        // Reported 2026-07-28: Gilbert spawned with a hand floating away from
-        // his body. Root cause — his donor's own molded axe+shield are
-        // "prop"-kind parts (verified, part_roles.json): kept (per the old
-        // `keepProps` here) means they're parented straight to the body
-        // joint at their ORIGINAL baked position, never re-hung alongside
-        // the arm the way the hand riding it is (see rehangArm) — so once
-        // the arm moves to its neutral hanging pose, the axe stays exactly
-        // where it was baked, adrift from wherever the hand ended up. It was
-        // also pure redundancy: bandits/Gilbert/royal knights already carry
-        // a REAL separately-portalled weapon below, and neither Cedric's
-        // horn+helmet nor Storm's visor are "prop" kind at all (they're
-        // "accessory", which is always kept regardless of this flag) — so
-        // no enemy in the roster actually needs their own donor's molded
-        // weapon kept. Confirmed with a fresh read of every CONFIGS entry's
-        // rig data, not assumed.
-        keepProps={false}
-        clip={clip}
-        timeScale={clip === 'anim_g_swordswish' ? 1.8 : 1.15}
-        onReady={(r) => {
-          rigRef.current = r;
-          setRig(r);
-          // publish this donor's REAL per-part volumes for ranged combat
-          registerHitbox(String(data.id), measureHitBoxes(r));
-        }}
-      />
-      {/* bandits: a raiding party mixes melee and ranged rather than every
-          raider carrying the same halberd (requested 2026-07-30) — the
-          `ranged` roll happens once at spawn (combat.ts), so it's stable for
-          the mob's whole life, and Enemies.tsx's own AI branches above
-          already read the same flag to hold-and-hit-scan at range instead of
-          closing to melee. Gilbert, their leader, always fights melee. */}
-      {rig && data.kind === 'bandit' && data.ranged
-        && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
-      {rig && ((data.kind === 'bandit' && !data.ranged) || data.kind === 'gilbert')
-        && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
-      {/* the crown's knights — and Cedric, their equal and opposite — fight
-          sword-and-shield, like the player's own kit. */}
-      {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton')
-        && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-      {/* shields (requested 2026-07-30): every melee kind now carries one —
-          a crossbow bandit's off-hand stays empty (it's a two-handed weapon,
-          same as Gilbert's halberd), and skeletons pick up the shield they
-          were the one melee kind still missing. */}
-      {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton'
-        || (data.kind === 'bandit' && !data.ranged))
-        && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+      {/* Wave 36 (A3): one of Cedric's own tethered chargers — the same
+          RiggedProp + gaitSpeed pattern Defenders.tsx already uses for a
+          mounted defender's own horse, so this reuses a shipped rig rather
+          than inventing a second one. */}
+      {data.mountAsset && (
+        <Suspense fallback={null}>
+          <RiggedProp assetId={data.mountAsset} height={data.mountAsset === 'l7339232' ? 1.9 : 1.7} gaitSpeed={ridePace} />
+        </Suspense>
+      )}
+      <group position-y={data.mountAsset ? MOUNT_SEAT_Y : 0}>
+        <RiggedFigure
+          config={CONFIGS[data.kind]}
+          height={1.72}
+          // Wave 36 (A3): the same straddle-bend override Defenders.tsx
+          // already applies to a mounted rider's legs (RiggedFigure.tsx's
+          // own seatedLegPose, Wave 34/G6.7) — config-agnostic, so it reuses
+          // cleanly onto an enemy rig too.
+          seatedLegPose={!!data.mountAsset}
+          // Reported 2026-07-28: Gilbert spawned with a hand floating away from
+          // his body. Root cause — his donor's own molded axe+shield are
+          // "prop"-kind parts (verified, part_roles.json): kept (per the old
+          // `keepProps` here) means they're parented straight to the body
+          // joint at their ORIGINAL baked position, never re-hung alongside
+          // the arm the way the hand riding it is (see rehangArm) — so once
+          // the arm moves to its neutral hanging pose, the axe stays exactly
+          // where it was baked, adrift from wherever the hand ended up. It was
+          // also pure redundancy: bandits/Gilbert/royal knights already carry
+          // a REAL separately-portalled weapon below, and neither Cedric's
+          // horn+helmet nor Storm's visor are "prop" kind at all (they're
+          // "accessory", which is always kept regardless of this flag) — so
+          // no enemy in the roster actually needs their own donor's molded
+          // weapon kept. Confirmed with a fresh read of every CONFIGS entry's
+          // rig data, not assumed.
+          keepProps={false}
+          clip={clip}
+          timeScale={clip === 'anim_g_swordswish' ? 1.8 : 1.15}
+          onReady={(r) => {
+            rigRef.current = r;
+            setRig(r);
+            // publish this donor's REAL per-part volumes for ranged combat
+            registerHitbox(String(data.id), measureHitBoxes(r));
+          }}
+        />
+        {/* bandits: a raiding party mixes melee and ranged rather than every
+            raider carrying the same halberd (requested 2026-07-30) — the
+            `ranged` roll happens once at spawn (combat.ts), so it's stable for
+            the mob's whole life, and Enemies.tsx's own AI branches above
+            already read the same flag to hold-and-hit-scan at range instead of
+            closing to melee. Gilbert, their leader, always fights melee. */}
+        {rig && data.kind === 'bandit' && data.ranged
+          && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
+        {rig && ((data.kind === 'bandit' && !data.ranged) || data.kind === 'gilbert')
+          && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+        {/* the crown's knights — and Cedric, their equal and opposite — fight
+            sword-and-shield, like the player's own kit. */}
+        {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton')
+          && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+        {/* shields (requested 2026-07-30): every melee kind now carries one —
+            a crossbow bandit's off-hand stays empty (it's a two-handed weapon,
+            same as Gilbert's halberd), and skeletons pick up the shield they
+            were the one melee kind still missing. */}
+        {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton'
+          || (data.kind === 'bandit' && !data.ranged))
+          && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+        {/* Wave 36 (A3): couched-lance cavalry — spear and shield, like the
+            player's own kit rather than Gilbert's halberd (a two-handed
+            weapon a rider on a charger has no free hand for). */}
+        {rig && data.kind === 'mountedRaider'
+          && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
+        {rig && data.kind === 'mountedRaider'
+          && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+      </group>
     </group>
   );
 }

@@ -37,4 +37,10 @@ export function preloadCommonAssets(preloadEnemyDonors: boolean) {
   if (!preloadEnemyDonors) return;
   for (const id of ENEMY_DONORS) loadDonor(id).catch(() => {});
   loadDragonRig().catch(() => {});
+  // Wave 36 (A8): the black dragon (BlackDragonSiege.tsx) is gated well past
+  // the green one, but the same "not guaranteed to appear soon" reasoning
+  // this whole function documents applies just as much to warming its rig —
+  // same lazy-load fallback either way (loadDragonRig('black') is already
+  // called by the live siege code regardless of whether this warm-up runs).
+  loadDragonRig('black').catch(() => {});
 }

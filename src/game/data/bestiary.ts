@@ -48,6 +48,15 @@ export const BESTIARY_LORE: Record<EnemyKind, BestiaryLore> = {
     strength: 'Rides in sword-and-shield, the same kit you carry yourself, and never breaks off once engaged.',
     weakness: 'Always melee — no crossbow in the ranks, nothing that reaches you from a distance.',
   },
+  // Wave 36 (A3) · KIND_HP.mountedRaider = 16, ATTACK_DMG = 2.2 — tougher and
+  // harder-hitting than a plain bandit, and (like gilbert/royal) absent from
+  // the morale-break condition, so it never breaks and runs. Rides a saddle
+  // height above the ground (combat.ts's MOUNT_SEAT_Y) at a real horse's
+  // pace, well above every on-foot kind in the roster.
+  mountedRaider: {
+    strength: "Rides one of Cedric's own chargers at a real horse's pace — faster than anything else in this book, and it will run you down before you outdistance it.",
+    weakness: 'A couched spear and shield leave no room for a bow — it never fights you from range, only up close.',
+  },
   // excluded from the Collection Book (KINDS in BestiaryPanel.tsx) — a duel,
   // not a scannable foe. Kept here only so the Record stays total.
   storm: { strength: '', weakness: '' },

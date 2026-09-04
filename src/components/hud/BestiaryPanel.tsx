@@ -17,13 +17,14 @@ import MenuTabs from './MenuTabs';
 import KkIcon from '../ui/KkIcon';
 
 /** every foe worth a page. Storm is a duel, not a bestiary entry. */
-const KINDS: EnemyKind[] = ['skeleton', 'bandit', 'royal', 'gilbert', 'cedric'];
+const KINDS: EnemyKind[] = ['skeleton', 'bandit', 'royal', 'gilbert', 'mountedRaider', 'cedric'];
 
 const BLURB: Record<EnemyKind, string> = {
   skeleton: 'Rises after dark and goes back to the earth at dawn. Brittle, but it never comes alone.',
   bandit: 'A road robber carrying whatever they took off the last traveller.',
   royal: "One of the crown's knights. They only ride against you if you swore to Cedric.",
   gilbert: 'Raid captain. Better kit than the men he leads, and he knows it.',
+  mountedRaider: "One of Cedric's own war party, riding his own tethered chargers into the fight.",
   cedric: 'Cedric the Bull, in the flesh. The capstone of the whole chronicle.',
   storm: '',
 };

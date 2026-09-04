@@ -49,7 +49,7 @@ import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/culti
 import { KEEP_PART_BY_ID, KEEP_SOCKETS, keepWalkwayAt } from '@/game/data/keep';
 import { refreshFort } from '@/game/fort';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
-import { KIND_LABEL, maxHpOf, type EnemyKind } from '@/game/combat';
+import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine, manEngine } from '@/game/crew';
 import { commandWheel, steerWheel } from '@/game/commandWheel';
 
@@ -2080,6 +2080,9 @@ export default function PlayerController() {
           (id) => st.villagers.find((v) => v.id === id)?.name ?? 'Villager',
           (k) => st.bestiary.includes(k),
           st.villagers.map((v) => ({ id: v.id, isDefender: v.job === 'defender' })),
+          // Wave 36 (A3): a mounted raider's rig sits a saddle-height off the
+          // ground — see resolveAim's own comment on this param
+          (k) => (k === 'mountedRaider' ? MOUNT_SEAT_Y : 0),
         );
       }
     }

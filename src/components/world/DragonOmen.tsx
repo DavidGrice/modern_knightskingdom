@@ -54,14 +54,52 @@ export const dragonAir = {
 };
 if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAir = dragonAir;
 
-let rigPromise: Promise<DragonRig> | null = null;
+/** Wave 36 (A8) · the black dragon's own mirror of dragonAir — Cedric's own
+ *  beast (BlackDragonSiege.tsx) fights entirely independently of the green
+ *  dragon above, so ground defenders/the coordination guard each need a
+ *  second copy of the same "where is it, can it be hit" state rather than
+ *  the two beasts fighting over one. */
+export const dragonAirBlack = {
+  busy: false,
+  hostile: false,
+  x: 0, y: 0, z: 0,
+  hit: null as null | ((source: string) => void),
+};
+if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAirBlack = dragonAirBlack;
 
-/** Load the OBJ once and re-hang wings/tail/head as pivoted sub-groups.
- *  All slicing math happens in raw OBJ space (model-up is -Y); the returned
- *  root carries the usual upright flip + wingspan normalization. */
-export function loadDragonRig(): Promise<DragonRig> {
-  if (rigPromise) return rigPromise;
-  rigPromise = new Promise((resolve, reject) => {
+export type DragonVariant = 'green' | 'black';
+
+/** Wave 36 (A8) · l7517401 (the black dragon) is verified, byte-for-byte at
+ *  the GLB level, to be the SAME digital model as l7517400 — identical wing/
+ *  eye/accent bounding boxes and vertex counts, only the body material's own
+ *  Kd changes (glit030_s50t0's green `0,0.4235,0.0745` becomes this
+ *  charcoal, taken straight from l7517401.glb's own embedded material). So
+ *  the black variant re-parses the SAME OBJ (the one thing that makes wing/
+ *  tail/head slicing possible at all — see BONE_OF above; l7517401 itself
+ *  has only a merged, unnamed GLB) and recolors every green-bodied mesh
+ *  after loading, rather than needing a rig — or a visual-quality
+ *  compromise — of its own.
+ *
+ *  Recolors by MATERIAL NAME, not by BONE_OF's bucket: glit030_s50t0 also
+ *  colors the tail and part of the wings/head, not just what BONE_OF calls
+ *  'body', and the black dragon's own GLB confirms all of it goes charcoal
+ *  together. This only ever runs for the 'black' variant. */
+const BLACK_BODY_COLOR = new THREE.Color(0.0627, 0.0627, 0.0627);
+
+// keyed per variant: each is its own MTLLoader/OBJLoader call, which three.js
+// gives its own fresh MaterialCreator (materials cache PER CALL, not
+// globally) — so recoloring the black variant's materials in place can never
+// leak onto the green dragon's own, separately-loaded instances.
+const rigPromises: Partial<Record<DragonVariant, Promise<DragonRig>>> = {};
+
+/** Load the OBJ once per variant and re-hang wings/tail/head as pivoted
+ *  sub-groups. All slicing math happens in raw OBJ space (model-up is -Y);
+ *  the returned root carries the usual upright flip + wingspan
+ *  normalization. */
+export function loadDragonRig(variant: DragonVariant = 'green'): Promise<DragonRig> {
+  const cached = rigPromises[variant];
+  if (cached) return cached;
+  const promise = new Promise<DragonRig>((resolve, reject) => {
     const mtl = new MTLLoader();
     mtl.setPath(C);
     mtl.setResourcePath(C);
@@ -73,6 +111,17 @@ export function loadDragonRig(): Promise<DragonRig> {
         obj.setMaterials(materials);
         obj.setPath(C);
         obj.load('l7517400.obj', (group) => {
+          if (variant === 'black') {
+            group.traverse((c) => {
+              const mesh = c as THREE.Mesh;
+              if (!mesh.isMesh) return;
+              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+              for (const m of mats) {
+                const mat = m as THREE.MeshPhongMaterial;
+                if (mat.name === 'glit030_s50t0') mat.color.copy(BLACK_BODY_COLOR);
+              }
+            });
+          }
           const byBone = new Map<string, THREE.Mesh[]>();
           group.traverse((c) => {
             const mesh = c as THREE.Mesh;
@@ -149,7 +198,8 @@ export function loadDragonRig(): Promise<DragonRig> {
       reject,
     );
   });
-  return rigPromise;
+  rigPromises[variant] = promise;
+  return promise;
 }
 
 function DragonFlight({ onDone }: { onDone: () => void }) {

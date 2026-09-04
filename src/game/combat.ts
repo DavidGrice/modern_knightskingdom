@@ -132,12 +132,21 @@ useGameStore.subscribe((s) => {
 });
 
 // 'royal' = the crown's knights, raiding only players who pledged to Cedric
-// (Phase 19's alliance branch) — sturdier than a bandit, softer than Gilbert
-export type EnemyKind = 'skeleton' | 'bandit' | 'gilbert' | 'cedric' | 'storm' | 'royal';
+// (Phase 19's alliance branch) — sturdier than a bandit, softer than Gilbert.
+// 'mountedRaider' (Wave 36, A3) = Cedric's own war party riding his two
+// tethered chargers (l7339231/l7339232, CedricCamp.tsx) — see Enemies.tsx's
+// own render tail for the mount.
+export type EnemyKind = 'skeleton' | 'bandit' | 'gilbert' | 'cedric' | 'storm' | 'royal' | 'mountedRaider';
+
+/** how high the saddle sits — Wave 36 (A3): the SAME lift Defenders.tsx's own
+ *  SADDLE_Y already gives a mounted defender, so a mounted raider's hitbox
+ *  (see MOUNT_SEAT_Y's use at the bolt-collision call below) matches where
+ *  the rider is actually rendered rather than where a standing foe would be. */
+export const MOUNT_SEAT_Y = 1.15;
 
 /** max hp per enemy kind (storm is a duel — the very first landed hit ends it) */
 const KIND_HP: Record<EnemyKind, number> = {
-  skeleton: 5, bandit: 8, gilbert: 14, cedric: 45, storm: 1, royal: 12,
+  skeleton: 5, bandit: 8, gilbert: 14, cedric: 45, storm: 1, royal: 12, mountedRaider: 16,
 };
 /** a kind's full health, for the aim readout's health bar */
 export function maxHpOf(kind: EnemyKind): number {
@@ -146,23 +155,24 @@ export function maxHpOf(kind: EnemyKind): number {
 
 export const KIND_LABEL: Record<EnemyKind, string> = {
   skeleton: 'Skeleton', bandit: 'Bandit', gilbert: 'Gilbert the Bad', cedric: 'Cedric the Bull', storm: 'Princess Storm', royal: 'Royal Knight',
+  mountedRaider: 'Mounted Raider',
 };
 const KIND_XP: Record<EnemyKind, number> = {
-  skeleton: 20, bandit: 30, gilbert: 45, cedric: 150, storm: 0, royal: 40,
+  skeleton: 20, bandit: 30, gilbert: 45, cedric: 150, storm: 0, royal: 40, mountedRaider: 55,
 };
 /** ranged kills have always paid a small bonus over melee (see stepBolt) */
 const KIND_XP_RANGED: Record<EnemyKind, number> = {
-  skeleton: 24, bandit: 34, gilbert: 50, cedric: 165, storm: 0, royal: 45,
+  skeleton: 24, bandit: 34, gilbert: 50, cedric: 165, storm: 0, royal: 45, mountedRaider: 60,
 };
 /** melee damage per hit and attack cooldown, by kind — moved here (were
  *  local to Enemies.tsx's own AI loop) so the Bestiary can surface the same
  *  real numbers the fight itself uses, instead of authoring a second,
  *  driftable copy just for display. */
 export const ATTACK_DMG: Record<EnemyKind, number> = {
-  skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2,
+  skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2, mountedRaider: 2.2,
 };
 export const ATTACK_CD: Record<EnemyKind, number> = {
-  skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4,
+  skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4, mountedRaider: 1.3,
 };
 /** One possible item in an enemy's purse. `chance` is rolled independently per
  *  entry, then a quantity is picked in [min, max] — so a kill can turn up
@@ -207,6 +217,14 @@ export const LOOT_TABLES: Record<EnemyKind, LootEntry[]> = {
     { item: 'iron_ore', min: 1, max: 2, chance: 0.6 },
     { item: 'iron_bar', min: 1, max: 1, chance: 0.3 },
     { item: 'chestplate', min: 1, max: 1, chance: 0.1 },
+  ],
+  // Wave 36 (A3): one of Cedric's own war party, riding his own tethered
+  // chargers — a better kit than the men who walk, mirroring gilbert's table
+  mountedRaider: [
+    { item: 'iron_bar', min: 1, max: 2, chance: 0.9 },
+    { item: 'plank', min: 2, max: 4, chance: 0.7 },
+    { item: 'gold', min: 5, max: 14, chance: 0.8 },
+    { item: 'helmet', min: 1, max: 1, chance: 0.15 },
   ],
 };
 
@@ -314,6 +332,10 @@ export interface EnemyData {
    *  swaps its held prop from the halberd to the crossbow the same donor
    *  rig already carries. Meaningless for any other kind. */
   ranged?: boolean;
+  /** Wave 36 (A3): which of Cedric's two chargers this mountedRaider rides —
+   *  rolled once at spawn (see spawn() below), same "stable for the mob's
+   *  whole life" shape as `ranged`. Meaningless for any other kind. */
+  mountAsset?: 'l7339231' | 'l7339232';
 }
 
 let enemySeq = 1;
@@ -366,6 +388,9 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       // guards, the Sealed Crypt) — variety everywhere a bandit can appear,
       // for free
       ranged: kind === 'bandit' && Math.random() < 0.4,
+      // Wave 36 (A3): one of Cedric's own two named chargers, picked once —
+      // no reason to weight it, both are the same mechanical mount
+      mountAsset: kind === 'mountedRaider' ? (Math.random() < 0.5 ? 'l7339231' : 'l7339232') : undefined,
       inventory: rollLoot(kind),
       mob: {
         x, z, yaw: Math.random() * Math.PI * 2,
@@ -936,8 +961,13 @@ export function stepBolt(b: Bolt, dt: number): boolean {
     if (e.mob.state === 'dying') continue;
     // a duel with Storm is settled sword-to-sword, not from range
     if (e.kind === 'storm') continue;
+    // Wave 36 (A3): a mounted raider's rig is lifted MOUNT_SEAT_Y off the
+    // ground (Enemies.tsx's own saddle wrap) — the registered per-part boxes
+    // are still measured in the figure's own LOCAL frame, so without this a
+    // shot aimed at the visible rider tested against an empty hitbox sitting
+    // where a standing foe's would be, a full saddle-height too low.
     const hit = hitTestCharacter(
-      String(e.id), e.mob.x, e.mob.z, e.mob.yaw, 0,
+      String(e.id), e.mob.x, e.mob.z, e.mob.yaw, e.kind === 'mountedRaider' ? MOUNT_SEAT_Y : 0,
       b.pos.x, b.pos.y, b.pos.z, nx, ny, nz,
     );
     if (!hit) continue;
