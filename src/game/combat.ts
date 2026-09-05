@@ -18,6 +18,7 @@ import { ITEMS } from './data/items';
 import { bestChestplateOwned } from './data/armor';
 import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
+import { bossTierScale } from './bossEncounter';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
 import { fortDamageReduction } from './fort';
@@ -224,7 +225,8 @@ export const LOOT_TABLES: Record<EnemyKind, LootEntry[]> = {
     { item: 'gold', min: 5, max: 14, chance: 0.8 },
     { item: 'helmet', min: 1, max: 1, chance: 0.15 },
   ],
-  // Cedric's real reward is the one-time capstone payout in markCedricDefeated
+  // Cedric's real reward is the capstone (or, after Wave 38's jailbreak
+  // loop, rematch) payout in markCedricDefeated, not this table
   cedric: [],
   storm: [],
   // a fallen knight's purse and kit — a traitor takes what a traitor can
@@ -351,9 +353,12 @@ export interface EnemyData {
    *  spawning still uses its own gate"). Fixed at spawn, not re-read every
    *  frame, so a fight doesn't get harder out from under the player mid-
    *  raid if their tier ticks over while they're still fighting. Cedric and
-   *  Storm are excluded — both are tuned, named set-piece encounters (Storm
-   *  specifically is a 1-HP "first hit ends it" duel; scaling her HP would
-   *  break the mechanic outright), not raid filler.
+   *  Storm are excluded from `raidStrength()` — both are tuned, named
+   *  set-piece encounters, not raid filler. Wave 38 (A1): Cedric instead
+   *  reads his own `bossTierScale('cedric')` curve (game/bossEncounter.ts),
+   *  a real but separately-tuned escalation; Storm stays flat 1 — she is a
+   *  1-HP "first hit ends it" duel, and scaling her HP would break the
+   *  mechanic outright, not generalize it.
    */
   scale: number;
   /** Cedric's Siege: true only for the sanctioned final-stand fight at his
@@ -409,7 +414,13 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
     // (game/arena.ts's arenaSpawnScale()) layers on top of the existing
     // game-progress curve rather than replacing it — extraScale defaults to
     // 1 so every pre-existing call site is unaffected
-    const scale = ((kind === 'cedric' || kind === 'storm') ? 1 : raidStrength()) * extraScale;
+    // Wave 38 (A1): Cedric now reads the shared boss curve instead of a flat
+    // 1 — applies to every 'cedric' spawn (final stand, the pre-final-stand
+    // camp duel, the raid-leader cameo), harmless for the latter two since he
+    // still flees at the same flat CEDRIC_FLEE_HP (Enemies.tsx), just takes a
+    // few more hits to get there at high tier. Storm stays flat 1: a 1-HP
+    // duel has nothing to scale (see bossEncounter.ts's own header comment).
+    const scale = (kind === 'storm' ? 1 : kind === 'cedric' ? bossTierScale('cedric') : raidStrength()) * extraScale;
     const maxHp = Math.round(KIND_HP[kind] * scale);
     const e: EnemyData = {
       id: enemySeq++,

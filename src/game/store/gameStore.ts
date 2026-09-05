@@ -207,7 +207,19 @@ interface GameState {
    *  display-only, exactly like visitedWorlds; never gates travel itself. */
   discoveredPois: string[];
   loreSeen: string[];            // NPC ids whose one-time voiced lore intro has played
-  defeatedCedric: boolean;       // Cedric the Bull's capstone boss fight has been won
+  /** Wave 38 (A1): repurposed from a permanent one-time flag to "currently
+   *  jailed" — true right after his capstone win, flips back false on a
+   *  jailbreak (freeCedric) for a scaling rematch. Every existing Cedric-arc
+   *  gate (cedricSiege.ts's cedricArcEligible, CedricCamp.tsx, the
+   *  challenge_cedric interact target, Enemies.tsx's camp guards) already
+   *  reads this reactively, so flipping it back re-shows all of them with no
+   *  further changes. */
+  defeatedCedric: boolean;
+  /** Wave 38 (A1): lifetime capture count — see types.ts's SaveGame field
+   *  for why this exists alongside the boolean above. */
+  cedricCaptures: number;
+  /** Wave 38 (A1): dayCount at his most recent capture — cedricJailbreakAllowed's own cooldown clock. */
+  cedricCapturedAtDay: number;
   alliance: Alliance | null;     // Phase 19: who the player pledged to; null = unsworn
   /** the continuous standing between the houses, -100 (Cedric) .. +100 (Leo).
    *  The pledge above is a one-off act of will; this is what your DEEDS say,
@@ -437,6 +449,9 @@ interface GameState {
   leaveArena: () => void;
   markLoreSeen: (npcId: string) => void;
   markCedricDefeated: () => void;
+  /** Wave 38 (A1): a jailed Cedric breaks free — see cedricSiege.ts's
+   *  cedricJailbreakAllowed for the gate that decides when this may fire. */
+  freeCedric: () => void;
   pledgeAlliance: (side: Alliance) => void;
   /** Wave 13 · the one turncoat move this wave ships: a knight already
    *  sworn to Cedric can turn on his own camp and return to unsworn ground,
@@ -1033,6 +1048,8 @@ function createGameStore() {
     discoveredPois: [],
     loreSeen: [],
     defeatedCedric: false,
+    cedricCaptures: 0,
+    cedricCapturedAtDay: -999,
     alliance: null,
     allegiance: 0,
     completedSideQuests: [],
@@ -1123,7 +1140,7 @@ function createGameStore() {
         notifications: [], prompt: null, actionProgress: null, dirty: true,
         timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
         gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
+        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
         durability: {}, perks: [], stats: { ...ZERO_STATS },
         claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
         villagers: [], villagerProgress: {}, armory: {},
@@ -1180,6 +1197,15 @@ function createGameStore() {
         reputation: s.reputation ?? {},
         destination: null, visitedWorlds: s.visitedWorlds ?? [], discoveredPois: s.discoveredPois ?? [], loreSeen: s.loreSeen ?? [],
         defeatedCedric: s.defeatedCedric ?? false,
+        // Wave 38 (A1) migration: a save from before this existed has no
+        // capture count — infer 1 if he was already marked defeated (the old
+        // permanent meaning), else 0. Same reasoning for the day stamp: a
+        // pre-Wave-38 defeated save has no recorded capture day, so seed it
+        // from the save's own dayCount (a jailbreak roll on the very next
+        // check will correctly treat "now" as the moment of capture) rather
+        // than -999, which would let him break out immediately on load.
+        cedricCaptures: s.cedricCaptures ?? (s.defeatedCedric ? 1 : 0),
+        cedricCapturedAtDay: s.cedricCapturedAtDay ?? (s.defeatedCedric ? (s.dayCount ?? 0) : -999),
         alliance: s.alliance ?? null,
         allegiance: s.allegiance ?? 0,
         // a save from before land tiers existed was built on the old flat
@@ -1247,6 +1273,8 @@ function createGameStore() {
         reputation: s.reputation,
         destination: null, visitedWorlds: s.visitedWorlds, discoveredPois: s.discoveredPois, loreSeen: s.loreSeen,
         defeatedCedric: s.defeatedCedric,
+        cedricCaptures: s.cedricCaptures,
+        cedricCapturedAtDay: s.cedricCapturedAtDay,
         alliance: s.alliance,
         allegiance: s.allegiance,
         completedSideQuests: s.completedSideQuests,
@@ -2115,24 +2143,56 @@ function createGameStore() {
     },
 
     // called from combat.ts alongside the generic kill notify/XP (see
-    // KIND_XP.cedric there) — this adds the one-time capstone material
-    // reward, flags the camp cleared, and gives the "safely behind bars"
-    // story beat its own line.
+    // KIND_XP.cedric there) — this adds the capstone (first time) or
+    // rematch (thereafter) material reward, flags him jailed, and gives the
+    // "safely behind bars" story beat its own line. Wave 38 (A1): no longer
+    // a one-time-only guard — `defeatedCedric` now means "currently jailed",
+    // not "permanently done" (see freeCedric below), so this can fire again
+    // after every jailbreak. Reward numbers are inline literals, not
+    // bossEncounter.ts's BOSS_VICTORY_REWARD.cedric, deliberately: that
+    // module reads difficulty.ts which reads THIS store, so importing it
+    // from here would be a real cycle (gameStore -> bossEncounter ->
+    // difficulty -> gameStore) — combat.ts/the siege components are the
+    // correct, cycle-safe place to read that table instead.
     markCedricDefeated: () => {
       const st = get();
       if (st.defeatedCedric) return;
-      set({ defeatedCedric: true, dirty: true });
-      // Cedric's Siege: the capstone payout for the real, permanent final
-      // stand — bigger than the old flat reward this used to pay for ANY
-      // duel win, since reaching this now means finishing the whole arc
-      // (a weathered homestead siege first, then this)
-      st.addItems({ gold: 250, iron_bar: 10, stone: 20 }, 'grant');
-      st.grantArmory('halberd', 1);
-      st.grantArmory('chestplate', 1);
-      st.shiftAllegiance(35, "You ended Cedric's rebellion at his own camp");
+      const first = st.cedricCaptures === 0;
+      set({
+        defeatedCedric: true,
+        cedricCaptures: st.cedricCaptures + 1,
+        cedricCapturedAtDay: st.dayCount,
+        dirty: true,
+      });
       audio.play('treasure', 0.9);
       audio.play('horn', 1);
-      st.notify("🔒 Cedric's rebellion ends here — the Bull is dragged in chains at last!", true);
+      if (first) {
+        // the capstone payout for finishing the whole arc (a weathered
+        // homestead siege first, then this) — bigger than any rematch
+        st.addItems({ gold: 250, iron_bar: 10, stone: 20 }, 'grant');
+        st.grantArmory('halberd', 1);
+        st.grantArmory('chestplate', 1);
+        st.shiftAllegiance(35, "You ended Cedric's rebellion at his own camp");
+        st.notify("🔒 Cedric's rebellion ends here — the Bull is dragged in chains at last!", true);
+      } else {
+        // a real but smaller stake each time he's recaptured — mirrors
+        // bossEncounter.ts's BOSS_VICTORY_REWARD.cedric verbatim
+        st.addItems({ gold: 70, iron_bar: 4, plank: 6, stone: 6 }, 'grant');
+        st.addXp('combat', 90);
+        st.notify('🔒 Cedric the Bull is dragged back to his cell — recaptured, for now.', true);
+      }
+    },
+
+    // Wave 38 (A1): the other half of the jailbreak loop — CedricSiege.tsx
+    // rolls this nightly once cedricSiege.ts's cedricJailbreakAllowed says
+    // his cooldown has elapsed. Every Cedric-arc gate already reads
+    // `defeatedCedric` reactively, so flipping it back to false alone is
+    // enough to re-show the idle boss, camp guards and the "Challenge
+    // Cedric" interact prompt with no further changes.
+    freeCedric: () => {
+      set({ defeatedCedric: false, dirty: true });
+      get().notify("Word reaches you: Cedric the Bull has broken free of his chains and returned to his camp!", true);
+      audio.play('warcry', 0.7);
     },
 
     // Phase 21 talent tree: spend derived points (one earned per total skill

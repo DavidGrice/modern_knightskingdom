@@ -3,10 +3,12 @@
 // fully independent dragon siege, mirroring DragonSiege.tsx's own
 // nightly-roll shape exactly (the same "duplicate the state machine for a
 // second entity" precedent CedricSiege.tsx already set for Cedric's own
-// homestead assault). A real generalized boss-encounter framework spanning
-// Cedric/Storm/the dragon is its own later item — retrofitting scaling onto
-// the EXISTING, already-tuned green dragon here would blur into that job and
-// risk the shipped encounter, so this is a sibling file instead.
+// homestead assault). This was a sibling file rather than a retrofit onto
+// the EXISTING, already-tuned green dragon, to avoid blurring into "build a
+// generalized boss-encounter framework" (its own later item) and risking
+// the shipped encounter — Wave 38 (A1) is that later item: both dragons now
+// read one shared hits-to-rout curve (game/bossEncounter.ts) instead of
+// this file's own local formula.
 //
 // Gated well past the first dragon (game/difficulty.ts's blackDragonAllowed:
 // the curve's ceiling tier AND having already routed the green dragon at
@@ -23,12 +25,20 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt } from '@/game/types';
-import { blackDragonAllowed, difficultyState } from '@/game/difficulty';
+import { blackDragonAllowed } from '@/game/difficulty';
+import { bossTierScale, BOSS_VICTORY_REWARD } from '@/game/bossEncounter';
 import { dragonAir, dragonAirBlack, loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
 const BREATH_EVERY = 5;   // a shade quicker than the green dragon's own 6s
 const BREATH_DAMAGE = 18;
+// Wave 38 (A1): base threshold, scaled at roll time by bossTierScale('blackDragon')
+// — was its own local `6 + Math.max(0, difficultyState.tier - 5)` formula,
+// now the same shared curve the green dragon reads (BOSS_TIER_STEP,
+// bossEncounter.ts). Numerically identical today: BLACK_DRAGON_TIER already
+// sits at TIER_RULES' own ceiling, so bossTierScale('blackDragon') is
+// always 1 until a future wave extends the curve past tier 5.
+const HITS_TO_ROUT_BASE = 6;
 const CIRCLE_R = 26;
 const ROLL_CHANCE = 0.18;
 
@@ -163,7 +173,7 @@ export default function BlackDragonSiege() {
   // captured once per roll, not re-read live — a fight in progress must not
   // get harder out from under the player if their tier ticks over mid-siege
   // (mirrors EnemyData.scale's own "fixed at spawn" rule, combat.ts)
-  const hitsToRoutRef = useRef(6);
+  const hitsToRoutRef = useRef(HITS_TO_ROUT_BASE);
   const endRef = useRef<(routed: boolean) => void>(() => {});
 
   const end = (routed: boolean) => {
@@ -174,8 +184,8 @@ export default function BlackDragonSiege() {
     const st = useGameStore.getState();
     st.recordBlackDragonSiege(routed);
     if (routed) {
-      st.addItems({ gold: 50, iron_bar: 3, plank: 4 }, 'grant');
-      st.addXp('combat', 60);
+      st.addItems(BOSS_VICTORY_REWARD.blackDragon.items, 'grant');
+      st.addXp('combat', BOSS_VICTORY_REWARD.blackDragon.xp);
     }
     st.notify(
       routed
@@ -206,9 +216,10 @@ export default function BlackDragonSiege() {
       if (!blackDragonAllowed(st)) return;
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < ROLL_CHANCE) {
-        // new code, no legacy behaviour to preserve — scales with tier from
-        // day one, unlike the green dragon's own flat HITS_TO_ROUT
-        hitsToRoutRef.current = 6 + Math.max(0, difficultyState.tier - 5);
+        // Wave 38 (A1): now the shared bossTierScale curve — see this file's
+        // own HITS_TO_ROUT_BASE comment above for why the numbers don't move
+        // yet under today's TIER_RULES.
+        hitsToRoutRef.current = Math.round(HITS_TO_ROUT_BASE * bossTierScale('blackDragon'));
         dragonAirBlack.busy = true;
         st.notify("🐉 THE BLACK DRAGON! Cedric's own beast descends upon your homestead — to arms!", true);
         audio.play('horn', 0.95);

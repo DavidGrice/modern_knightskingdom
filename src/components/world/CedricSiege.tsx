@@ -3,10 +3,12 @@
 // unlocked (game/cedricSiege.ts's tier gate), a nightly roll can bring his
 // FULL war party — and his siege engines — down on the homestead, mirroring
 // DragonSiege.tsx's own nightly-roll shape exactly. Weathering this never
-// permanently defeats him: only his final stand (PlayerController.tsx's
-// challenge_cedric handler, upgraded once cedricFinalStandReady) does that —
-// see combat.ts's `finalStand` flag, which is what keeps him alive to fight
-// another night here.
+// jails him: only his final stand (PlayerController.tsx's challenge_cedric
+// handler, upgraded once cedricFinalStandReady) does that — see combat.ts's
+// `finalStand` flag, which is what keeps him alive to fight another night
+// here. Wave 38 (A1): jailing him isn't permanent any more either — this
+// file also rolls his jailbreak (below), which can put him right back in
+// this same rotation for a tier-scaled rematch.
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
@@ -21,16 +23,22 @@ import { roadEntry } from '@/game/data/road';
 import { resetRaiderRam, raiderRamState } from '@/game/raiderRam';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { dragonAir } from './DragonOmen';
-import { cedricSiegeAllowed, cedricWarState } from '@/game/cedricSiege';
+import { cedricSiegeAllowed, cedricJailbreakAllowed, cedricWarState } from '@/game/cedricSiege';
 import { difficultyState, MOUNTED_RAIDER_TIER } from '@/game/difficulty';
+import { BOSS_ENCOUNTERS } from '@/game/bossEncounter';
 import RiggedProp, { fireProp } from './RiggedProp';
 
 /** final stand: seconds after the escort arrives before a single wave-2
- *  reinforcement rushes in, if he's still standing */
-const FINAL_STAND_REINFORCE_AT = 20;
+ *  reinforcement rushes in, if he's still standing — Wave 38 (A1): promoted
+ *  from this file's own local constant into the shared boss shape, so a
+ *  future boss reads the same field instead of inventing its own. */
+const FINAL_STAND_REINFORCE_AT = BOSS_ENCOUNTERS.cedric.reinforceAt ?? 20;
 
 const SIEGE_SECONDS = 70;
 const ROLL_CHANCE = 0.22;
+/** Wave 38 (A1): once cedricJailbreakAllowed's own cooldown has elapsed, the
+ *  odds a given eligible night is the one he actually breaks out — tunable. */
+const JAILBREAK_ROLL_CHANCE = 0.3;
 /** how hard his engines hit — no wood/stone filtering (unlike the dragon's
  *  breath): a catapult stone does not care what it lands on. Stone still
  *  helps indirectly, since maxHpFor/maxHpForPart scale off material cost. */
@@ -113,6 +121,7 @@ export default function CedricSiege() {
   const destination = useGameStore((s) => s.destination);
   const [active, setActive] = useState(false);
   const lastNightChecked = useRef(-1);
+  const lastJailbreakChecked = useRef(-1);
   const endRef = useRef<(routed: boolean) => void>(() => {});
   const finalStandT = useRef(0);
   const finalStandWasActive = useRef(false);
@@ -170,6 +179,22 @@ export default function CedricSiege() {
       }
     } else {
       finalStandWasActive.current = false;
+    }
+
+    // Wave 38 (A1) jailbreak roll: deliberately NOT behind the
+    // `destination`/`active` homestead guard below — springing him from his
+    // cell happens at his own camp regardless of where the player currently
+    // is, and only flips a store flag rather than spawning anything itself.
+    // cedricJailbreakAllowed's own `defeatedCedric` check already prevents
+    // this from ever firing while he's actively out (mid-siege or mid-final-
+    // stand, both of which require him NOT jailed in the first place).
+    if (worldEnv.night > 0.8 && worldEnv.dayCount !== lastJailbreakChecked.current) {
+      if (cedricJailbreakAllowed(useGameStore.getState())) {
+        lastJailbreakChecked.current = worldEnv.dayCount;
+        if (Math.random() < JAILBREAK_ROLL_CHANCE) {
+          useGameStore.getState().freeCedric();
+        }
+      }
     }
 
     if (destination || active) return;

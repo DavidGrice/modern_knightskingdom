@@ -18,12 +18,15 @@ import { audio } from '@/lib/audio';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt } from '@/game/types';
 import { dragonAllowed } from '@/game/difficulty';
+import { bossTierScale, BOSS_VICTORY_REWARD } from '@/game/bossEncounter';
 import { dragonAir, dragonAirBlack, loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
 const BREATH_EVERY = 6;   // seconds between fire passes
 const BREATH_DAMAGE = 14;
-const HITS_TO_ROUT = 5;
+// Wave 38 (A1): base threshold, scaled at roll time by bossTierScale('dragon')
+// — see BlackDragonSiege.tsx's own hitsToRout prop, which this now mirrors.
+const HITS_TO_ROUT_BASE = 5;
 const CIRCLE_R = 30;
 const ROLL_CHANCE = 0.25;
 
@@ -35,7 +38,7 @@ function flammable(type: string): boolean {
   return wood > (def.cost.stone ?? 0);
 }
 
-function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
+function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (routed: boolean) => void }) {
   const [rig, setRig] = useState<DragonRig | null>(null);
   useEffect(() => {
     let live = true;
@@ -117,8 +120,8 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
     dragonAir.hit = (source: string) => {
       hits.current += 1;
       audio.play('thud', 0.9);
-      if (hits.current >= HITS_TO_ROUT) { finish(true); return; }
-      st.notify(`${source} strikes the beast! (${hits.current}/${HITS_TO_ROUT})`, true);
+      if (hits.current >= hitsToRout) { finish(true); return; }
+      st.notify(`${source} strikes the beast! (${hits.current}/${hitsToRout})`, true);
     };
 
     // counterplay: any bolt/arrow passing near the beast stings it
@@ -129,11 +132,11 @@ function SiegeFlight({ onDone }: { onDone: (routed: boolean) => void }) {
         remove(b.id);
         hits.current += 1;
         audio.play('thud', 0.9);
-        if (hits.current >= HITS_TO_ROUT) {
+        if (hits.current >= hitsToRout) {
           finish(true);
           return;
         }
-        st.notify(`🏹 A bolt strikes the beast! (${hits.current}/${HITS_TO_ROUT})`, true);
+        st.notify(`🏹 A bolt strikes the beast! (${hits.current}/${hitsToRout})`, true);
       }
     }
   });
@@ -157,6 +160,10 @@ export default function DragonSiege() {
   const destination = useGameStore((s) => s.destination);
   const [active, setActive] = useState(false);
   const lastNightChecked = useRef(-1);
+  // captured once per roll, not re-read live — mirrors BlackDragonSiege.tsx's
+  // own hitsToRoutRef exactly (a fight in progress must not get harder out
+  // from under the player if their tier ticks over mid-siege)
+  const hitsToRoutRef = useRef(HITS_TO_ROUT_BASE);
   const endRef = useRef<(routed: boolean) => void>(() => {});
 
   const end = (routed: boolean) => {
@@ -166,6 +173,12 @@ export default function DragonSiege() {
     setActive(false);
     const st = useGameStore.getState();
     st.recordDragonSiege(routed);
+    // Wave 38 (A1): the green dragon's first-ever loot on a rout — was
+    // achievements-only before (see BOSS_VICTORY_REWARD's own doc comment).
+    if (routed) {
+      st.addItems(BOSS_VICTORY_REWARD.dragon.items, 'grant');
+      st.addXp('combat', BOSS_VICTORY_REWARD.dragon.xp);
+    }
     st.notify(
       routed
         ? '🐉 Stung and shrieking, the dragon breaks off into the dark — the homestead stands!'
@@ -201,6 +214,9 @@ export default function DragonSiege() {
       if (!st.dragonSeen || !dragonAllowed()) return;
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < ROLL_CHANCE) {
+        // Wave 38 (A1): rolled once here, same "fixed at spawn" shape as
+        // BlackDragonSiege.tsx's own hitsToRoutRef assignment.
+        hitsToRoutRef.current = Math.round(HITS_TO_ROUT_BASE * bossTierScale('dragon'));
         dragonAir.busy = true;
         st.notify('🐉 DRAGONFIRE! The beast descends upon your homestead — to arms!', true);
         audio.play('horn', 0.95);
@@ -213,7 +229,7 @@ export default function DragonSiege() {
   if (!active || destination) return null;
   return (
     <Suspense fallback={null}>
-      <SiegeFlight onDone={end} />
+      <SiegeFlight hitsToRout={hitsToRoutRef.current} onDone={end} />
     </Suspense>
   );
 }
