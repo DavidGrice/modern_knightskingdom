@@ -19,14 +19,22 @@ import { FACE_OPTIONS, CREST_OPTIONS, PALETTE_SWATCHES, type Gender } from '@/ga
 import { crestLocked, crestLockHint } from '@/game/data/crestUnlocks';
 import { CLASSES, CLASS_BY_ID } from '@/game/data/classes';
 import { SKILLS } from '@/game/data/ranks';
+import { DIFFICULTIES, DIFFICULTY_BY_ID } from '@/game/difficulty';
+import { consumeNewGamePlus } from '@/game/ngPlus';
 import { loadPalette } from '@/lib/minifig';
 import RotatablePreview from '../character/RotatablePreview';
 import KkIcon from '../ui/KkIcon';
-import type { CharacterConfig } from '@/game/types';
+import type { CharacterConfig, DifficultyId } from '@/game/types';
 
 const CALLING_ICON: Record<string, string> = {
   wanderer: 'k-boot', woodsman: 'k-axe', quarryman: 'k-pick', angler: 'k-fish',
   farmhand: 'k-farm', artisan: 'k-bench', prentice: 'k-flame', squire: 'k-shield',
+};
+
+// Wave 39 (A4): a plain glyph per difficulty, same "one lookup, no per-item
+// authoring" convention CALLING_ICON above already uses.
+const DIFFICULTY_ICON: Record<DifficultyId, string> = {
+  normal: 'k-shield', hard: 'k-swords', grueling: 'k-skull',
 };
 
 const SKILL_LABEL: Record<string, string> = Object.fromEntries(
@@ -86,7 +94,13 @@ export default function CharacterCreator() {
   const pop = useAppStore((s) => s.pop);
   const push = useAppStore((s) => s.push);
   const newGame = useGameStore((s) => s.newGame);
+  const startNewGamePlus = useGameStore((s) => s.startNewGamePlus);
   const uiTheme = useAppStore((s) => s.settings.uiTheme);
+
+  // Wave 39 (A4) · lazy initializer: grabs and clears MainMenu.tsx's staged
+  // NG+ carry exactly once, on mount, so a stray back-navigation into this
+  // screen without going through "Begin New Game+" can never resurrect it.
+  const [ngPlus] = useState(consumeNewGamePlus);
 
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>('male');
@@ -99,6 +113,7 @@ export default function CharacterCreator() {
   const [faceId, setFaceId] = useState(facesForGender[0].id);
   const [crestId, setCrestId] = useState(firstOpenCrest(crestsForGender));
   const [classId, setClassId] = useState('wanderer');
+  const [difficultyId, setDifficultyId] = useState<DifficultyId>('normal');
   const [armColor, setArmColor] = useState(26);
   const [handColor, setHandColor] = useState(18);
   const [legColor, setLegColor] = useState(38);
@@ -136,7 +151,8 @@ export default function CharacterCreator() {
   const calling = CLASS_BY_ID[classId];
 
   function begin() {
-    newGame(config);
+    if (ngPlus) startNewGamePlus(config, ngPlus, difficultyId);
+    else newGame(config, difficultyId);
     push('game');
   }
 
@@ -144,9 +160,13 @@ export default function CharacterCreator() {
     <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
         <div className="kk-screen-head">
-          <h2>FORGE YOUR HERO</h2>
+          <h2>{ngPlus ? 'A NEW LEGEND' : 'FORGE YOUR HERO'}</h2>
           <span className="rule" />
-          <span className="hint">Appearance never affects rank — that is earned in the world</span>
+          <span className="hint">
+            {ngPlus
+              ? 'Your skill and talents carry forward — the realm itself begins anew'
+              : 'Appearance never affects rank — that is earned in the world'}
+          </span>
         </div>
 
         <div className="kk-forge-body">
@@ -213,6 +233,32 @@ export default function CharacterCreator() {
               </div>
               <div className="kk-parchment">
                 {calling.desc} <strong>{calling.passiveLabel}:</strong> {calling.passiveDesc}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+                <span className="kk-forge-label" style={{ marginBottom: 6 }}>Difficulty</span>
+                <span style={{ font: '400 10.5px/1 var(--kk-font)', color: 'rgba(240,220,176,.45)' }}>
+                  chosen once, for the whole of this journey
+                </span>
+              </div>
+              <div className="kk-callings" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                {DIFFICULTIES.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className={`kk-calling ${difficultyId === d.id ? 'on' : ''}`}
+                    onClick={() => setDifficultyId(d.id)}
+                    title={d.blurb}
+                  >
+                    <KkIcon name={DIFFICULTY_ICON[d.id]} size={19} />
+                    <span className="nm">{d.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="kk-parchment">
+                {DIFFICULTY_BY_ID[difficultyId].blurb}
               </div>
             </div>
 

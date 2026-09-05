@@ -1,11 +1,12 @@
 'use client';
 import { create } from 'zustand';
 import type {
-  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, ItemId,
+  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, DifficultyId, ItemId,
   LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
   WaterFeature,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
+import type { NgPlusCarry } from '../ngPlus';
 import type { InputDevice } from '../inputMode';
 import { GROUNDS, groundAt, type RectSection } from '../data/grounds';
 import { MAX_PLOT_STAGE, PLOT_BY_ID, plotNodeCount } from '../data/cultivatedPlots';
@@ -137,6 +138,9 @@ export type CameraMode = 'fps' | 'third';
 interface GameState {
   // persisted
   character: CharacterConfig | null;
+  /** Wave 39 (A4): Normal/Hard/Grueling, chosen once at run creation — see
+   *  game/difficulty.ts's DIFFICULTIES and types.ts's SaveGame.difficulty. */
+  difficulty: DifficultyId;
   inventory: Partial<Record<ItemId, number>>;
   xp: Record<SkillId, number>;
   unlocks: string[];
@@ -332,7 +336,14 @@ interface GameState {
   dirty: boolean; // needs saving
 
   // lifecycle
-  newGame: (c: CharacterConfig) => void;
+  newGame: (c: CharacterConfig, difficulty?: DifficultyId) => void;
+  /** Wave 39 (A4) · a distinct fresh-run path, not a relabeled newGame: it
+   *  resets everything newGame's own freshSaveFields() resets (day count,
+   *  the whole build/kingdom side of the save), but overlays `carry`'s skill
+   *  XP and talent tree on top rather than zeroing them — see this file's
+   *  own freshSaveFields() doc comment for why reusing that literal (instead
+   *  of a second hand-picked reset list) is the load-bearing decision here. */
+  startNewGamePlus: (c: CharacterConfig, carry: NgPlusCarry, difficulty?: DifficultyId) => void;
   loadFromSave: (s: SaveGame) => void;
   toSave: () => SaveGame;
   seedNodes: () => void;
@@ -905,6 +916,70 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kk = useGameStore;
 }
 
+/** Wave 39 (A4) · the module-state side effects newGame()/loadFromSave()/
+ *  startNewGamePlus() all need at the start of a fresh session — pulled out
+ *  once a third call site needed the identical list. None of this touches
+ *  Zustand state; every reset here is a leaf module (AI registries, the
+ *  target registry, the sound ring, work signals) that must forget the last
+ *  session before a new one starts reading it. */
+function resetSessionModules() {
+  resetPlayerState();
+  // the AI registry is module state: a new session must not inherit the
+  // last one's agents, clock or half-drained needs
+  agentManager.clear();
+  resetVillagerAgentSync();
+  resetNpcAgentSync();
+  resetCourtAmbientAgentSync();
+  resetCompanionAgentSync();
+  // Tam's own combat state is keyed by a FIXED id (unlike a roster
+  // villager's fresh 'v<n>' one every game) — without this a new session
+  // would silently inherit whatever HP the last one left him at. See
+  // game/companion.ts's own comment on resetCompanionCombat.
+  resetCompanionCombat(COMPANION_ID);
+  targetRegistry.clear();
+  // §6.2 — the AI's world-sound ring is module state too: a fresh session
+  // must not have two seconds of the last one's combat still audible.
+  resetSounds();
+  clearAllWorkSignals();
+}
+
+/** Wave 39 (A4) · the full "what a fresh run resets" literal, pulled out of
+ *  newGame() so startNewGamePlus() can build on the EXACT same list rather
+ *  than a second, hand-picked one that could drift from it — every prior
+ *  wave in this project's plan found real drift from a re-derived field
+ *  list, so this file deliberately has only one. A future wave that adds a
+ *  field to this literal resets it in NG+ automatically, with nothing else
+ *  to remember to update. */
+function freshSaveFields(character: CharacterConfig, difficulty: DifficultyId): Partial<GameState> {
+  return {
+    character,
+    difficulty,
+    // bare-handed start (2026-07-20): no starting axe, no calling kit —
+    // harvestNode/useTool never actually gate on OWNING a tool, only on
+    // its condition (durability defaults to 100 whether you own zero or
+    // one), so gathering bare-handed already works mechanically. Every
+    // calling's kit is empty by design now (see data/classes.ts) — the
+    // signature skill's +10% XP is the only thing it actually grants.
+    inventory: {},
+    xp: { ...ZERO_XP },
+    unlocks: [],
+    completedQuests: [],
+    questProgress: {},
+    buildings: [],
+    panel: 'none', paused: false, buildMode: false,
+    notifications: [], prompt: null, actionProgress: null, dirty: true,
+    timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
+    gateOpen: {}, buildingHp: {}, reputation: {},
+    destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
+    durability: {}, perks: [], stats: { ...ZERO_STATS },
+    claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
+    villagers: [], villagerProgress: {}, armory: {},
+    interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
+    blackDragonSieges: 0, blackDragonRouted: false,
+    cedricSieges: 0, cedricRouted: false,
+  };
+}
+
 function createGameStore() {
   return create<GameState>((set, get) => {
   // ---- internal helpers (closure-scoped, operate through set/get) ----
@@ -1001,6 +1076,7 @@ function createGameStore() {
 
   return {
     character: null,
+    difficulty: 'normal',
     inventory: {},
     xp: { ...ZERO_XP },
     unlocks: [],
@@ -1097,56 +1173,32 @@ function createGameStore() {
     season: 0,
     dirty: false,
 
-    newGame: (character) => {
-      resetPlayerState();
+    newGame: (character, difficulty = 'normal') => {
+      resetSessionModules();
       stabledHorses.ids = [];
       stabledHorses.assigned = {};
       // Wave 12 · module state, same class of thing as the stable above: a new
       // character must not inherit the last one's moat. Bumping the revision is
       // also what makes the next nav rebuild forget the old water.
       setWaterworks([]);
-      // the AI registry is module state, like the two above: a new character
-      // must not inherit the last one's agents, clock or half-drained needs
-      agentManager.clear();
-      resetVillagerAgentSync();
-      resetNpcAgentSync();
-      resetCourtAmbientAgentSync();
-      resetCompanionAgentSync();
-      // Tam's own combat state is keyed by a FIXED id (unlike a roster
-      // villager's fresh 'v<n>' one every game) — without this a new
-      // character would silently inherit whatever HP the last session left
-      // him at. See game/companion.ts's own comment on resetCompanionCombat.
-      resetCompanionCombat(COMPANION_ID);
-      targetRegistry.clear();
-      // §6.2 — the AI's world-sound ring is module state too: a fresh session
-      // must not have two seconds of the last one's combat still audible.
-      resetSounds();
-      clearAllWorkSignals();
+      set(freshSaveFields(character, difficulty));
+      worldEnv.time = 0.3;
+      worldEnv.dayCount = 0;
+      get().seedNodes();
+    },
+
+    startNewGamePlus: (character, carry, difficulty = 'normal') => {
+      resetSessionModules();
+      stabledHorses.ids = [];
+      stabledHorses.assigned = {};
+      setWaterworks([]);
       set({
-        character,
-        // bare-handed start (2026-07-20): no starting axe, no calling kit —
-        // harvestNode/useTool never actually gate on OWNING a tool, only on
-        // its condition (durability defaults to 100 whether you own zero or
-        // one), so gathering bare-handed already works mechanically. Every
-        // calling's kit is empty by design now (see data/classes.ts) — the
-        // signature skill's +10% XP is the only thing it actually grants.
-        inventory: {},
-        xp: { ...ZERO_XP },
-        unlocks: [],
-        completedQuests: [],
-        questProgress: {},
-        buildings: [],
-        panel: 'none', paused: false, buildMode: false,
-        notifications: [], prompt: null, actionProgress: null, dirty: true,
-        timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
-        gateOpen: {}, buildingHp: {}, reputation: {},
-        destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
-        durability: {}, perks: [], stats: { ...ZERO_STATS },
-        claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
-        villagers: [], villagerProgress: {}, armory: {},
-        interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
-        blackDragonSieges: 0, blackDragonRouted: false,
-        cedricSieges: 0, cedricRouted: false,
+        ...freshSaveFields(character, difficulty),
+        // the entire point of NG+: skill XP and the talent tree it gates
+        // survive the reset above — see types.ts's SaveGame doc comment for
+        // why exactly this pair (and not perks/attrSpent) is safe to carry.
+        xp: { ...ZERO_XP, ...carry.xp },
+        skillTree: [...carry.skillTree],
       });
       worldEnv.time = 0.3;
       worldEnv.dayCount = 0;
@@ -1154,20 +1206,7 @@ function createGameStore() {
     },
 
     loadFromSave: (s) => {
-      resetPlayerState();
-      agentManager.clear();
-      resetVillagerAgentSync();
-      resetNpcAgentSync();
-      resetCourtAmbientAgentSync();
-      resetCompanionAgentSync();
-      // same reasoning as newGame's own call: a fixed-id combat record must
-      // not carry a prior session's HP into this loaded one.
-      resetCompanionCombat(COMPANION_ID);
-      targetRegistry.clear();
-      // §6.2 — the AI's world-sound ring is module state too: a fresh session
-      // must not have two seconds of the last one's combat still audible.
-      resetSounds();
-      clearAllWorkSignals();
+      resetSessionModules();
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];
       stabledHorses.assigned = { ...(s.mounts ?? {}) };
@@ -1178,6 +1217,9 @@ function createGameStore() {
       setWaterworks(loadedWater);
       set({
         character: s.character,
+        // Wave 39 (A4): absent = 'normal' — every save written before
+        // difficulty existed picks up the mult:1.0 tier, zero behavior change.
+        difficulty: s.difficulty ?? 'normal',
         inventory: s.inventory,
         xp: { ...ZERO_XP, ...s.xp },
         unlocks: s.unlocks,
@@ -1254,6 +1296,7 @@ function createGameStore() {
       return {
         version: 1,
         character: s.character!,
+        difficulty: s.difficulty,
         inventory: s.inventory,
         xp: s.xp,
         unlocks: s.unlocks,

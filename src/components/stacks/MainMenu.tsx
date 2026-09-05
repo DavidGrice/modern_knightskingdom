@@ -13,10 +13,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore } from '@/game/store/gameStore';
 import { fetchSave, hasGuestSave } from '@/lib/save';
-import { SKILLS, levelFromXp, rankFromTotalLevel } from '@/game/data/ranks';
+import { SKILLS, levelFromXp, rankFromTotalLevel, RANKS } from '@/game/data/ranks';
 import { QUESTS } from '@/game/data/quests';
+import { stageNewGamePlus } from '@/game/ngPlus';
 import type { SaveGame } from '@/game/types';
 import KkIcon from '../ui/KkIcon';
+
+// Wave 39 (A4) · the name of the topmost rank, not the literal string
+// 'Paladin' — RANKS is ordered climbing, so a future wave adding a rank
+// above it (already flagged elsewhere in this project's plan) moves this
+// gate for free, with no edit here.
+const TOP_RANK = RANKS[RANKS.length - 1].name;
 
 interface SlotInfo {
   name: string;
@@ -51,6 +58,10 @@ export default function MainMenu() {
   const loadFromSave = useGameStore((s) => s.loadFromSave);
   const [loading, setLoading] = useState(false);
   const [slot, setSlot] = useState<SlotInfo | null>(null);
+  // Wave 39 (A4) · the raw save, kept alongside the derived SlotInfo above
+  // (which used to be all this screen held onto) so "Begin New Game+" has
+  // the actual xp/skillTree to stage without a second fetch.
+  const [rawSave, setRawSave] = useState<SaveGame | null>(null);
   const [checked, setChecked] = useState(false);
 
   const canContinue = guest ? checked && !!slot : hasSave;
@@ -62,7 +73,7 @@ export default function MainMenu() {
     if (!present) { setChecked(true); return; }
     fetchSave(guest).then((s) => {
       if (!alive) return;
-      if (s?.character) setSlot(describe(s));
+      if (s?.character) { setSlot(describe(s)); setRawSave(s); }
       setChecked(true);
     });
     return () => { alive = false; };
@@ -95,6 +106,23 @@ export default function MainMenu() {
     play(false);
   }, [slot, play]);
 
+  // Wave 39 (A4) · New Game+, gated on having actually reached the top rank
+  // (see canBeginNgPlus below) — reuses startNew()'s exact overwrite-confirm
+  // pattern, since this equally discards the current save for good, then
+  // stages the carry for CharacterCreator.tsx to pick up on mount.
+  const beginNgPlus = useCallback(() => {
+    if (!rawSave || !slot) return;
+    if (!window.confirm(
+      `Beginning New Game+ will overwrite "${slot.name}". Your skill XP and talents carry forward — everything else begins anew. This cannot be undone — continue?`,
+    )) {
+      return;
+    }
+    stageNewGamePlus({ xp: rawSave.xp, skillTree: rawSave.skillTree ?? [] });
+    push('create');
+  }, [rawSave, slot, push]);
+
+  const canBeginNgPlus = slot?.rank === TOP_RANK;
+
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     setUser(null);
@@ -123,6 +151,12 @@ export default function MainMenu() {
               <KkIcon name="k-keep" size={17} />
               <span>New Journey</span>
             </button>
+            {canBeginNgPlus && (
+              <button className="kk-menu-item" onClick={beginNgPlus}>
+                <KkIcon name="k-crown" size={17} />
+                <span>Begin New Game+</span>
+              </button>
+            )}
             <button className="kk-menu-item" onClick={() => push('options')}>
               <KkIcon name="k-cog" size={17} />
               <span>Options</span>

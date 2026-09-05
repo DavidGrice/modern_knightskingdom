@@ -19,10 +19,33 @@
 
 import { useGameStore } from './store/gameStore';
 import { totalSkillLevel } from './data/ranks';
+import type { DifficultyId } from './types';
 
 // gameStore does not export its state interface, and widening its API just to
 // satisfy this module would be the wrong trade — derive the type instead.
 type GameState = ReturnType<typeof useGameStore.getState>;
+
+/** Wave 39 (A4) · Normal/Hard/Grueling — a manual pressure multiplier chosen
+ *  once at run creation, layered ON TOP of the tier curve below rather than
+ *  replacing it. `mult: 1.0` for 'normal' means every save written before
+ *  this existed (which defaults to 'normal', see types.ts's SaveGame.difficulty
+ *  doc) sees exactly zero behavior change. Values are tunable — same honest
+ *  "tunable" flag bossEncounter.ts's own BOSS_TIER_STEP carries. */
+export interface DifficultyDef {
+  id: DifficultyId;
+  label: string;
+  blurb: string;
+  mult: number;
+}
+
+export const DIFFICULTIES: DifficultyDef[] = [
+  { id: 'normal', label: 'Normal', mult: 1.0, blurb: 'The realm exactly as tuned.' },
+  { id: 'hard', label: 'Hard', mult: 1.3, blurb: 'Raiders and bosses hit harder, and take more to put down.' },
+  { id: 'grueling', label: 'Grueling', mult: 1.7, blurb: 'Every fight in the realm is a real fight, always.' },
+];
+
+export const DIFFICULTY_BY_ID: Record<DifficultyId, DifficultyDef> =
+  Object.fromEntries(DIFFICULTIES.map((d) => [d.id, d])) as Record<DifficultyId, DifficultyDef>;
 
 /** The tier at which the dragon is allowed to come at all (§O7). */
 export const DRAGON_TIER = 3;
@@ -94,6 +117,10 @@ export interface ThreatSnapshot {
   days: number;
   /** what the next tier is still waiting on; empty at max */
   blocking: string[];
+  /** Wave 39 (A4) · DIFFICULTY_BY_ID[st.difficulty ?? 'normal'].mult — a
+   *  scalar for raidStrength()/bossTierScale() to layer on top of the tier
+   *  curve, not a gate; see this file's own DIFFICULTIES doc comment. */
+  difficultyMult: number;
 }
 
 /** Mutable mirror, refreshed on store change. Spawners read this every frame
@@ -106,6 +133,7 @@ export const difficultyState: ThreatSnapshot = {
   kills: 0,
   days: 0,
   blocking: [],
+  difficultyMult: 1,
 };
 
 /** A weapon on its own is not a defence. The dragon gate specifically exists
@@ -143,7 +171,9 @@ export function computeThreat(st: GameState): ThreatSnapshot {
     if (days < next.days) blocking.push(`days ${days}/${next.days}`);
   }
 
-  return { tier, rangedReady: rangedReady(st), structures, skill, kills, days, blocking };
+  const difficultyMult = DIFFICULTY_BY_ID[st.difficulty ?? 'normal']?.mult ?? 1;
+
+  return { tier, rangedReady: rangedReady(st), structures, skill, kills, days, blocking, difficultyMult };
 }
 
 function refresh(st: GameState) {
@@ -155,6 +185,7 @@ function refresh(st: GameState) {
   difficultyState.kills = s.kills;
   difficultyState.days = s.days;
   difficultyState.blocking = s.blocking;
+  difficultyState.difficultyMult = s.difficultyMult;
 }
 
 // Subscribe from the consumer side — the store never learns this file exists.
@@ -182,7 +213,9 @@ export function blackDragonAllowed(st: GameState): boolean {
 }
 
 /** Scales raid pressure off the same curve, so raiders and the dragon can no
- *  longer disagree about how far along the player is. */
+ *  longer disagree about how far along the player is. Wave 39 (A4): the
+ *  manual difficulty multiplier layers on top of the tier curve here, not in
+ *  place of it — a tier-0 Grueling run still hits like tier 0, only harder. */
 export function raidStrength(): number {
-  return 1 + difficultyState.tier * 0.35;
+  return (1 + difficultyState.tier * 0.35) * difficultyState.difficultyMult;
 }
