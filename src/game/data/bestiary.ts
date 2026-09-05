@@ -34,10 +34,13 @@ export const BESTIARY_LORE: Record<EnemyKind, BestiaryLore> = {
     strength: 'Tougher and hits harder than the men he leads, and unlike them, his nerve never breaks — he fights to the end.',
     weakness: 'Always melee, always on his own — no crossbow, no pack to call on, and nothing rallies him.',
   },
-  // KIND_HP.cedric = 45, by far the highest in the roster. Flees below
-  // CEDRIC_FLEE_HP everywhere except his own sanctioned final stand
-  // (`finalStand`, see Cedric's Siege) — the one fight he does not walk away
-  // from, and the only one that permanently ends him
+  // KIND_HP.cedric = 45 (tier-scaled past his own unlock tier, see
+  // bossEncounter.ts's bossTierScale), by far the highest base in the
+  // roster. Flees below CEDRIC_FLEE_HP everywhere except his own sanctioned
+  // final stand (`finalStand`, see Cedric's Siege) — the one fight he does
+  // not walk away from. Wave 38 (A1): winning it jails rather than
+  // permanently ends him — a jailbreak can put him right back in this fight
+  // for a scaling rematch (gameStore.ts's freeCedric).
   cedric: {
     strength: 'By far the toughest fight in the realm — 45 Vigour and a real three-point swing.',
     weakness: 'Everywhere but his own camp, once truly weathered, he breaks off and flees rather than dying — only his sanctioned final stand is a fight to the finish.',

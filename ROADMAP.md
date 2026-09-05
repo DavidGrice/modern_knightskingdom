@@ -8544,3 +8544,68 @@ reskin, plus a real structural gap in `stepBolt()` found and fixed along the way
   (a real 14-point headshot landed on a mounted raider through the unmodified per-part hit path) and
   the player's own turret-manning/auto-fire pipeline is completely untouched by this wave's files.
   `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+## Wave 38: a shared boss-encounter framework for the dragons + a scaling, repeatable Cedric rematch (A1) — SHIPPED 2026-09-05
+
+Fifth wave of the new 27-wave plan. Research found the plan's own cited "proven precedent" (the
+black dragon's tier-scaling formula) was silently dead code, and found that Cedric's own game already
+implies exactly the fix his "permanent defeat" needed — he's jailed, not killed.
+
+- [COMPLETE] ✅ **A real, previously-unnoticed bug found in the black dragon's own scaling formula.**
+  `BlackDragonSiege.tsx`'s `hitsToRoutRef.current = 6 + Math.max(0, difficultyState.tier - 5)`
+  (shipped Wave 36) can never actually scale: `BLACK_DRAGON_TIER = 5` is both its own unlock gate AND
+  `TIER_RULES`' own ceiling, so `tier` can never exceed `5` and the formula always evaluates to a flat
+  `6`. New `src/game/bossEncounter.ts` (`BossId`, `BOSS_ENCOUNTERS`, `bossTierScale()`,
+  `BOSS_VICTORY_REWARD`) replaces this dead local formula with one shared, reusable curve — a pure
+  de-dup with zero behavior change today (confirmed identical: still exactly 6 hits at tier 5), but
+  the black dragon now scales for free the moment a future wave ever extends `TIER_RULES` past tier 5.
+- [COMPLETE] ✅ **The green dragon gets real tier scaling and its first-ever loot.** `DragonSiege.tsx`'s
+  flat `HITS_TO_ROUT = 5` now reads `bossTierScale('dragon')`, rolled once per siege (not re-read
+  mid-fight, so a fight in progress can't get harder out from under the player). A rout now grants
+  `BOSS_VICTORY_REWARD.dragon` (`gold:25, iron_bar:1, plank:3` + 30 XP) — previously
+  achievements-only.
+- [COMPLETE] ✅ **Cedric the Bull: a real, repeatable, tier-scaling rematch — grounded in the game's own
+  existing lore, not invented.** Investigation found the achievement is literally `cedric_jailed`
+  ("Behind Bars"), `markCedricDefeated()`'s own notify already says "dragged in chains," and
+  `CedricCamp.tsx` already renders a literal jailed figure behind a portcullis prop quoting the
+  original game's own ending line — this has always been "jailed," not "killed," so a jailbreak loop
+  completes existing content rather than inventing new lore. `defeatedCedric` is repurposed from
+  "permanently defeated" to "currently in custody"; new `cedricCaptures`/`cedricCapturedAtDay` fields
+  (with a disclosed save-migration path for existing saves) distinguish the one-time capstone payout
+  from every later rematch's own smaller reward (`gold:70, iron_bar:4, plank:6, stone:6` + 90 XP). A
+  new `cedricJailbreakAllowed()` (3-day cooldown after capture) gates a nightly jailbreak roll in
+  `CedricSiege.tsx`, mirroring the existing homestead-siege roll's own shape exactly. His final-stand
+  HP now scales via `bossTierScale('cedric')` too (previously a flat 45 regardless of tier — the same
+  bug-class as the green dragon). **Zero changes needed** in `CedricCamp.tsx`, `PlayerController.tsx`,
+  or `Enemies.tsx`'s camp-guard spawner — all three already derive their behavior reactively from
+  `!defeatedCedric`, so flipping it back to `false` on jailbreak correctly re-shows the idle boss,
+  camp guards, and the "Challenge Cedric" interact prompt with no further edits.
+- [COMPLETE] ✅ **Storm: investigated and deliberately left mechanically untouched — a real finding,
+  not a shortfall.** Her duel is a 1-HP "first hit ends it" resolve with no tier gate at all; forcing
+  her into a `BossEncounter` shape would replace a mechanic that already works (her attack cooldown
+  already shrinks with `reputation['storm']`, and `resolveDuel()` already grants a real reward
+  independent of the generic per-kind tables) with a strictly worse-fitting one. Excluded by design,
+  documented in `bossEncounter.ts`'s own header comment.
+- **Verified live with exact, measured hit-count evidence.** Green dragon: forced tier 3 (its own
+  unlock) and took exactly 5 hits to rout; forced tier 5 and took exactly 7 hits
+  (`round(5 × bossTierScale) = round(5×1.3) = 7`) — a genuinely different live hit count, not just a
+  source-level number change — with the correct loot granted on both routs. Black dragon: confirmed
+  unchanged at exactly 6 hits (expected, since its unlock tier already sits at the curve's ceiling)
+  and identical reward, proving the de-dup introduced zero regression. Cedric: killed a real
+  final-stand spawn through the actual player-attack code path (not a direct store call), confirmed
+  the full capstone payout fired (`cedricCaptures` 0→1), confirmed the jailbreak cooldown correctly
+  blocks ~20 consecutive nightly-roll attempts immediately after capture, then advanced the real game
+  clock past the 3-day cooldown and confirmed the real shipped jailbreak code path flipped
+  `defeatedCedric` back to `false` on its own (not by calling the action directly) — a second
+  final-stand kill at tier 5 then measured `maxHp = 52` (`round(45×1.15)`, exact match) and correctly
+  fired the smaller rematch reward branch (`cedricCaptures` 1→2). Storm: confirmed `maxHp` stays
+  exactly `1` even at the game's maximum tier, and her duel still resolves via the existing special
+  case. No regressions found across a long multi-section live session (turrets, siege-crew, caster,
+  shielded elite, and every court/settlement system stayed mounted and error-free throughout). Two
+  minor "polish" notes surfaced by verify, both confirmed as non-issues rather than defects: a
+  leftover-but-harmless early-return guard in `markCedricDefeated()` (freeCedric always clears
+  `defeatedCedric` before any real rematch attempt, so the guard can never actually block one), and a
+  pre-existing, unrelated `DragonOmen.tsx` flyover roll that can compete for the same busy-flag mutex
+  during live testing at a high forced night value — a test-methodology note for future dragon-related
+  verification passes, not a code defect. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.

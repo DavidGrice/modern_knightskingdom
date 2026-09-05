@@ -356,8 +356,19 @@ export interface SaveGame {
   discoveredPois?: string[];
   /** NPC ids whose one-time voiced lore introduction has already played */
   loreSeen?: string[];
-  /** Cedric the Bull's capstone boss fight has been won (see CedricCamp.tsx) */
+  /** Cedric the Bull is currently in custody (see CedricCamp.tsx) — Wave 38
+   *  (A1) repurposed this from a permanent one-time flag to "at large vs.
+   *  jailed": a jailbreak (gameStore.ts's freeCedric) can flip it back to
+   *  false for a scaling rematch. */
   defeatedCedric?: boolean;
+  /** Wave 38 (A1) · lifetime times he's been captured — 0 before the first
+   *  capstone win, incremented on every recapture thereafter. Distinguishes
+   *  the one-time capstone payout (markCedricDefeated's `first` branch) from
+   *  every later rematch's own, smaller reward. */
+  cedricCaptures?: number;
+  /** Wave 38 (A1) · `dayCount` at his most recent capture — what
+   *  cedricJailbreakAllowed measures the jailbreak cooldown against. */
+  cedricCapturedAtDay?: number;
   /** Phase 19 alliance branch: who the player pledged to; null/absent = unsworn */
   alliance?: Alliance | null;
   /** Phase 21 guilds: primary guild id (data/guilds.ts); null/absent = unaffiliated */
