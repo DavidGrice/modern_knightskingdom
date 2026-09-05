@@ -14,12 +14,21 @@ import { ARENA_ORIGIN, ARENA_RADIUS } from '@/game/data/worlds';
 
 /** weighted over the same filler kinds a raid draws from — excludes
  *  cedric/storm, both tuned named-boss encounters (spawn()'s own existing
- *  exclusion reasoning, combat.ts) */
+ *  exclusion reasoning, combat.ts). Wave 37 (A3 remainder) adds the caster
+ *  and shielded elite at modest weights, same filler-tier footing as
+ *  gilbert; siegeCrew is deliberately NOT included here — its own AI fires
+ *  at `st.buildings`/`st.keep` (the player's real, un-instanced homestead),
+ *  which would let an arena run batter the player's actual home from inside
+ *  a different world entirely. It stays scoped to Cedric's War Party
+ *  (CedricSiege.tsx), the one place that's guaranteed to be the same
+ *  instance as the buildings it targets. */
 const SPAWN_TABLE: { kind: EnemyKind; weight: number }[] = [
   { kind: 'skeleton', weight: 0.4 },
-  { kind: 'bandit', weight: 0.35 },
-  { kind: 'royal', weight: 0.15 },
-  { kind: 'gilbert', weight: 0.1 },
+  { kind: 'bandit', weight: 0.3 },
+  { kind: 'royal', weight: 0.12 },
+  { kind: 'gilbert', weight: 0.08 },
+  { kind: 'caster', weight: 0.06 },
+  { kind: 'shieldedElite', weight: 0.04 },
 ];
 
 function rollKind(): EnemyKind {

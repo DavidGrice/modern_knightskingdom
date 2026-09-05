@@ -21,7 +21,7 @@ import { raidStrength } from './difficulty';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
 import { fortDamageReduction } from './fort';
-import { hasLineOfSight } from './navgrid';
+import { hasLineOfSight, GROUND_LOS_Y } from './navgrid';
 // NPC_AI_SPEC §6.2 — the AI's world-sound emitter. Both modules are
 // deliberately import-light leaves of the perception layer (sounds.ts pulls
 // only playerState + the config JSON; Belief.ts owns the entity-id scheme),
@@ -136,7 +136,12 @@ useGameStore.subscribe((s) => {
 // 'mountedRaider' (Wave 36, A3) = Cedric's own war party riding his two
 // tethered chargers (l7339231/l7339232, CedricCamp.tsx) — see Enemies.tsx's
 // own render tail for the mount.
-export type EnemyKind = 'skeleton' | 'bandit' | 'gilbert' | 'cedric' | 'storm' | 'royal' | 'mountedRaider';
+// Wave 37 (A3 remainder) · the last three of the roster's A3 item: 'caster'
+// (a ranged spellcaster — see fireSpellBolt below), 'shieldedElite' (blocks
+// most frontal damage — see isFrontalHit below), 'siegeCrew' (mans a real
+// Wave-35 turret asset during Cedric's War Party — see EnemyData.siegeAsset).
+export type EnemyKind = 'skeleton' | 'bandit' | 'gilbert' | 'cedric' | 'storm' | 'royal' | 'mountedRaider'
+  | 'caster' | 'shieldedElite' | 'siegeCrew';
 
 /** how high the saddle sits — Wave 36 (A3): the SAME lift Defenders.tsx's own
  *  SADDLE_Y already gives a mounted defender, so a mounted raider's hitbox
@@ -147,6 +152,9 @@ export const MOUNT_SEAT_Y = 1.15;
 /** max hp per enemy kind (storm is a duel — the very first landed hit ends it) */
 const KIND_HP: Record<EnemyKind, number> = {
   skeleton: 5, bandit: 8, gilbert: 14, cedric: 45, storm: 1, royal: 12, mountedRaider: 16,
+  // Wave 37 · a glass cannon (dies in ~2 melee hits — closing the gap is the
+  // real counter), a real tank, and a durable-enough gunner
+  caster: 6, shieldedElite: 18, siegeCrew: 10,
 };
 /** a kind's full health, for the aim readout's health bar */
 export function maxHpOf(kind: EnemyKind): number {
@@ -156,13 +164,16 @@ export function maxHpOf(kind: EnemyKind): number {
 export const KIND_LABEL: Record<EnemyKind, string> = {
   skeleton: 'Skeleton', bandit: 'Bandit', gilbert: 'Gilbert the Bad', cedric: 'Cedric the Bull', storm: 'Princess Storm', royal: 'Royal Knight',
   mountedRaider: 'Mounted Raider',
+  caster: 'Hedge Witch', shieldedElite: 'Shieldbearer', siegeCrew: 'Siege Engineer',
 };
 const KIND_XP: Record<EnemyKind, number> = {
   skeleton: 20, bandit: 30, gilbert: 45, cedric: 150, storm: 0, royal: 40, mountedRaider: 55,
+  caster: 35, shieldedElite: 42, siegeCrew: 35,
 };
 /** ranged kills have always paid a small bonus over melee (see stepBolt) */
 const KIND_XP_RANGED: Record<EnemyKind, number> = {
   skeleton: 24, bandit: 34, gilbert: 50, cedric: 165, storm: 0, royal: 45, mountedRaider: 60,
+  caster: 40, shieldedElite: 47, siegeCrew: 40,
 };
 /** melee damage per hit and attack cooldown, by kind — moved here (were
  *  local to Enemies.tsx's own AI loop) so the Bestiary can surface the same
@@ -170,9 +181,14 @@ const KIND_XP_RANGED: Record<EnemyKind, number> = {
  *  driftable copy just for display. */
 export const ATTACK_DMG: Record<EnemyKind, number> = {
   skeleton: 1, bandit: 1.5, gilbert: 2, cedric: 3, storm: 0, royal: 2, mountedRaider: 2.2,
+  // Wave 37 · a caster's melee fallback is deliberately weak (its real
+  // threat is fireSpellBolt, below); a shielded elite hits like a veteran;
+  // a siege crew's melee-defense is a middling last resort, not its job
+  caster: 0.8, shieldedElite: 1.8, siegeCrew: 1.5,
 };
 export const ATTACK_CD: Record<EnemyKind, number> = {
   skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4, mountedRaider: 1.3,
+  caster: 1.6, shieldedElite: 1.5, siegeCrew: 1.6,
 };
 /** One possible item in an enemy's purse. `chance` is rolled independently per
  *  entry, then a quantity is picked in [min, max] — so a kill can turn up
@@ -225,6 +241,26 @@ export const LOOT_TABLES: Record<EnemyKind, LootEntry[]> = {
     { item: 'plank', min: 2, max: 4, chance: 0.7 },
     { item: 'gold', min: 5, max: 14, chance: 0.8 },
     { item: 'helmet', min: 1, max: 1, chance: 0.15 },
+  ],
+  // Wave 37 · a hedge witch travels light — herbs and a little coin, the
+  // occasional stray bolt off a raider she rode with
+  caster: [
+    { item: 'herb', min: 1, max: 3, chance: 0.7 },
+    { item: 'gold', min: 3, max: 8, chance: 0.6 },
+    { item: 'bolt', min: 1, max: 2, chance: 0.15 },
+  ],
+  // a veteran's kit — real armory pieces, not just scrap
+  shieldedElite: [
+    { item: 'iron_bar', min: 1, max: 2, chance: 0.85 },
+    { item: 'gold', min: 4, max: 10, chance: 0.75 },
+    { item: 'shield', min: 1, max: 1, chance: 0.12 },
+    { item: 'chestplate', min: 1, max: 1, chance: 0.08 },
+  ],
+  // an engineer's tools and pay, mirroring gilbert/mountedRaider's own shape
+  siegeCrew: [
+    { item: 'iron_bar', min: 1, max: 2, chance: 0.8 },
+    { item: 'plank', min: 2, max: 4, chance: 0.7 },
+    { item: 'gold', min: 3, max: 8, chance: 0.6 },
   ],
 };
 
@@ -336,6 +372,16 @@ export interface EnemyData {
    *  rolled once at spawn (see spawn() below), same "stable for the mob's
    *  whole life" shape as `ranged`. Meaningless for any other kind. */
   mountAsset?: 'l7339231' | 'l7339232';
+  /** Wave 37 (A3 remainder) · which real Wave-35 turret asset this siegeCrew
+   *  is manning — set once at spawn, same "stable for the mob's whole life"
+   *  shape as `mountAsset`. A literal union of one value today (oc6098b1:
+   *  the one manual turret with a real swinging-arm rig AND an explicit
+   *  `isManualTurret` flag — see labCapabilities.ts's WALL_FIRE_OVERRIDES),
+   *  designed to extend to oc6098b2/oc6032b1 later with no structural
+   *  change (Enemies.tsx's own render/AI already reads this generically via
+   *  labOccupyMode/labCanFire rather than branching on the id). Meaningless
+   *  for any other kind. */
+  siegeAsset?: 'oc6098b1';
 }
 
 let enemySeq = 1;
@@ -391,6 +437,10 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       // Wave 36 (A3): one of Cedric's own two named chargers, picked once —
       // no reason to weight it, both are the same mechanical mount
       mountAsset: kind === 'mountedRaider' ? (Math.random() < 0.5 ? 'l7339231' : 'l7339232') : undefined,
+      // Wave 37 (A3 remainder) · only one asset exists yet, so nothing to
+      // roll — see EnemyData.siegeAsset's own comment for why this is
+      // designed as a union rather than a fixed string anyway
+      siegeAsset: kind === 'siegeCrew' ? 'oc6098b1' : undefined,
       inventory: rollLoot(kind),
       mob: {
         x, z, yaw: Math.random() * Math.PI * 2,
@@ -653,6 +703,33 @@ export function cycleWeapon(): void {
   st.notify(SWAP_HINT[next]);
 }
 
+/**
+ * Wave 37 (A3 remainder) · the shielded elite's whole mechanic. The player's
+ * OWN block (see damagePlayer above) is not facing-based at all — unconditional
+ * `dmg *= 0.25` whenever blocking+shield+stamina — so there is no existing
+ * "reuse the player's own logic" path here; this is a real, small, new
+ * mechanic rather than a reskin. The facing-cone MATH does have a real
+ * precedent, though: playerAttack's own melee cone test just above
+ * ((dx*fx+dz*fz)/d < wp.cone) is the exact same forward-dot-product shape,
+ * just evaluated from the DEFENDER's side instead of the attacker's.
+ */
+const SHIELD_FRONT_DOT = 0.3; // matches MELEE.sword.cone — a ~±72° frontal arc
+const SHIELD_REDUCTION = 0.3; // 70% reduction — same order as the player's own 75% block
+
+/** true if `(atkX, atkZ)` sits within the defender's frontal arc, given the
+ *  defender's own facing (`defYaw`) and position. Applied against
+ *  `playerState.x/z` at both call sites (landMeleeHit and stepBolt) — melee
+ *  AND ranged are blocked when frontal, deliberately: this forces an actual
+ *  flank, not just "switch to a crossbow". */
+function isFrontalHit(defYaw: number, defX: number, defZ: number, atkX: number, atkZ: number): boolean {
+  const fx = -Math.sin(defYaw);
+  const fz = -Math.cos(defYaw);
+  const dx = atkX - defX;
+  const dz = atkZ - defZ;
+  const d = Math.hypot(dx, dz) || 1;
+  return (dx * fx + dz * fz) / d > SHIELD_FRONT_DOT;
+}
+
 /** Resolve ONE landed melee blow: damage, the camp's rally, knockback, and
  *  the kill/loot/notify path if it fell. Split out of playerAttack when the
  *  halberd's sweep made "the single best target" no longer the only shape a
@@ -662,7 +739,11 @@ export function cycleWeapon(): void {
 function landMeleeHit(e: EnemyData, d: number, dmg: number) {
   const st = useGameStore.getState();
   const { enemies } = useEnemyStore.getState();
-  e.hp -= dmg;
+  // Wave 37 (A3 remainder) · a shielded elite blocks most of a frontal blow
+  // outright — see isFrontalHit's own comment above
+  const applied = (e.kind === 'shieldedElite' && isFrontalHit(e.mob.yaw, e.mob.x, e.mob.z, playerState.x, playerState.z))
+    ? dmg * SHIELD_REDUCTION : dmg;
+  e.hp -= applied;
   // NPC_AI_SPEC §6.2 — steel on a raider gives that raider away by sound.
   // Keyed to `enemy:<id>` (not `noise:`) on purpose: this sound identifies a
   // specific mob, so it refreshes the SAME belief the vision sensor uses for
@@ -792,11 +873,19 @@ if (w) w.__kkDamagePlayer = damagePlayer;
 
 export interface Bolt {
   id: number;
-  kind: 'bolt' | 'arrow';
+  kind: 'bolt' | 'arrow' | 'spell';
   pos: { x: number; y: number; z: number };
   vel: { x: number; y: number; z: number };
   age: number;
   damage: number;
+  /** Wave 37 (A3 remainder) · true only for a caster's own spell bolt.
+   *  stepBolt is otherwise built exclusively player-vs-enemy (it tests the
+   *  flight segment against useEnemyStore().enemies and never calls
+   *  damagePlayer at all) — this flag is what branches a hostile bolt to a
+   *  simple segment-vs-player-point test instead, calling damagePlayer(b.damage)
+   *  directly, which also means the player's own shield-block and armor
+   *  reduction apply for free (damagePlayer already owns that logic). */
+  hostile?: boolean;
   /** age at which the shaft lodged, so a corpse's bolts linger briefly
    *  rather than vanishing the instant the mob starts its death animation */
   stuckAt?: number;
@@ -922,6 +1011,57 @@ export function fireArrow(power: number): boolean {
 
 export { MIN_DRAW, FULL_DRAW_TIME };
 
+/** how close a hostile bolt has to come to the player to land — the player
+ *  has no per-part hitbox registry (game/hitbox.ts only ever covers ENEMY
+ *  donors; every other attack on the player so far has been a melee swing or
+ *  a silent hit-scan, neither of which needed one), so a simple point radius
+ *  stands in, same shape as raiderRam's own RAM_RADIUS just below. */
+const HOSTILE_BOLT_HIT_RADIUS = 0.6;
+
+/**
+ * Wave 37 (A3 remainder) · the caster's own ranged attack. No magic/VFX
+ * precedent exists anywhere in this codebase (no particle system, no "magic"
+ * asset in the catalog) — the two existing ranged shapes are the player's own
+ * travelling Bolt/Cannonball projectiles and a silent hit-scan (ranged
+ * bandits/Defenders: straight to damagePlayer, no object in the world at
+ * all). Reskinning the Bolt system is the honest middle ground: a REAL,
+ * visible travelling projectile (Bolts.tsx's own 'spell' render branch)
+ * using the exact same store/physics every other bolt already gets, rather
+ * than inventing a whole new particle system for one enemy kind or falling
+ * back to ANOTHER invisible hit-scan.
+ *
+ * Sibling to fireBolt/fireArrow above, but takes `damage` as a parameter —
+ * Enemies.tsx's own AI branch owns the actual number (mirrors how RANGED_DMG
+ * lives beside the ranged-bandit AI that fires it, not in this module).
+ */
+export function fireSpellBolt(e: EnemyData, damage: number): void {
+  // GROUND_LOS_Y ("the body height a ground-standing figure already
+  // occupies") stands in for both the caster's own casting-hand height and,
+  // added to the player's own foot-height `playerState.y`, roughly the
+  // player's centre mass — reusing the one constant this codebase already
+  // has for "a standing figure's own body height" rather than inventing a
+  // second one.
+  const ox = e.mob.x, oy = GROUND_LOS_Y, oz = e.mob.z;
+  const dx = playerState.x - ox;
+  const dy = (playerState.y + GROUND_LOS_Y) - oy;
+  const dz = playerState.z - oz;
+  const len = Math.hypot(dx, dy, dz) || 1;
+  const speed = 22;
+  useBoltStore.getState().add({
+    id: boltSeq++,
+    kind: 'spell',
+    hostile: true,
+    pos: { x: ox, y: oy, z: oz },
+    vel: { x: (dx / len) * speed, y: (dy / len) * speed, z: (dz / len) * speed },
+    age: 0,
+    damage,
+  });
+  // no dedicated spell SFX exists in the extracted bank (lib/audio.ts's
+  // SOUNDS) — 'lightning' is the closest "something just loosed" cue that
+  // isn't a gunpowder bang or a mundane weapon sound
+  audio.play('lightning', 0.5);
+}
+
 /** advance one bolt; returns true when it should despawn */
 export function stepBolt(b: Bolt, dt: number): boolean {
   const st = useGameStore.getState();
@@ -949,6 +1089,28 @@ export function stepBolt(b: Bolt, dt: number): boolean {
   if (!hasLineOfSight(b.pos.x, b.pos.y, b.pos.z, nx, ny, nz, st.destination ?? null)) {
     audio.play('brick_collide', 0.5);
     return true; // despawns — lodged in whatever it hit
+  }
+  // Wave 37 (A3 remainder) · a hostile bolt (the caster's own spell) is
+  // fired AT the player, so it tests THIS frame's flight segment against
+  // the player's own position instead of the enemy roster below — closest
+  // point on the segment to a fixed point, tested against a hit radius,
+  // the same shape the raiderRam segment check further down this function
+  // already uses.
+  if (b.hostile) {
+    const dx = nx - b.pos.x, dy = ny - b.pos.y, dz = nz - b.pos.z;
+    const len2 = dx * dx + dy * dy + dz * dz || 1;
+    const py = playerState.y + GROUND_LOS_Y;
+    let t = ((playerState.x - b.pos.x) * dx + (py - b.pos.y) * dy + (playerState.z - b.pos.z) * dz) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const px = b.pos.x + dx * t, ppy = b.pos.y + dy * t, pz = b.pos.z + dz * t;
+    const d2 = (px - playerState.x) ** 2 + (ppy - py) ** 2 + (pz - playerState.z) ** 2;
+    if (d2 < HOSTILE_BOLT_HIT_RADIUS * HOSTILE_BOLT_HIT_RADIUS) {
+      damagePlayer(b.damage);
+      audio.play('thud', 0.6);
+      return true;
+    }
+    b.pos.x = nx; b.pos.y = ny; b.pos.z = nz;
+    return b.pos.y <= 0.05 || b.age > 3;
   }
   // Segment-vs-enemy, tested against that donor's REAL per-part volumes
   // (game/hitbox.ts, measured from the assembled rig). This replaces a
@@ -978,7 +1140,12 @@ export function stepBolt(b: Bolt, dt: number): boolean {
     const hit = nearest?.hit;
     if (e && hit) {
       const mult = PART_DAMAGE[hit.part] ?? 1;
-      const dealt = b.damage * mult;
+      const raw = b.damage * mult;
+      // Wave 37 (A3 remainder) · the same frontal block a melee swing
+      // already respects — blocked from range too, deliberately (see
+      // isFrontalHit's own comment above for why melee+ranged both count).
+      const dealt = (e.kind === 'shieldedElite' && isFrontalHit(e.mob.yaw, e.mob.x, e.mob.z, playerState.x, playerState.z))
+        ? raw * SHIELD_REDUCTION : raw;
       e.hp -= dealt;
       audio.play('thud', 0.7);
       // NPC_AI_SPEC §6.2 — the ranged counterpart of landMeleeHit's own

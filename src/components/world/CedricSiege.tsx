@@ -211,6 +211,13 @@ export default function CedricSiege() {
           const kind: EnemyKind = mounted && i < 4 ? 'mountedRaider' : 'bandit';
           useEnemyStore.getState().spawn(kind, sx, sz, true, undefined, true);
         }
+        // Wave 37 (A3 remainder) · one of Cedric's own crew sets up on a
+        // real oc6098b1 catapult and works it against the homestead
+        // independently — see combat.ts's EnemyKind + Enemies.tsx's own
+        // siege-crew AI branch. Spawned already IN PLACE (approaching=false)
+        // rather than walking in from the road like the rest of the party —
+        // it's here to man the gun, not join the charge.
+        useEnemyStore.getState().spawn('siegeCrew', entry.x + 7, entry.z + 7, true, undefined, false);
         // his vehicles, plural, guaranteed — not the ordinary raid's 40% coin-flip
         resetRaiderRam(entry.x + 10, entry.z);
         setActive(true);

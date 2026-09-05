@@ -60,4 +60,25 @@ export const BESTIARY_LORE: Record<EnemyKind, BestiaryLore> = {
   // excluded from the Collection Book (KINDS in BestiaryPanel.tsx) — a duel,
   // not a scannable foe. Kept here only so the Record stays total.
   storm: { strength: '', weakness: '' },
+  // Wave 37 (A3 remainder) · KIND_HP.caster = 6, the lowest Vigour in the
+  // book after storm's own 1-hit duel — but CASTER_RANGE = 16 (Enemies.tsx)
+  // is the longest reach any raider has, and fireSpellBolt is a real,
+  // visible travelling projectile rather than a silent hit-scan
+  caster: {
+    strength: 'Strikes from up to 16m with a real bolt of violet fire you can actually see coming — closing the gap fast is the only way to stop another.',
+    weakness: 'The frailest thing in the book after a plain skeleton. A couple of good hits ends it, and up close its own swing barely scratches you (ATTACK_DMG.caster = 0.8).',
+  },
+  // KIND_HP.shieldedElite = 18, and isFrontalHit (combat.ts) blocks 70% of
+  // whatever lands on its front — melee AND ranged alike
+  shieldedElite: {
+    strength: 'Carries a shield that blocks most of what lands on its front, sword or bolt alike, for as long as you stand in front of it.',
+    weakness: 'The block only covers its front. Step to its flank or its back and the reduction is gone entirely.',
+  },
+  // rides in with Cedric's War Party and mans a real oc6098b1 catapult
+  // (Enemies.tsx) — never chases, but the d<1.8 melee branch still fires
+  // first if you walk right up, so it is a real, killable fight
+  siegeCrew: {
+    strength: "Sets up on a real catapult and works it against your homestead on its own timer, unattended, from well outside your own reach.",
+    weakness: 'Never abandons its post to chase you down. Walk up and it fights back only in melee like anything else — kill it and the catapult falls silent for good.',
+  },
 };

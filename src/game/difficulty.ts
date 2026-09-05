@@ -46,6 +46,18 @@ export const BLACK_DRAGON_TIER = 5;
  *  war party (CEDRIC_SIEGE_TIER above), not part of its first unlock. */
 export const MOUNTED_RAIDER_TIER = 5;
 
+/** Wave 37 (A3 remainder) · the tier at which a caster can show up as an
+ *  occasional raid-filler replacement (Enemies.tsx's rollBanditFiller) —
+ *  deliberately low: it's a glass cannon (KIND_HP.caster = 6), not a
+ *  late-game escalation like the mounted raider/black dragon above. */
+export const CASTER_TIER = 1;
+
+/** Wave 37 (A3 remainder) · the tier at which a shielded elite can replace a
+ *  plain-bandit filler slot — a real defensive mechanic (frontal block)
+ *  earns a slightly later unlock than the caster's glass-cannon ranged
+ *  threat, though still well before the mid/late-game gates above. */
+export const SHIELDED_ELITE_TIER = 2;
+
 export interface TierRule {
   tier: number;
   /** lifetime structures raised */

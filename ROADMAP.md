@@ -8488,3 +8488,59 @@ caught a real correctness gap that would have shipped a genuinely unfightable-at
   and the original green dragon still fires correctly on its own when the black dragon's gate is
   closed, with the new mutual-busy guard confirmed not to block it. `npx tsc --noEmit` / `npm run
   build`: both clean, verified independently.
+
+## Wave 37: caster, shielded-elite, and siege-crew enemy kinds (A3 remainder) — SHIPPED 2026-09-05
+
+Fourth wave of the new 27-wave plan, closing out item A3 in full (Wave 36 shipped the mounted-raider
+half). Three new `EnemyKind`s, each grounded in a real, verified asset/mechanism rather than a
+reskin, plus a real structural gap in `stepBolt()` found and fixed along the way.
+
+- [COMPLETE] ✅ **Caster ("Hedge Witch") — a real, visible ranged spell attack, not another silent
+  hit-scan.** No magic/VFX precedent existed anywhere in the codebase (no particle system, no
+  "magic" asset tag), so this reskins the existing `Bolt` projectile system instead of inventing a
+  new one: `Bolt.kind` gained `'spell'`, `Bolt.hostile?` flags it as fired at the player, and a new
+  `fireSpellBolt()` (sibling to `fireBolt`/`fireArrow`) aims it using the same `GROUND_LOS_Y`/
+  gravity/LOS handling every other bolt already gets. This required a real fix to `stepBolt()`,
+  which was built exclusively player-vs-enemy (tested only against `useEnemyStore`, never called
+  `damagePlayer`) — a hostile bolt now branches early to a segment-vs-player-point radius test that
+  calls `damagePlayer()` directly, so the player's own shield-block and armor reduction apply for
+  free. Donor `minifigweezil01` (violet palette, indices 80-83 of the real runtime palette) —
+  verified unused by any `CONFIGS` entry, not a character-creator option, not a villager look. Fully
+  bare-handed but for a small self-lit `SpellHandGlow` at the casting hand. Gated behind a new
+  `CASTER_TIER=1`, rolled as an occasional (~18%) replacement for a plain-bandit raid-filler slot.
+- [COMPLETE] ✅ **Shielded Elite ("Shieldbearer") — a real, new facing-based defense mechanic.**
+  Investigation found the player's own block is NOT facing-based at all (`dmg *= 0.25` unconditional
+  whenever blocking) — so this is genuinely new, not a reskin of existing logic, though the cone
+  *math* reuses `playerAttack()`'s own forward-dot-product test evaluated from the defender's side.
+  New `isFrontalHit()` + `SHIELD_FRONT_DOT=0.3`/`SHIELD_REDUCTION=0.3`, applied in both
+  `landMeleeHit` and `stepBolt`'s hit-resolution — melee AND ranged are both blocked when frontal,
+  deliberately forcing a real flank rather than just a weapon swap. Donor `minifigcedricbull04`
+  (dark maroon "veteran" palette), sword+shield loadout, gated behind `SHIELDED_ELITE_TIER=2`.
+- [COMPLETE] ✅ **Siege Crew ("Siege Engineer") — a real AI-controlled turret gunner, joining
+  Cedric's War Party.** No precedent for AI-driven siege-engine occupancy existed anywhere (`crew.ts`
+  is 100% player-only); closest analogue found was `CedricSiege.tsx`'s own `WarParty`, whose two
+  engines already fire on their own timer directly at `st.buildings`/`st.keep`, bypassing the
+  player-only cannon pipeline entirely. New `EnemyData.siegeAsset?: 'oc6098b1'` (literal union,
+  mirrors `mountAsset`'s shape) mans the one real turret confirmed to have both a genuine swinging-
+  arm rig AND an explicit `isManualTurret` flag (`oc6098b2` was checked and found to lack the flag;
+  `oc6032b1` has no `part_roles.json` entry at all — a real drift from the plan's wording that
+  treated all three as equivalent). AI never chases (stays at its post) but the existing melee
+  branch still wins if the player closes distance — genuinely killable, not a decoy. Fires on a slow
+  ~7s reload via the existing `fireProp()`/`damageBuilding()`/`damageKeepPart()` mechanism. Spawns
+  in Cedric's War Party muster block only (deliberately excluded from the arena spawn table, since
+  its AI targets the player's real, un-instanced homestead — an arena run must never be able to
+  batter the actual home). Donor `minifiggilbertbad03` ("one of Gilbert's own veterans assigned to
+  the gun").
+- **Verified live with unusually precise, measured evidence.** Caster: a real spell bolt fired every
+  ~2.6s and dealt 1.298 damage per hit (matches `CASTER_SPELL_DMG=1.3` at `raidStrength()`≈1) across
+  two full attack cycles, screenshotted mid-cast. Shielded elite: an identical sword swing (dmg=3)
+  landed 0.9 damage frontal vs. 3.0 damage from the back — a measured reduction ratio of exactly
+  0.300, matching `SHIELD_REDUCTION` to three decimal places. Siege crew: triggered via the REAL
+  production path (satisfied `cedricSiegeAllowed()`, forced the nightly 22% roll), confirmed
+  `cedricWarState` mustered a real `siegeCrew` alongside cedric/gilbert/bandits, watched its engine
+  fire within ~13s and drop a real pre-placed storehouse's HP from full to 28 via genuine
+  `damageBuilding()` structural damage (not a synthetic spawn/damage call), then killed it in melee
+  to confirm it's a real fight. Regression-checked Wave 36's `MOUNT_SEAT_Y` hitbox fix still holds
+  (a real 14-point headshot landed on a mounted raider through the unmodified per-part hit path) and
+  the player's own turret-manning/auto-fire pipeline is completely untouched by this wave's files.
+  `npx tsc --noEmit` / `npm run build`: both clean, verified independently.

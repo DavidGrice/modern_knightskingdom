@@ -15,6 +15,7 @@ function BoltMesh({ bolt }: { bolt: Bolt }) {
   const group = useRef<THREE.Group>(null);
   const remove = useBoltStore((s) => s.remove);
   const arrow = bolt.kind === 'arrow';
+  const spell = bolt.kind === 'spell';
 
   useFrame((_, rawDt) => {
     if (useGameStore.getState().paused) return;
@@ -52,20 +53,36 @@ function BoltMesh({ bolt }: { bolt: Bolt }) {
 
   return (
     <group ref={group} position={[bolt.pos.x, bolt.pos.y, bolt.pos.z]}>
-      <mesh>
-        <cylinderGeometry args={[arrow ? 0.014 : 0.02, arrow ? 0.014 : 0.02, arrow ? 0.6 : 0.42, 5]} />
-        <meshStandardMaterial color="#6b4a2a" roughness={0.8} />
-      </mesh>
-      <mesh position-y={arrow ? 0.32 : 0.22}>
-        <coneGeometry args={[arrow ? 0.022 : 0.035, arrow ? 0.07 : 0.1, 5]} />
-        <meshStandardMaterial color="#9a9aa0" metalness={0.5} roughness={0.4} />
-      </mesh>
-      {arrow && [0, 1, 2].map((i) => (
-        <mesh key={i} position-y={-0.24} rotation-y={(i / 3) * Math.PI * 2}>
-          <boxGeometry args={[0.002, 0.09, 0.05]} />
-          <meshStandardMaterial color="#e8d9b0" roughness={0.9} />
-        </mesh>
-      ))}
+      {spell ? (
+        // Wave 37 (A3 remainder) · the caster's own spell bolt — a small
+        // emissive orb + point light instead of a wood-and-steel shaft, the
+        // "re-skin the Bolt system" approach combat.ts's fireSpellBolt
+        // itself explains: same store, same physics, a different look.
+        <>
+          <pointLight color="#a855f7" intensity={2} distance={4.5} decay={2} />
+          <mesh>
+            <sphereGeometry args={[0.09, 10, 10]} />
+            <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2.4} />
+          </mesh>
+        </>
+      ) : (
+        <>
+          <mesh>
+            <cylinderGeometry args={[arrow ? 0.014 : 0.02, arrow ? 0.014 : 0.02, arrow ? 0.6 : 0.42, 5]} />
+            <meshStandardMaterial color="#6b4a2a" roughness={0.8} />
+          </mesh>
+          <mesh position-y={arrow ? 0.32 : 0.22}>
+            <coneGeometry args={[arrow ? 0.022 : 0.035, arrow ? 0.07 : 0.1, 5]} />
+            <meshStandardMaterial color="#9a9aa0" metalness={0.5} roughness={0.4} />
+          </mesh>
+          {arrow && [0, 1, 2].map((i) => (
+            <mesh key={i} position-y={-0.24} rotation-y={(i / 3) * Math.PI * 2}>
+              <boxGeometry args={[0.002, 0.09, 0.05]} />
+              <meshStandardMaterial color="#e8d9b0" roughness={0.9} />
+            </mesh>
+          ))}
+        </>
+      )}
     </group>
   );
 }
