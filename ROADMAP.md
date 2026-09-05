@@ -8609,3 +8609,65 @@ implies exactly the fix his "permanent defeat" needed — he's jailed, not kille
   during live testing at a high forced night value — a test-methodology note for future dragon-related
   verification passes, not a code defect. `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 39: player-selectable difficulty (Normal/Hard/Grueling) + New Game+ (A4) — SHIPPED 2026-09-05
+
+Sixth wave of the new 27-wave plan. Research found the plan's own wording named a function
+(`rangedReady()`) that has nothing to layer a multiplier onto, and traced the real curve all the way
+through to confirm exactly two functions needed to change for the multiplier to cascade everywhere
+correctly.
+
+- [COMPLETE] ✅ **A real difficulty multiplier, layered on top of the existing tier curve rather than
+  replacing it.** New `DIFFICULTIES` table (`difficulty.ts`: Normal ×1.0, Hard ×1.3, Grueling ×1.7),
+  chosen once at run creation in `CharacterCreator.tsx`, stored as `SaveGame.difficulty`. Investigation
+  found the plan's own "`raidStrength()`/`rangedReady()`" wording was imprecise — `rangedReady()` is a
+  pure boolean unlock *gate* ("does the player own a bow/crossbow and ammo"), not a scalar curve, and
+  layering a multiplier onto it is incoherent; it and every other tier *gate*
+  (`dragonAllowed`/`blackDragonAllowed`/`cedricArcEligible`/the Wave-37 enemy-kind tier constants) were
+  correctly left untouched — Normal/Hard/Grueling changes how hard an unlocked fight hits, never
+  whether/when it unlocks. The multiplier was traced to exactly two real numeric functions:
+  `raidStrength()` and Wave 38's `bossTierScale()`, both now `(existing curve) * difficultyMult`. Since
+  `combat.ts`'s `spawn()` already routes both raid-filler HP/damage and Cedric's rematch scaling
+  through these two functions, and `arena.ts`'s own scale composes through `raidStrength()` too, this
+  cascades correctly through raids, the arena, both dragons, and Cedric's rematch with **zero changes**
+  needed to `combat.ts`, `arena.ts`, `Enemies.tsx`, `DragonSiege.tsx`, `BlackDragonSiege.tsx`, or
+  `CedricSiege.tsx` — confirmed live, not assumed. `mult: 1.0` for Normal (every save written before
+  this existed defaults to it) means zero behavior change for existing saves.
+- [COMPLETE] ✅ **A real New Game+ mode, built on a single shared reset literal rather than a second,
+  hand-maintained field list.** `newGame()`'s own reset `set({...})` was extracted verbatim into
+  `freshSaveFields()`, so a future wave that adds a field to what a fresh run resets automatically
+  resets it in NG+ too — no second list to drift, the exact failure mode every prior wave in this plan
+  has found at least once. New `startNewGamePlus()` builds on that same literal but overlays
+  `carry.xp`/`carry.skillTree` instead of zeroing them. Investigation resolved "skill XP and talents"
+  to precisely two `SaveGame` fields (`xp`, `skillTree`) by tracing the actual gating functions
+  (`totalSkillLevel`, `talentPointsEarned`/`talentBuyable`) and confirming both depend on nothing else
+  NG+ resets — carrying exactly this pair can never produce an invalid state. `perks`/`attrSpent` are
+  deliberately NOT carried forward (perks are gated by `completedQuests`, which does reset — carrying
+  old perks forward could exceed the freshly-computed slot ceiling; attributes are cheaply
+  re-derivable from the carried XP with a few reinvestment clicks). The "run is done" trigger reuses
+  data `MainMenu.tsx` already computes (`rank === RANKS[RANKS.length - 1].name`, i.e. reached the top
+  rank — gated by name-of-top-rank rather than the literal string `'Paladin'`, so Wave 52's own planned
+  "rank above Paladin" item moves this gate for free with no edit here) rather than inventing a new
+  "completion" concept. New leaf module `src/game/ngPlus.ts` stages the carry across the
+  MainMenu→CharacterCreator screen hop (same module-singleton convention as `arenaState`/
+  `difficultyState`), consumed exactly once via a lazy `useState` initializer so a stray
+  back-navigation can never resurrect stale data into an ordinary new run.
+- **Verified live with exact before/after value comparisons, not spot checks.** Difficulty: at 'hard'
+  (picked through the real CharacterCreator UI), a spawned bandit's maxHp went 8→10 and Cedric's
+  45→59 (both exact `round(base×1.3)`); 'normal' reproduced the pre-Wave-39 numbers exactly (zero
+  regression) and 'grueling' gave 14/77. Composition with Wave 38 was proven multiplicative, not
+  additive or overriding: at a forced tier 5, `bossTierScale` gave 1.15/2.75 (tier-climb only, mult=1)
+  and 1.955/4.675 with mult=1.7 layered on — exactly the products, confirming true composition. Storm
+  stayed flat `maxHp=1` under Grueling, confirming her deliberate exclusion. The live AI Debug Overlay
+  rendered "THREAT TIER 0 ... DIFF 1.70x" in the real running scene (screenshotted). New Game+: seeded
+  a synthetic Paladin-rank save (skill level 35, all quests done, real build progress — day 47, 2
+  buildings, land tier 3, a keep) and confirmed MainMenu showed the "Begin New Game+" button only once
+  that rank was reached; after completing the real NG+ flow, confirmed key-by-key that `xp` (all 7
+  skills) and `skillTree` carried over exactly unchanged while dayCount, buildings, landTier,
+  villagers, keep, completedQuests, inventory, attrSpent, and perks all reset to fresh-game defaults.
+  Confirmed an ordinary "New Journey" immediately afterward showed the normal header (not the NG+ one)
+  and produced all-zero xp/empty skillTree, proving the one-shot carry-consumption correctly avoided
+  contaminating a plain new game. Zero console errors across the entire session; the only `newGame()`
+  call site in the whole codebase (`CharacterCreator.tsx`) was confirmed as the sole caller affected by
+  the added optional parameter. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.

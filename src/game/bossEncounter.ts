@@ -37,9 +37,16 @@ const BOSS_TIER_STEP = 0.15; // tunable: %/tier climbed past the fight's own unl
  *  gate meets it exactly as tuned; only climbing further makes it harder.
  *  (Black dragon's own numbers won't move under today's TIER_RULES, since
  *  BLACK_DRAGON_TIER already sits at the curve's ceiling — same as before,
- *  just no longer a duplicated formula.) */
+ *  just no longer a duplicated formula.)
+ *
+ *  Wave 39 (A4): `difficultyState.difficultyMult` (Normal/Hard/Grueling,
+ *  see difficulty.ts's DIFFICULTIES) layers on top of the tier-climb scale
+ *  above, the same composition raidStrength() uses — a Grueling player
+ *  fighting Cedric's rematch right at his own unlock tier still feels the
+ *  manual multiplier, not just further tier climbing. */
 export function bossTierScale(id: BossId): number {
-  return 1 + Math.max(0, difficultyState.tier - BOSS_ENCOUNTERS[id].unlockTier) * BOSS_TIER_STEP;
+  return (1 + Math.max(0, difficultyState.tier - BOSS_ENCOUNTERS[id].unlockTier) * BOSS_TIER_STEP)
+    * difficultyState.difficultyMult;
 }
 
 export interface BossReward { items: Partial<Record<ItemId, number>>; xp: number }

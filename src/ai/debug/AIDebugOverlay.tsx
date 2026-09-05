@@ -146,6 +146,8 @@ export default function AIDebugOverlay() {
       <div className="ai-debug-row ai-debug-dim">
         THREAT TIER <b>{difficultyState.tier}</b> · struct {difficultyState.structures} · skill{' '}
         {difficultyState.skill} · kills {difficultyState.kills} · day {difficultyState.days}
+        {' · DIFF '}
+        <b>{difficultyState.difficultyMult.toFixed(2)}x</b>
         <br />
         DRAGON{' '}
         <span className={difficultyState.tier >= DRAGON_TIER && difficultyState.rangedReady ? '' : 'ai-warn'}>

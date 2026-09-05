@@ -5,6 +5,14 @@ export type ScreenName = 'auth' | 'menu' | 'options' | 'credits' | 'create' | 'g
 
 export type SkillId = 'woodcutting' | 'mining' | 'smithing' | 'fishing' | 'building' | 'combat' | 'farming';
 
+/** Wave 39 (A4) · a manual pressure multiplier picked once at run creation
+ *  (CharacterCreator.tsx), layered on top of difficulty.ts's own tier curve
+ *  — see game/difficulty.ts's DIFFICULTIES table for the actual numbers.
+ *  A plain string union (not an object) because every other per-run pick in
+ *  this file — SkillId, ItemId — is one too, and this is a leaf type with no
+ *  runtime dependents. */
+export type DifficultyId = 'normal' | 'hard' | 'grueling';
+
 export type ItemId =
   | 'wood' | 'plank' | 'stone' | 'iron_ore' | 'iron_bar'
   | 'fish' | 'cooked_fish' | 'flowers'
@@ -264,6 +272,10 @@ export interface CultivatedPlot extends RectSection {
 export interface SaveGame {
   version: 1;
   character: CharacterConfig;
+  /** Wave 39 (A4) · chosen once at newGame()/startNewGamePlus() time, never
+   *  toggled mid-run. Absent = 'normal' (every save written before this
+   *  existed), which is the mult:1.0 tier — zero behavior change for it. */
+  difficulty?: DifficultyId;
   inventory: Partial<Record<ItemId, number>>;
   xp: Record<SkillId, number>;
   unlocks: string[];
