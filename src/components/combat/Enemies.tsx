@@ -5,9 +5,9 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ArmShield, HeldCrossbow, HeldHalberd, HeldSpear, HeldSword } from '../character/Equipment';
-import { useEnemyStore, damagePlayer, resolveDuel, combatState, ATTACK_DMG, ATTACK_CD, MOUNT_SEAT_Y, type EnemyData } from '@/game/combat';
-import RiggedProp from '../world/RiggedProp';
+import { ArmShield, HeldCrossbow, HeldHalberd, HeldSpear, HeldSword, SpellHandGlow } from '../character/Equipment';
+import { useEnemyStore, damagePlayer, resolveDuel, combatState, ATTACK_DMG, ATTACK_CD, MOUNT_SEAT_Y, fireSpellBolt, type EnemyData, type EnemyKind } from '@/game/combat';
+import RiggedProp, { fireProp } from '../world/RiggedProp';
 import type { SoundName } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
@@ -20,11 +20,13 @@ import { findPath, rebuildNav, getNavGrid, hasLineOfSight, GROUND_LOS_Y, navBloc
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import HealthBillboard from './HealthBillboard';
 import type { RiggedMinifig } from '@/lib/minifigRig';
-import { isDoorLike, isHomeBuilding } from '@/game/types';
+import { isBuilt, isDoorLike, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId } from '@/game/types';
 import { ITEMS } from '@/game/data/items';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD, POND, WORLD_HALF } from '@/game/data/world';
-import { sizeFor } from '@/game/data/buildables';
+import { sizeFor, heightOf } from '@/game/data/buildables';
+import { labCanFire, labOccupyMode } from '@/game/data/labCapabilities';
+import { difficultyState, CASTER_TIER, SHIELDED_ELITE_TIER } from '@/game/difficulty';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
@@ -94,6 +96,33 @@ const CONFIGS: Record<string, CharacterConfig> = {
     name: 'Mounted Raider', headDonor: 'minifiggilbertbad02', bodyDonor: 'minifiggilbertbad02',
     armColor: 38, handColor: 18, legColor: 38, hipColor: 24,
   },
+  // Wave 37 (A3 remainder) · minifigweezil01 is a real, verified, previously-
+  // unused donor variant (crossbow+bolt mold, never kept — keepProps={false}
+  // below) — not a creator option (FACE_OPTIONS/CREST_OPTIONS only offer the
+  // '00' variant of each named family) and not a villager look (VILLAGER_LOOKS
+  // never uses it either). A violet family from the real runtime palette
+  // (indices 80-83, not the [255,0,255] filler padding the rest of the array)
+  // is what reads as "not a mundane fighter" without inventing a new asset.
+  caster: {
+    name: 'Hedge Witch', headDonor: 'minifigweezil01', bodyDonor: 'minifigweezil01',
+    armColor: 82, handColor: 18, legColor: 83, hipColor: 38,
+  },
+  // minifigcedricbull04 (battle axe+shield mold) — real, verified, unused by
+  // any other CONFIGS entry, not a creator option, not a villager look. A
+  // dark maroon/near-black "veteran" scheme distinct from every other kind's
+  // palette in this table.
+  shieldedElite: {
+    name: 'Shieldbearer', headDonor: 'minifigcedricbull04', bodyDonor: 'minifigcedricbull04',
+    armColor: 23, handColor: 18, legColor: 38, hipColor: 23,
+  },
+  // minifiggilbertbad03 (crossbow+bolt+shield mold) — real, verified, unused,
+  // not a creator option, not a villager look. Rides along inside Cedric's
+  // War Party (CedricSiege.tsx) — "one of Gilbert's own veterans assigned to
+  // the gun." A leather/soot engineer palette, all real indices.
+  siegeCrew: {
+    name: 'Siege Engineer', headDonor: 'minifiggilbertbad03', bodyDonor: 'minifiggilbertbad03',
+    armColor: 74, handColor: 18, legColor: 75, hipColor: 46,
+  },
 };
 
 /** crossbow-armed bandits (`data.ranged`): hold at range and hit-scan
@@ -102,10 +131,45 @@ const CONFIGS: Record<string, CharacterConfig> = {
 const RANGED_RANGE = 14;
 const RANGED_ATTACK_CD = 1.8;
 const RANGED_DMG = 1.2;
+/** Wave 37 (A3 remainder) · a caster's own ranged profile — a real, visible
+ *  spell bolt (fireSpellBolt) rather than another silent hit-scan, but the
+ *  same range/no-kiting AI SHAPE as a ranged bandit (see rangedProfile
+ *  below): point-blank is fine, and nothing here invents new movement AI. */
+const CASTER_RANGE = 16;
+const CASTER_ATTACK_CD = 2.6;
+const CASTER_SPELL_DMG = 1.3;
+/** Wave 37 (A3 remainder) · a siege crew's own manned-engine reload — much
+ *  slower than any personal attack cooldown (this is a catapult, not a
+ *  sword), and distinct from RAID_SIEGE_DMG.siegeCrew below (its own
+ *  opportunistic melee-vs-keep value if it ends up standing next to a
+ *  finished keep piece, same as any other raider). */
+const SIEGE_CREW_ENGINE_DMG = 20;
+const SIEGE_CREW_ENGINE_CD = 7;
+/** how far back of its own manned engine's centre a siege crew's figure
+ *  stands, so it doesn't render inside the catapult's own mesh — same
+ *  "standoff behind the machine" idea game/crew.ts's own crewState.back
+ *  computes for the PLAYER crewing an engine, just a fixed approximation
+ *  here rather than re-deriving it from the buildable's own depth */
+const SIEGE_CREW_STANDOFF = 2.2;
 /** J51 follow-up: structural damage per hit against a keep piece — a
  *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
  *  pool), closer to what the player's own ram/cannon already deal it */
-const RAID_SIEGE_DMG: Record<string, number> = { bandit: 9, gilbert: 12, cedric: 18, royal: 12, mountedRaider: 11 };
+const RAID_SIEGE_DMG: Record<string, number> = {
+  bandit: 9, gilbert: 12, cedric: 18, royal: 12, mountedRaider: 11,
+  caster: 6, shieldedElite: 14, siegeCrew: 12,
+};
+
+/** Wave 37 (A3 remainder) · rolled once per plain-bandit filler slot in the
+ *  ordinary dusk raid (see the raid trigger below): an occasional replacement
+ *  once the player has climbed the difficulty curve far enough, one roll
+ *  partitioned into three mutually-exclusive outcomes rather than two
+ *  independent checks that could both fire on the same slot. */
+function rollBanditFiller(): EnemyKind {
+  const r = Math.random();
+  if (difficultyState.tier >= CASTER_TIER && r < 0.18) return 'caster';
+  if (difficultyState.tier >= SHIELDED_ELITE_TIER && r < 0.18 + 0.16) return 'shieldedElite';
+  return 'bandit';
+}
 /** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
  *  every appearance except his own sanctioned final stand — a real fight
  *  first, then he bails, same shape as the bandit morale-break below */
@@ -399,6 +463,19 @@ function Enemy({ data }: { data: EnemyData }) {
           if (dd < 16 && dd < villagerD) { villagerD = dd; villagerTarget = { id: vid, x: vm.x, z: vm.z }; }
         }
       }
+
+      // Wave 37 (A3 remainder) · a caster fights the PLAYER at range the
+      // same SHAPE a ranged bandit already does (point-blank is fine, no
+      // kiting) — see the final d<range branch below, the one place this is
+      // read. Deliberately NOT generalized through the three priority
+      // branches just above (defTarget/companionTarget/villagerTarget): a
+      // caster still falls back to its own melee stats (ATTACK_DMG.caster/
+      // ATTACK_CD.caster) against those targets this wave — a real, named
+      // scope cut, not an oversight.
+      const rangedProfile = data.ranged ? { range: RANGED_RANGE, cd: RANGED_ATTACK_CD }
+        : data.kind === 'caster' ? { range: CASTER_RANGE, cd: CASTER_ATTACK_CD }
+        : null;
+
       if (keepTarget && keepD < d && keepD < defD) {
         m.state = 'attack';
         m.attackCd -= dt;
@@ -523,15 +600,15 @@ function Enemy({ data }: { data: EnemyData }) {
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);
         }
-      } else if (d < (data.ranged ? RANGED_RANGE : 1.8)) {
+      } else if (d < (rangedProfile ? rangedProfile.range : 1.8)) {
         m.state = 'attack';
         m.attackCd -= dt;
         // held at range rather than closing the last few metres (see the
         // chase branch below), so — unlike melee, which already arrives
-        // facing its target — a crossbow bandit needs its own aim-turn here
-        if (data.ranged) m.yaw = Math.atan2(-(playerState.x - m.x), -(playerState.z - m.z));
+        // facing its target — a ranged attacker needs its own aim-turn here
+        if (rangedProfile) m.yaw = Math.atan2(-(playerState.x - m.x), -(playerState.z - m.z));
         if (m.attackCd <= 0) {
-          m.attackCd = data.ranged ? RANGED_ATTACK_CD : data.kind === 'storm'
+          m.attackCd = rangedProfile ? rangedProfile.cd : data.kind === 'storm'
             // Silver Tongue trade-off perk: its own upside is trade prices
             // (gameStore.ts's sellItem/buyOffer) — the cost is Storm striking
             // faster here, the same direction reputation already pushes this
@@ -550,10 +627,17 @@ function Enemy({ data }: { data: EnemyData }) {
             if (hasLineOfSight(m.x, GROUND_LOS_Y, m.z, playerState.x, playerState.y, playerState.z, data.world ?? null)) {
               damagePlayer(RANGED_DMG * data.scale);
             }
+          } else if (data.kind === 'caster') {
+            // Wave 37 · a REAL travelling spell bolt, not another silent
+            // hit-scan — same LOS gate the ranged bandit uses above, so a
+            // caster behind full cover doesn't loose one at a wall.
+            if (hasLineOfSight(m.x, GROUND_LOS_Y, m.z, playerState.x, playerState.y, playerState.z, data.world ?? null)) {
+              fireSpellBolt(data, CASTER_SPELL_DMG * data.scale);
+            }
           } else if (data.kind === 'storm') resolveDuel(false, data.id);
           else damagePlayer(ATTACK_DMG[data.kind] * data.scale);
         }
-      } else if (d < 26 || (m.alertT ?? 0) > 0) {
+      } else if (data.kind !== 'siegeCrew' && (d < 26 || (m.alertT ?? 0) > 0)) {
         m.state = 'chase';
         m.attackCd = Math.max(0.4, m.attackCd - dt);
 
@@ -608,6 +692,36 @@ function Enemy({ data }: { data: EnemyData }) {
         // codebase (see PlayerController/combat.ts), so recovering yaw from
         // a movement direction needs the negated atan2, not a bare one.
         m.yaw = Math.atan2(-nx, -nz);
+      } else if (data.kind === 'siegeCrew') {
+        // Wave 37 (A3 remainder) · a real, additive AI behaviour: never
+        // chases (guarded on the branch above) and never idly wanders off
+        // its post either — it works its manned engine instead, on a slow
+        // reload, independently of wherever the player is on the field.
+        // The existing d<1.8 melee branch above still fires first and wins
+        // if the player walks right up, so this is genuinely killable, not
+        // a decoy. Target selection mirrors CedricSiege.tsx's own WarParty
+        // engine loop (a random finished home building or keep socket).
+        m.state = 'attack';
+        m.attackCd -= dt;
+        if (m.attackCd <= 0 && labCanFire(data.siegeAsset)) {
+          m.attackCd = SIEGE_CREW_ENGINE_CD + Math.random() * 3;
+          const targets: { keep: boolean; id: string; x: number; z: number }[] = [
+            ...st.buildings.filter((b) => isBuilt(b) && isHomeBuilding(b) && b.type !== 'keep')
+              .map((b) => ({ keep: false, id: b.id, x: b.x, z: b.z })),
+            ...(st.keep
+              ? KEEP_SOCKETS.filter((s) => st.keep!.parts[s.id] && (st.keep!.built[s.id] ?? 0) >= 1)
+                .map((s) => ({ keep: true, id: s.id, x: st.keep!.x + s.x, z: st.keep!.z + s.z }))
+              : []),
+          ];
+          if (targets.length) {
+            const target = targets[Math.floor(Math.random() * targets.length)];
+            m.yaw = Math.atan2(-(target.x - m.x), -(target.z - m.z));
+            fireProp(`siegeCrew_${data.id}`);
+            audio.playAt('explosion', target.x, target.z, 0.7);
+            if (target.keep) st.damageKeepPart(target.id, SIEGE_CREW_ENGINE_DMG, 'was battered by a Siege Engineer');
+            else st.damageBuilding(target.id, SIEGE_CREW_ENGINE_DMG, 'was battered by a Siege Engineer');
+          }
+        }
       } else {
         m.state = 'wander';
         m.wanderT -= dt;
@@ -716,15 +830,34 @@ function Enemy({ data }: { data: EnemyData }) {
           <RiggedProp assetId={data.mountAsset} height={data.mountAsset === 'l7339232' ? 1.9 : 1.7} gaitSpeed={ridePace} />
         </Suspense>
       )}
-      <group position-y={data.mountAsset ? MOUNT_SEAT_Y : 0}>
+      {/* Wave 37 (A3 remainder): a real Wave-35 turret asset — the same
+          RiggedProp pattern the mount above already uses, just for a
+          stationary engine instead of a horse. Rotates with the whole group
+          (g.rotation.y above) exactly like the mount does, so the machine
+          visibly turns to face whatever it just fired at. */}
+      {data.siegeAsset && (
+        <Suspense fallback={null}>
+          <RiggedProp assetId={data.siegeAsset} height={heightOf(data.siegeAsset)} buildingId={`siegeCrew_${data.id}`} />
+        </Suspense>
+      )}
+      <group
+        position-y={data.mountAsset ? MOUNT_SEAT_Y : 0}
+        // the crew stands clear of its own machine rather than rendering
+        // inside it — SIEGE_CREW_STANDOFF's own comment above explains the
+        // fixed approximation; labOccupyMode is consulted (rather than
+        // hardcoding standing) so a future seated variant (oc6032b1) gets
+        // the right leg pose for free, same as a mounted rider's does.
+        position-z={data.siegeAsset ? SIEGE_CREW_STANDOFF : 0}
+      >
         <RiggedFigure
           config={CONFIGS[data.kind]}
           height={1.72}
           // Wave 36 (A3): the same straddle-bend override Defenders.tsx
           // already applies to a mounted rider's legs (RiggedFigure.tsx's
           // own seatedLegPose, Wave 34/G6.7) — config-agnostic, so it reuses
-          // cleanly onto an enemy rig too.
-          seatedLegPose={!!data.mountAsset}
+          // cleanly onto an enemy rig too. Wave 37: extended to a siege
+          // crew's own manned engine, via the lab's real occupyMode data.
+          seatedLegPose={!!data.mountAsset || labOccupyMode(data.siegeAsset) === 'seated'}
           // Reported 2026-07-28: Gilbert spawned with a hand floating away from
           // his body. Root cause — his donor's own molded axe+shield are
           // "prop"-kind parts (verified, part_roles.json): kept (per the old
@@ -761,15 +894,18 @@ function Enemy({ data }: { data: EnemyData }) {
         {rig && ((data.kind === 'bandit' && !data.ranged) || data.kind === 'gilbert')
           && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
         {/* the crown's knights — and Cedric, their equal and opposite — fight
-            sword-and-shield, like the player's own kit. */}
-        {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton')
+            sword-and-shield, like the player's own kit. Wave 37: the
+            shielded elite (its whole mechanic) and the siege crew's own
+            melee-defense fallback join the same kit. */}
+        {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton'
+          || data.kind === 'shieldedElite' || data.kind === 'siegeCrew')
           && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
         {/* shields (requested 2026-07-30): every melee kind now carries one —
             a crossbow bandit's off-hand stays empty (it's a two-handed weapon,
             same as Gilbert's halberd), and skeletons pick up the shield they
             were the one melee kind still missing. */}
         {rig && (data.kind === 'royal' || data.kind === 'cedric' || data.kind === 'skeleton'
-          || (data.kind === 'bandit' && !data.ranged))
+          || (data.kind === 'bandit' && !data.ranged) || data.kind === 'shieldedElite' || data.kind === 'siegeCrew')
           && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
         {/* Wave 36 (A3): couched-lance cavalry — spear and shield, like the
             player's own kit rather than Gilbert's halberd (a two-handed
@@ -778,6 +914,12 @@ function Enemy({ data }: { data: EnemyData }) {
           && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
         {rig && data.kind === 'mountedRaider'
           && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+        {/* Wave 37 (A3 remainder): the caster is fully bare-handed — the
+            first enemy in the roster with no held prop at all — save for a
+            small self-lit glow at its casting hand, so it reads as a
+            spellcaster rather than simply unarmed. */}
+        {rig && data.kind === 'caster'
+          && createPortal(<SpellHandGlow side={-1} />, rig.joints.rightarm)}
       </group>
     </group>
   );
@@ -1075,9 +1217,12 @@ export default function Enemies() {
           spawn('gilbert', sx, sz, true, undefined, true, false, 1, false, null);
         }
         if (!st.destination) audio.playVoice('greeting_weezil', 0.6);
+        // Wave 37 (A3 remainder): each plain-bandit filler slot can
+        // occasionally roll a caster or a shielded elite instead, once the
+        // difficulty curve allows it (rollBanditFiller, above)
         for (let i = 1; i < 3; i++) {
           const [sx, sz] = roadSpawnPos(i);
-          spawn('bandit', sx, sz, true, undefined, true, false, 1, false, null);
+          spawn(rollBanditFiller(), sx, sz, true, undefined, true, false, 1, false, null);
         }
       }
       // raiders occasionally bring their own ram — the same threat the

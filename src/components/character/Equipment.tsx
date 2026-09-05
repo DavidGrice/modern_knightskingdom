@@ -68,6 +68,24 @@ export function HeldCrossbow({ side = -1 }: { side?: number }) {
   );
 }
 
+/** Wave 37 (A3 remainder) · the caster carries no weapon at all — this is
+ *  the one held-slot "prop" it gets instead: a small self-lit glow at the
+ *  casting hand, so it reads as a spellcaster rather than simply unarmed.
+ *  Same joint-local offset family as HeldSword/HeldCrossbow above (this
+ *  project's one attach-point convention for anything portaled onto
+ *  rightarm) — reused rather than re-derived. */
+export function SpellHandGlow({ side = -1 }: { side?: number }) {
+  return (
+    <group position={[side * 0.12, -0.5, 0.21]}>
+      <pointLight color="#a855f7" intensity={1.2} distance={2.5} decay={2} />
+      <mesh>
+        <sphereGeometry args={[0.06, 10, 10]} />
+        <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2.2} />
+      </mesh>
+    </group>
+  );
+}
+
 export function HeldHelmet() {
   return (
     <group position={[0, 0.09, 0.01]}>
