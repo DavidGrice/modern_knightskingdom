@@ -9,7 +9,10 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, type EnemyKind } from '@/game/combat';
-import { ARENA_MILESTONES, arenaState, arenaSpawnScale, rollArenaMilestoneLoot } from '@/game/arena';
+import {
+  ARENA_MILESTONES, arenaState, arenaSpawnScale, rollArenaMilestoneLoot,
+  ARENA_ENV_BY_ID, rollNextArenaEnv, startArenaObjective,
+} from '@/game/arena';
 import { ARENA_ORIGIN, ARENA_RADIUS } from '@/game/data/worlds';
 
 /** weighted over the same filler kinds a raid draws from — excludes
@@ -62,6 +65,52 @@ export default function ArenaSpawner() {
       const drop = rollArenaMilestoneLoot();
       st.addItems(drop, 'grant');
       st.notify(`${m} kills! The arena rewards you.`, true);
+
+      // Wave 43 (A5) · mini-boss — one champion-tier spawn per milestone,
+      // credited/cleaned up exactly like every other arena mob (`arena: true`,
+      // no new flag). shieldedElite/royal are both already filler-tier
+      // arena spawns (SPAWN_TABLE above) at modest weight; here one is
+      // guaranteed and scaled up, so a milestone always feels like a real
+      // spike rather than just another loot roll.
+      const bossKind: EnemyKind = Math.random() < 0.5 ? 'shieldedElite' : 'royal';
+      const bossAngle = Math.random() * Math.PI * 2;
+      const bossR = ARENA_RADIUS * 0.5;
+      useEnemyStore.getState().spawn(
+        bossKind,
+        ARENA_ORIGIN.x + Math.sin(bossAngle) * bossR,
+        ARENA_ORIGIN.z + Math.cos(bossAngle) * bossR,
+        false, undefined, false, false,
+        arenaSpawnScale() * 1.6, true,
+      );
+      st.notify('A champion enters the ring!', true);
+
+      // bonus objective — (re)rolled at every milestone
+      startArenaObjective();
+
+      // mid-run mutator swap — every milestone EXCEPT the first respects
+      // the player's own entry choice for their opening 50 kills, then
+      // starts reshuffling the ring underneath them. ArenaScene.tsx polls
+      // arenaState.env itself, so this swap is visible the moment it lands.
+      if (m !== ARENA_MILESTONES[0]) {
+        arenaState.env = rollNextArenaEnv(arenaState.env ?? 'earth');
+        st.notify(`The ring shifts — welcome to ${ARENA_ENV_BY_ID[arenaState.env].name}!`, true);
+      }
+    }
+
+    // bonus-objective resolution — outside the milestone loop since it must
+    // keep ticking (and can expire) on frames no milestone is crossed
+    const obj = arenaState.objective;
+    if (obj) {
+      if (arenaState.kills - obj.startKills >= obj.need) {
+        arenaState.objective = null;
+        const drop = rollArenaMilestoneLoot();
+        st.addItems(drop, 'grant');
+        st.notify('Bonus objective complete! The arena rewards you further.', true);
+      } else if (performance.now() >= obj.deadline) {
+        // a redo, not a punishment — same forgiving tone as a missed
+        // milestone: it just quietly stops offering this bonus
+        arenaState.objective = null;
+      }
     }
 
     timer.current -= dt;

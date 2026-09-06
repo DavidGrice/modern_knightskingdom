@@ -24,6 +24,7 @@ import FishingMeter from './FishingMeter';
 import ClaimBanner from './ClaimBanner';
 import DungeonStatus from './DungeonStatus';
 import BuildChallengePanel from './BuildChallengePanel';
+import ChallengePanels from './ChallengePanels';
 import FortStatus from './FortStatus';
 import OrderStatus from './OrderStatus';
 import ArenaHud from './ArenaHud';
@@ -373,6 +374,7 @@ export default function HUD() {
       <OrderRadial />
       <ClaimBanner />
       <BuildChallengePanel />
+      <ChallengePanels />
       <CeremonyBanner />
 
       <div className="kk-toasts">

@@ -60,12 +60,43 @@ export const ARENA_ENV_BY_ID: Record<ArenaEnvId, ArenaEnv> =
 
 export const ARENA_MILESTONES = [50, 100, 200, 500];
 
+/** Wave 43 (A5) — a discrete "kill N more in T seconds" bonus, (re)rolled at
+ *  every milestone crossing (see ArenaSpawner.tsx). Failing it is a no-op,
+ *  not a punishment — same forgiving tone as the endless mode's own open-
+ *  ended kill counter: it just quietly stops offering the bonus loot until
+ *  the next milestone rolls a fresh one. */
+export interface ArenaObjective {
+  startKills: number;
+  need: number;
+  deadline: number; // performance.now() timestamp
+}
+export const ARENA_OBJECTIVE_KILLS = 10;
+export const ARENA_OBJECTIVE_TIME_MS = 30_000;
+
 export const arenaState: {
   active: boolean;
   env: ArenaEnvId | null;
   kills: number;
   milestonesClaimed: number[];
-} = { active: false, env: null, kills: 0, milestonesClaimed: [] };
+  objective: ArenaObjective | null;
+} = { active: false, env: null, kills: 0, milestonesClaimed: [], objective: null };
+
+export function startArenaObjective() {
+  arenaState.objective = {
+    startKills: arenaState.kills,
+    need: ARENA_OBJECTIVE_KILLS,
+    deadline: performance.now() + ARENA_OBJECTIVE_TIME_MS,
+  };
+}
+
+/** Rolls a different environment than the one currently active, so a
+ *  mid-run mutator swap (ArenaSpawner.tsx, every milestone past the first)
+ *  always actually changes something rather than sometimes re-rolling the
+ *  same ring by chance. */
+export function rollNextArenaEnv(exclude: ArenaEnvId): ArenaEnvId {
+  const choices = ARENA_ENVS.filter((e) => e.id !== exclude);
+  return choices[Math.floor(Math.random() * choices.length)].id;
+}
 
 /** raidStrength() (the game's one already-tuned overall-progress curve)
  *  times a run-local escalation that climbs smoothly every 25 kills within
@@ -109,11 +140,13 @@ export function resetArenaRun(envId: ArenaEnvId) {
   arenaState.env = envId;
   arenaState.kills = 0;
   arenaState.milestonesClaimed = [];
+  arenaState.objective = null;
 }
 
 export function endArenaRun() {
   arenaState.active = false;
   arenaState.env = null;
+  arenaState.objective = null;
 }
 
 if (typeof window !== 'undefined') {

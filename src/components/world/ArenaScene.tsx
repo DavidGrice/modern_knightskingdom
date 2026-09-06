@@ -13,8 +13,9 @@
 // mounts it in place of a baked scene, so it supplies its own lighting and
 // fog entirely, the same way DungeonScene.tsx supplies its own dim mood for
 // the other non-baked destination, the Sealed Crypt.
-import { useMemo } from 'react';
-import { ARENA_ENV_BY_ID, type ArenaEnvId } from '@/game/arena';
+import { useMemo, useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { arenaState, ARENA_ENV_BY_ID, type ArenaEnvId } from '@/game/arena';
 import { ARENA_RADIUS } from '@/game/data/worlds';
 
 const SEG_COUNT = 28;
@@ -57,7 +58,29 @@ function LavaPools() {
   );
 }
 
-export default function ArenaScene({ envId }: { envId: ArenaEnvId | null }) {
+export default function ArenaScene({ envId: initialEnvId }: { envId: ArenaEnvId | null }) {
+  // Wave 43 (A5) — TemplateWorld.tsx passes `envId` as a plain prop, read
+  // only whenever TemplateWorldRoot itself happens to re-render (its own
+  // effect deps are `[destId]`/`claimedWorlds[destId]`, neither of which
+  // changes on a mid-run mutator swap — see ArenaSpawner.tsx's own new
+  // swap). arenaState.env is a plain mutable leaf-module field, not Zustand
+  // state, so nothing upstream re-renders on a bare reassignment of it.
+  // Polling it here on a `useFrame` throttle is the in-Canvas equivalent of
+  // the rAF-poll convention ArenaHud.tsx/BuildChallengePanel.tsx already use
+  // outside the Canvas for the same kind of non-reactive leaf-module read —
+  // `setEnvId` only actually re-renders on the rare frame a swap really
+  // happened, since React bails out on an unchanged value otherwise. The
+  // `initialEnvId` prop still supplies the correct value at mount (and stays
+  // the single source of truth for every OTHER destination, since this
+  // component only ever renders for the arena).
+  const [envId, setEnvId] = useState(initialEnvId);
+  const pollT = useRef(0);
+  useFrame((_, dt) => {
+    pollT.current += dt;
+    if (pollT.current < 0.5) return;
+    pollT.current = 0;
+    if (arenaState.env !== envId) setEnvId(arenaState.env);
+  });
   const env = ARENA_ENV_BY_ID[envId ?? 'earth'];
   const angles = useRingAngles();
   const R = ARENA_RADIUS;

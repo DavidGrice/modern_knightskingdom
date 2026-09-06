@@ -48,6 +48,7 @@ import RaiderRam from '../combat/RaiderRam';
 import Cannonballs from '../combat/Cannonballs';
 import Bolts from '../combat/Bolts';
 import ArenaSpawner from '../combat/ArenaSpawner';
+import ChallengeRunner from '../combat/ChallengeRunner';
 import AiRuntime from '@/ai/AiRuntime';
 import AIPerceptionGizmos from '@/ai/debug/AIPerceptionGizmos';
 
@@ -145,6 +146,10 @@ export default function GameWorld() {
       <Cannonballs />
       <Bolts />
       <ArenaSpawner />
+      {/* Wave 43 (B6) · same always-mounted reasoning as ArenaSpawner just
+          above — ticks the 3 new challenge-ground mechanics and cheaply
+          early-returns on every frame none of them is the active one. */}
+      <ChallengeRunner />
       {/* Wave 15 · always mounted (unlike CombatController above), same
           reasoning as ArenaSpawner/AiRuntime here — Start/B need to keep
           opening/closing panels and pausing even while BuildController (not
