@@ -172,7 +172,15 @@
       "defenderState, and keep pieces) — the term was implemented and inert on",
       "purpose, so phase 7's combat pass would have a real seam to write into.",
       "See perception/Senses.ts's reportAgentDamaged() and",
-      "actions/engageThreatVillager.ts for the real caller."
+      "actions/engageThreatVillager.ts for the real caller.",
+      "Updated 2026-09-05 (Wave 41): a SWORN DEFENDER now also calls this —",
+      "rosterSync.ts spawns a real Agent for one (archetype defenderObserver),",
+      "so Enemies.tsx's own defTarget branch (the oldest damage path in this",
+      "system, predating even the villager one above) finally has a live",
+      "agent to report against too. Perception/belief/threat only: see",
+      "archetypes.json's own dated note for why this cannot turn into a",
+      "second engage_threat/take_cover for the same defender Defenders.tsx is",
+      "already fighting with."
     ],
     "smoothingTau": 0.28,
     "closeDistance": 4,

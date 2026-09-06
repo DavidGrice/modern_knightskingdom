@@ -8736,3 +8736,59 @@ than fabricating a clip reference that doesn't exist.
   pre-Wave-40 early-return already no-ops the whole function in that case — live-confirmed correct
   once a second weapon is actually owned, and defensible as-is since no real weapon change occurs to
   break a chain over. `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+## Wave 41: a real, perception-only Agent for sworn defenders (A2, scoped) — SHIPPED 2026-09-05
+
+Eighth wave of the new 27-wave plan, and the one item this plan flagged for its own dedicated Plan-mode
+design session before implementation — this project's fourth encounter with the same architectural
+fork (the AI reasoner's `guard` archetype vs. `Defenders.tsx`'s own shipped, tuned combat AI), after
+Phase 7 first named it, Wave 21 sidestepped it for ordinary villagers, and Wave 25 sidestepped it again
+for the companion. The dedicated design pass considered a full migration (deleting `Defenders.tsx`'s
+FSM in favor of the reasoner) and ruled it out with real reasoning, then found and closed two concrete
+landmines in the naive middle-ground reading before recommending a genuinely safe scope.
+
+- [COMPLETE] ✅ **A full migration was investigated and ruled out, honestly, not by default.** A
+  defender's real behavior surface — loadout-based weapon rendering, mounted combat, tower/wall/keep
+  elevation with ground-raider invulnerability, day/night shift + bed-claiming, the four-way global
+  order system, one-shot scout reporting, dragon-air combat, water avoidance, gear-driven HP/rendering,
+  LOS-gated ranged attacks — has no reasoner-side equivalent to extend, unlike Wave 21/25's own
+  single-new-action scope. Porting all of it in one wave would have been original new-content design
+  for at least six independent subsystems, not a migration of existing behavior — directly against this
+  project's own repeated house style of small, additive changes over a rewrite.
+- [COMPLETE] ✅ **Two real, concrete landmines found in the "just reverse the exclusion" reading, before
+  it could ship broken.** (1) Spawning a defender's Agent under the existing `'guard'` archetype would
+  let the reasoner's own `engage_threat` fire in real parallel with `Defenders.tsx`'s own independent
+  attack loop — a second, un-tuned source of damage against the same `EnemyData.hp`. (2) `guard`'s
+  intrinsic list also includes `wander`, whose real capability gate (`agent.bb.job !== null`) a
+  defender's `bb.job` would pass — the moment the player travels away from home, a defender's `Agent`
+  would go tier-D and `wander` could actually win, silently walking the agent's position along a fake
+  ring decoupled from the real position `Defenders.tsx` renders from.
+- [COMPLETE] ✅ **The real, shipped scope: a brand-new `defenderObserver` archetype with a deliberately
+  EMPTY intrinsic action list.** `assembleCandidates` filters every action against an archetype's
+  intrinsic set before it is ever scored — an empty list is a structural guarantee (not gate-tuning)
+  that a `defenderObserver` agent can never win `engage_threat`/`take_cover`/`wander`, closing both
+  landmines above by construction. `rosterSync.ts` now spawns this real Agent for every sworn defender,
+  mirroring `defenderState`'s real position into it one-directionally every frame (with explicit
+  despawn+respawn handling for a villager's job crossing the defender boundary in either direction
+  mid-session, since `Agent.archetype` is `readonly`). `Enemies.tsx`'s existing defender-damage line
+  gained one call to `reportAgentDamaged()` — the exact one-line addition Waves 21/25 already made for
+  their own populations — finally giving `reportAgentDamaged()` a real caller for a defender and making
+  `bb.lastDamageAt`/§6.3's threat term genuinely populated for the first time. `'guard'` itself is
+  completely untouched and remains reserved for a real future full migration. `Defenders.tsx`,
+  `game/defenders.ts`, and `game/data/defenderOrders.ts` are byte-for-byte untouched — confirmed, not
+  assumed, by an explicit empty-diff check on all three files.
+- **Verified live with the central structural safety claim checked two independent ways.** Read
+  `assembleCandidates`/`pickRaw`/`runReasoner`'s own code path directly to confirm an empty intrinsic
+  list structurally forces `agent.intent = null` forever, then confirmed it live: polled a real
+  `defenderObserver` agent's `bb.lastScores`/`currentActionId`/`intent` across 12+ real think ticks
+  standing adjacent to it (always empty/null), then again through a full home→destination (tier-D
+  leg)→home round trip — the exact scenario the design worried a wrong guarantee would surface as a
+  fake wandering agent — with the agent's mirrored position tracking real `defenderState.x/z` exactly
+  throughout, zero divergence. Confirmed a real raid hit on a defender updates `bb.lastDamageAt` for
+  the first time ever, with defender combat numbers (HP/damage/kill/flee behavior) completely
+  unchanged from the untouched formula. Confirmed reassigning a defender to a civilian job mid-session
+  correctly despawns the observer Agent and respawns a real `'villager'`-archetype one with
+  `take_cover`/`engage_threat_villager` genuinely reachable again through the live pipeline. Confirmed
+  no regression to ordinary villagers, the companion, court NPCs, or any Wave 36-40 enemy kind, across
+  3 full reproducible test runs with zero console/page errors. `npx tsc --noEmit` / `npm run build`:
+  both clean, verified independently.

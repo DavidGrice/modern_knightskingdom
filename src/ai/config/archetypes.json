@@ -76,7 +76,29 @@
     "every villager fights and not at every stage of the game — see that",
     "file's own header for the full argument. 'take_cover' is untouched: a",
     "raid still sends every villager fleeing exactly as before, and this new",
-    "action's real, reliable content is entirely the between-raid case."
+    "action's real, reliable content is entirely the between-raid case.",
+    "Updated 2026-09-05 (Wave 41): new 'defenderObserver' archetype. This is a",
+    "real, spawned Agent for a SWORN DEFENDER, but for perception/belief/",
+    "reportAgentDamaged purposes only — Defenders.tsx still drives 100% of a",
+    "defender's actual combat, movement and rendering, exactly as before this",
+    "wave. `intrinsic: []` is LOAD-BEARING, not a placeholder waiting to be",
+    "filled in: assembleCandidates (core/Reasoner.ts) filters every action",
+    "against an archetype's intrinsic set before it is ever scored, so an",
+    "empty set means zero candidates are ever assembled, pickAction always",
+    "returns null, and runReasoner's own 'no winner' branch unconditionally",
+    "sets `agent.intent = null` every think tick — a STRUCTURAL guarantee,",
+    "not gate-tuning, that a defenderObserver agent can never win",
+    "engage_threat/take_cover (double combat against Defenders.tsx's own tuned",
+    "attack, on the same EnemyData.hp) or wander (which would otherwise walk",
+    "agent.position along a fake ring the moment the player leaves home,",
+    "decoupled from the real defenderState.x/z Defenders.tsx renders from —",
+    "see wander.ts's own `bb.job !== null` gate, which 'guard's list would",
+    "have passed). `needProfile: 'guard'` is reused purely so the debug",
+    "overlay's needs bar reads sensibly; it has zero gameplay effect, since no",
+    "action is ever assembled to read it. 'guard' itself is UNTOUCHED and",
+    "remains reserved for a real future full migration off Defenders.tsx — see",
+    "rosterSync.ts's own header and PHASE_STATUS.md's phase 7 section for the",
+    "full reasoning this wave's design pass grounded itself in."
   ],
   "villager": {
     "label": "Villager",
@@ -95,6 +117,11 @@
     "label": "Guard",
     "needProfile": "guard",
     "intrinsic": ["engage_threat", "take_cover", "flee_to_safety", "wander", "idle"]
+  },
+  "defenderObserver": {
+    "label": "Defender (observer)",
+    "needProfile": "guard",
+    "intrinsic": []
   },
   "companion": {
     "label": "Companion",

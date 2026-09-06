@@ -503,6 +503,50 @@ what every one of those design choices was built to avoid. See that file's
 own header for the full reasoning and `ROADMAP.md`'s Wave 21 entry for live
 balance-verification evidence.
 
+**Wave 41 (2026-09-05) gave a sworn defender a real Agent — but, deliberately,
+for perception only, not combat.** A dedicated design pass (its own Plan-mode
+session, this project's third and fourth encounter with this exact fork — this
+phase 7 section and Wave 21's `engage_threat_villager`/Wave 25's
+`assist_leader` above being the first two) considered the full migration this
+section has always described as the eventual endpoint, and ruled it out again
+for this wave: a defender's real behavior surface (loadout-based weapon rendering, mounted
+combat, tower/wall/keep elevation with ground-raider invulnerability, day/
+night shift + bed-claiming, the four-way global order system with per-defender
+override, one-shot scout reporting, dragon-air combat, water avoidance,
+gear-driven HP/rendering, LOS-gated ranged attacks) has no reasoner-side
+equivalent to extend, unlike Wave 21/25's own single new action apiece. What
+shipped instead is narrower than either of those: `rosterSync.ts` now spawns a
+real Agent for a defender-job villager, under a brand-new `defenderObserver`
+archetype (`config/archetypes.json`) whose `intrinsic` list is deliberately
+**empty**. That is a structural guarantee, not gate-tuning — `assembleCandidates`
+(`core/Reasoner.ts`) filters every action against an archetype's intrinsic set
+before it is ever scored, so an empty list means zero candidates are ever
+assembled and `runReasoner`'s own "no winner" branch keeps `agent.intent` null
+forever. `engage_threat`, `take_cover`, `flee_to_safety` and `wander` all
+remain permanently unreachable for a defender — **now because
+`defenderObserver` never offers them, rather than because no such agent
+exists at all** (`engage_threat.ts`'s own header is updated in place to say
+so; the "population question" bullets above are left as the accurate-at-the-
+time record they were when phase 7 shipped, same as they were left after
+Wave 21 made their "ordinary villager cannot be damaged" line stale too).
+`guard` itself is completely untouched and remains reserved for a real
+future full migration, exactly as this section has said since Wave 11.
+
+What this DOES buy, for real: `reportAgentDamaged()` (this section's own "no
+caller" note two paragraphs below is now Wave-41-stale — see there) finally
+gets a live caller for a defender, via one added line in `Enemies.tsx`'s
+existing `defTarget.hp -= ...` branch, so `bb.lastDamageAt` and therefore
+§6.3's damage-memory threat term become real for a defender for the first
+time. `Senses.updateSenses` runs unconditionally for every Agent regardless of
+its intrinsic list, so a defender's `Blackboard` (beliefs, `threatLevel`,
+scored-but-never-won candidates) is genuinely populated too, and the defender
+now shows up in the AI debug overlay/gizmos (already fully generic — no
+archetype branching needed there). None of it changes a single damage number,
+kill, or piece of loot: `Defenders.tsx`, `game/defenders.ts` and
+`game/data/defenderOrders.ts` are byte-for-byte untouched by this wave, and a
+player watching a defender fight cannot tell, by looking, that anything
+happened.
+
 **`FollowLeader` / `assist_leader` — scoped down, honestly.** There is exactly
 one follower behaviour in this game: `defenderOrders.order === 'follow'`
 (`Defenders.tsx`), a defender forming up 2.6 m behind the player. It belongs to

@@ -11,13 +11,26 @@
 // changed — the same pattern rebuildNav already uses for the buildings
 // array.
 //
-// Defender-job villagers are excluded. Villagers.tsx's own renderer already
-// draws that line (`villagers.filter(v => v.job !== 'defender')`) —
-// Defenders.tsx owns their combat AI, and phases 3-5 explicitly don't touch
-// combat (PHASE_STATUS.md's phase 5.9 note).
+// Defender-job villagers used to be excluded outright — Villagers.tsx's own
+// renderer still draws its own version of that line
+// (`villagers.filter(v => v.job !== 'defender')`) for RENDERING, and
+// Defenders.tsx still owns 100% of a defender's actual combat AI, exactly as
+// before (phases 3-5 explicitly don't touch combat — PHASE_STATUS.md's phase
+// 5.9 note, still true for behaviour). Wave 41 changes only the AGENT side of
+// that line: a defender now gets a real Agent too, under a dedicated
+// 'defenderObserver' archetype (config/archetypes.json) whose `intrinsic`
+// list is empty on purpose — see that file's own dated note for the full
+// double-combat/wander reasoning. This file's job is narrower than it
+// sounds: give that Agent real perception (so its Blackboard's beliefs/
+// threat/lastDamageAt become genuinely populated) and keep its position
+// mirrored from the real `defenderState` Defenders.tsx already owns, and
+// touch nothing else — no new capability, no new candidate, no new intent
+// can ever be actuated for it, by construction (see archetypes.json).
 
 import { agentManager } from './core/AgentManager';
 import { villagerMobs } from '@/game/villagerMobs';
+import { defenderState } from '@/game/defenders';
+import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import type { Villager } from '@/game/types';
 
 let lastVillagers: Villager[] | null = null;
@@ -28,11 +41,20 @@ const spawnedIds = new Set<string>();
  *  which is the one frame the mirror has to run in the other direction. */
 const unrendered = new Set<string>();
 
-/** Every non-defender roster villager gets (or keeps) an Agent; anyone no
- *  longer on the roster loses theirs. Archetype is 'villager' for all of
- *  them for now — job-specific archetype selection isn't consumed by
- *  anything until phase 5's candidate assembly exists, so there is nothing
- *  to gain by making that call before it matters.
+/** Every roster villager gets (or keeps) an Agent; anyone no longer on the
+ *  roster loses theirs. Archetype is 'villager' for everyone except a sworn
+ *  defender, who gets 'defenderObserver' instead (Wave 41) — see this file's
+ *  own header and archetypes.json's dated note for why that split is safe.
+ *
+ *  A villager's job can cross the defender boundary in either direction
+ *  mid-session (the Roster panel), and `Agent.archetype` is `readonly`
+ *  (core/Agent.ts) — an existing Agent can never be handed a new archetype in
+ *  place, so a job change that crosses the boundary below is a
+ *  despawn-then-respawn, not an update. (The original phase-1 note this
+ *  paragraph replaces — "job-specific selection isn't consumed by anything
+ *  until phase 5's candidate assembly exists" — no longer holds now that an
+ *  archetype choice does change behaviour: an empty intrinsic list versus a
+ *  real one.)
  *
  *  Wave 26 bugfix · region is now `v.world ?? null`, not a hardcoded `null`
  *  for everyone. This was the exact landmine wander.ts's own "belt and
@@ -60,21 +82,49 @@ export function syncVillagerAgents(villagers: Villager[]) {
 
   const liveIds = new Set<string>();
   for (const v of villagers) {
-    if (v.job === 'defender') continue;
     liveIds.add(v.id);
+    const archetype = v.job === 'defender' ? 'defenderObserver' : 'villager';
+    const existing = agentManager.get(v.id);
+    if (existing && existing.archetype !== archetype) {
+      // The job crossed the defender boundary since this Agent was spawned.
+      // `archetype` is readonly (core/Agent.ts), so there is no in-place
+      // update — despawn it here and fall through to the spawn below, which
+      // `spawnedIds.has(v.id)` would otherwise short-circuit past. Same
+      // despawn() the "no longer on the roster" branch below already calls,
+      // so this gets the same reservation/steering-cache cleanup a real
+      // departure gets (AgentManager.despawn's own comment).
+      agentManager.despawn(v.id);
+      spawnedIds.delete(v.id);
+      unrendered.delete(v.id);
+    }
     if (spawnedIds.has(v.id)) continue;
-    const mob = villagerMobs[v.id];
-    agentManager.spawn(v.id, 'villager', mob?.x ?? 0, mob?.z ?? 0, v.world ?? null);
+    if (archetype === 'defenderObserver') {
+      // A brand-new defender's `defenderState` entry may not exist yet on
+      // this exact frame — Defenders.tsx's own `registerDefender` runs from
+      // ITS render, which may not have happened yet the first frame a
+      // villager becomes a defender. HOME_X/HOME_Z is a harmless placeholder
+      // for that one frame: `mirrorVillagerPositions` below self-corrects the
+      // moment `defenderState[v.id]` exists, the same lazy-registration shape
+      // `registerCompanionCombat` (game/companion.ts) already uses for Tam.
+      const ds = defenderState[v.id];
+      agentManager.spawn(v.id, archetype, ds?.x ?? HOME_X, ds?.z ?? HOME_Z, null);
+    } else {
+      const mob = villagerMobs[v.id];
+      agentManager.spawn(v.id, archetype, mob?.x ?? 0, mob?.z ?? 0, v.world ?? null);
+    }
     spawnedIds.add(v.id);
   }
 
   for (const id of spawnedIds) {
     if (liveIds.has(id)) continue;
+    // Wave 41: a villager reassigned to/from 'defender' no longer reaches
+    // this branch at all — they stay in `liveIds` throughout, and the
+    // archetype-change branch above despawns+respawns them in place. What
+    // still lands here is a villager actually leaving the roster (id no
+    // longer present in `villagers` at all), same unbounded-leak reasoning
+    // as Locomotion's own despawn cleanup for that case.
     agentManager.despawn(id);
     spawnedIds.delete(id);
-    // same unbounded-leak reasoning as Locomotion's own despawn cleanup: a
-    // villager reassigned to 'defender' and back would otherwise leave one
-    // entry here per departure for the rest of the session
     unrendered.delete(id);
   }
 }
@@ -116,13 +166,33 @@ export function syncVillagerAgents(villagers: Villager[]) {
  *  of an LOD change. Freezing it is precisely today's behaviour. The single
  *  write on the way back is §8's own "resume normally" — and by the time it
  *  runs, Locomotion's re-entry hook has already snapped the agent onto
- *  walkable ground. */
+ *  walkable ground.
+ *
+ *  Wave 41 — a `defenderObserver` agent gets a DIFFERENT mirror, one-directional
+ *  and unconditional, checked first (before the `villagerMobs` lookup below,
+ *  which has no entry for a defender-job villager — Villagers.tsx's own
+ *  VillagerFigure filter is `v.job !== 'defender'`, so `registerVillagerMob`
+ *  never runs for one). No tier-D/`unrendered` handling is needed here the way
+ *  the villager branch below needs it: `stepUnrenderedAgents` (Locomotion.ts)
+ *  skips any agent whose `.intent` is null, and a `defenderObserver` agent's
+ *  `.intent` is ALWAYS null — its archetype's intrinsic list is empty, so
+ *  `runReasoner` never has a winner and its own "no winner" branch
+ *  unconditionally clears `intent` every think tick (Reasoner.ts). There is
+ *  nothing here for that sweep to coarse-step even while the agent is tier D
+ *  off-region, so copying `defenderState`'s real position in every frame,
+ *  unconditionally, cannot fight it the way it would for a real wandering
+ *  villager. */
 export function mirrorVillagerPositions() {
   for (const id of spawnedIds) {
-    const mob = villagerMobs[id];
-    if (!mob) continue;
     const agent = agentManager.get(id);
     if (!agent) continue;
+    if (agent.archetype === 'defenderObserver') {
+      const ds = defenderState[id];
+      if (ds) agent.position.set(ds.x, 0, ds.z);
+      continue;
+    }
+    const mob = villagerMobs[id];
+    if (!mob) continue;
     if (agent.steering === 'teleport') {
       unrendered.add(id);
       continue;
