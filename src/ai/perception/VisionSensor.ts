@@ -25,7 +25,14 @@ import { getNavGrid, type NavGrid } from '@/game/navgrid';
 import { playerState } from '@/game/playerState';
 import { PERCEPTION, VISION_HALF_COS } from '../config';
 import type { Agent } from '../core/Agent';
-import { ensureBelief, enemyBeliefId, PLAYER_BELIEF_ID } from './Belief';
+// Safe, already-proven edge: Senses.ts (this same folder) already imports
+// `agentManager` directly from `../core/AgentManager` at top level with no
+// incident — the real, previously-crashed cycle this project has hit lives on
+// `Agent.ts` statically importing `src/ai/perception` (or `game/navgrid.ts`)
+// back, which neither `agentManager` nor `Agent` (type-only below) does.
+import { agentManager } from '../core/AgentManager';
+import { recordSighting } from '../core/Memory';
+import { ensureBelief, enemyBeliefId, neighborBeliefId, PLAYER_BELIEF_ID } from './Belief';
 import type { PerceptionState } from './state';
 
 // §0.4 — module-level scratch, reused by every agent's every tick. Nothing
@@ -78,15 +85,27 @@ function hasLineOfSight(grid: NavGrid, ax: number, az: number, bx: number, bz: n
   return true;
 }
 
-/** §6.1's broad phase, over the two populations that actually matter.
+/** §6.1's broad phase, over the three populations that matter.
  *
- *  Fellow AGENTS are deliberately not perceived, despite §6.1's "squared
- *  distance check against agent list": nothing consumes a belief about a
- *  neighbouring villager. Threat only counts hostiles (Belief.ts's id
- *  scheme), and the actions that WOULD want one — `follow_leader` /
- *  `assist_leader` — are phase 7's, unbuilt and unspawned. Populating a map
- *  with 20 beliefs per agent that nothing reads is cost with no consumer;
- *  phase 7 adds the population here when it adds the reader. */
+ *  Fellow AGENTS were deliberately not perceived through phase 7, despite
+ *  §6.1's "squared distance check against agent list": nothing consumed a
+ *  belief about a neighbouring villager, and populating a map with 20
+ *  beliefs per agent that nothing read was cost with no consumer.
+ *
+ *  WAVE 42 UPDATE (E3) — that changed: `Senses.ts`'s `deriveThreat` now reads
+ *  a `neighbor:` belief's OWNER's own `threatLevel`/`lastDamageAt` as a
+ *  contagion term, so a villager who has not personally noticed a hostile
+ *  can still back off the six already-shipped `not_threatened`-gated actions
+ *  purely from seeing a neighbour panic. This reuses the exact same broad/
+ *  mid/narrow/ramp pipeline below rather than standing up a second, parallel
+ *  one — a fellow-agent candidate is added in the loop below with its own
+ *  `neighborBeliefId`, and everything downstream (cone test, LOS march,
+ *  confidence ramp) treats it identically to a hostile or the player
+ *  candidate; only `isHostileBeliefId`'s own prefix check (`Belief.ts`) is
+ *  what keeps a `neighbor:` belief out of threat/`nearestNoticedHostile` on
+ *  its own account. `follow_leader`/`assist_leader` remain the actions that
+ *  would want a DIFFERENT thing (tracking a specific leader, not "some
+ *  nearby agent") and this is not that — see those actions' own files. */
 function collectCandidates(agent: Agent, range2: number): void {
   candCount = 0;
   const ax = agent.position.x;
@@ -122,6 +141,26 @@ function collectCandidates(agent: Agent, range2: number): void {
     candIds[candCount] = enemyBeliefId(e.id);
     candX[candCount] = e.mob.x;
     candZ[candCount] = e.mob.z;
+    candDist[candCount] = Math.sqrt(d2);
+    candCount++;
+  }
+
+  // Wave 42 (E3) — fellow agents, region-matched and self-excluded, same
+  // O(n) scan A7's navgrid.ts avoidance uses at this project's own stated
+  // 6-20 agent scale (a naive loop is the right cost here, not a spatial
+  // index). `agentManager.agents` is the single live registry array
+  // (AgentManager.ts pushes/splices it in place), so this never allocates.
+  const agents = agentManager.agents;
+  for (let i = 0; i < agents.length; i++) {
+    const other = agents[i];
+    if (other === agent || (other.region ?? null) !== (agent.region ?? null)) continue;
+    const dx = other.position.x - ax;
+    const dz = other.position.z - az;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > range2) continue;
+    candIds[candCount] = neighborBeliefId(other.id);
+    candX[candCount] = other.position.x;
+    candZ[candCount] = other.position.z;
     candDist[candCount] = Math.sqrt(d2);
     candCount++;
   }
@@ -191,6 +230,11 @@ export function updateVision(agent: Agent, st: PerceptionState, now: number, dt:
     const frac = dist / v.range;
     const ramp = v.rampSecondsNear + (v.rampSecondsFar - v.rampSecondsNear) * (frac > 1 ? 1 : frac);
     const b = ensureBelief(agent.bb, id, now);
+    // Wave 42 (E6) — `firstSeenAt === now` is only ever true on the tick
+    // `ensureBelief` just created this exact belief (it stamps that field on
+    // creation and never touches it again), so this fires once per belief's
+    // lifetime, not once per perceive tick a target stays in view.
+    if (b.firstSeenAt === now) recordSighting(agent.bb, id, now, false);
     b.confidence = Math.min(1, b.confidence + dt / ramp);
     b.lastKnownPosition.set(candX[i], 0, candZ[i]);
     b.lastSeenAt = now;

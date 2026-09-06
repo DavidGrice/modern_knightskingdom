@@ -180,13 +180,25 @@
       "agent to report against too. Perception/belief/threat only: see",
       "archetypes.json's own dated note for why this cannot turn into a",
       "second engage_threat/take_cover for the same defender Defenders.tsx is",
-      "already fighting with."
+      "already fighting with.",
+      "Updated 2026-09-05 (Wave 42, E3): neighborWeight is the new fourth",
+      "input — a NEIGHBOUR's own alarm (their threatLevel, or a recent hit),",
+      "read through a `neighbor:` belief (VisionSensor.ts) and combined via",
+      "MAX rather than another additive term (Senses.ts's own comment has the",
+      "double-counting argument). 0.5 is chosen so a fully-alarmed adjacent",
+      "neighbour (alarmed=1, prox=1) contributes 0.5 — comfortably above",
+      "take_cover's own 0.4 minThreat entry gate (so contagion alone CAN start",
+      "a cover run, matching the design's own 'real, live payoff' framing) but",
+      "still below flee_to_safety's switch-clearing territory on its own, so a",
+      "single alarmed neighbour cannot, by itself, manufacture a full raid",
+      "response two hostile beliefs would."
     ],
     "smoothingTau": 0.28,
     "closeDistance": 4,
     "falloffDistance": 16,
     "extraPerHostile": 0.15,
     "damageMemorySec": 8,
-    "damageWeight": 0.6
+    "damageWeight": 0.6,
+    "neighborWeight": 0.5
   }
 }

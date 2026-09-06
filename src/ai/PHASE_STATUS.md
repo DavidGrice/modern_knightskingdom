@@ -35,6 +35,15 @@ no mesh and no behaviour — per §10.1.
 `decision/`, `perception/`, `navigation/`, `world/`, `actuation/`,
 `AIDebugGizmos` (nothing to draw until there are paths or vision cones), and
 §11's `memoryStream` / `recall()` — the spec says "not built now".
+**Wave 42 (2026-09-05, E6) built the stub** on its own merits, still fully
+without an LLM: `core/Memory.ts` (bounded push + a recency-scored
+`recall(query, k)`, `query` accepted per §11.2's own "for now" framing but
+genuinely unused), `bb.memoryStream` on `Blackboard.ts`, `agent.recall(...)`
+on `Agent.ts`, and two real producers — `Reasoner.ts` on a notable Activity
+`SUCCESS`, `VisionSensor.ts`/`HearingSensor.ts` on a belief's first tick of
+existence. A new `MEMORY` row in `AIDebugOverlay` is its own required §0.5
+view. §11's LLM boundary is untouched: zero network/model imports anywhere
+in `core/Memory.ts`, and nothing calls it from anywhere.
 
 **Verified** by `scripts/smoke131.mjs`, all passing:
 - think rate matches the LOD tier (10.0 / 10 Hz measured)
@@ -385,6 +394,25 @@ what two numbers that must agree by hand eventually do.
   but nothing reads a belief about a neighbouring villager: threat counts only
   hostiles, and `follow_leader` / `assist_leader` are phase 7's, unbuilt.
   Phase 7 adds the population here when it adds the reader.
+  **Wave 42 (2026-09-05, E3) built this** — not as a `follow_leader`/
+  `assist_leader` prerequisite (both remain aspirational exactly as phase 7
+  left them; tracking a specific leader is a different problem from "some
+  nearby agent"), but as ambient neighbour-wariness: `VisionSensor.ts` now
+  also perceives nearby fellow `Agent`s (`neighbor:<id>` beliefs,
+  `Belief.ts`), and `Senses.ts`'s `deriveThreat` reads a noticed neighbour's
+  own `threatLevel`/`lastDamageAt` as a `MAX`-combined contagion term
+  (`perception.json`'s `threat.neighborWeight`) — so a villager who has not
+  personally noticed a hostile can still back off the six already-shipped
+  `not_threatened` actions purely from a neighbour's own alarm. Deliberately
+  does NOT relay a neighbour's own hostile belief secondhand into
+  `take_cover`/`engage_threat_villager`'s `nearestNoticedHostile()` gate — a
+  fleeing/fighting neighbour visible enough to be sensed has almost always
+  already shouted via `takeCover.ts`'s existing `claimAlarm` sound relay, so
+  a second, parallel path would mostly duplicate it for real added
+  complexity. Runs uniformly for every archetype including Wave 41's
+  `defenderObserver` (empty intrinsic list, so structurally inert either
+  way) — see `core/Memory.ts`'s own wave for why that population question
+  was resolved as "don't special-case it out" rather than left open again.
 - **No new outlet for threat.** Threat now suppresses work correctly through
   the six existing `not_threatened` considerations, but nothing *new* fires on
   it — `flee_to_safety` still gates on `raid_active` alone, untouched. A
@@ -734,6 +762,37 @@ rather than out of a third timer.
   Honest consequence: **C and A/B differ in cost, not behaviour.** A real
   fidelity distinction stays blocked on avoidance not existing, and is left to
   whoever builds it.
+  **Wave 42 (2026-09-05, A7) built §7.5** — inverse-distance-weighted
+  separation, clamped to 30% of max speed, with a hashed per-agent priority
+  so a doorway standoff resolves instead of deadlocking (radius and maxPush
+  are §7.5's own numbers, verbatim; yieldPush is this wave's own choice for
+  the priority §7.5 asks for but gives no number — `config/navgrid.json`'s
+  `avoidance._doc` has the arithmetic). Landed INSIDE `navSteer`
+  (`game/navgrid.ts`) itself rather than as a new layer, so every existing
+  caller (`Villagers.tsx`, `Npc.tsx`, `Merchant.tsx`, `Locomotion.ts`)
+  inherits it for the cost of one optional `NavAgent.id` field. **This
+  finally gives tier C a real fidelity difference, for free**, exactly what
+  this bullet said was blocked: tier C's own `simplifiedInterval` throttle
+  (0.15 s) now means its avoidance is genuinely re-evaluated ~7×/s instead
+  of 60×/s — actually staler dodging, not just cheaper bookkeeping — for
+  any agent that has a tier concept at all. Honest scope-down, named rather
+  than silently dropped: `Enemies.tsx` (raiders, the arena) and
+  `Defenders.tsx` both bypass `navSteer` entirely and are **not** covered —
+  `Enemies.tsx` already has its own separate ad hoc pack-separation among
+  enemies only (found live, ~line 333 and a duplicate near 756), and
+  `Defenders.tsx` has none at all. The core math is exported as a real
+  function (`applyLocalAvoidance`), not a private closure, specifically so
+  a future wave can wire it into either without re-deriving the formula —
+  migrating either is real, separately-reviewable work this wave did not
+  take on. **Post-merge fix (same day):** a verify pass found the
+  priority asymmetry above was invisible for a lone neighbour — the single
+  most common doorway case — because a single-stage sum-then-clamp let
+  both the 0.4x (yield) and 1.0x (full) branches saturate to the identical
+  maxPush for any distance in the whole 1.2m radius. Fixed by capping each
+  neighbour's raw push individually before the priority scaling, so the two
+  tiers land at visibly different magnitudes (0.3 vs 0.12) for the common
+  case, while the summed-vector clamp still bounds a multi-neighbour crowd.
+  See `config/navgrid.json`'s `avoidance._doc` for the corrected arithmetic.
 - **Tier-D coarse step size/interval** — 2 s / 4 m cap, reasoned above.
 - **Re-entry snap** — reuses `NavGrid.nearestWalkable` at its own default
   radius, which `findPath` has used since before this system existed, rather

@@ -72,7 +72,13 @@ const steerState = new Map<string, SteerState>();
 function steerFor(agent: Agent): SteerState {
   let s = steerState.get(agent.id);
   if (!s) {
-    s = { x: agent.position.x, z: agent.position.z, region: agent.region, banked: 0 };
+    // `id` (Wave 42, A7) opts every Locomotion-driven agent into navSteer's
+    // own self-exclusion for its new local-avoidance scan — without it an
+    // agent would find itself in its OWN neighbour list every navSteer call
+    // (distance 0, the exact degenerate case applyLocalAvoidance's own
+    // `d2 < 1e-6` guard exists for) and simply skip itself there instead,
+    // which works but wastes the guard on every single call for no reason.
+    s = { x: agent.position.x, z: agent.position.z, region: agent.region, id: agent.id, banked: 0 };
     steerState.set(agent.id, s);
   }
   return s;

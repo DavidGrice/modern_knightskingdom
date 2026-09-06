@@ -141,6 +141,9 @@ export interface ThreatConfig {
   extraPerHostile: number;
   damageMemorySec: number;
   damageWeight: number;
+  /** Wave 42 (E3) — the neighbour-contagion term's own weight; see
+   *  perception.json's `threat._doc` for the arithmetic behind 0.5. */
+  neighborWeight: number;
 }
 
 export interface PerceptionConfig {

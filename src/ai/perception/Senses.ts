@@ -29,7 +29,7 @@
 import { PERCEPTION } from '../config';
 import type { Agent } from '../core/Agent';
 import { agentManager } from '../core/AgentManager';
-import { decayBeliefs, isHostileBeliefId } from './Belief';
+import { decayBeliefs, isHostileBeliefId, isNeighborBeliefId, neighborIdOf } from './Belief';
 import { updateHearing } from './HearingSensor';
 import { updateVision } from './VisionSensor';
 import { perceptionStateFor, type PerceptionState } from './state';
@@ -153,6 +153,48 @@ function deriveThreat(agent: Agent, st: PerceptionState, now: number, dt: number
     const since = now - bb.lastDamageAt;
     if (since < t.damageMemorySec) target += t.damageWeight * (1 - since / t.damageMemorySec);
   }
+
+  // Wave 42 (E3) — neighbour contagion. A `neighbor:` belief (VisionSensor.ts)
+  // carries no threat of its own — a fellow villager standing nearby is not a
+  // hostile — but the AGENT it is about might itself be alarmed, and that is
+  // worth reacting to even before this agent has noticed the hostile causing
+  // it: someone bolting for cover reads as "something is wrong here" whether
+  // or not you can see what they saw. MAX against `target`, never another
+  // `+=` term like the two inputs above: this agent may ALSO directly believe
+  // in the very same hostile the neighbour is reacting to, and adding both
+  // would double-count one real threat as two. `noticedAt` gates which belief
+  // rows count here, same threshold §6.3 already uses for hostiles — a
+  // neighbour belief too faint to have been consciously registered yet
+  // shouldn't move this agent's own threat either.
+  let neighborAlarm = 0;
+  for (const b of bb.beliefs.values()) {
+    if (!isNeighborBeliefId(b.entityId) || b.confidence < noticedAt) continue;
+    const other = agentManager.get(neighborIdOf(b.entityId));
+    if (!other) continue;
+    const ndx = b.lastKnownPosition.x - ax;
+    const ndz = b.lastKnownPosition.z - az;
+    const nd = Math.hypot(ndx, ndz);
+    const nprox = nd <= t.closeDistance ? 1
+      : nd >= t.falloffDistance ? 0
+      : 1 - (nd - t.closeDistance) / (t.falloffDistance - t.closeDistance);
+    // "Alarmed" reuses the same two live signals `target` above is already
+    // built from — the OTHER agent's own smoothed threatLevel, or their own
+    // recent-damage memory. The 0.6 floor for a recent hit exists because
+    // `threatLevel` is smoothed (§6.3's own `smoothingTau`) and can lag a
+    // single blow by a fraction of a second — a neighbour who was JUST hit
+    // should read as alarmed immediately, not only once their own smoothed
+    // number catches up. High enough to matter (see `neighborWeight`'s own
+    // arithmetic in perception.json's `threat._doc`) without being 1.0,
+    // which would make "recently hit" indistinguishable from "currently
+    // staring down a hostile at point-blank range".
+    const alarmed = Math.max(
+      other.bb.threatLevel,
+      other.bb.lastDamageAt >= 0 && now - other.bb.lastDamageAt < t.damageMemorySec ? 0.6 : 0,
+    );
+    const a = alarmed * nprox * t.neighborWeight;
+    if (a > neighborAlarm) neighborAlarm = a;
+  }
+  if (neighborAlarm > target) target = neighborAlarm;
 
   if (target > 1) target = 1;
   st.threatTarget = target;
