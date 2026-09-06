@@ -7,15 +7,29 @@
 //   - `setDefenderLoadout` (gameStore.ts) refuses any villager whose job is not
 //     'defender', so "can fight" and "is a sworn defender" are the same
 //     predicate in this game — there is no armed farmer and no way to make one.
-//   - `rosterSync.ts` deliberately excludes `job === 'defender'` from getting an
+//   - `rosterSync.ts` used to exclude `job === 'defender'` from getting an
 //     `Agent` at all, because `Defenders.tsx` already owns a complete, tuned
 //     combat AI for them (orders, engage radius, bow vs melee, mounts, tower
-//     elevation, HP/downed/recovery, watch shifts).
+//     elevation, HP/downed/recovery, watch shifts). As of Wave 41 a defender
+//     DOES get a real Agent — see the dated note below for why that still
+//     changes nothing here.
 //
 // So this action's `is_defender` gate is the exact mirror image of that
 // exclusion: it can only ever fire for an agent whose villager record says
-// 'defender', and no such agent exists today. That is deliberate and it is not
-// a stub — the Activity below is complete, deals real damage through the same
+// 'defender'.
+//
+// Updated 2026-09-05 (Wave 41): `rosterSync.ts` now DOES spawn a real Agent
+// for a sworn defender — but under a dedicated 'defenderObserver' archetype
+// whose `intrinsic` list is empty (config/archetypes.json), not under
+// 'guard'. This gate stays permanently unreachable for a DIFFERENT reason
+// now: `assembleCandidates` (core/Reasoner.ts) filters every action against
+// the agent's own archetype's intrinsic set before this gate — or any other
+// consideration — is ever evaluated, and `engage_threat` is not a member of
+// defenderObserver's (empty) list. So `is_defender` scoring 1 for a real
+// defenderObserver agent's `bb.job` is true and irrelevant: this Activity is
+// never even assembled as a candidate for it, let alone scored or won. That
+// is deliberate and it is not a stub — the Activity below is complete, deals
+// real damage through the same
 // `EnemyData.hp` path `Defenders.tsx` uses, and shares its damage FORMULA
 // rather than copying it (`defenderStrike`, game/defenders.ts). What it does
 // not do is reverse rosterSync's exclusion, because that is a migration off a
@@ -41,6 +55,16 @@
 // that provably cannot resolve today (`agentManager.get(defenderId)` is always
 // undefined) buys nothing and adds an import edge to `Enemies.tsx` that cannot
 // be verified without running the game.
+//
+// Wired for real as of Wave 41: `agentManager.get(defenderId)` no longer
+// resolves to `undefined` (a real `defenderObserver` agent exists), so
+// `Enemies.tsx`'s `defTarget` branch now calls `reportAgentDamaged(defId,
+// agentManager.now)` right beside the `defTarget.hp -=` line this paragraph
+// describes — the same one-line addition the villagerTarget/companionTarget
+// branches already made in Waves 21/25. That is the ENTIRE behavioral change
+// this wave makes to a defender: a real `bb.lastDamageAt` for the reasoner's
+// own §6.3 threat term. `engage_threat` itself, immediately above, remains
+// exactly as inert as this whole header describes.
 
 import { lootFor, useEnemyStore, type EnemyData } from '@/game/combat';
 import { defenderStrike } from '@/game/defenders';

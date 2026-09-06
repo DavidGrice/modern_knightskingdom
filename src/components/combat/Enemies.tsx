@@ -500,6 +500,11 @@ function Enemy({ data }: { data: EnemyData }) {
             // range needs no check.
             if (!data.ranged || hasLineOfSight(m.x, GROUND_LOS_Y, m.z, defTarget.x, GROUND_LOS_Y, defTarget.z, data.world ?? null)) {
               defTarget.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
+              // Wave 41 · §6.3's damage-memory term (Senses.ts), same AI-clock
+              // call the companionTarget/villagerTarget branches below already
+              // make — a sworn defender finally has a real Agent
+              // (archetype defenderObserver, rosterSync.ts) for this to reach.
+              reportAgentDamaged(defId, agentManager.now);
             }
             if (defTarget.hp <= 0 && defTarget.state === 'ok') {
               defTarget.state = 'downed';
