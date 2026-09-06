@@ -21,7 +21,7 @@ import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
 import { touchState } from '@/game/touchInput';
 import { noteInputDevice, resolveInputDevice, interactLabel, clickHoldLabel } from '@/game/inputMode';
-import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer } from '@/game/combat';
+import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer, tryDodge, DODGE_SPEED } from '@/game/combat';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { fishingState, startFishing, tickFishing } from '@/game/fishing';
 import { tickBuildChallenge } from '@/game/buildChallenge';
@@ -569,7 +569,11 @@ export default function PlayerController() {
   useFrame((_, dt) => {
     const cam = camera as THREE.PerspectiveCamera;
     if (!cam.isPerspectiveCamera) return;
-    const target = combatState.aiming ? settings.fov * 0.62 : settings.fov;
+    // Wave 40 (A6) · a small FOV punch while a dodge burst is active, reusing
+    // this exact smoother rather than a new one — the same "reuse the FOV
+    // ease" precedent this ternary already set for aiming.
+    const dodgingNow = performance.now() < combatState.dodgeUntil;
+    const target = combatState.aiming ? settings.fov * 0.62 : dodgingNow ? settings.fov * 1.07 : settings.fov;
     if (Math.abs(cam.fov - target) > 0.1) {
       cam.fov += (target - cam.fov) * Math.min(1, dt * 10);
       cam.updateProjectionMatrix();
@@ -1475,6 +1479,11 @@ export default function PlayerController() {
       if (keys.current[kb.lookDown]) pitch.current = THREE.MathUtils.clamp(pitch.current - turn, -1.45, 1.45);
       camera.rotation.set(pitch.current, yaw.current, 0);
       if (st.photoMode) {
+        // Wave 40 (A6) · a dodge queued while free-flying (photo mode has no
+        // combat) would otherwise sit stale and fire as a surprise roll the
+        // moment the player exits it — discarded here instead, since only
+        // the on-foot branch below ever consumes the flag.
+        combatState.dodgeQueued = false;
         // free-fly: no collision, no gravity, moves along the view
         // direction (including vertically) rather than the ground plane
         const flySpeed = isDown(kb.sprint) ? 16 : 8;
@@ -1527,6 +1536,23 @@ export default function PlayerController() {
       if (isMoving) {
         _dirV.normalize().applyAxisAngle(_upV, yaw.current);
       }
+      // Wave 40 (A6) · dodge-roll: consume a queued press from
+      // CombatController's input dispatch (keydown/touch/gamepad edge).
+      // Mounted/crewing has no roll — crewing is already a different branch
+      // of this if/else, so only riding needs an explicit check here. No
+      // direction held = a back-step, so the button always does SOMETHING.
+      if (combatState.dodgeQueued) {
+        combatState.dodgeQueued = false;
+        if (!ridingState.active && !crewState.engineId) {
+          const backX = Math.sin(yaw.current), backZ = Math.cos(yaw.current);
+          tryDodge(isMoving ? _dirV.x : backX, isMoving ? _dirV.z : backZ);
+        }
+      }
+      // active burst: overrides steering AND speed below, but still feeds
+      // the SAME collision-clamped nx/nz code every ordinary step already
+      // resolves through — a bigger step, not a teleport through a wall.
+      const dodging = performance.now() < combatState.dodgeUntil;
+      if (dodging) _dirV.set(combatState.dodgeDir.x, 0, combatState.dodgeDir.z);
       // movement (mounted: faster, with a stamina-limited gallop; on foot:
       // sprinting spends stamina too, the same way a sword swing does,
       // rather than being a free speed boost)
@@ -1549,7 +1575,10 @@ export default function PlayerController() {
       // homestead's own SIGNPOST) and only real out in the open, not inside
       // a building's interior pocket.
       const onRoadNow = !st.destination && !st.interior && onRoad(pos.current.x, pos.current.z);
-      const speed = (riding ? (galloping ? 11 : 6) : sprint ? 7 : 4) * (onRoadNow ? ROAD_SPEED_MULT : 1) * (arenaEnv?.playerSpeedMult ?? 1);
+      // Wave 40 (A6) · a dodge burst is a flat speed override — no road/arena
+      // multiplier stacking on top of it, same as it ignores sprint/gallop.
+      const speed = dodging ? DODGE_SPEED
+        : (riding ? (galloping ? 11 : 6) : sprint ? 7 : 4) * (onRoadNow ? ROAD_SPEED_MULT : 1) * (arenaEnv?.playerSpeedMult ?? 1);
       if (arenaEnv && arenaEnv.ambientDamagePerSec > 0) {
         arenaDamageTimer.current -= dt;
         if (arenaDamageTimer.current <= 0) {
@@ -2054,7 +2083,11 @@ export default function PlayerController() {
     playerState.z = pos.current.z;
     playerState.yaw = yaw.current;
     playerState.pitch = pitch.current;
-    playerState.speed = moving ? (isDown(kb.sprint) ? 7 : 4) : 0;
+    // Wave 40 (A6) · a forced speed scalar during a dodge burst — the
+    // existing run-cycle clip selector (playerState.speed > 5 in
+    // PlayerAvatar.tsx) and the viewmodel's speed-driven bob/sway
+    // (Viewmodel.tsx) both react to this for free, no fabricated clip.
+    playerState.speed = performance.now() < combatState.dodgeUntil ? 14 : moving ? (isDown(kb.sprint) ? 7 : 4) : 0;
     playerState.grounded = grounded.current;
     playerState.acting = st.actionProgress !== null;
     playerState.riding = ridingState.active;

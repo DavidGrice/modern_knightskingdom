@@ -23,9 +23,11 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_HELD_TARGET_KINDS, MELEE, activeMelee, cycleWeapon } from '@/game/combat';
 import { useGameStore } from '@/game/store/gameStore';
 import { crewState } from '@/game/crew';
+import { ridingState } from '@/game/riding';
 import { touchState } from '@/game/touchInput';
 import { useAppStore } from '@/game/store/appStore';
 import { noteInputDevice } from '@/game/inputMode';
+import { isRebindListening } from '@/game/data/keybinds';
 
 let attackCd = 0;
 let rangedCd = 0;
@@ -34,6 +36,7 @@ let touchBlockPrev = false;
 let padAttackPrev = false;
 let padBlockPrev = false;
 let padSwapPrev = false;
+let padDodgePrev = false;
 
 type GameState = ReturnType<typeof useGameStore.getState>;
 
@@ -88,7 +91,16 @@ function releaseAttack() {
 /** RMB-down / touch-block-down. */
 function startBlock(st: GameState) {
   if (rangedReady(st)) combatState.aiming = true;
-  else combatState.blocking = true;
+  else {
+    combatState.blocking = true;
+    // Wave 40 (A6) · the rising edge of a real held block — damagePlayer's
+    // parry branch compares a hit's arrival time against this to tell a
+    // just-pressed parry from a long-held block. Safe to stamp
+    // unconditionally: startBlock is only ever called on a true press-edge
+    // (native mousedown doesn't repeat; touch/gamepad both edge-guard with
+    // their own *Prev boolean below before calling this).
+    combatState.blockPressedAt = performance.now();
+  }
 }
 
 /** RMB-up / touch-block-up. */
@@ -125,6 +137,27 @@ export default function CombatController() {
       window.removeEventListener('mouseup', onMouseUp);
     };
   }, [gl]);
+
+  // Wave 40 (A6) · dodge-roll keyboard input. A discrete press (not a hold),
+  // so this is a real keydown listener rather than another *Prev held-state
+  // edge-detect — mirrors GameScreen.tsx's own action-lookup pattern
+  // (isRebindListening's Options-screen guard, e.repeat to ignore OS key
+  // repeat while held). Mounted/crewing has no roll — checked here rather
+  // than only in PlayerController's consumer, so the flag never even queues
+  // for those states — and PlayerController's consumer checks again anyway
+  // as the authoritative gate.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat || isRebindListening()) return;
+      const st = useGameStore.getState();
+      if (st.paused || st.buildMode || st.panel !== 'none') return;
+      if (ridingState.active || crewState.engineId) return;
+      if (e.code !== useAppStore.getState().settings.keybinds.dodge) return;
+      combatState.dodgeQueued = true;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
@@ -187,15 +220,22 @@ export default function CombatController() {
       const attackDown = !!gp?.buttons[gpBtn.attack]?.pressed;
       const blockDown = !!gp?.buttons[gpBtn.block]?.pressed;
       const swapDown = !!gp?.buttons[gpBtn.swapWeapon]?.pressed;
+      const dodgeDown = !!gp?.buttons[gpBtn.dodge]?.pressed;
       const guarded = st.buildMode || st.panel !== 'none';
       if (attackDown && !padAttackPrev && !guarded) startAttack(st);
       if (!attackDown && padAttackPrev) releaseAttack();
       if (blockDown && !padBlockPrev && !guarded) startBlock(st);
       if (!blockDown && padBlockPrev) endBlock();
       if (swapDown && !padSwapPrev && !guarded) cycleWeapon();
+      // Wave 40 (A6) · same edge-detect shape as swap's Y button above —
+      // mounted/crewing gate lives here too, matching the keydown listener.
+      if (dodgeDown && !padDodgePrev && !guarded && !ridingState.active && !crewState.engineId) {
+        combatState.dodgeQueued = true;
+      }
       padAttackPrev = attackDown;
       padBlockPrev = blockDown;
       padSwapPrev = swapDown;
+      padDodgePrev = dodgeDown;
     }
   });
 

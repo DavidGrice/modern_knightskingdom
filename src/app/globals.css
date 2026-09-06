@@ -721,6 +721,9 @@ input:focus { border-color: var(--gold); }
 .touch-btn-attack { width: clamp(56px, 14vmin, 76px); height: clamp(56px, 14vmin, 76px); font-size: clamp(19px, 5vmin, 26px); color: var(--danger); border-color: var(--danger); }
 .touch-btn-attack:active { background: rgba(176,58,46,0.28); border-color: var(--danger); }
 .touch-btn-block { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }
+/* Wave 40 (A6): dodge-roll — same size/margin tier as Jump/Block, sitting
+   between Block and Interact in the row so it reads as a combat option. */
+.touch-btn-dodge { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }
 
 /* ---------- NPC AI debug overlay (NPC_AI_SPEC §9) ----------
    Deliberately NOT themed like the rest of the UI: a developer tool that

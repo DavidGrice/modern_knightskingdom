@@ -20,6 +20,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { touchState, detectTouch, resetTouchState } from '@/game/touchInput';
 import { noteInputDevice } from '@/game/inputMode';
+import { combatState } from '@/game/combat';
+import { ridingState } from '@/game/riding';
+import { crewState } from '@/game/crew';
 
 // Wave 15 responsive residual (2026-08-17): used to be a flat 52px, tuned
 // by eye to the old fixed 120px CSS base — now that the base's own CSS size
@@ -159,6 +162,19 @@ export default function TouchControls() {
           onTouchCancel={(e) => { e.preventDefault(); touchState.block = false; }}
         >
           🛡
+        </button>
+        {/* Wave 40 (A6): a discrete tap, not a hold — no held/edge state
+            needed, just queue a roll for PlayerController's on-foot branch
+            to consume, same as the keyboard/gamepad dispatch. */}
+        <button
+          className="touch-btn touch-btn-dodge"
+          onTouchStart={(e) => {
+            e.preventDefault();
+            if (ridingState.active || crewState.engineId) return;
+            combatState.dodgeQueued = true;
+          }}
+        >
+          ↻
         </button>
         <button
           className="touch-btn touch-btn-interact"

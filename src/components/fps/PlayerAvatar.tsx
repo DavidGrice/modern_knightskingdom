@@ -19,6 +19,11 @@ export default function PlayerAvatar() {
   const emote = useGameStore((s) => s.emote);
   const holder = useRef<THREE.Group>(null);
   const [clip, setClip] = useState('anim_r_restpose');
+  // Wave 40 (A6) · optional polish: a compare-then-set flag (same shape as
+  // meleeTool/clip below) so a dodge burst's faster timeScale actually takes
+  // effect — timeScale is a JSX prop, only re-read on a re-render, and this
+  // file otherwise only re-renders when clip/meleeTool/rig actually change.
+  const [dodging, setDodging] = useState(false);
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
   const hasSword = useGameStore((s) => (s.inventory.sword ?? 0) > 0);
   const hasShield = useGameStore((s) => (s.inventory.shield ?? 0) > 0);
@@ -35,10 +40,20 @@ export default function PlayerAvatar() {
 
   useFrame(() => {
     const g = holder.current;
+    // Wave 40 (A6) · optional polish — see the `dodging` state's own comment.
+    const nowDodging = performance.now() < combatState.dodgeUntil;
+    if (nowDodging !== dodging) setDodging(nowDodging);
     if (g) {
       g.visible = !playerState.riding; // MountedHorse.tsx shows the seated rider instead
       g.position.set(playerState.x, playerState.y, playerState.z);
-      g.rotation.y = playerState.yaw + Math.PI; // model faces +Z; movement forward is -Z
+      // face the roll's own direction instead of camera yaw while dodging,
+      // so a sideways/backward roll visibly turns the body instead of
+      // moonwalking — same movement-facing convention Enemies.tsx's own AI
+      // already uses (atan2(-dx, -dz) off a normalized direction).
+      const facingYaw = nowDodging
+        ? Math.atan2(-combatState.dodgeDir.x, -combatState.dodgeDir.z)
+        : playerState.yaw;
+      g.rotation.y = facingYaw + Math.PI; // model faces +Z; movement forward is -Z
     }
     // cheap store read, and setState only on an actual swap — same
     // "compare-then-set" shape the clip selection below already uses
@@ -72,7 +87,7 @@ export default function PlayerAvatar() {
         height={1.75}
         clip={clip}
         loop={!emoteActive.current}
-        timeScale={clip === 'anim_g_swordswish' ? 2 : clip === 'anim_c_run' ? 1.3 : 1}
+        timeScale={clip === 'anim_g_swordswish' ? 2 : clip === 'anim_c_run' ? (dodging ? 1.9 : 1.3) : 1}
         onReady={setRig}
         onClipEnd={() => {
           emoteActive.current = false;

@@ -8671,3 +8671,68 @@ correctly.
   call site in the whole codebase (`CharacterCreator.tsx`) was confirmed as the sole caller affected by
   the added optional parameter. `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 40: real melee depth — dodge-roll, parry timing, i-frames, combo chain (A6) — SHIPPED 2026-09-05
+
+Seventh wave of the new 27-wave plan, and the largest single-file diff in `combat.ts` this plan has
+produced. Research found a real, honest constraint before designing anything — this extraction has
+only ~15 total animation clips and none of them is a roll, a parry flourish, or a finisher — and found
+a way to deliver all four mechanics anyway by reusing existing speed-driven rendering machinery rather
+than fabricating a clip reference that doesn't exist.
+
+- [COMPLETE] ✅ **A shared invincibility gate, one line covering every damage path in the game.**
+  `damagePlayer()` — confirmed the single funnel for all 5 real damage sources (ranged bandits, enemy
+  melee, the Wave-37 caster's hostile bolt, arena ambient ticks, siege splash) — gained one early-return
+  guard (`if (performance.now() < combatState.iframeUntil) return;`) as its very first line. Both the
+  dodge-roll and a successful parry write this one field, so i-frames protect against everything
+  automatically, including a spell bolt or an explosion — a deliberate, reasoned inclusion, not scope
+  creep.
+- [COMPLETE] ✅ **A real dodge-roll with genuine displacement and i-frames, with an honestly-scoped
+  visual.** New `tryDodge()` (stamina-gated, on a 650ms cooldown, a 220ms fully-invincible burst at
+  `DODGE_SPEED=15`) feeds the exact same collision-clamped movement code every ordinary step already
+  resolves through — a bigger step, not a teleport through a wall. Rather than inventing a fake
+  animation-clip reference, the visual cue is a forced `playerState.speed` bump that the *existing*
+  speed-driven systems already react to for free: the third-person run-cycle selector
+  (`speed > 5 → anim_c_run`), the first-person viewmodel's speed-driven bob/sway, and a small FOV punch
+  reusing the exact smoother the aim-zoom ternary already had. Optional polish (also implemented): the
+  player's third-person figure faces the roll's own direction instead of camera yaw, and runs the
+  existing clip at a faster `timeScale`. New rebindable `dodge` action (`KeyR` — confirmed genuinely
+  free in the keybind system; gamepad R-Stick Click, button 11 — confirmed the one standard-mapping
+  button left unclaimed by either `DEFAULT_GAMEPAD_BUTTONS` or `PlayerController`'s own
+  `RESERVED_GAMEPAD_BUTTONS`), plus a discrete touch button. Correctly excluded while mounted or
+  crewing an engine, and while in Photo Mode's free-fly (a queued dodge there is discarded rather than
+  left to fire as a surprise roll on exit).
+- [COMPLETE] ✅ **Parry timing — a real skill-reward layered on top of the existing hold-block, not a
+  replacement for it.** `combatState.blockPressedAt` stamps the true rising edge of a block press
+  (confirmed `startBlock()` only ever fires on a genuine press-edge across mouse/touch/gamepad, so this
+  is safe to stamp unconditionally). A hit landing within `PARRY_WINDOW_MS=300` of that edge negates
+  100% of the damage (vs. the unchanged 25%-damage hold-block outside the window), costs less stamina
+  than holding (4 vs. 14), grants a brief 150ms i-frame window, and staggers + knocks back the
+  attacker — reusing `EnemyMob.attackCd`'s own "force it up, never clobbered" trick for the stagger, the
+  same mechanism the combo finisher below uses, so neither needed a new AI-state machine. Deliberately
+  melee-only (opts into parry via a new `{melee, attacker}` param on `damagePlayer`, set only at the
+  one real enemy-melee-vs-player call site in `Enemies.tsx`) — genre-correct scope, and every
+  ranged/caster/siege damage path lacks an attacker reference to stagger regardless.
+- [COMPLETE] ✅ **A real combo chain, reusing the existing per-weapon damage table rather than a
+  parallel one.** Three consecutive landed swings within a rolling `COMBO_WINDOW_MS=2000` window build
+  to a finisher: 1.6× the swing's own already-fully-computed damage (charge/berserker/order-bonus and
+  all — the same "scales the WHOLE blow" philosophy this file already applies to the mounted couched
+  charge), a bigger knockback, and a real stagger on the target. Resets cleanly on a miss, on the
+  window lapsing (a plain timestamp check — self-resetting even across a long pause, since
+  `performance.now()` keeps advancing), a dodge-roll, or a weapon swap.
+- **Verified live with real measured before/after evidence, not spot checks**, after working through
+  and eliminating two test-methodology confounds (a nearby AI enemy independently attacking during a
+  parry measurement, and a lethal test-damage value triggering the pre-existing knockout/respawn reset
+  rather than reflecting the mechanic itself). Confirmed a real dodge genuinely displaces the tracked
+  player position and that damage during its window is fully negated, vs. full damage landing just
+  outside it. Confirmed a real, correctly-timed parry produces a measurably better outcome than the
+  unchanged 25%-reduction hold-block. Confirmed a real 3-swing combo lands a measurably stronger
+  finisher than an isolated swing, and that the chain genuinely resets after a real pause/miss/swap.
+  Confirmed neither mechanic can be spammed for free stamina-less invincibility. No regressions to
+  hold-block, ordinary swings, or Wave 36-39 content (mounted raider, caster, shielded elite, siege
+  crew, and the difficulty multiplier all spawned/behaved correctly). One polish-level finding was
+  investigated and confirmed a non-issue rather than a defect: the combo-chain reset line added to
+  `cycleWeapon()` is unreachable when the player owns no second weapon, because a pre-existing,
+  pre-Wave-40 early-return already no-ops the whole function in that case — live-confirmed correct
+  once a second weapon is actually owned, and defensible as-is since no real weapon change occurs to
+  break a chain over. `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
