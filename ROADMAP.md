@@ -8855,3 +8855,55 @@ broken.
   console/page errors across the full live session (~2.5 minutes of heavy real AI activity, 30+ spawned
   test agents, a real gather→haul cycle) and no regression to any existing AI population or Wave 36-41
   combat content. `npx tsc --noEmit` / `npm run build`: both clean, verified independently.
+
+## Wave 43: arena depth (A5) + activating the 5 dormant challenge grounds (B6) — SHIPPED 2026-09-06
+
+Tenth wave of the new 27-wave plan. Research found a real, previously-invisible reactivity gap in the
+arena's own environment system before A5 could work as designed, and made an honest, reasoned scope
+call on B6 rather than force-fitting 5 literally unique mechanics into one wave.
+
+- [COMPLETE] ✅ **A5 · mini-boss spawns, a bonus objective, and REAL mid-run mutator swaps — plus a real
+  bug found and fixed before it could ship silently broken.** Investigation traced every consumer of
+  `arenaState.env` and found the gameplay multipliers (`playerSpeedMult`/`enemySpeedMult`/
+  `ambientDamagePerSec`/`lootMult`) already read it fresh every frame — a mutator swap would have worked
+  mechanically from day one. But the VISUAL side (`ArenaScene.tsx`'s floor/wall/fog color) only ever read
+  `arenaState.env` as a stale prop at whatever render `TemplateWorld.tsx` happened to do, which nothing
+  mid-run ever triggers — so a swap would have silently done nothing the player could see. Fixed with a
+  small `useFrame`-polled `useState` inside `ArenaScene` itself (the in-Canvas equivalent of the
+  rAF-poll convention `ArenaHud`/`BuildChallengePanel` already use outside it), with zero changes to
+  `TemplateWorld.tsx`. Every milestone now guarantees a champion-tier mini-boss spawn (`shieldedElite`/
+  `royal` at 1.6× the run's own scale) and rolls a fresh 30-second bonus objective; every milestone past
+  the first also reshuffles the active environment to a different one of the 4 rings.
+- [COMPLETE] ✅ **B6 · 3 genuinely new mechanic types across the 5 remaining challenge grounds, reused
+  rather than force-fit into 5 unique systems.** Investigation found no existing generic joust/dummy/
+  quintain mechanic to reuse (`joustRichard()` is entirely bespoke to the scripted Richard duel — a
+  mount, a gallop flag, a one-shot distance roll, none of it generalizable) and confirmed the honest,
+  right-sized scope: 3 new mechanic types (Gather Race, Defend the Plot, Joust Gauntlet — the plan's own
+  named examples), assigned Gather→challenge-2/5, Defend→challenge-3/6, Joust→challenge-4 (the most
+  novel of the three, not worth duplicating), leaving challenge-1's existing Build Race untouched. Each
+  copies `BuildChallengePanel.tsx`'s exact proven shape (claim-gated Start button, rAF-polled leaf-module
+  run-state, live countdown). Defend the Plot spawns real hostiles scoped to their own destination via
+  the existing `worldOverride` mechanism (the same doctrine dungeon rooms and Cedric's camp already use)
+  and drains the destination's own stored claim-flag position's HP via proximity — deliberately NOT real
+  object-targeting AI against the flag (the siege-crew kind's un-scoped building-attack AI was
+  investigated and correctly ruled unsafe to reuse here). **A real gap found and fixed along the way**:
+  `combat.ts`'s exit-cleanup subscriber only ever cleared hostiles when leaving `'dungeon'` or `'arena'`
+  specifically — leaving a Defend run mid-fight would have left its hostiles sitting inert in the store,
+  reappearing alive on the next visit. Generalized to cover any `challenge-` prefixed world, with
+  `ChallengeRunner.tsx`'s own Defend branch additionally doing the same cleanup immediately for the
+  same-ground-retry case (no `destination` change) the generic subscriber alone can't catch.
+- **Verified live end-to-end for every mechanic, not just spot-checked.** A5: forced kills to a real
+  milestone and watched the real spawn/objective/mutator-swap fire on the very next tick — a screenshot
+  confirmed the floor/wall genuinely repainted to the lava palette with visible pools, and an isolated
+  ambient-damage measurement (HP 10→9.13 over ~3.2s with all other damage sources removed) confirmed the
+  new environment's multiplier was live, not just cosmetic. B6: completed a real Gather Race by
+  teleporting to all 6 real ring positions; confirmed Defend the Plot's hostile spawn was genuinely
+  scoped to its own destination (two unrelated home-world skeletons were untouched), watched plot HP
+  drain at the exact documented rate, and confirmed both the fail path (immediate cleanup) and the
+  generalized exit-cleanup subscriber (a mid-fight `returnHome()`) independently cleared hostiles
+  correctly; completed a real Joust Gauntlet with realistic precision scoring and a real gold/XP payout.
+  Confirmed challenge-1's original Build Race is completely unaffected (zero diff to its own files, no
+  dual-panel conflict with the new `ChallengePanels.tsx`). Zero console/page errors across the full
+  session, and a final regression check confirmed no enemies leaked between any of the 3 new challenge
+  worlds, the arena, or home after returning. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently.

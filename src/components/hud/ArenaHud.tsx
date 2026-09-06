@@ -7,6 +7,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { arenaState, ARENA_ENV_BY_ID, ARENA_MILESTONES } from '@/game/arena';
 
+/** Wave 43 (A5) — appended to the same polled badge text, not a second
+ *  component: one line, one throttle, matching this file's own header note
+ *  about mirroring DungeonStatus.tsx's single-read shape. */
+function objectiveSuffix(): string {
+  const obj = arenaState.objective;
+  if (!obj) return '';
+  const remainingKills = Math.max(0, obj.need - (arenaState.kills - obj.startKills));
+  const remainingS = Math.max(0, Math.ceil((obj.deadline - performance.now()) / 1000));
+  return ` · bonus: ${remainingKills} more in ${remainingS}s`;
+}
+
 export default function ArenaHud() {
   const [text, setText] = useState<string | null>(null);
   const last = useRef(0);
@@ -20,7 +31,7 @@ export default function ArenaHud() {
       if (!arenaState.active || !arenaState.env) { setText(null); return; }
       const env = ARENA_ENV_BY_ID[arenaState.env];
       const next = ARENA_MILESTONES.find((m) => m > arenaState.kills);
-      setText(`${env.name} — ${arenaState.kills} kills${next ? ` (next reward at ${next})` : ''}`);
+      setText(`${env.name} — ${arenaState.kills} kills${next ? ` (next reward at ${next})` : ''}${objectiveSuffix()}`);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);

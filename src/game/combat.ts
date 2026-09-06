@@ -515,7 +515,16 @@ if (w) w.__kke = useEnemyStore;
 let lastEnemyWorld: string | null = null;
 useGameStore.subscribe((s) => {
   const world = s.destination ?? null;
-  if (world !== lastEnemyWorld && (lastEnemyWorld === 'dungeon' || lastEnemyWorld === 'arena')) {
+  // Wave 43 (B6): the 5 newly-active challenge grounds spawn real hostiles
+  // scoped to their own destination id exactly like a dungeon room or the
+  // arena (EnemyData.world doctrine above) — an ordinary voluntary exit from
+  // one needs the same scoped cleanup dungeon/arena already get, or a
+  // Defend-the-Plot run left mid-fight would sit inert in the store and
+  // reappear alive next visit (ChallengeRunner.tsx's own Defend branch also
+  // does this cleanup immediately/explicitly on the same-ground-retry path
+  // this subscriber alone can't catch, since `destination` never changes
+  // there — this generic fix still matters for every OTHER way of leaving).
+  if (world !== lastEnemyWorld && (lastEnemyWorld === 'dungeon' || lastEnemyWorld === 'arena' || lastEnemyWorld?.startsWith('challenge-'))) {
     useEnemyStore.getState().removeByWorld(lastEnemyWorld);
   }
   lastEnemyWorld = world;
