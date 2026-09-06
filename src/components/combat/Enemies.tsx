@@ -635,7 +635,14 @@ function Enemy({ data }: { data: EnemyData }) {
               fireSpellBolt(data, CASTER_SPELL_DMG * data.scale);
             }
           } else if (data.kind === 'storm') resolveDuel(false, data.id);
-          else damagePlayer(ATTACK_DMG[data.kind] * data.scale);
+          // Wave 40 (A6) · the one and only enemy-melee-vs-player path — opts
+          // in to parry timing (damagePlayer's own parry branch checks
+          // opts.melee before it does anything, and stamps opts.attacker's
+          // cooldown/position on a successful parry). Every other
+          // damagePlayer call site (ranged bandit above, the caster's bolt,
+          // the arena tick, siege splash) stays untouched and defaults
+          // `opts` to undefined — parry is deliberately melee-only.
+          else damagePlayer(ATTACK_DMG[data.kind] * data.scale, { melee: true, attacker: data });
         }
       } else if (data.kind !== 'siegeCrew' && (d < 26 || (m.alertT ?? 0) > 0)) {
         m.state = 'chase';

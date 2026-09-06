@@ -21,7 +21,7 @@
 // those untouchable indices, refused as a rebind target so a player can't
 // accidentally steal e.g. "A" away from jump.
 export type GamepadAction =
-  | 'attack' | 'block' | 'swapWeapon'
+  | 'attack' | 'block' | 'swapWeapon' | 'dodge'
   | 'pause' | 'cancel' | 'menuInventory' | 'menuCrafting' | 'menuQuests';
 
 export const DEFAULT_GAMEPAD_BUTTONS: Record<GamepadAction, number> = {
@@ -30,6 +30,9 @@ export const DEFAULT_GAMEPAD_BUTTONS: Record<GamepadAction, number> = {
   attack: 7, // RT — hold to draw a bow, tap to fire a bolt/swing melee
   block: 6, // LT — aim a readied ranged weapon, else raise a shield
   swapWeapon: 3, // Y — mirrors keyboard Q (GameScreen.tsx's cycleWeapon())
+  // Wave 40 (A6) · the only standard-mapping button left unclaimed by either
+  // this table or PlayerController's own RESERVED_GAMEPAD_BUTTONS below.
+  dodge: 11, // R-Stick Click
 
   // menu nav (GamepadMenuController.tsx) — v1 is OPEN/CLOSE only, no
   // in-panel cursor. See that file's header comment for why.
@@ -55,6 +58,7 @@ export const GAMEPAD_ACTION_GROUPS: { label: string; actions: { id: GamepadActio
       { id: 'attack', label: 'Attack / Draw Bow' },
       { id: 'block', label: 'Block / Aim' },
       { id: 'swapWeapon', label: 'Swap Weapon' },
+      { id: 'dodge', label: 'Dodge Roll' },
     ],
   },
   {

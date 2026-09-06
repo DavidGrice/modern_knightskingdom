@@ -96,6 +96,32 @@ export const combatState = {
   attackAt: 0,
   /** set by damage logic; PlayerController teleports and clears it */
   teleportTo: null as [number, number] | null,
+
+  // ---- Wave 40 (A6) · real melee depth: dodge-roll, parry timing, i-frames,
+  // combo chain. Plain fields on this same always-on mutable object — no
+  // parallel store, matching every field above.
+  /** performance.now() of block's rising edge — lets damagePlayer tell a
+   *  just-pressed parry from a long-held block (see tryDodge's sibling
+   *  reasoning below and damagePlayer's parry branch). Stamped by
+   *  CombatController's startBlock(), which only ever runs on a true
+   *  press-edge across mouse/touch/gamepad. */
+  blockPressedAt: 0,
+  /** set by CombatController's input dispatch (keydown/touch/gamepad edge),
+   *  consumed once by PlayerController's on-foot movement branch */
+  dodgeQueued: false,
+  /** world-space unit vector, captured at trigger time by tryDodge() */
+  dodgeDir: { x: 0, z: -1 },
+  /** performance.now() the active dodge burst ends */
+  dodgeUntil: 0,
+  /** performance.now() cooldown gate — tryDodge refuses a new roll before this */
+  dodgeReadyAt: 0,
+  /** shared invincibility gate — both dodge and a successful parry write this;
+   *  damagePlayer's very first line is an early-return while now < this */
+  iframeUntil: 0,
+  /** consecutive landed melee swings within COMBO_WINDOW_MS of each other */
+  comboCount: 0,
+  /** performance.now() the current combo chain lapses if no swing lands first */
+  comboWindowUntil: 0,
 };
 
 const w = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null;
@@ -510,7 +536,17 @@ export function armorReduction(inv: Partial<Record<ItemId, number>>, perks: stri
   return Math.min(0.45, r);
 }
 
-export function damagePlayer(amount: number) {
+export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?: EnemyData }) {
+  // Wave 40 (A6) · the shared invincibility gate. Both the dodge-roll's own
+  // burst and a successful parry (below) write iframeUntil — every damage
+  // path in the game funnels through this one function (5 call sites,
+  // grep-confirmed: ranged bandits, this melee branch, the caster's hostile
+  // bolt in stepBolt, the arena's ambient tick, a siege vehicle's splash), so
+  // one early-return here covers all of them for free, including dodging
+  // away from a spell bolt or an explosion — deliberately, not an oversight.
+  // Silent: no sound/flash/notify, matching genre convention that during an
+  // i-frame window the hit simply didn't happen.
+  if (performance.now() < combatState.iframeUntil) return;
   const st = useGameStore.getState();
   // Wave 8 · Sound Walls. A closed wall ring around the homestead takes a
   // fifth off every blow landed on you INSIDE it (game/fort.ts). Applied on
@@ -520,9 +556,34 @@ export function damagePlayer(amount: number) {
   // feel both.
   let dmg = amount * (1 - armorReduction(st.inventory, st.perks)) * (1 - fortDamageReduction());
   if (combatState.blocking && (st.inventory.shield ?? 0) > 0 && combatState.stamina > 10) {
-    dmg = Math.max(0, Math.round(dmg * 0.25 * 10) / 10);
-    combatState.stamina = Math.max(0, combatState.stamina - 14);
-    audio.play('brick_collide', 0.7);
+    // Wave 40 (A6) · a parry is a MELEE-only skill-reward on top of the
+    // existing hold-block (genre-correct scope, and every ranged/caster/
+    // siege damage path lacks an attacker reference to stagger anyway — see
+    // opts.attacker's own comment). `opts.melee` is only ever set by
+    // Enemies.tsx's own melee-vs-player call site.
+    const parried = !!opts?.melee && (performance.now() - combatState.blockPressedAt) <= PARRY_WINDOW_MS;
+    if (parried) {
+      dmg = 0;
+      combatState.stamina = Math.max(0, combatState.stamina - PARRY_STAMINA_COST);
+      combatState.iframeUntil = Math.max(combatState.iframeUntil, performance.now() + PARRY_IFRAME_MS);
+      audio.play('brick_collide', 1, false); // full volume, no detune — a sharper clang than the held-block hit
+      if (opts?.attacker) {
+        const a = opts.attacker;
+        // reuses EnemyMob.attackCd as a stagger for free (Enemies.tsx only
+        // ever resets it to a SMALLER value when it reaches <=0 — forcing it
+        // up from out here is never clobbered) — same trick the combo
+        // finisher below uses, zero new AI-state machine either place.
+        a.mob.attackCd = Math.max(a.mob.attackCd, PARRY_STAGGER_S);
+        const pdx = a.mob.x - playerState.x, pdz = a.mob.z - playerState.z, pd = Math.hypot(pdx, pdz) || 1;
+        a.mob.x += (pdx / pd) * PARRY_KNOCKBACK;
+        a.mob.z += (pdz / pd) * PARRY_KNOCKBACK;
+      }
+      st.notify('Parry!', true);
+    } else {
+      dmg = Math.max(0, Math.round(dmg * 0.25 * 10) / 10); // unchanged — the existing hold-block reward stays exactly as good
+      combatState.stamina = Math.max(0, combatState.stamina - 14);
+      audio.play('brick_collide', 0.7);
+    }
   } else {
     audio.play('thud', 0.9);
   }
@@ -659,6 +720,68 @@ export const MELEE: Record<MeleeWeaponId, MeleeStats> = {
   spear: { dmg: 3.5, wornDmg: 1.8, reach: 3.9, cone: 0.6, cd: 0.7, stamina: 10, sweep: false, charge: 2.2 },
 };
 
+// ---- Wave 40 (A6) · real melee depth: dodge-roll, parry timing, i-frames,
+// combo chain. This codebase's whole extraction has ~15 animation clips
+// total and none of them are a roll/parry-flourish/finisher — see the
+// dodge's own header comment on `tryDodge` for the honest, non-fabricated
+// stand-in this uses instead of a bespoke clip reference.
+
+/** stamina cost of one dodge-roll */
+export const DODGE_STAMINA_COST = 25;
+/** cooldown before another roll can start */
+export const DODGE_COOLDOWN_MS = 650;
+/** how long the burst itself lasts */
+export const DODGE_DURATION_MS = 220;
+/** the WHOLE burst is invincible — no animation means no separate "recovery
+ *  frames" to model honestly, so this equals DODGE_DURATION_MS rather than
+ *  some shorter, invented fraction of it */
+export const DODGE_IFRAME_MS = 220;
+/** ~3.3m over the burst (DODGE_SPEED * DODGE_DURATION_MS/1000) — a real
+ *  repositioning tool given weapon reach tops out at 3.9m (the spear) */
+export const DODGE_SPEED = 15;
+
+/**
+ * One stamina-costed burst of displacement + i-frames. Decides WHETHER a
+ * roll starts and which way it points; the actual movement is applied by
+ * PlayerController's on-foot branch (the same collision-clamped nx/nz code
+ * every ordinary step already resolves through, so a roll can't clip through
+ * a wall — it's a bigger step, not a teleport). No fabricated animation: the
+ * visible cue is a forced `playerState.speed` bump that the EXISTING
+ * run-cycle (third person) and speed-driven bob/sway (first-person
+ * viewmodel) already react to, plus the existing FOV smoother widening a
+ * touch further — see PlayerController's own dodge wiring.
+ */
+export function tryDodge(dirX: number, dirZ: number): boolean {
+  const now = performance.now();
+  if (now < combatState.dodgeReadyAt || combatState.stamina < DODGE_STAMINA_COST) return false;
+  const len = Math.hypot(dirX, dirZ) || 1;
+  combatState.dodgeDir = { x: dirX / len, z: dirZ / len };
+  combatState.dodgeUntil = now + DODGE_DURATION_MS;
+  combatState.dodgeReadyAt = now + DODGE_COOLDOWN_MS;
+  combatState.iframeUntil = Math.max(combatState.iframeUntil, now + DODGE_IFRAME_MS);
+  combatState.stamina -= DODGE_STAMINA_COST;
+  combatState.comboCount = 0; // a roll breaks a melee chain, same as a miss
+  audio.play('wind1', 0.55); // no dedicated whoosh sample exists — closest honest reuse in the bank
+  return true;
+}
+
+/** generous: no windup animation telegraphs an enemy's swing, so a tight
+ *  reflex window would be unfair, not skillful */
+export const PARRY_WINDOW_MS = 300;
+/** vs. 14 for a normal held block — precision is cheaper than endurance */
+export const PARRY_STAMINA_COST = 4;
+/** shorter than the dodge's 220ms — there's no roll happening, just a clash */
+export const PARRY_IFRAME_MS = 150;
+/** how long a parried attacker's own next swing is delayed */
+export const PARRY_STAGGER_S = 2.2;
+const PARRY_KNOCKBACK = 1.3;
+
+/** comfortably covers two halberd swings (0.95s cd each) with reaction time */
+export const COMBO_WINDOW_MS = 2000;
+const COMBO_CHAIN_LENGTH = 3;
+const COMBO_FINISHER_MULT = 1.6;
+const FINISHER_STAGGER_S = 1.8;
+
 /** Which melee weapon is actually in hand. The readied one only counts while
  *  it is still OWNED — selling or losing a halberd has to fall back to the
  *  sword (and the sword to bare fists, which is what 'sword' means when
@@ -711,6 +834,7 @@ export function cycleWeapon(): void {
   }
   combatState.aiming = false;
   combatState.drawStart = 0;
+  combatState.comboCount = 0; // Wave 40 (A6) · swapping weapons breaks a melee chain
   st.notify(SWAP_HINT[next]);
 }
 
@@ -747,7 +871,7 @@ function isFrontalHit(defYaw: number, defX: number, defZ: number, atkX: number, 
  *  swing can have — a swept kill has to loot, rally and credit the arena
  *  exactly like a thrust one, and that is not a rule worth keeping two
  *  copies of. */
-function landMeleeHit(e: EnemyData, d: number, dmg: number) {
+function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
   const st = useGameStore.getState();
   const { enemies } = useEnemyStore.getState();
   // Wave 37 (A3 remainder) · a shielded elite blocks most of a frontal blow
@@ -768,11 +892,14 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number) {
     if (o.id === e.id || o.mob.state === 'dying' || o.kind === 'storm') continue;
     if (Math.hypot(o.mob.x - e.mob.x, o.mob.z - e.mob.z) < 40) o.mob.alertT = 12;
   }
-  // knockback
-  const kb = 0.9;
+  // knockback — Wave 40 (A6): a finisher hits harder than a flat 0.9
+  const kb = finisher ? 1.8 : 0.9;
   const dd = d || 1;
   e.mob.x += ((e.mob.x - playerState.x) / dd) * kb;
   e.mob.z += ((e.mob.z - playerState.z) / dd) * kb;
+  // Wave 40 (A6) · a finisher staggers its target, same "force attackCd up"
+  // trick the parry branch (damagePlayer) uses — no new AI-state machine.
+  if (finisher) e.mob.attackCd = Math.max(e.mob.attackCd, FINISHER_STAGGER_S);
   if (e.hp <= 0 && e.mob.state !== 'dying') {
     if (e.kind === 'storm') {
       resolveDuel(true, e.id);
@@ -861,6 +988,7 @@ export function playerAttack(): boolean {
   // and breaking it before it reaches the gate is the whole point of having
   // defenders on the wall
   if (!landed.length) {
+    combatState.comboCount = 0; // Wave 40 (A6) · a whiff breaks the chain
     if (raiderRamState.active && !raiderRamState.wrecked) {
       const rdx = raiderRamState.x - playerState.x;
       const rdz = raiderRamState.z - playerState.z;
@@ -871,9 +999,22 @@ export function playerAttack(): boolean {
     }
     return true;
   }
+  // Wave 40 (A6) · combo chain: consecutive landed swings within
+  // COMBO_WINDOW_MS build toward a finisher. The window lapsing is just a
+  // timestamp check — self-resetting the moment real time exceeds it, which
+  // also covers pausing the game for a while, since performance.now() keeps
+  // advancing regardless.
+  const nowT = performance.now();
+  if (combatState.comboCount > 0 && nowT > combatState.comboWindowUntil) combatState.comboCount = 0;
+  combatState.comboCount++;
+  combatState.comboWindowUntil = nowT + COMBO_WINDOW_MS;
+  const finisher = combatState.comboCount >= COMBO_CHAIN_LENGTH;
+  if (finisher) combatState.comboCount = 0; // chain completes and restarts
+  const swingDmg = finisher ? dmg * COMBO_FINISHER_MULT : dmg; // reuses this swing's own `dmg`, already computed above from MELEE[kind]
   // one impact sound per SWING, not per body a sweep passes through
   audio.play('brick_collide', 0.8);
-  for (const h of landed) landMeleeHit(h.e, h.d, dmg);
+  if (finisher) { audio.play('thud', 0.9); st.notify('Finishing blow!', true); }
+  for (const h of landed) landMeleeHit(h.e, h.d, swingDmg, finisher);
   return true;
 }
 

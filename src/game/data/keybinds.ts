@@ -29,6 +29,7 @@ export const KEYBIND_GROUPS: KeybindGroup[] = [
     actions: [
       { id: 'interact', label: 'Interact / Hold to Gather' },
       { id: 'swapWeapon', label: 'Swap Weapon' },
+      { id: 'dodge', label: 'Dodge Roll' },
     ],
   },
   {
@@ -65,6 +66,7 @@ export const DEFAULT_KEYBINDS: Record<string, string> = {
   lookDown: 'ArrowDown',
   interact: 'KeyE',
   swapWeapon: 'KeyQ',
+  dodge: 'KeyR', // Wave 40 (A6) · confirmed unbound anywhere in this rebindable system
   inventory: 'KeyI',
   craft: 'KeyC',
   quests: 'KeyJ',
