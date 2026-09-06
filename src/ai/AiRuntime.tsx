@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
-import { getNavGrid } from '@/game/navgrid';
+import { getNavGrid, setLiveAgents } from '@/game/navgrid';
 import { agentManager, type WindowBounds } from './core/AgentManager';
 import { stepUnrenderedAgents } from './core/Locomotion';
 import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
@@ -49,6 +49,12 @@ export default function AiRuntime() {
     // it — same convention as villagerMobs/stabledHorses. A real reset is
     // gameStore's newGame/loadFromSave calling agentManager.clear().
     agentManager.spawn(PROBE.id, PROBE.archetype, PROBE.x, PROBE.z, null);
+    // Wave 42 (A7) — hand navSteer's own local-avoidance scan the live agent
+    // registry, ONCE: `agentManager.agents` is a single stable array instance
+    // for the whole session (spawn/despawn push/splice it in place, per
+    // AgentManager.ts's own header), so this reference stays correct for
+    // every future spawn/despawn with no per-frame re-snapshot needed.
+    setLiveAgents(agentManager.agents);
   }, []);
 
   useFrame((_, dt) => {

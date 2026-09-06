@@ -28,6 +28,7 @@
 
 import { PERCEPTION } from '../config';
 import type { Agent } from '../core/Agent';
+import { recordSighting } from '../core/Memory';
 import { ensureBelief } from './Belief';
 import { forEachSoundSince, latestSoundSeq, type SoundEvent } from './sounds';
 import type { PerceptionState } from './state';
@@ -62,6 +63,10 @@ export function updateHearing(agent: Agent, st: PerceptionState, now: number): v
 function applySound(agent: Agent, e: SoundEvent, now: number, cap: number, fuzz: number): void {
   const existing = agent.bb.beliefs.get(e.sourceId);
   const b = existing ?? ensureBelief(agent.bb, e.sourceId, now);
+  // Wave 42 (E6) — same "created THIS tick" test VisionSensor.ts uses, and
+  // for the same reason: fires once per belief's lifetime, not once per
+  // sound event heard while it is already known about.
+  if (b.firstSeenAt === now) recordSighting(agent.bb, e.sourceId, now, true);
 
   if (!existing || !b.isVisibleNow) {
     // §6.2's fuzz — a bearing, not a fix. Only applied when the agent is not

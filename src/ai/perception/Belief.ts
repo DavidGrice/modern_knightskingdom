@@ -28,6 +28,11 @@ import type { Belief, Blackboard } from '../core/Blackboard';
  *                      farming every time you walked past would be a
  *                      regression, not perception, and every `not_threatened`
  *                      consideration already shipped would feel it.
+ *    `neighbor:<id>`   Wave 42 (E3) — a FELLOW AGENT this one has personally
+ *                      noticed. Also NOT hostile, for the same reason `player`
+ *                      isn't: it feeds Senses.ts's neighbour-contagion term
+ *                      (that neighbour's OWN threatLevel/lastDamageAt), never
+ *                      threat directly from its own presence.
  */
 export function enemyBeliefId(mobId: number): string {
   return `enemy:${mobId}`;
@@ -36,11 +41,35 @@ export const PLAYER_BELIEF_ID = 'player';
 export function noiseBeliefId(what: string): string {
   return `noise:${what}`;
 }
+/** Wave 42 (E3) — the id for a belief about a fellow `Agent`, keyed by that
+ *  agent's own `id` (`AgentManager`'s registry key) so `neighborIdOf` below
+ *  can look the believed-about agent back up with `agentManager.get(...)`. */
+export function neighborBeliefId(agentId: string): string {
+  return `neighbor:${agentId}`;
+}
 
 /** True for the belief ids that feed `threatLevel`. See the id scheme above
- *  for why the player is deliberately excluded. */
+ *  for why the player (and, as of Wave 42, a fellow agent) is deliberately
+ *  excluded. */
 export function isHostileBeliefId(id: string): boolean {
   return id.startsWith('enemy:') || id.startsWith('noise:');
+}
+
+/** Wave 42 (E3) — true for a belief about a fellow `Agent`. Deliberately its
+ *  own predicate rather than folded into `isHostileBeliefId` above: a
+ *  neighbour is the one belief kind that is neither hostile nor the player,
+ *  and `Senses.ts`'s contagion term needs to select exactly this set. */
+export function isNeighborBeliefId(id: string): boolean {
+  return id.startsWith('neighbor:');
+}
+
+/** `neighbor:tam` -> `tam` — the inverse of `neighborBeliefId` above.
+ *  `slice(9)` is `'neighbor:'.length`, not a magic number independent of it:
+ *  if the prefix ever changes, this has to change with it, same as
+ *  `enemyKindLabel`'s own `slice(6)` (`actions/takeCover.ts`) already does
+ *  for `'enemy:'`. */
+export function neighborIdOf(beliefId: string): string {
+  return beliefId.slice(9);
 }
 
 /** Phase 7 — the nearest hostile this agent has actually NOTICED, by

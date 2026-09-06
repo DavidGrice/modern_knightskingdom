@@ -82,9 +82,14 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   // to the reasoner-driven Agent side of this exact class of bug
   // (rosterSync.ts's own header) — this is the other half, in the older
   // parallel legacy-cascade system that fix never touched.
+  // `id` (Wave 42, A7) opts this legacy-cascade villager into navSteer's own
+  // local-avoidance self-exclusion (game/navgrid.ts) — the same one-field
+  // touch every other navSteer caller gets this wave, so a whole village no
+  // longer clips through itself when several villagers converge on the same
+  // stall/well/gathering point.
   const state = useRef({
     x: home[0], z: home[1], tx: home[0], tz: home[1],
-    yaw: homeAngle, pause: (h % 7), region: villager.world ?? null,
+    yaw: homeAngle, pause: (h % 7), region: villager.world ?? null, id: villager.id,
   });
   const mob = useMemo(() => registerVillagerMob(villager.id, home[0], home[1]), [villager.id, home]);
   // Wave 21 — an ordinary villager's own combat state (HP/downed), the same

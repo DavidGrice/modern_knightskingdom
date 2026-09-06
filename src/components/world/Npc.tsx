@@ -49,7 +49,13 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
   // rather than reading the useFrame-local `agent` from the JSX below
   const [carrying, setCarrying] = useState<{ resource: ItemId; amount: number } | null>(null);
   const group = useRef<THREE.Group>(null);
-  const pos = useRef(new THREE.Vector3(def.x, 0, def.z));
+  // `Object.assign(..., { id: def.id })` (Wave 42, A7) opts this NPC's own
+  // navSteer call site (the night-gather schedule walk below) into local
+  // avoidance's self-exclusion, the same one-field touch every other
+  // navSteer caller gets this wave — a plain THREE.Vector3 satisfies
+  // navgrid.ts's NavAgent shape structurally (x/z fields) already; this just
+  // adds the one extra field that shape newly accepts.
+  const pos = useRef(Object.assign(new THREE.Vector3(def.x, 0, def.z), { id: def.id }));
   const yaw = useRef(def.yaw);
   const mob = useMemo(() => registerNpcMob(def.id, def.x, def.z), [def.id, def.x, def.z]);
 

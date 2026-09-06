@@ -8792,3 +8792,66 @@ landmines in the naive middle-ground reading before recommending a genuinely saf
   no regression to ordinary villagers, the companion, court NPCs, or any Wave 36-40 enemy kind, across
   3 full reproducible test runs with zero console/page errors. `npx tsc --noEmit` / `npm run build`:
   both clean, verified independently.
+
+## Wave 42: local avoidance (A7) + fellow-agent beliefs (E3) + a memory-stream foundation (E6) — SHIPPED 2026-09-05
+
+Ninth wave of the new 27-wave plan, bundling three related AI-substrate items. Research corrected the
+plan's own framing on two of the three (A7's "raids/arena/defenders" claim conflated several genuinely
+separate steering systems; E3's "except roster defenders" caveat was stale the moment Wave 41 shipped),
+and verify caught a genuine, subtle math bug in A7's own priority mechanic before it could ship silently
+broken.
+
+- [COMPLETE] ✅ **A7 · real local-avoidance separation steering (NPC_AI_SPEC §7.5), landed inside
+  `navSteer()` itself.** Research found `Enemies.tsx` and `Defenders.tsx` both bypass `navSteer`
+  entirely (confirmed live, not assumed — enemies already have their own separate ad hoc pack-separation
+  among themselves; defenders have none at all), so the honestly-buildable population this wave is the
+  `navSteer` population: villagers, court NPCs, and every Locomotion-driven `Agent`. New
+  `applyLocalAvoidance()` in `game/navgrid.ts` (inverse-distance-weighted repulsion within a 1.2m radius,
+  clamped to 30% of speed — both numbers verbatim from the spec) is exported as a real, reusable function
+  specifically so a future wave can wire the identical formula into Enemies/Defenders without
+  re-deriving it — that migration is named as real, separate, deliberately-deferred work, not silently
+  dropped. A hashed per-agent priority (zero new authored data) gives §7.5's "small per-agent priority"
+  for doorway-standoff resolution. **A real, previously-unnoticed bug found and fixed same-day**: the
+  priority asymmetry was invisible for a lone neighbor — the single most common doorway case — because
+  clamping only the final summed vector let both the yielding and full-push branches saturate to the
+  identical value at any distance in range. Fixed by capping each neighbor's raw push individually
+  before the priority scaling, restoring a real, always-visible 0.3-vs-0.12 split. Tier C's own steering
+  throttle now gives it a genuinely different (not just cheaper) avoidance fidelity for free — closing
+  the exact open question Phase 8 left behind.
+- [COMPLETE] ✅ **E3 · fellow-agent beliefs, resolved honestly against a stale plan caveat.** The plan's
+  own "except roster defenders (which still needs A2 first)" wording was superseded the moment Wave 41
+  shipped — a `defenderObserver` agent's perception already runs unconditionally regardless of its empty
+  intrinsic list, so excluding it from a new sensor would be more code than doing nothing, for an
+  unmeasurable saving. New `neighbor:<id>` belief id (`Belief.ts`), a new `VisionSensor.ts` candidate
+  source (nearby fellow `Agent`s, reusing the entire existing cone/LOS/confidence pipeline), and a
+  `Senses.ts` contagion term that `MAX`-combines a noticed neighbor's own alarm into this agent's own
+  `threatLevel` — never additive, so a directly-seen hostile is never double-counted. Deliberately does
+  NOT relay a neighbor's hostile belief secondhand into `take_cover`/`engage_threat_villager`'s own
+  target gate, since the existing sound-based alarm-shout mechanism already covers most of that ground.
+- [COMPLETE] ✅ **E6 · a real memory-stream foundation, explicitly without an LLM.** New
+  `src/ai/core/Memory.ts` (zero network/model imports) implements NPC_AI_SPEC §11.2 verbatim: a 200-cap
+  bounded array (`pushMemory`), a recency-only `recall(query, k)` stub (`query` accepted per the spec's
+  own "for now" framing but genuinely unused), and `agent.recall(...)` on `Agent.ts`. Two real producers:
+  `Reasoner.ts` on a notable Activity `SUCCESS` (an explicitly curated, small action list — `wander`/
+  `idle`/ambient actions are deliberately excluded so the 200-cap stream isn't flooded with nothing worth
+  recalling), and `VisionSensor.ts`/`HearingSensor.ts` on a belief's first tick of existence. A new
+  `MEMORY` debug-overlay row satisfies this codebase's own "every layer ships with a debug view the same
+  session it's built" rule with no exceptions.
+- **Verified live with exact measured evidence, including the bug catch above.** A7: isolated math
+  probes confirmed the 1.2m radius cutoff is exact and the crowd-case push plateaus rather than growing
+  unboundedly; a real two-agent doorway integration test through the actual `navSteer`/Locomotion
+  pipeline showed genuine separation growth (0.3m → 1.2m peak) with arrival unaffected, vs. a control
+  run with avoidance forced off staying pinned at the starting distance; tier-C throttling was measured
+  directly (13 vs. 120 re-steers over 120 frames). Post-fix, the yield asymmetry was re-measured as two
+  distinctly different deflection angles (6.84° vs 16.70°) across the entire radius, not just at the
+  edge. E3: triggered a real `reportAgentDamaged()` call and watched an observing agent's threatLevel
+  rise purely from contagion with zero own hostile belief, confirmed `take_cover`'s own consideration
+  reads the same real value live while correctly staying gated off (no direct target), and confirmed a
+  `defenderObserver` agent gets the identical real belief/threat rise while its own action stays
+  structurally null throughout. E6: a real end-to-end villager gather cycle produced a real
+  "gathered resources at HH:MM" memory entry the moment the Activity actually succeeded; pushed 205
+  entries onto a real agent's real stream and confirmed the cap holds at exactly 200 with correct
+  oldest-first eviction; confirmed `recall` returns correctly-ordered, k-respecting results. Zero
+  console/page errors across the full live session (~2.5 minutes of heavy real AI activity, 30+ spawned
+  test agents, a real gather→haul cycle) and no regression to any existing AI population or Wave 36-41
+  combat content. `npx tsc --noEmit` / `npm run build`: both clean, verified independently.

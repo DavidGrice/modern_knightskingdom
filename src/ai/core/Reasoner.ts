@@ -12,6 +12,7 @@ import type { Agent } from './Agent';
 import { targetRegistry, type Target } from './TargetRegistry';
 import type { Blackboard, ScoredAction, ScoredConsideration } from './Blackboard';
 import { archetypeDef } from '../config';
+import { recordActivitySuccess } from './Memory';
 
 /** §5.4 (PHASE_3_4_5) / §5.1 (NPC_AI_SPEC) — passed to every Consideration's
  *  `input()` and to `scoreAction` itself. `target` is set for a per-target
@@ -435,6 +436,12 @@ export function runReasoner(agent: Agent, actions: Action[], now: number, dt: nu
   if (agent.currentActivity) {
     const status = agent.currentActivity.update(agent, dt, now);
     if (status === 'SUCCESS' || status === 'FAILURE') {
+      // Wave 42 (E6) — §11.2's "completed activities append to a
+      // memoryStream", SUCCESS only: a FAILURE (a blocked target, a decayed
+      // belief) is not something that actually happened, so it earns no
+      // record. `recordActivitySuccess` itself filters further, down to the
+      // small set of notable action ids (core/Memory.ts's own header).
+      if (status === 'SUCCESS') recordActivitySuccess(agent.bb, winner.action.id, now);
       startCooldown(agent.bb, winner.action.id, winner.action.cooldown, now);
       agent.currentActivity = null;
       agent.bb.currentActionId = null;

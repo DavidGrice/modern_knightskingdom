@@ -107,6 +107,12 @@ export default function AIDebugOverlay() {
       : agentManager.now - cbs.coverStartedAt < COMBAT.cover.commitSec
         ? `committed ${(agentManager.now - cbs.coverStartedAt).toFixed(1)}/${COMBAT.cover.commitSec}s`
         : 'en route · commitment expired';
+  // §11.2/§0.5 (Wave 42, E6) — the memory-stream layer's own debug view,
+  // required the same session it's built same as every other layer here.
+  // `agent.recall` itself is a thin pass-through (core/Memory.ts), so this
+  // is just the render side of it, computed once rather than once per usage
+  // below.
+  const memories = agent ? agent.recall('', 5) : [];
 
   return (
     <div className="ai-debug">
@@ -313,6 +319,22 @@ export default function AIDebugOverlay() {
                   b.lastKnownPosition.z - agent.position.z,
                 ).toFixed(1)}m]
               </span>
+            </div>
+          ))}
+
+          {/* §11.2/§0.5 — the memory-stream's own debug view: the top few
+              (most-recent-first) entries `agent.recall` actually returns,
+              exactly what a future dialogue layer would see if it queried
+              this agent right now. Empty is the normal reading for almost
+              every agent almost all the time — see core/Memory.ts's own
+              header for why most actions are deliberately NOT recorded. */}
+          <div className="ai-debug-row ai-debug-head2">MEMORY</div>
+          {memories.length === 0 && (
+            <div className="ai-debug-row ai-debug-dim">— nothing remembered yet</div>
+          )}
+          {memories.map((m, i) => (
+            <div key={i} className="ai-debug-row ai-debug-dim">
+              [{m.at.toFixed(1)}s] {m.summary}
             </div>
           ))}
 

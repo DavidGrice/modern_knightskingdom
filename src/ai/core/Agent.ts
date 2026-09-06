@@ -19,10 +19,11 @@ import {
   type SteeringMode,
   type Tier,
 } from '../config';
-import { createBlackboard, type Blackboard } from './Blackboard';
+import { createBlackboard, type Blackboard, type MemoryRecord } from './Blackboard';
 import type { TargetId } from './TargetRegistry';
 import { tickReasoner, type Activity } from './Reasoner';
 import { tickSenses } from './Perception';
+import { recall as recallMemory } from './Memory';
 // AgentManager.ts imports Agent (this file) at its own top level to
 // construct instances in spawn() — a real cycle, referenced here only
 // inside the `intent` setter body below, never at this module's own
@@ -293,5 +294,17 @@ export class Agent {
   addNeed(id: NeedId, delta: number) {
     const v = this.bb.needs[id] + delta;
     this.bb.needs[id] = v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+
+  /** §11.2 (Wave 42, E6) — "`agent.recall(query, k)` returning top-k",
+   *  verbatim. A thin pass-through to `core/Memory.ts`'s own free function —
+   *  the real logic (recency scoring, the top-k slice) lives there rather
+   *  than here, the load-bearing reason being that `Memory.ts` can then be
+   *  built and unit-verified against a bare `MemoryRecord[]` in isolation,
+   *  with no real `Agent` needed to exercise it. `k` stays optional here so
+   *  a caller can omit it and still get `recall`'s own default (5, the top
+   *  of §11.2's "keep k in the 3-5 range"). */
+  recall(query: string, k?: number): MemoryRecord[] {
+    return recallMemory(this.bb.memoryStream, query, k);
   }
 }
