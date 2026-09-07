@@ -8907,3 +8907,56 @@ call on B6 rather than force-fitting 5 literally unique mechanics into one wave.
   session, and a final regression check confirmed no enemies leaked between any of the 3 new challenge
   worlds, the arena, or home after returning. `npx tsc --noEmit` / `npm run build`: both clean, verified
   independently.
+
+## Wave 44: a third ownable settlement at template-04, The Siege Camp (B1) — SHIPPED 2026-09-06
+
+Eleventh wave of the new 27-wave plan, replicating the empire arc's twice-proven settlement pattern
+(template-08/Fenwick, Wave 4; template-07/Torvald, Wave 26) at a third site. Research corrected the
+plan's own framing on what was actually missing, and implementation caught a real latent bug the new
+three-settlement topology would have exposed.
+
+- [COMPLETE] ✅ **Garrick, "Siege Camp Smith" — a new resident NPC at template-04, themed to the site's
+  own real identity, not a generic builder.** Investigation found the plan's "Builders' Guild has no
+  quest-giver" framing was imprecise: the guild's own errand pool (`GUILD_QUESTS.builders`, shipped
+  Wave 22) is offered directly by the guild hall itself with zero NPC involved, for any of the game's
+  5 guilds — confirmed live, no wiring needed there at all. What template-04 actually lacked was a
+  resident, full stop, the same gap Waves 4 and 26 each closed at their own sites. Garrick reads as a
+  war-camp survivor (the destination's real blurb: "a war machine still stands aimed at a keep it never
+  breached") rather than a generic construction character, and "doubles" as the guild's quest-giver
+  narratively only — his own dialogue references the hall's board, while his `sideQuests` field carries
+  just the new settlement chain. Placed via the same local-point convention Fenwick/Torvald use,
+  live-verified reachable with a clean, non-overlapping interact prompt.
+- [COMPLETE] ✅ **A real, reasoned "no resource nodes" call, tested against the same evidence bar Wave 26
+  used to justify the opposite call at template-07.** Investigation re-ran Wave 26's own decisive test
+  (does the site's guild passive AND its blurb/loot promise real gathering, "twice over") and found
+  template-04 fails it: the Builders' passive rewards construction swings, not mining, and the site's
+  own iron-ore loot reads as a one-time salvage prop, not a promised vein — the same weak signal
+  template-08 already has and correctly shipped without nodes. Residents (miner/merchant/builder) fall
+  through the existing, already-proven `villagerAtWork` "nothing to work — don't stall the economy"
+  fallback, identical to Bram's `farmer` role at template-08.
+- [COMPLETE] ✅ **Reciprocal delivery quests in both directions, and two new caravan routes wiring the
+  new settlement to both existing ones.** `camp_want_lumber` (Siege Camp wants wood from the Frozen
+  Pass) and a new `pass_want_stone` appended to Torvald's own chain (Frozen Pass wants stone from the
+  Siege Camp) — both confirmed to target raw, gather-harvestable goods after tracing `bumpSideQuest`'s
+  matching logic, avoiding the exact craft-vs-gather quest bug class Wave 34 fixed elsewhere. Two new
+  `CARAVAN_ROUTES` entries make template-04 a real hub, routed to both other settlements.
+- [COMPLETE] ✅ **A real, previously-latent bug found and fixed before three settlements could expose
+  it.** `caravanPartnerOf()` returned only the *first* matching route by object-key iteration order —
+  harmless with exactly one route in the whole game, but with template-04 now routed to both other
+  settlements, it would have silently stranded one of every hub's two connections, unreachable through
+  the dialogue UI with no error. Generalized to `caravanPartnersOf(): string[]`, with `DialoguePanel.tsx`
+  now rendering one real caravan card per reachable partner instead of assuming exactly one.
+- **Verified live end-to-end, including the full quest chain, founding, and every new caravan route.**
+  Completed Garrick's real 2-quest chain via real UI actions, filed the deed, and confirmed the exact 3
+  named residents (Rurik/miner, Petra/merchant, Dunstan/builder) spawned and a real Collect Yield paid
+  out the correct formula. Confirmed the caravan route table is now a real triangle — every settlement
+  shows exactly 2 Trade Caravan cards — and dispatched/collected a real caravan on all 3 routes with
+  gold landing exactly on the documented formula. Confirmed both new reciprocal delivery quests
+  complete correctly in both directions, and confirmed zero regression to Fenwick's/Torvald's own
+  existing chains, the original template-07↔08 route, or the Builders' Guild hall's own membership/
+  errand flow. Zero console/page errors across two full live playthroughs. One placement-verification
+  gap flagged by the implementation itself (Garrick's exact coordinate was reasoned but not yet
+  live-surveyed) was closed by the verify pass itself, which teleported there and confirmed a clean,
+  non-overlapping interact prompt on real walkable ground — the placement comment has been corrected in
+  place to reflect that confirmation rather than leaving a stale "needs checking" note. `npx tsc
+  --noEmit` / `npm run build`: both clean, verified independently.

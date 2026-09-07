@@ -76,6 +76,51 @@ export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
       xpSkill: 'building', xp: 40, rewardItems: { gold: 20 },
       requires: ['settle_clear', 'frostpass_clear'],
     },
+    // Wave 44 · the empire arc's third site, The Siege Camp (template-04),
+    // wants stone rather than ore or grain — closes the loop the OTHER
+    // direction from garrick's own pass_want_stone-mirrored errand below.
+    // Routed to Frozen Pass rather than Old Ruins on purpose: Old Ruins
+    // already imports iron_ore FROM Frozen Pass (ruins_want_ore above), so
+    // having an ore-exporter also import ore back would read backwards;
+    // stone fits both a mountain pass that already once wanted stone itself
+    // (frostpass_shelter, same chain) and a ruined siege camp that has
+    // masonry to spare.
+    {
+      id: 'pass_want_stone', kind: 'deliver', target: 'stone', need: 15, deliverTo: 'template-07',
+      label: "Good masonry's rare up this high — haul 15 stone from the Siege Camp's own ruined walls",
+      xpSkill: 'mining', xp: 60, rewardItems: { gold: 25 },
+      requires: ['frostpass_clear', 'camp_clear'],
+    },
+  ],
+  // Wave 44: the empire arc's third site, The Siege Camp (template-04) --
+  // Garrick's own two-errand chain (same gather-then-kill shape as
+  // fenwick/torvald above) plus a reciprocal delivery quest the other
+  // direction (see torvald's own pass_want_stone above for its pair).
+  // Deliberately targets `wood`, a raw `kind:'gather'`-harvestable
+  // good, not a crafted good like `iron_bar` -- bumpSideQuest's matchesKind
+  // (gameStore.ts) only ever cross-matches `kind:'deliver'` with
+  // `kind:'gather'` bumps, never `kind:'craft'` (the exact bug class Wave 34
+  // fixed at five other real sites -- see GUILD_QUESTS' own header comment
+  // just below in npcs.ts) -- an iron_bar-deliver quest here would have been
+  // silently unfinishable.
+  garrick: [
+    {
+      id: 'camp_shore', kind: 'gather', target: 'stone', need: 20,
+      label: "Shore up what's left of the palisade — bring 20 stone",
+      xpSkill: 'building', xp: 60, rewardItems: { gold: 15 },
+    },
+    {
+      id: 'camp_clear', kind: 'kill', target: 'any', need: 6,
+      label: "Clear out whatever's nesting round the old engine — defeat 6 hostiles",
+      xpSkill: 'combat', xp: 80, rewardItems: { gold: 20 },
+      requires: ['camp_shore'],
+    },
+    {
+      id: 'camp_want_lumber', kind: 'deliver', target: 'wood', need: 10, deliverTo: 'template-04',
+      label: 'Timber for the palisade — the Lodge folk have plenty; bring 10 wood to the Siege Camp',
+      xpSkill: 'woodcutting', xp: 60, rewardItems: { gold: 25 },
+      requires: ['camp_clear', 'frostpass_clear'],
+    },
   ],
 };
 
@@ -111,6 +156,26 @@ export const SETTLEMENT_FOUNDING: Record<string, SettlementFoundingDef> = {
       { id: 'settler_kolgrim', name: 'Kolgrim', job: 'lumberjack' },
       { id: 'settler_sigrun', name: 'Sigrun', job: 'miner' },
       { id: 'settler_brenna', name: 'Brenna', job: 'merchant' },
+    ],
+  },
+  // Wave 44: the empire arc's third site, The Siege Camp (template-04) — no
+  // SETTLEMENT_NODES entry below (see that table's own comment), so
+  // residents are farmer/merchant/builder-shaped like template-08's, not
+  // node-working like template-07's. `miner` (not `farmer`) fills the
+  // node-kind slot: Siege Camp's own travel blurb/loot has zero food/farm
+  // subtext, while it at least names "iron" once (a one-time salvage prop,
+  // not a promise of a rich vein — see this wave's research notes for why
+  // that's not enough to earn real ore nodes on its own). Either way the
+  // job falls straight through to villagerAtWork's own "nothing to work —
+  // do not stall the economy" fallback (gameStore.ts) with zero matching
+  // nodes in this world, identical to Bram's `farmer` at template-08.
+  'template-04': {
+    cost: { gold: 60 },
+    requiredQuestId: 'camp_clear',
+    residents: [
+      { id: 'settler_rurik', name: 'Rurik', job: 'miner' },
+      { id: 'settler_petra', name: 'Petra', job: 'merchant' },
+      { id: 'settler_dunstan', name: 'Dunstan', job: 'builder' },
     ],
   },
 };

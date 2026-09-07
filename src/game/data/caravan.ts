@@ -58,23 +58,38 @@ export interface CaravanRouteDef {
  *  dispatch/collect UI besides. */
 export const CARAVAN_ROUTES: Record<string, CaravanRouteDef> = {
   'template-07|template-08': { etaMs: 8 * 60_000, riskPct: 0.10 },
+  // Wave 44: The Siege Camp (template-04) joins as a third settlement,
+  // paired with EACH existing one — a data-only addition, per this file's
+  // own header comment above. Same eta/risk as the original pair: these
+  // `origin.x/z` values are non-overlapping bake slots (worlds.ts), not
+  // real relative distances, so there's no real basis to differentiate.
+  'template-04|template-07': { etaMs: 8 * 60_000, riskPct: 0.10 },
+  'template-04|template-08': { etaMs: 8 * 60_000, riskPct: 0.10 },
 };
 
 export function caravanRouteKey(a: string, b: string): string {
   return [a, b].sort().join('|');
 }
 
-/** The other endpoint of `world`'s own caravan route, or null if it has
- *  none — how DialoguePanel decides whether to offer the caravan block at
- *  all without hand-naming template-07/08 itself, so a future second route
- *  just needs a new CARAVAN_ROUTES entry. */
-export function caravanPartnerOf(world: string): string | null {
+/** Every OTHER endpoint `world` has a caravan route with — zero, one, or
+ *  (as of Wave 44's third settlement) two. Wave 44 correction: this used to
+ *  return a single `string | null` (the first matching route key), which
+ *  quietly worked while exactly one route existed but silently strands
+ *  every route past the first once a hub world (template-04, routed to
+ *  BOTH other settlements) exists — `Object.keys()` iteration order would
+ *  pick one partner and DialoguePanel would never even try to render the
+ *  other, the same "reads as done, isn't reachable" trap this wave's own
+ *  research flagged for craft-vs-gather delivery quests. DialoguePanel now
+ *  renders one caravan block per partner returned here instead of assuming
+ *  a single partner. */
+export function caravanPartnersOf(world: string): string[] {
+  const partners: string[] = [];
   for (const key of Object.keys(CARAVAN_ROUTES)) {
     const [a, b] = key.split('|');
-    if (a === world) return b;
-    if (b === world) return a;
+    if (a === world) partners.push(b);
+    else if (b === world) partners.push(a);
   }
-  return null;
+  return partners;
 }
 
 /** What's actually worth carting: the existing merchant ledger (SELL_PRICES)

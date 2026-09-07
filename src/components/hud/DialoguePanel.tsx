@@ -9,7 +9,7 @@ import { NPC_BY_ID, sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
 import { SETTLEMENT_FOUNDING } from '@/game/data/settlementQuests';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_MARKUP, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
-  caravanPartnerOf, caravanQuoteGold, caravanRouteKey, caravanTradeableItems,
+  caravanPartnersOf, caravanQuoteGold, caravanRouteKey, caravanTradeableItems,
 } from '@/game/data/caravan';
 import { ITEMS } from '@/game/data/items';
 import { audio } from '@/lib/audio';
@@ -369,127 +369,139 @@ export default function DialoguePanel() {
           {/* Wave 27 · Trade Caravan — extends the settlement block above
               with the new dispatch/collect action, shown only once BOTH
               ends of a caravan route are founded settlements (data/
-              caravan.ts's CARAVAN_ROUTES; only template-07<->template-08
-              has a route as of this wave). Reuses the exact same "talk to
+              caravan.ts's CARAVAN_ROUTES). Reuses the exact same "talk to
               the settlement's own resident" access pattern as Settlement
-              Yield above — zero new panel/route/hotkey. */}
+              Yield above — zero new panel/route/hotkey.
+              Wave 44 · renders one block per REACHABLE partner rather than
+              assuming a single one — a hub world (template-04, routed to
+              both other settlements as of this wave) can have two at once.
+              The dispatch form's own local picks (caravanItem/Qty/Insured)
+              stay shared component state across every block, same as
+              before this wave (only ever one route exists per NPC's own
+              dialogue until now) — a minor shared-staging quirk if two
+              blocks render at once, not a functional bug: each block's own
+              Dispatch button always sends whatever is currently staged to
+              THAT block's own partner. */}
           {(() => {
             const world = npc.world;
             if (!world || !settlements[world]) return null;
-            const partner = caravanPartnerOf(world);
-            if (!partner || !settlements[partner]) return null;
-            const key = caravanRouteKey(world, partner);
-            const route = CARAVAN_ROUTES[key];
-            const partnerName = WORLD_DESTINATION_BY_ID[partner]?.name ?? partner;
-            const run = caravans[key];
+            const partners = caravanPartnersOf(world).filter((p) => settlements[p]);
+            if (partners.length === 0) return null;
 
-            if (run) {
-              const remainMin = Math.ceil((run.etaMs - (Date.now() - run.departedAt)) / 60000);
-              const originName = WORLD_DESTINATION_BY_ID[run.from]?.name ?? run.from;
-              return (
-                <div className="quest-item">
-                  <div className="q-name">🐎 Trade Caravan</div>
-                  {remainMin <= 0 ? (
-                    <>
-                      <div className="q-desc">The caravan from {originName} has arrived.</div>
-                      <button
-                        className="menu-btn small"
-                        style={{ margin: '8px 0 0' }}
-                        onClick={() => collectCaravan(run.from, run.to)}
-                      >
-                        ✅ Collect Caravan
-                      </button>
-                    </>
-                  ) : (
-                    <div className="q-desc">Caravan en route — back in about {remainMin}m.</div>
-                  )}
-                </div>
-              );
-            }
+            return partners.map((partner) => {
+              const routeKey = caravanRouteKey(world, partner);
+              const route = CARAVAN_ROUTES[routeKey];
+              const partnerName = WORLD_DESTINATION_BY_ID[partner]?.name ?? partner;
+              const run = caravans[routeKey];
 
-            const carts = Math.min(CARAVAN_MAX_CARTS, villagers.filter((v) => (v.world ?? null) === world && v.gear?.carrier === 'cart').length);
-            const cap = carts * CARAVAN_CAP_PER_CART;
-            const tradeable = caravanTradeableItems(inventory);
-            const wit = attrSpent.wit ?? 0;
-            const silverTongue = perks.includes('silver_tongue');
-            const held = caravanItem ? (inventory[caravanItem] ?? 0) : 0;
-            const qty = Math.max(1, Math.min(caravanQty, cap, held || 1));
-            const quote = caravanItem ? caravanQuoteGold(caravanItem, qty, wit, silverTongue) : 0;
-            const insuranceCost = caravanItem ? Math.ceil(quote * CARAVAN_INSURANCE_RATE) : 0;
-
-            return (
-              <div className="quest-item">
-                <div className="q-name">🐎 Trade Caravan</div>
-                <div className="q-desc">
-                  Load cargo and dispatch a caravan to {partnerName} — {Math.round(CARAVAN_MARKUP * 100 - 100)}%
-                  over the merchant&apos;s rate, back in about {Math.round((route?.etaMs ?? 0) / 60000)}m.
-                </div>
-                {carts <= 0 ? (
-                  <div className="q-desc" style={{ fontStyle: 'italic' }}>
-                    No one here is equipped with a Hand Cart.
-                  </div>
-                ) : (
-                  <>
-                    <div className="equip-tile-row">
-                      {tradeable.length === 0 && (
-                        <div className="q-desc">Nothing in your satchel is worth carting.</div>
-                      )}
-                      {tradeable.map((id) => (
-                        <button
-                          key={id}
-                          className="menu-btn small"
-                          style={{
-                            margin: 0, width: 'auto', padding: '4px 9px',
-                            opacity: caravanItem === id ? 1 : 0.65,
-                            borderColor: caravanItem === id ? 'var(--gold)' : undefined,
-                          }}
-                          onClick={() => { setCaravanItem(id); setCaravanQty(Math.min(inventory[id] ?? 1, cap)); }}
-                        >
-                          {ITEMS[id]?.name ?? id} ({inventory[id] ?? 0})
-                        </button>
-                      ))}
-                    </div>
-                    {caravanItem && (
+              if (run) {
+                const remainMin = Math.ceil((run.etaMs - (Date.now() - run.departedAt)) / 60000);
+                const originName = WORLD_DESTINATION_BY_ID[run.from]?.name ?? run.from;
+                return (
+                  <div className="quest-item" key={routeKey}>
+                    <div className="q-name">🐎 Trade Caravan</div>
+                    {remainMin <= 0 ? (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0' }}>
-                          <button
-                            className="menu-btn small" style={{ margin: 0, width: 'auto', padding: '2px 10px' }}
-                            onClick={() => setCaravanQty((q) => Math.max(1, q - 1))}
-                          >-</button>
-                          <span>{qty} / {cap} cap</span>
-                          <button
-                            className="menu-btn small" style={{ margin: 0, width: 'auto', padding: '2px 10px' }}
-                            onClick={() => setCaravanQty((q) => Math.min(cap, held, q + 1))}
-                          >+</button>
-                        </div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                          <input
-                            type="checkbox" checked={caravanInsured}
-                            onChange={(e) => setCaravanInsured(e.target.checked)}
-                          />
-                          Escort (insure, {insuranceCost} gold) — guarantees no loss on the road
-                        </label>
-                        <div className="q-desc">
-                          Quote: {quote} gold on arrival
-                          {route ? ` (${Math.round(route.riskPct * 100)}% risk uninsured)` : ''}.
-                        </div>
+                        <div className="q-desc">The caravan from {originName} has arrived.</div>
                         <button
                           className="menu-btn small"
                           style={{ margin: '8px 0 0' }}
-                          disabled={caravanInsured && (inventory.gold ?? 0) < insuranceCost}
-                          onClick={() => {
-                            dispatchCaravan(world, partner, caravanItem, qty, caravanInsured);
-                            setCaravanItem(null); setCaravanQty(1); setCaravanInsured(false);
-                          }}
+                          onClick={() => collectCaravan(run.from, run.to)}
                         >
-                          🐎 Dispatch to {partnerName}
+                          ✅ Collect Caravan
                         </button>
                       </>
+                    ) : (
+                      <div className="q-desc">Caravan en route — back in about {remainMin}m.</div>
                     )}
-                  </>
-                )}
-              </div>
-            );
+                  </div>
+                );
+              }
+
+              const carts = Math.min(CARAVAN_MAX_CARTS, villagers.filter((v) => (v.world ?? null) === world && v.gear?.carrier === 'cart').length);
+              const cap = carts * CARAVAN_CAP_PER_CART;
+              const tradeable = caravanTradeableItems(inventory);
+              const wit = attrSpent.wit ?? 0;
+              const silverTongue = perks.includes('silver_tongue');
+              const held = caravanItem ? (inventory[caravanItem] ?? 0) : 0;
+              const qty = Math.max(1, Math.min(caravanQty, cap, held || 1));
+              const quote = caravanItem ? caravanQuoteGold(caravanItem, qty, wit, silverTongue) : 0;
+              const insuranceCost = caravanItem ? Math.ceil(quote * CARAVAN_INSURANCE_RATE) : 0;
+
+              return (
+                <div className="quest-item" key={routeKey}>
+                  <div className="q-name">🐎 Trade Caravan</div>
+                  <div className="q-desc">
+                    Load cargo and dispatch a caravan to {partnerName} — {Math.round(CARAVAN_MARKUP * 100 - 100)}%
+                    over the merchant&apos;s rate, back in about {Math.round((route?.etaMs ?? 0) / 60000)}m.
+                  </div>
+                  {carts <= 0 ? (
+                    <div className="q-desc" style={{ fontStyle: 'italic' }}>
+                      No one here is equipped with a Hand Cart.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="equip-tile-row">
+                        {tradeable.length === 0 && (
+                          <div className="q-desc">Nothing in your satchel is worth carting.</div>
+                        )}
+                        {tradeable.map((id) => (
+                          <button
+                            key={id}
+                            className="menu-btn small"
+                            style={{
+                              margin: 0, width: 'auto', padding: '4px 9px',
+                              opacity: caravanItem === id ? 1 : 0.65,
+                              borderColor: caravanItem === id ? 'var(--gold)' : undefined,
+                            }}
+                            onClick={() => { setCaravanItem(id); setCaravanQty(Math.min(inventory[id] ?? 1, cap)); }}
+                          >
+                            {ITEMS[id]?.name ?? id} ({inventory[id] ?? 0})
+                          </button>
+                        ))}
+                      </div>
+                      {caravanItem && (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0' }}>
+                            <button
+                              className="menu-btn small" style={{ margin: 0, width: 'auto', padding: '2px 10px' }}
+                              onClick={() => setCaravanQty((q) => Math.max(1, q - 1))}
+                            >-</button>
+                            <span>{qty} / {cap} cap</span>
+                            <button
+                              className="menu-btn small" style={{ margin: 0, width: 'auto', padding: '2px 10px' }}
+                              onClick={() => setCaravanQty((q) => Math.min(cap, held, q + 1))}
+                            >+</button>
+                          </div>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                            <input
+                              type="checkbox" checked={caravanInsured}
+                              onChange={(e) => setCaravanInsured(e.target.checked)}
+                            />
+                            Escort (insure, {insuranceCost} gold) — guarantees no loss on the road
+                          </label>
+                          <div className="q-desc">
+                            Quote: {quote} gold on arrival
+                            {route ? ` (${Math.round(route.riskPct * 100)}% risk uninsured)` : ''}.
+                          </div>
+                          <button
+                            className="menu-btn small"
+                            style={{ margin: '8px 0 0' }}
+                            disabled={caravanInsured && (inventory.gold ?? 0) < insuranceCost}
+                            onClick={() => {
+                              dispatchCaravan(world, partner, caravanItem, qty, caravanInsured);
+                              setCaravanItem(null); setCaravanQty(1); setCaravanInsured(false);
+                            }}
+                          >
+                            🐎 Dispatch to {partnerName}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            });
           })()}
 
           {mySideQuest && mySideDef && (() => {
