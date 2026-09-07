@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import MenuTabs from './MenuTabs';
 import { QUESTS } from '@/game/data/quests';
-import { NPCS, NPC_BY_ID, CEDRIC_WAR_QUESTS, isNpcRevealed, sideQuestBlocker, sideQuestGiverName, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
+import { NPCS, NPC_BY_ID, CEDRIC_WAR_QUESTS, INTERIOR_RESIDENTS, isNpcRevealed, sideQuestBlocker, sideQuestGiverName, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
 import { HOUSE_COLORS } from '@/game/data/allegiance';
 import AllegianceMeter from './AllegianceMeter';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
@@ -61,6 +61,20 @@ const HOMESTEAD_REGION: QuestRegion | null = (() => {
   const npcIds = NPCS.filter((n) => !n.world && n.sideQuests.length > 0).map((n) => n.id);
   return npcIds.length ? { id: 'homestead', label: 'The Homestead', icon: '🏡', npcIds } : null;
 })();
+// Wave 45 (B3) · interior residents (data/npcs.ts's INTERIOR_RESIDENTS) are
+// deliberately kept out of NPCS (see that table's own header comment), so
+// NPC_REGIONS' `n.world` grouping above never sees them — without a region
+// of their own they'd be the only quest-givers in the game with nowhere to
+// show up in this journal at all. Same non-NPC-array region shape
+// GUILD_REGIONS already uses just below, one per resident.
+const INTERIOR_REGION_ID = (npcId: string) => `interior_${npcId}`;
+const INTERIOR_REGIONS: QuestRegion[] = Object.values(INTERIOR_RESIDENTS).map((r) => ({
+  id: INTERIOR_REGION_ID(r.npc.id), label: r.npc.title, icon: '🚪', npcIds: [r.npc.id],
+}));
+// reverse lookup (resident npc id -> is-a-resident?), for the carried-errand
+// auto-open logic below — avoids re-scanning INTERIOR_RESIDENTS' values on
+// every render.
+const INTERIOR_NPC_IDS = new Set(Object.values(INTERIOR_RESIDENTS).map((r) => r.npc.id));
 
 function RewardLine({ q }: { q: SideQuestDef }) {
   const items = q.rewardItems
@@ -202,13 +216,21 @@ export default function QuestLogPanel() {
   const [openRegions, setOpenRegions] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = { main: true };
     const sqGuild = sideQuest ? GUILD_BY_ID[sideQuest.npcId] : null;
-    const giver = sideQuest && sideQuest.npcId !== 'cedric' && !sqGuild ? NPC_BY_ID[sideQuest.npcId] : null;
+    // Wave 45 (B3) · an interior resident's errand files under that
+    // resident's own region instead — same non-NpcDef-region special case
+    // sqGuild already gets, checked before the plain NPC_BY_ID lookup below
+    // so an interior resident's world-less NpcDef doesn't fall through to
+    // 'homestead' instead (see INTERIOR_RESIDENTS' own header comment for why
+    // these have no `world` field at all).
+    const sqInterior = !!sideQuest && INTERIOR_NPC_IDS.has(sideQuest.npcId);
+    const giver = sideQuest && sideQuest.npcId !== 'cedric' && !sqGuild && !sqInterior ? NPC_BY_ID[sideQuest.npcId] : null;
     // Wave 13 · a world-less giver (Alric/Beda) files under 'homestead' now
     // that they can actually hand out an errand — see HOMESTEAD_REGION.
     // Wave 22 · a guild errand files under that guild's own region instead.
     const giverWorld = sideQuest
       ? (sideQuest.npcId === 'cedric' ? CEDRIC_WORLD
         : sqGuild ? GUILD_REGION_ID(sqGuild.id)
+        : sqInterior ? INTERIOR_REGION_ID(sideQuest.npcId)
         : (giver ? giver.world ?? 'homestead' : null))
       : null;
     if (giverWorld) init[giverWorld] = true;
@@ -221,7 +243,13 @@ export default function QuestLogPanel() {
   const withCedric = alliance === 'cedric' ? [...baseRegions, CEDRIC_REGION] : baseRegions;
   // Wave 22 · only the player's own current guild gets a region — its
   // errand board is for members only, so there's nothing to show otherwise.
-  const regions = myGuild && GUILD_REGIONS[myGuild] ? [...withCedric, GUILD_REGIONS[myGuild]] : withCedric;
+  const withGuild = myGuild && GUILD_REGIONS[myGuild] ? [...withCedric, GUILD_REGIONS[myGuild]] : withCedric;
+  // Wave 45 (B3) · interior residents always get a region, same as every
+  // other world-less/no-`revealAfterQuest` giver (Alric/Beda) — their title
+  // alone names which building unlocks them ("Storehouse Quartermaster"),
+  // and GiverBlock's existing "Available — visit X in person" hint already
+  // makes clear this isn't a location you can just walk up to.
+  const regions = [...withGuild, ...INTERIOR_REGIONS];
 
   return (
     <div className="game-panel clickable menu-family">

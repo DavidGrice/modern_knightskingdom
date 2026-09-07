@@ -12,10 +12,12 @@ import { Suspense } from 'react';
 import * as THREE from 'three';
 import { KEEP_CHEST_POS, KEEP_INTERIOR } from '@/game/data/world';
 import { INTERIORS, pocketFor, type InteriorDef } from '@/game/data/interiors';
+import { INTERIOR_RESIDENTS } from '@/game/data/npcs';
 import { useGameStore } from '@/game/store/gameStore';
 import PropModel from './PropModel';
 import { Torch } from './Buildings';
 import RealPropPart from '../character/RealPropPart';
+import RiggedFigure from '../character/RiggedFigure';
 
 const WALL_T = 0.4;
 const AC = '/assets/props/castle_accessories';
@@ -273,6 +275,27 @@ function JewelTowerDressing({ def }: { def: InteriorDef }) {
   );
 }
 
+// Wave 45 (B3): the resident quest-giver standing inside whichever instance
+// of this building type is currently entered — INTERIOR_RESIDENTS
+// (data/npcs.ts) is keyed by TYPE, not this specific building's own id, so
+// the same Corwin/Cutter/Perrin/Aldous appears no matter which physical
+// Storehouse/Jail Cell/Watch Tower/Jewel Tower the player just walked into
+// (see that table's own header comment for why). `localX`/`localZ`/`yaw`
+// are the SAME numbers PlayerController's own interact-range check uses, so
+// the rendered figure and the "Talk to X" prompt can never drift apart.
+function ResidentFigure({ buildingType }: { buildingType: string }) {
+  const resident = INTERIOR_RESIDENTS[buildingType];
+  if (!resident) return null;
+  const { npc, localX, localZ, yaw } = resident;
+  return (
+    <Suspense fallback={null}>
+      <group position={[localX, 0, localZ]} rotation-y={yaw}>
+        <RiggedFigure config={npc.config} height={1.75} keepProps={npc.keepProps !== false} clip="anim_r_restpose" lodExempt />
+      </group>
+    </Suspense>
+  );
+}
+
 export default function BuildingInteriorRoom() {
   const interior = useGameStore((s) => s.interior);
   const buildings = useGameStore((s) => s.buildings);
@@ -293,6 +316,7 @@ export default function BuildingInteriorRoom() {
       {building.type === 'oc6094-2' && <JailCellDressing def={def} />}
       {building.type === 'tower' && <TowerDressing def={def} />}
       {building.type === 'oc6098b3' && <JewelTowerDressing def={def} />}
+      <ResidentFigure buildingType={building.type} />
     </group>
   );
 }
