@@ -8960,3 +8960,86 @@ three-settlement topology would have exposed.
   non-overlapping interact prompt on real walkable ground — the placement comment has been corrected in
   place to reflect that confirmation rather than leaving a stale "needs checking" note. `npx tsc
   --noEmit` / `npm run build`: both clean, verified independently.
+
+## Wave 45: Anglers' Circle quest-giver (B2) + the 4 zero-occupant interiors get residents (B3) — SHIPPED 2026-09-07
+
+Twelfth wave of the new 27-wave plan. B2 replicates Wave 44's own "a destination just needed a
+resident, full stop" finding at a fourth site; B3 closes a real, differently-shaped gap the empire arc
+had left open since Wave 24 — four generalized, enterable interiors (Storehouse, Jail Cell, Watch
+Tower, Jewel Tower) that shipped with real rooms and zero occupants, contradicting the game's own
+founding "quests come from allied NPCs, indoors" rule.
+
+- [COMPLETE] ✅ **Wyeth, "River Landing Ferryman" — template-03's first resident, in a plain,
+  independent `sideQuests` pool, not a settlement chain.** Confirmed live that the Anglers' Circle's
+  own hall already offers its full errand pool with zero NPC involved (`GUILD_QUESTS.anglers`, same
+  shape Wave 44 found for the Builders' Guild) — what template-03 actually lacked was a resident at
+  all. Deliberately scoped smaller than Fenwick/Torvald/Garrick: no `SETTLEMENT_QUESTS`/
+  `SETTLEMENT_FOUNDING` involved, matching the plain unchained pool shape Richard/John/Queen already
+  use. Themed to the destination's own real identity (worlds.ts: "a loading dock, cart tracks, and a
+  hint of trade") rather than duplicating the guild's fishing errands — his own lines point the player
+  at the Circle's board instead of re-offering its content. Placed via the same local-offset convention
+  Garrick/Torvald use (~21m east of `ANGLERS_HALL`); the resolved world point was cross-checked against
+  `templateWalkableFootprint.generated.json`'s three overlapping template-03 walkable rects and falls
+  inside all three, not just the one big union rect.
+- [COMPLETE] ✅ **Four new resident quest-givers — Corwin (Storehouse), Cutter (Jail Cell), Perrin
+  (Watch Tower), Aldous (Jewel Tower) — on a real, reasoned type-scoped design, not a copy of the
+  fixed-destination NPC pattern.** These interiors are player-BUILT buildable types with no `unique`
+  field (a player can have several, or none) — traced `removeBuilding()` end to end and confirmed it
+  never touches `completedSideQuests`/`sideQuest`/`reputation`, all keyed on a fixed npc id already, so
+  a resident keyed to the building TYPE (matching `INTERIORS`' own shape) rather than one specific
+  building instance never risks an orphaned errand if every instance of a type gets demolished — it
+  just goes temporarily unreachable, like any other quest-giver the player hasn't visited. New
+  `INTERIOR_RESIDENTS` table (`data/npcs.ts`) merges into `NPC_BY_ID` only, deliberately NOT into `NPCS`
+  itself — `Npc.tsx`'s render filter and PlayerController's home-only NPC loop both iterate `NPCS`
+  unconditionally, and a resident's only real position is `pocketFor(type, buildingId)`'s shared "empty
+  corner of the map" space, so an `NPCS` entry there would have produced a floating interact prompt with
+  no NPC rendered at that empty field. Each resident's personality/errands are grounded in their own
+  room's real purpose (a quartermaster's shelving/crates, a reformed poacher's bread/flowers, a
+  lookout's kills/ore, an appraiser's iron/guard duty) — reusing the plain existing `SideQuestDef` shape
+  throughout, no new quest kind.
+- [COMPLETE] ✅ **A small, fully-reused wiring path for interior dialogue — no new panel, store action,
+  or quest kind.** Traced the full interact chain and found `st.openDialogue(npcId)` already has zero
+  position/world awareness (`DialoguePanel.tsx` resolves purely off `NPC_BY_ID`), so the only real gap
+  was giving a resident an interact-range check inside the sealed pocket room. `PlayerController.tsx`'s
+  existing `if (st.interior)` branch (previously only the Keep's chest/throne and a generic "Leave X")
+  grew one more check: resolve the entered building's own resident, compare distance to
+  `pocketFor(type, id)` + the resident's local offset, and hand back the exact same `kind: 'npc'` target
+  every other NPC already dispatches through. `BuildingInteriorRoom.tsx` gained one generic
+  `ResidentFigure` component (an ordinary `RiggedFigure` on `anim_r_restpose`) rendered unconditionally
+  alongside the four existing per-type dressing components — it resolves to `null` for `keep`/`stable`.
+  `QuestLogPanel.tsx` gained an `INTERIOR_REGIONS` list (mirroring `GUILD_REGIONS`' own non-`NPCS`-array
+  region shape) so residents get a real journal section instead of silently having nowhere to appear,
+  plus the matching fix to the panel's own carried-errand auto-open logic (previously would have
+  defaulted an interior resident's `world`-less `NpcDef` to the 'homestead' region on open).
+- **A real, severe blocker found and fixed by live verification: 3 of the 4 new interiors had no way
+  to leave.** The first cut's resident-interact check reused the general `INTERACT_RANGE` (3.4m), which
+  geometrically covers the ENTIRE floor of the Watch Tower, Jail Cell, and Jewel Tower rooms (all three
+  under 3.6m across) from a centrally-placed resident — live-verified by teleporting to all 4 corners of
+  each built interior and reading the real interact prompt: every single corner of those three rooms
+  returned "Talk to `<resident>`", never "Leave the X". Since `exitInterior()` has exactly one call site
+  in the whole codebase (reachable only via that exact prompt), a player entering any of these three via
+  the ordinary door had no in-game action that returned them outside — only a Save & Return to Menu,
+  which clears `interior` on load but does not relocate the player, stranding them at the interior's raw
+  off-map pocket coordinates in an empty field. Fixed with a new, dedicated `RESIDENT_TALK_RANGE = 1.5`
+  (`data/world.ts`, same pattern as the existing `FISH_CAST_RANGE`) — every room's worst-case corner
+  still clears this by ~0.4-1.3m, guaranteeing a real "Leave" corner exists everywhere. Re-verified live
+  after the fix: Jail Cell/Watch Tower/Jewel Tower now each correctly return a MIX of "Talk to X" near
+  the resident and "Leave the X" near the door, confirmed by a real `KeyE` press actually firing
+  `exitInterior()` and relocating the player out of the pocket coordinate space; Storehouse (the one
+  interior with a large-enough room) was unaffected throughout.
+- **A real bug found and fixed: Wyeth's reputation was permanently inert.** Wyeth's `NpcDef` initially
+  omitted `repTitles`, even though the exact structural template this item was told to copy
+  (Richard/John/Queen) all carry one — `addReputation()` (gameStore.ts) silently no-ops for any NPC
+  lacking it, so turning in any of Wyeth's errands granted gold correctly but never moved his Standing
+  tier. Live-confirmed before the fix (`reputation.wyeth` stayed `0` across a real turn-in) and after
+  (went `0 → 15`, matching Richard/John/Queen's own 0/30/80/160 breakpoint convention, titled to his own
+  "mind the dock and what crosses it" line).
+- **Verified live end-to-end after both fixes**, real headless Chrome against a real running dev server
+  (junctions to the main worktree's asset tree were available in this pass): confirmed Wyeth is reachable
+  with a single unambiguous interact prompt and his full accept→progress→turn-in loop (including
+  reputation and the quest-log region) works correctly; demolished a Storehouse mid-quest-chain, built a
+  brand new one, and confirmed Corwin reappeared with his prior `completedSideQuests` state intact,
+  correctly offering his second errand rather than re-offering the first or losing progress — the live
+  proof the type-scoped (not instance-scoped) residency design holds under the exact demolish/rebuild
+  case it was designed for. Zero console errors across the full live session. `npx tsc --noEmit` /
+  `npm run build`: both clean, verified independently.

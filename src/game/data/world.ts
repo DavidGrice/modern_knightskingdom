@@ -69,6 +69,22 @@ export const STATION_RANGE = 4.5;
 // still reaching the real bank right next to the dock.
 export const FISH_CAST_RANGE = 1.5;
 
+// verify-fix (Wave 45, B3) · the 4 generalised-interior resident quest-givers
+// (INTERIOR_RESIDENTS, data/npcs.ts) also need a tighter bubble than the
+// general INTERACT_RANGE, for the opposite reason FISH_CAST_RANGE does: 3 of
+// those 4 rooms (Watch Tower, Jail Cell, Jewel Tower — data/interiors.ts's
+// own halfX/halfZ) are small enough that the full 3.4m range reaches every
+// wall from a centrally-placed resident, so the plain "Leave the X" fallback
+// (PlayerController's findTarget, checked right after the resident) could
+// never win anywhere in the room — live-verified during that wave's own
+// verify pass (every corner of all 3 rooms returned "Talk to <resident>",
+// never the exit prompt). The worst-case real, movement-clamped floor space
+// in any of the 4 rooms still leaves ~1.9m of clearance past this range in
+// every case (re-verified against each room's own halfX/halfZ and each
+// resident's own local stand-point — data/interiors.ts, INTERIOR_RESIDENTS),
+// so a corner far enough from the resident to read "Leave" always exists.
+export const RESIDENT_TALK_RANGE = 1.5;
+
 // The Grand Keep's great hall: a fixed, always-present interior fixture
 // tucked in an empty corner of the map (outside the tree ring, mining field,
 // pond and homestead). Entering/exiting is a teleport (see gameStore

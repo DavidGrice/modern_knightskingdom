@@ -10,10 +10,10 @@ import { LAND_TIERS, BUILDABLE_BY_ID, CLAIM_RADIUS, heightOf, labAssetId, sizeFo
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
   BROOK, EYE_HEIGHT, FISHING_DOCK, FISH_CAST_RANGE, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
-  POND, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
+  POND, RESIDENT_TALK_RANGE, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
 } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
-import { NPCS, NPC_BY_ID, isNpcRevealed } from '@/game/data/npcs';
+import { NPCS, NPC_BY_ID, isNpcRevealed, INTERIOR_RESIDENTS } from '@/game/data/npcs';
 import { INTERIORS, pocketFor } from '@/game/data/interiors';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { audio } from '@/lib/audio';
@@ -607,6 +607,30 @@ export default function PlayerController() {
       }
       const building = st.buildings.find((b) => b.id === st.interior);
       const def = building ? INTERIORS[building.type] : null;
+      // Wave 45 (B3): a resident quest-giver stands at a fixed local spot
+      // inside their own building type's pocket room (INTERIOR_RESIDENTS,
+      // data/npcs.ts) — checked here, ahead of the plain exit fallback, the
+      // same "specific stand-point, not talk-from-anywhere" gate the Keep's
+      // own chest/throne above already use. `st.openDialogue` (performAction's
+      // existing `kind === 'npc'` branch) needs no changes — it already
+      // resolves any npc id generically, with no position/world check of its
+      // own, and these residents are merged into NPC_BY_ID for exactly this.
+      //
+      // verify-fix (Wave 45): uses RESIDENT_TALK_RANGE (1.5m), NOT the
+      // general INTERACT_RANGE (3.4m) — see that constant's own comment
+      // (data/world.ts) for why. At the full 3.4m range this check covered
+      // every wall of 3 of the 4 rooms from a centrally-placed resident, so
+      // the "Leave" fallback right below could never win anywhere inside
+      // them — a real, live-verified regression fixed here.
+      const resident = building ? INTERIOR_RESIDENTS[building.type] : null;
+      if (building && resident) {
+        const pocket = pocketFor(building.type, building.id);
+        const rx = pocket.x + resident.localX;
+        const rz = pocket.z + resident.localZ;
+        if (Math.hypot(rx - pos.current.x, rz - pos.current.z) < RESIDENT_TALK_RANGE) {
+          return { id: resident.npc.id, kind: 'npc', duration: 0, actionable: true, label: `Talk to ${resident.npc.name}` };
+        }
+      }
       return {
         id: 'interior_exit', kind: 'interior_exit', duration: 0, actionable: true,
         label: `Leave ${def?.doorLabel ?? 'the building'}`,
