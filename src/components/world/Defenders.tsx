@@ -29,6 +29,7 @@ import { hashId } from './Villagers';
 import { homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import { POND } from '@/game/data/world';
+import { MERCHANT_SPOT, MERCHANT_CAMP_STATION } from '@/game/data/trade';
 import { pushOutOfWater } from '@/game/waterworks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import type { CharacterConfig, Villager } from '@/game/types';
@@ -100,12 +101,18 @@ function DefenderFigure({ villager }: { villager: Villager }) {
 
   const station = keepSocketId ? null
     : villager.stationId ? buildings.find((b) => b.id === villager.stationId) ?? null : null;
+  // Wave 46 (B4) · the merchant camp's own guard post — a second fixed-point
+  // stationId sentinel, the same shape as `keep:<socketId>` just above
+  // (neither is a real PlacedBuilding id; `station` stays null for both).
+  const atMerchantCamp = villager.stationId === MERCHANT_CAMP_STATION;
   // an unfinished tower is just a ghost outline — no battlement to stand on
   const elevated = keepSocket && keep
     ? keepBuilt && !!keepPart?.walkway
     : station?.type === 'tower' && !!station && isBuilt(station);
-  const postX = keepSocket && keep ? keep.x + keepSocket.x : station ? station.x : HOME_X + Math.cos(h) * 5;
-  const postZ = keepSocket && keep ? keep.z + keepSocket.z : station ? station.z : HOME_Z + Math.sin(h) * 5;
+  const postX = keepSocket && keep ? keep.x + keepSocket.x
+    : station ? station.x : atMerchantCamp ? MERCHANT_SPOT.x : HOME_X + Math.cos(h) * 5;
+  const postZ = keepSocket && keep ? keep.z + keepSocket.z
+    : station ? station.z : atMerchantCamp ? MERCHANT_SPOT.z : HOME_Z + Math.sin(h) * 5;
   // Wave 31 · a home-only mechanic (defenders never post at a destination —
   // see `order` below), so only the two non-elevated (ground-level) branches
   // need homeGroundY; the elevated ones already carry their own real base
@@ -297,7 +304,7 @@ function DefenderFigure({ villager }: { villager: Villager }) {
       }
       // active circuit (Phase 22): steady rounds — wide sweeps free-roaming,
       // tight loops when stationed; Scout doubles the sweep at a jog
-      const radius = order === 'scout' ? 30 : station ? 6 : 15;
+      const radius = order === 'scout' ? 30 : (station || atMerchantCamp) ? 6 : 15;
       const pace = order === 'scout' ? 2.1 : 1.3;
       patrolA.current += (pace / radius) * dt;
       const txP = ds.postX + Math.cos(patrolA.current) * radius;

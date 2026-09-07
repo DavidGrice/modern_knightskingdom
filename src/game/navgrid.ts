@@ -22,6 +22,7 @@ import { getMountedRoot, getMountedRegion } from '../components/world/TemplateWo
 import { dungeonState, type DungeonLayout } from './dungeon';
 import { useGameStore } from './store/gameStore';
 import { onRoad } from './data/road';
+import { hasSettlementRoad, onSettlementRoad } from './data/settlementRoads';
 import navgridConfig from '../ai/config/navgrid.json';
 
 // Phase 2, iteration 2.5 — scratch vectors for height rasterization, reused
@@ -186,21 +187,35 @@ export class NavGrid {
   private readonly maxStep: number;
 
   // Requested 2026-07-30: NPCs should prefer the road over cutting across
-  // grass. The route is fixed for the whole run and only meaningful on the
-  // home grid (road.ts's SIGNPOST-anchored route is a home-world concept —
-  // a destination/dungeon grid's own coordinates could coincidentally fall
-  // in the same numeric range without this meaning anything there), so it is
+  // grass. Each region's own route is fixed for the whole run, so it is
   // built once, lazily, rather than per rebuild() call like the (building-
   // dependent) obstacle grid above it.
+  //
+  // Wave 46 (B8) · this used to hard-gate on `this.region !== null` — ANY
+  // non-home region, not "no data exists yet for a destination." That was a
+  // real architecture gap, not just an authoring one: road.ts's own
+  // SIGNPOST-anchored LEGS are home-coordinate-space (a destination/dungeon
+  // grid's own coordinates could coincidentally fall in the same numeric
+  // range without this meaning anything there), so even hand-placing real
+  // road data for a settlement couldn't have satisfied this gate — it
+  // refused every non-null region unconditionally, before ever asking
+  // whether that region had geometry. Generalized below to consult
+  // data/settlementRoads.ts (real per-destination path segments, resolved
+  // from the same live NPC/guild-hall/arrival-spawn coordinates
+  // Waves 4/26/44 already placed) for any region that has one, and to keep
+  // the exact old no-op for every region that doesn't.
   private roadMask: Uint8Array | null = null;
 
   private ensureRoadMask(): void {
-    if (this.roadMask || this.region !== null) return;
+    if (this.roadMask) return;
+    if (this.region !== null && !hasSettlementRoad(this.region)) return;
     const n = this.dim * this.dim;
     const mask = new Uint8Array(n);
     for (let i = 0; i < this.dim; i++) {
       for (let j = 0; j < this.dim; j++) {
-        if (onRoad(this.toWorldX(i), this.toWorldZ(j))) mask[this.idx(i, j)] = 1;
+        const wx = this.toWorldX(i), wz = this.toWorldZ(j);
+        const onIt = this.region === null ? onRoad(wx, wz) : onSettlementRoad(this.region, wx, wz);
+        if (onIt) mask[this.idx(i, j)] = 1;
       }
     }
     this.roadMask = mask;
@@ -293,6 +308,20 @@ export class NavGrid {
    * wherever already calls it) picks this up: `builtFrom === buildings`
    * would otherwise wrongly no-op, since the buildings array's own identity
    * has not changed, only this grid's relationship to world space has.
+   *
+   * Wave 46 (B8) · `roadMask` gets the same treatment now, for the same
+   * reason: it is keyed by the same indices as `blocked`/`heights`, so it is
+   * exactly as stale as either the moment the origin moves. This was a real
+   * latent bug, not cosmetic, once `ensureRoadMask()` could build a non-empty
+   * mask for a destination at all (see that method's own Wave 46 comment): a
+   * window-mode grid starts centred on the destination's declared teleport
+   * origin, not its real content — e.g. template-04's origin (1900, 1000)
+   * vs. its actual hall/resident cluster ~(2100, 1820), hundreds of units
+   * away — so the FIRST `ensureRoadMask()` call (from the first `findPath`)
+   * always lands before the first real recentre. Left uninvalidated, that
+   * first call would build a real mask once, over entirely the wrong patch
+   * of space, and then never rebuild — silently no-opping the whole feature
+   * the moment the grid actually recentred onto the settlement.
    */
   recentre(x: number, z: number): void {
     if (this.mode !== 'window') return;
@@ -304,6 +333,7 @@ export class NavGrid {
     // exactly as stale as the obstacle grid the moment the origin moves —
     // same reasoning as builtFrom = null just above.
     this.heightsStale = true;
+    this.roadMask = null;
   }
 
   /** Rasterized ground height at (x, z), or null if this grid has no height

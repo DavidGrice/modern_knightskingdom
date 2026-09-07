@@ -14,16 +14,30 @@ import type { ItemId } from '../types';
 // south guard posts" the roadmap actually asked for, since the props those
 // referred to hadn't been identified yet.
 //
-// L68 (resolved) · the two guard posts ARE the mc001 ("Wall Corner (Small)")
-// huts in StarterVillage.tsx — the same props already carrying Alric's and
-// Beda's houses, at (-41.5, 36.5) and (-34, 44). The merchant now stands
-// between them, on the road's own westward run (road.ts's route passes
-// right through this corner), clear of both huts' and both NPCs'
-// STARTER_VILLAGE_CLEAR radii (world.ts) and well outside BUILD_REGION —
-// no overlap with either the homestead or any GROUNDS section (checked
-// against grounds.ts's own dev-time overlap assertions). Facing back down
-// the road toward the homestead.
-export const MERCHANT_SPOT = { x: -37.5, z: 40, yaw: -1.21 };
+// L68 (resolved, superseded) · the two guard posts WERE the mc001 ("Wall
+// Corner (Small)") huts in StarterVillage.tsx — the same props already
+// carrying Alric's and Beda's houses. The merchant used to stand between
+// them, sharing their corner rather than having a camp of his own — the
+// "shares a corner" gap this wave's own item closed.
+//
+// Wave 46 (B4) · a real walled camp of his own, down a short spur off
+// road.ts's westward trunk (leg 6) rather than borrowing Alric's/Beda's
+// corner. See MerchantCamp.tsx for the mc001/mc005 enclosure and
+// Defenders.tsx for the guard posted here via MERCHANT_CAMP_STATION (the
+// same fixed-point stationId sentinel `keep:<socketId>` already pioneered —
+// a second sentinel, not new machinery). Clear of Alric/Beda (~35m), clear
+// of Northwood Stand's fenced rectangle (~35m), and well outside
+// BUILD_REGION on the x-axis alone (checked against grounds.generated.json
+// and buildables.ts's own BUILD_REGION). Facing the yard's north-facing
+// gate, back toward the spur.
+export const MERCHANT_SPOT = { x: -76.8, z: 16, yaw: Math.PI };
+
+/** The sentinel stationId a defender is given to stand guard at the
+ *  merchant's camp — the same shape as J51's own `keep:<socketId>` sentinel
+ *  (Defenders.tsx/VillagersPanel.tsx), a second fixed point rather than a
+ *  real PlacedBuilding id. `stationDefender()` (gameStore.ts) does zero
+ *  validation of the id it is given, so this needs no store changes. */
+export const MERCHANT_CAMP_STATION = 'merchant_camp';
 
 export const SELL_PRICES: Partial<Record<ItemId, number>> = {
   wood: 1,

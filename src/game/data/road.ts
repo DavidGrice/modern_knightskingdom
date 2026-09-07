@@ -55,18 +55,23 @@ export { N, E, So, W };
 /** how much of a plate's width the printed road takes — sampled off spr164,
  *  whose sand runs from 27% to 72% across the tile.
  *
- *  Worth knowing, because it surprises anyone who measures it: two fixed props
- *  stand INSIDE this width and therefore report `onRoad()` true — SIGNPOST
- *  (-16, 36) at 2.40m off the centreline and MERCHANT_SPOT (-37.5, 40) at
- *  1.60m, against a half width of 2.88. Both predate Wave 12's network: the
- *  old seven-cell route already laid the same plates under them (verified
- *  against git HEAD, identical distances). Left alone deliberately — a
- *  roadside sign and a pedlar's cart parked on the road are where those two
- *  belong, SIGNPOST is what the whole network is anchored to (moving it slides
- *  every leg), and Merchant.tsx's walk-in timing is tuned to the distance from
- *  `roadEntry()` to MERCHANT_SPOT. The one real consequence is that standing
- *  at either grants ROAD_SPEED_MULT, and that a dig over the signpost is
- *  refused as road rather than as signpost (see waterworks.ts). */
+ *  Worth knowing, because it surprises anyone who measures it: SIGNPOST
+ *  (-16, 36) stands INSIDE this width, 2.40m off the centreline, and
+ *  therefore reports `onRoad()` true, against a half width of 2.88 — it
+ *  predates Wave 12's network (the old seven-cell route already laid the
+ *  same plates under it, verified against git HEAD). Left alone
+ *  deliberately: a roadside sign parked on the road is where it belongs, and
+ *  SIGNPOST is what the whole network is anchored to (moving it slides every
+ *  leg). The one real consequence is that standing on it grants
+ *  ROAD_SPEED_MULT, and that a dig over the signpost is refused as road
+ *  rather than as signpost (see waterworks.ts).
+ *
+ *  Wave 46 (B4) · MERCHANT_SPOT used to be this file's second such example
+ *  (1.60m off the centreline at the old (-37.5, 40) spot, shared with Alric's
+ *  and Beda's own corner) — no longer true. The merchant now stands inside
+ *  his own walled camp at the end of leg 6 below, off the printed
+ *  carriageway; Merchant.tsx's walk-in timing is tuned to the distance from
+ *  `roadEntry()` to MERCHANT_SPOT, most of it now along leg 6's own spur. */
 export const ROAD_HALF_WIDTH = ROAD_TILE * 0.45 / 2;
 
 /**
@@ -164,6 +169,15 @@ const LEGS: [number, number][][] = [
   // 5 · the Home Grove's turn-off, one plate north off the east road. Dead
   // ends (Road.tsx lays a straight through it) pointing at the grove's gate.
   [[2, SZ - 1], [2, SZ]],
+
+  // 6 · Wave 46 (B4) · the merchant camp's spur, one plate south off leg 2's
+  // own westward trunk (SX-5 sits between SX-8 and 0, so this leg STARTS on
+  // a cell leg 2 already laid — the free T-junction every branch off the
+  // trunk gets, same as every leg above). Dead ends a cell short of the
+  // camp's own gate (MerchantCamp.tsx / MERCHANT_SPOT in data/trade.ts) —
+  // the same "close enough to see the gate from" reach every other leg's own
+  // dead end uses, not a plate laid inside the yard itself.
+  [[SX - 5, SZ], [SX - 5, SZ - 1]],
 ];
 
 /** de-duplicated, and filled in so a jump of more than one cell still joins up */

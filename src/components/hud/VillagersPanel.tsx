@@ -19,6 +19,7 @@ import { levelFromXp, xpForLevel } from '@/game/data/ranks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { DefenderLoadout, ItemId, Villager, VillagerJob } from '@/game/types';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
+import { MERCHANT_CAMP_STATION } from '@/game/data/trade';
 import { villagerConfig } from '@/game/data/villagerLooks';
 import { PortraitFactory, usePortrait } from '../character/VillagerPortrait';
 import Ico from '../ui/Ico';
@@ -393,6 +394,17 @@ export default function VillagersPanel() {
                       onClick={() => stationDefender(v.id, null)}
                     >
                       🏠 Patrol Home
+                    </button>
+                    <button
+                      className="menu-btn small"
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: v.stationId === MERCHANT_CAMP_STATION ? 1 : 0.65,
+                        borderColor: v.stationId === MERCHANT_CAMP_STATION ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={() => stationDefender(v.id, MERCHANT_CAMP_STATION)}
+                    >
+                      🏪 Merchant Camp
                     </button>
                     {towers.map((t, i) => (
                       <button

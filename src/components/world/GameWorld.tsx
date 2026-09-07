@@ -22,6 +22,7 @@ import Villagers from './Villagers';
 import Defenders from './Defenders';
 import DepositFloaties from './DepositFloaties';
 import StarterVillage from './StarterVillage';
+import MerchantCamp from './MerchantCamp';
 import Road from './Road';
 import Emplacements from './Emplacements';
 import CedricCamp from './CedricCamp';
@@ -108,6 +109,7 @@ export default function GameWorld() {
             tick would be lost, silently disabling home defense while away */}
         <Emplacements />
         {!destination && <StarterVillage />}
+        {!destination && <MerchantCamp />}
         <CedricCamp />
         <BattleDome />
         <CourtDressing />
