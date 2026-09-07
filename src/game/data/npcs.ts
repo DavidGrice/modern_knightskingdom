@@ -599,6 +599,45 @@ export const NPCS: NpcDef[] = [
     sideQuests: SETTLEMENT_QUESTS.torvald,
     world: 'template-07',
   },
+  // Wave 44: the empire arc's third settlement site, The Siege Camp
+  // (template-04) — reads as a war-camp survivor, not a generic builder,
+  // even though he sits by the Builders' Guild's own hall (BUILDERS_HALL,
+  // data/guilds.ts): the destination's real theme (worlds.ts blurb/loot —
+  // "a war machine still stands aimed at a keep it never breached", +iron
+  // ore fittings) is a siege engine and its salvage, not construction.
+  // He "doubles" as the Guild's missing quest-giver narratively only — his
+  // own `sideQuests` carries just the new settlement chain below; the
+  // Guild's own errand pool (GUILD_QUESTS.builders) is offered by the hall
+  // itself (Panels.tsx's GuildErrands, walking within its interact range)
+  // and needed zero NPC to begin with — confirmed live, see this wave's
+  // research notes.
+  {
+    id: 'garrick',
+    name: 'Garrick',
+    title: 'Siege Camp Smith',
+    config: {
+      name: 'Garrick', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
+      armColor: 44, handColor: 18, legColor: 46, hipColor: 47,
+    },
+    // ~20m east of BUILDERS_HALL — which is also (within 0.02/0.007 local
+    // units) the template-04 arrival spawn/claim-banner point, per
+    // worlds.ts's own TEMPLATE_ARRIVAL_SPAWN comment — a reasoned starting
+    // candidate mirroring Torvald's own east-of-hall placement at The
+    // Frozen Pass. Live-verified during this wave's own verify pass (a real
+    // teleport + interact): reachable on real walkable ground, with a clean
+    // "Talk to Garrick" prompt showing no overlap with the hall's own.
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-04'], 2930.73, 10942.8), yaw: Math.PI / 2,
+    keepProps: false,
+    greetSound: 'villager',
+    portrait: '/assets/minifigs/minifiggenericgood00.png',
+    lines: [
+      "That old war machine's stood aimed at the same keep since before I was born — still cocked, never loosed. There's good iron left in her bones, if a man's not afraid to pry.",
+      "The Guild keeps a board of real work up at the hall there — mind you take a look. But I've a different kind of work in mind, if you're the sort who finishes what others walked away from.",
+      "Shore up what's left of this camp and clear it of what's moved in since, and I'll see the deed's yours. A siege camp makes a fine start for a keep of your own.",
+    ],
+    sideQuests: SETTLEMENT_QUESTS.garrick,
+    world: 'template-04',
+  },
 ];
 
 export const NPC_BY_ID = Object.fromEntries(NPCS.map((n) => [n.id, n]));
