@@ -9043,3 +9043,63 @@ founding "quests come from allied NPCs, indoors" rule.
   proof the type-scoped (not instance-scoped) residency design holds under the exact demolish/rebuild
   case it was designed for. Zero console errors across the full live session. `npx tsc --noEmit` /
   `npm run build`: both clean, verified independently.
+
+## Wave 46: a walled merchant camp (B4) + settlement road-preference authoring (B8) — SHIPPED 2026-09-07
+
+Thirteenth wave of the new 27-wave plan. Research found the plan's own "B8 is authoring work, not an
+architecture fix" framing was wrong — the nav-grid's road-mask mechanism structurally refused to run for
+any non-home region, independent of whether data existed — and live verify caught a real discrepancy
+between the implementation's own claimed measurement and actual live behavior before it could ship with
+a visible pop.
+
+- [COMPLETE] ✅ **B4 · the traveling merchant gets a real walled camp of his own**, moved off Alric's/
+  Beda's shared starter-village corner into a new 3-sided enclosure (`mc001` corners + `mc005` walls, at
+  the family's real 3.84m defensive height, not the starter village's stylized hut scale-down), reached
+  by a new one-cell spur (leg 6) that T-junctions for free off the existing westward road trunk — the
+  same zero-new-pathing-concept extension `road.ts`'s own header already proved 6 times over for the
+  resource grounds. A defender can now be posted to guard the camp via a second `MERCHANT_CAMP_STATION`
+  sentinel `stationId` — reusing the exact `keep:<socketId>` fixed-point mechanism Wave-precedent J51
+  already pioneered, needing zero store changes since `stationDefender()` never validates the id it's
+  given.
+- [COMPLETE] ✅ **B8 · settlement road-preference, with a real architecture correction the plan itself
+  missed.** `NavGrid.ensureRoadMask()` had a hard `this.region !== null` gate — an unconditional refusal
+  for ANY destination, not a "no data yet" placeholder — because `road.ts`'s own `onRoad()` only ever
+  checks position against home-coordinate-space `LEGS` with no region concept at all. Content authoring
+  alone could never have satisfied this gate. New `src/game/data/settlementRoads.ts` provides real,
+  already-resolved per-destination path segments (arrival→resident, arrival→guild-hall) computed live
+  from the same `TEMPLATE_ARRIVAL_SPAWN`/`NPC_BY_ID`/`GUILD_BY_WORLD` coordinates Waves 4/26/44 already
+  placed — no second hand-typed table that could drift from the source of truth. `ensureRoadMask()` now
+  consults this per-region before falling back to its original no-op for every region without data,
+  leaving templates 01/02/etc. completely untouched. **A second, previously-latent bug found and fixed
+  in the same pass**: `recentre()` (used by every window-mode destination grid) invalidated
+  `builtFrom`/`heightsStale` on origin change but never `roadMask` — harmless while the mask was always
+  empty for destinations, but since a destination grid's first `ensureRoadMask()` call happens before
+  its first real recentre (starting centred on the raw teleport origin, hundreds of units from the
+  actual settlement content), the mask would have been built once over the wrong patch of space and
+  never rebuilt, silently no-oping the whole feature the moment the grid actually recentred onto the
+  settlement. Fixed by adding `roadMask = null` alongside `recentre()`'s existing invalidations.
+- **A real discrepancy caught by live verify, not just re-stated from the implement pass.** The
+  implementation report claimed to have live-measured the retuned `WALK_BUFFER=0.09` and found the
+  merchant "already standing at the spot ~1.7s before the trading window opens." Verify independently
+  re-measured the identical scenario from scratch and found the opposite: the merchant was still ~3.7m
+  short of `MERCHANT_SPOT` when the window opened, producing a real, reproducible teleport-pop rather
+  than a smooth arrival — the code's own more cautious in-place comment turned out to be the accurate
+  account, not the implementation report's specific claim. Fixed by bumping `WALK_BUFFER` to `0.1`,
+  re-measured live and confirmed closing to within 0.5m before the window opens (down from a ~3.7m pop),
+  in both the arriving and leaving directions.
+- **Verified live end-to-end for both items, with real quantified evidence, not just presence checks.**
+  B4: `onRoad()` spot-checks confirm the new spur is real road and `MERCHANT_SPOT` sits correctly inside
+  the yard off the printed carriageway; a real A*-cost comparison (with the road discount zeroed and
+  restored) showed the AI genuinely choosing a longer, road-hugging route (cost 64.7) over a shorter
+  beeline (cost 80.2) once the discount applied — real, quantified preference, not a coincidental tie;
+  the `merchant_camp` station sentinel correctly resolves a posted defender's position and patrol radius
+  end-to-end, confirmed via the existing debug hook. B8: for template-04, a real `travelTo()` plus a
+  real per-frame `recentre()` (no manual test hacks) produced a genuine 144-cell road mask sitting
+  exactly on the authored arrival→Garrick segment, with a real, measured cost discount (12.25 vs 20.41)
+  changing the route's own shape — and the `recentre()` staleness fix was directly demonstrated live
+  (forcing a far recentre nulls the mask immediately; a subsequent path rebuilds it correctly). The same
+  was independently confirmed for template-07 and template-08, with template-01 (no authored data)
+  confirmed as an unaffected control — zero regression to every other region. Zero console errors
+  across the full live session (this repo's own `CLAUDE.md` conventions followed throughout — real
+  GPU-rendered Chrome, no mouse/audio disruption). `npx tsc --noEmit` / `npm run build`: both clean,
+  verified independently.

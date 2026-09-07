@@ -10,6 +10,7 @@
 // on a TDZ access to WORLD_DESTINATION_BY_ID.
 import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 import { BUILD_REGION } from './buildables';
+import { MERCHANT_SPOT } from './trade';
 
 export const WORLD_HALF = 200;          // world spans ±200 on x/z
 export const SPAWN: [number, number, number] = [0, 0, 26];
@@ -176,6 +177,10 @@ export const FIXED_WORLD_PROPS: { name: string; x: number; z: number }[] = [
   { name: 'SIGNPOST', x: SIGNPOST.x, z: SIGNPOST.z },
   { name: 'POND', x: POND.x, z: POND.z },
   { name: 'FISHING_DOCK', x: FISHING_DOCK.startX, z: FISHING_DOCK.startZ },
+  // Wave 46 (B4) · the merchant's new walled camp (MerchantCamp.tsx) — well
+  // outside BUILD_REGION today, but the region is due to grow (see this
+  // guard's own doc above), same reasoning as every other entry here.
+  { name: 'MERCHANT_CAMP', x: MERCHANT_SPOT.x, z: MERCHANT_SPOT.z },
 ];
 
 // Dev-only guard for the rule above: nothing fixed in the world may stand

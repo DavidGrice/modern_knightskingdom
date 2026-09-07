@@ -33,15 +33,13 @@ treat both as hard requirements, not nice-to-haves.
 - `--use-angle=d3d11` is kept because this project's own real-texture screenshot
   requirement (see the memory note this file summarizes: SwiftShader software
   rendering flattens textures) needs a real GPU backend, not the software fallback.
-  **Open question, not yet confirmed**: whether `--headless=new` combined with
-  `--use-angle=d3d11` actually renders through real ANGLE/D3D11 on this machine, or
-  silently falls back to SwiftShader the way old headless mode always did. The first
-  agent that needs a real look-and-feel screenshot under this new flag combination
-  should verify this directly (e.g. screenshot a known-textured surface and confirm it
-  isn't flattened) and update this file with the result. If it DOES fall back to
-  SwiftShader, screenshot-quality verification may need a different approach — ask
-  before falling back to a headed, off-screen window, since that reintroduces the
-  mouse-hijack risk this file exists to prevent.
+  **Confirmed (Wave 46 verification, playwright-core 1.62.1, this machine)**:
+  `--headless=new` combined with `--use-angle=d3d11` DOES render through a real GPU
+  backend, not a SwiftShader fallback — screenshots of the mc001/mc005 wall props
+  (Wave 46's merchant camp) show genuine multi-tone stone-block texture detail and
+  distinct material colors (arched red doorways, tan/grey block variation), not the
+  flattened single-color look SwiftShader produces. No further verification needed on
+  this point for future waves on this machine.
 
 **If headless truly cannot render what a specific check needs** (last resort only,
 and say so explicitly in your own report rather than silently downgrading): a headed,

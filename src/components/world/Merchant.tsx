@@ -37,7 +37,26 @@ const MERCHANT_KEEP_PROPS = false;
 // buffer just outside that window, and position is pinned to MERCHANT_SPOT
 // for the whole time he is actually interactable, regardless of whether the
 // walk-in has visually finished settling.
-const WALK_BUFFER = 0.03; // ~21.6 game-seconds at the default 720s day
+// Wave 46 (B4) · MERCHANT_SPOT moved from the old shared starter-village
+// corner (34.4m from OFF_STAGE, entirely along the printed road at the
+// ROAD_SPEED_MULT-boosted 1.56 effective speed — 34.4/1.56 = 22.05s, which
+// is what the old 0.03 (21.6s) was tuned against) into his own walled camp
+// down road.ts's new leg 6 spur. New distance hypot(64, 48) = 80: ~74.6m of
+// that is along the road (roadSpeedMult applies, effective 1.56) and the
+// remaining ~9.6m is the open walk from the spur's dead end into the camp's
+// gate at plain WALK_SPEED — the straight-line estimate (74.6/1.56 + 9.6/1.2
+// ≈ 55.8s) undershot the real walk badly: navSteer's A*-routed path is
+// longer than that split assumes, and the original 0.09 (64.8s @ the
+// default 720s day) — itself only a padded guess, never actually measured —
+// left the merchant still ~2-3.7m short of MERCHANT_SPOT when the trading
+// window opened, producing a real, visible teleport-pop instead of a clean
+// arrival. Live-measured (real Chrome, dayLength=720, sampled every 3s
+// across the buffer window): at 63.32s in he had covered ~77.6m and still
+// had 3.738m left at his final off-road pace (~1.19 m/s, i.e. plain
+// WALK_SPEED, confirming that shortfall lands in the off-road tail, not the
+// road leg) — call it ~66.5s to fully close the gap. 0.1 (72s) leaves ~5.5s
+// of margin over that measurement rather than trimming it to the wire.
+const WALK_BUFFER = 0.1;
 const WALK_SPEED = 1.2;
 
 // The actual road's far entry point — the same spot every newcomer walks in
