@@ -50,6 +50,7 @@ import Cannonballs from '../combat/Cannonballs';
 import Bolts from '../combat/Bolts';
 import ArenaSpawner from '../combat/ArenaSpawner';
 import ChallengeRunner from '../combat/ChallengeRunner';
+import SettlementRaidRunner from '../combat/SettlementRaidRunner';
 import AiRuntime from '@/ai/AiRuntime';
 import AIPerceptionGizmos from '@/ai/debug/AIPerceptionGizmos';
 
@@ -152,6 +153,10 @@ export default function GameWorld() {
           above — ticks the 3 new challenge-ground mechanics and cheaply
           early-returns on every frame none of them is the active one. */}
       <ChallengeRunner />
+      {/* Wave 47 (B5) · same always-mounted, cheap-early-return reasoning as
+          ChallengeRunner just above — ticks rival raids against a founded
+          settlement (game/settlementRaid.ts). */}
+      <SettlementRaidRunner />
       {/* Wave 15 · always mounted (unlike CombatController above), same
           reasoning as ArenaSpawner/AiRuntime here — Start/B need to keep
           opening/closing panels and pausing even while BuildController (not

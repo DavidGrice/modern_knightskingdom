@@ -48,7 +48,11 @@ export interface SideQuestDef {
   // that field's own doc comment. 'caravan' (Wave 27) is advanced by a real
   // caravan collection (gameStore's collectCaravan), not by carrying
   // anything yourself — see data/caravan.ts for the mechanic itself.
-  kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'deliver' | 'caravan';
+  // 'defend' (Wave 47, B7) is advanced the same opportunistic way: a real
+  // settlement raid resolving in the player's favor (gameStore's
+  // resolveSettlementRaid) bumps it, whether or not it's the errand you set
+  // out that night meaning to finish — see game/settlementRaid.ts.
+  kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'deliver' | 'caravan' | 'defend';
   target: string;       // itemId / recipeId / buildableId / enemy kind or 'any' for kills
   need: number;
   label: string;

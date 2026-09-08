@@ -9103,3 +9103,87 @@ a visible pop.
   across the full live session (this repo's own `CLAUDE.md` conventions followed throughout — real
   GPU-rendered Chrome, no mouse/audio disruption). `npx tsc --noEmit` / `npm run build`: both clean,
   verified independently.
+
+## Wave 47: contested caravan risk + rival settlement raids (B5) + a defend→growth quest link for all 3 settlements (B7) — SHIPPED 2026-09-08
+
+Fourteenth wave of the new 27-wave plan. Research re-confirmed a stale "both settlements" framing in
+both items' own plan text — Wave 44 already made it three (Fenwick/template-08, Torvald/template-07,
+Garrick/template-04) — and built against all three throughout. Also made an explicit, reasoned scope
+call: full settlement-ownership transfer ("ownership changes hands") was ruled out this wave.
+
+- [COMPLETE] ✅ **B5 · `allegiance.ts` gets a real "how contested is my standing" signal**
+  (`contestedPressure()`, 0 across the whole ±10 Unsworn band, ramping to 1 at either axis extreme) that
+  both new mechanics read so they can never drift into different opinions of the same scalar.
+  `caravan.ts`'s `effectiveCaravanRisk()` adds up to +15pp on top of a route's own flat `riskPct`,
+  wired into the real roll in `collectCaravan()` — genuinely neutral standing leaves it untouched.
+- [COMPLETE] ✅ **B5 · rival settlement raids**, a new leaf module (`game/settlementRaid.ts`) mirroring
+  Wave 43's Defend-the-Plot shape exactly: real hostiles spawn via `spawn()`'s own `worldOverride`
+  param, scoped to the founded settlement, ticked by a new always-mounted `SettlementRaidRunner.tsx`
+  (next to `<ChallengeRunner/>` in `GameWorld.tsx`). Triggers at real dusk (`night > 0.62`, the same
+  bound `Enemies.tsx`'s own raid already uses) once a settlement's own cooldown has passed (15 real min
+  at zero contested pressure, floor 6 min at max) — genuinely Unsworn standing means neither house has
+  reason to test the claim, no raid possible, by design. The attacking house's own kinds (`bandit`+
+  `mountedRaider` for a crown-leaning claim, `royal`+`mountedRaider` for a Cedric-leaning one) close on
+  the settlement's claimed plot and drain a real HP pool the player's own combat is what defends.
+  **Explicit, reasoned scope-down, stated plainly rather than silently under-delivered**: permanent
+  settlement-ownership transfer is NOT built. Two real reasons found live: the instance-separation
+  architecture only ticks `world === null` (home) enemies while the player is elsewhere (`combat.ts`'s
+  `Enemies()` filter), so a raid can only ever be a fight the player is standing in, never an unattended
+  siege — undercutting the "at risk even when you're not looking" framing permanent loss would need to
+  feel earned — and permanently deleting hand-founded content (named residents, real quest-chain
+  prerequisites elsewhere) is a far bigger one-way commitment than the plan's own phrasing implied. What
+  ships instead is real and reversible: a win pays a gold/xp bonus scaled by surviving plot HP and bumps
+  the settlement's own new defend quest (B7); a loss — plot HP hits 0, or the player leaves mid-fight —
+  never destroys anything, it pushes `lastCollectedAt` forward 5 real minutes, delaying (never voiding)
+  the next yield collection. Also narrowed on purpose: no named-boss cameos (Cedric/Gilbert/Weezil) at a
+  settlement raid — that stays exclusive to his own home arc; a settlement raid reads as anonymous rival
+  pressure from whichever house the player has NOT been leaning toward.
+- [COMPLETE] ✅ **B7 · a real defend→growth quest link for all three settlements**, built as content on
+  top of B5's own raid mechanism per the task's explicit instruction, not a second disconnected system:
+  a new `'defend'` `SideQuestDef.kind` (added to both `npcs.ts`'s union and `bumpSideQuest`'s own
+  parameter type) advances the same opportunistic way `'caravan'` already does — `resolveSettlementRaid`
+  calls `bumpSideQuest('defend', destId, 1)` on a win, ticking whichever settlement's defend quest
+  happens to be the player's current errand. Each of the three chains (fenwick/torvald/garrick, all
+  previously dead-ending after their Wave-27 reciprocal/caravan content) gets two new links: a
+  `kind:'defend'` "Hold the Line" errand, then a `kind:'gather'` "expand" errand gated on it. Closing the
+  expand quest is the system's first-ever real settlement growth — `turnInSideQuest()` bumps that
+  settlement's new `growthTier` field (`Settlement` interface, promoted from a repeated anonymous inline
+  type in both `gameStore.ts` and `types.ts` to one real shared type since both needed touching anyway),
+  and `collectSettlementYield()`'s own formula now pays out `+ growthTier * 10` gold, permanently, on
+  top of the existing resident-count bonus. **Inter-settlement rivalry content, grounded in B5's own
+  mechanism rather than invented as a second concept** per the task's instruction: `DialoguePanel.tsx`'s
+  Settlement Yield block now surfaces `contestedPressure(allegiance)` as a flavor line naming whichever
+  house is NOT currently favored ("Word is riders loyal to King Leo have been probing the road"), and its
+  caravan quote's own risk display switched from the route's raw static `riskPct` to
+  `effectiveCaravanRisk()` so the quoted number is never a lie about what actually gets rolled.
+  Explicitly scoped down, stated plainly: true settlement *population* growth (new residents arriving at
+  a founded settlement post-founding) is a separate real system — no arrival mechanism targets a
+  non-home world today (`recruitVillageFolk`/`checkVillagerArrival` are both hardcoded to the home
+  roster) — and wasn't attempted here; what's delivered is a real yield-tier bump, not a headcount one.
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). One environment-only, non-code finding
+  matching Wave 27's own: the isolated worktree was missing `public/assets`/`public/help` (both
+  gitignored, not copied when the worktree was created), crashing every page load before any Wave-47
+  code ran — fixed locally for the verification session only via directory junctions to the main
+  checkout's asset tree; no tracked files were affected. With assets restored: drove the real
+  `SettlementRaidRunner` trigger end-to-end by advancing the real world clock (`worldEnv.time`, not a
+  direct `.night` write — `DayNight.tsx` recomputes `night` from `time` every frame and would have
+  clobbered a direct write) past dusk with a real contested allegiance and an elapsed cooldown; confirmed
+  a real `royal`+`mountedRaider` raid spawned and scoped correctly to the settlement's own world (zero
+  enemies leaking to any other world); forced a win and confirmed the exact expected gold (30, matching
+  `round(30·hpFrac)`) and combat XP, `lastRaidAt` stamped, and `sideQuest.have` bumped 0→1 on the
+  player's real active `ruins_hold_the_line` quest; turned it in for real and confirmed the reward and
+  `completedSideQuests`; forced a second raid and a real loss via leaving mid-fight and confirmed
+  `lastCollectedAt` pushed forward by exactly the real `SETTLEMENT_RAID_YIELD_PENALTY_MS` (300000ms) constant, never
+  a destroyed settlement; completed the new `ruins_expand` quest for real and confirmed `growthTier` went
+  0→1 and `collectSettlementYield`'s own payout rose by exactly +10 gold on the next real collection
+  (16 vs the prior 6, at zero residents, isolating the growth term). Confirmed live in `DialoguePanel`
+  itself (not just the store): at allegiance −70, the rival flavor line correctly read "King Leo" and the
+  displayed caravan risk read 20% — the hand-computed expected value (`0.10 base + 0.667 pressure × 0.15
+  = 0.20`), not the route's flat 10%. Zero console/page errors across every session, across 4 separate
+  browser runs — including a regression pass confirming a third, untouched settlement still founds
+  correctly post-`Settlement`-interface-promotion, an untouched caravan route still applies its own flat
+  risk at neutral allegiance, and Wave 43's Defend the Plot runs fully independently alongside an active
+  settlement raid with zero cross-contamination. `npx tsc --noEmit` / `npm run build`: both clean,
+  verified independently.
