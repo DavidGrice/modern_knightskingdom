@@ -83,3 +83,17 @@ export function allegianceGateHint(need: number): string {
     ? `Requires standing with the crown (${tier.title})`
     : `Requires standing with the Bull (${tier.title})`;
 }
+
+/** Wave 47 (B5) · 0 inside the whole -10..10 "Unsworn" band (matches
+ *  ALLEGIANCE_TIERS' own bound above), ramping linearly to 1 the further
+ *  into either house's territory the player's deeds have carried them.
+ *  Genuine neutrality (leaningHouse === null) is a real, contest-free
+ *  choice by design — this is the single "how contested is my standing"
+ *  signal both caravan.ts's risk and settlementRaid.ts's trigger/
+ *  composition read, so the two can never drift into different opinions of
+ *  the same scalar. */
+export function contestedPressure(value: number): number {
+  if (leaningHouse(value) === null) return 0;
+  const band = 10;
+  return Math.min(1, (Math.abs(value) - band) / (ALLEGIANCE_MAX - band));
+}

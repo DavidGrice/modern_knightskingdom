@@ -35,12 +35,24 @@
 // supports without a far larger, out-of-scope rearchitecture.
 import type { ItemId } from '../types';
 import { SELL_PRICES } from './trade';
+import { contestedPressure } from './allegiance';
 
 export const CARAVAN_CAP_PER_CART = 10;      // matches CARRIERS' own "cart" = +10/trip
 export const CARAVAN_MAX_CARTS = 3;          // a settlement only ever has 3 residents
 export const CARAVAN_MARKUP = 1.6;           // premium over the flat merchant SELL_PRICES rate
 export const CARAVAN_INSURANCE_RATE = 0.2;   // escort fee, gold, guarantees zero loss
 export const CARAVAN_LOSS_SURVIVE_FRACTION = 0.5; // an uninsured bad roll never wipes the load
+
+// Wave 47 (B5) · a route's own riskPct used to be a flat, static number,
+// deaf to the real allegiance scalar even though the whole route runs
+// between two settlements a war between two houses is actively contesting.
+// The more either house's cause you've thrown in with, the more the OTHER
+// house's raiders have reason to watch your roads — genuinely neutral
+// standing (contestedPressure === 0) leaves the base riskPct untouched.
+export const CARAVAN_ALLEGIANCE_RISK_MAX = 0.15;
+export function effectiveCaravanRisk(baseRiskPct: number, allegiance: number): number {
+  return Math.min(0.9, baseRiskPct + contestedPressure(allegiance) * CARAVAN_ALLEGIANCE_RISK_MAX);
+}
 
 export interface CaravanRouteDef {
   etaMs: number;

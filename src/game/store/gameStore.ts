@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type {
   ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, DifficultyId, ItemId,
-  LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
+  LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, Settlement, SkillId, Villager, VillagerJob,
   WaterFeature,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
@@ -47,11 +47,12 @@ import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
 import { NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
-import { SETTLEMENT_FOUNDING, SETTLEMENT_NODES } from '../data/settlementQuests';
+import { SETTLEMENT_FOUNDING, SETTLEMENT_GROWTH_QUEST_DEST, SETTLEMENT_NODES } from '../data/settlementQuests';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_LOSS_SURVIVE_FRACTION, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
-  caravanQuoteGold, caravanRouteKey,
+  caravanQuoteGold, caravanRouteKey, effectiveCaravanRisk,
 } from '../data/caravan';
+import { SETTLEMENT_RAID_YIELD_PENALTY_MS } from '../settlementRaid';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { resetCompanionCombat } from '../companion';
 import { SELL_PRICES } from '../data/trade';
@@ -295,9 +296,9 @@ interface GameState {
   customBlueprints: Blueprint[]; // player-saved structures (see data/blueprints.ts for starter ones)
   lastTaxAt: number;              // epoch ms of last keep tax collection, 0 = never
   /** Empire arc, Wave 4: destination id -> founded settlement, absent = not
-   *  yet earned. See SaveGame.settlements' own doc comment for how this
-   *  differs from claimedWorlds. */
-  settlements: Record<string, { since: number; lastCollectedAt: number }>;
+   *  yet earned. See `Settlement`'s own doc comment (types.ts) for how this
+   *  differs from claimedWorlds, and for its Wave 47 fields. */
+  settlements: Record<string, Settlement>;
   /** Wave 27: in-flight Trade Caravan runs, keyed by caravanRouteKey(from,to)
    *  (data/caravan.ts) — see CaravanRun's own doc comment (types.ts). */
   caravans: Record<string, CaravanRun>;
@@ -383,6 +384,16 @@ interface GameState {
    *  via the same Wit/Silver-Tongue formula sellItem() uses, rolling a real
    *  (mitigable, never total) loss chance unless insured. */
   collectCaravan: (from: string, to: string) => void;
+  /** Wave 47 (B5) · settles the outcome of a rival raid against a founded
+   *  settlement (game/settlementRaid.ts + SettlementRaidRunner.tsx), the
+   *  only place `st.settlements[destId]` mutates for a raid. A WIN pays a
+   *  gold/xp bonus scaled by `hpFrac` and bumps that settlement's own
+   *  `kind:'defend'` errand (see data/settlementQuests.ts). A LOSS never
+   *  destroys anything — the real, reversible consequence is
+   *  `lastCollectedAt` pushed forward by SETTLEMENT_RAID_YIELD_PENALTY_MS,
+   *  delaying (never voiding) the next yield collection. Either way
+   *  `lastRaidAt` is stamped so the next raid respects its own cooldown. */
+  resolveSettlementRaid: (destId: string, won: boolean, hpFrac?: number) => void;
   /** Empire arc, Wave 5: break and plant one of the hand-authored plots
    *  (data/cultivatedPlots.ts). Seeds a sparse stage-0 cluster. */
   cultivatePlot: (plotId: string) => void;
@@ -984,7 +995,7 @@ function createGameStore() {
   return create<GameState>((set, get) => {
   // ---- internal helpers (closure-scoped, operate through set/get) ----
 
-  function bumpSideQuest(kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'caravan', target: string, amount: number) {
+  function bumpSideQuest(kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'caravan' | 'defend', target: string, amount: number) {
     const sq = get().sideQuest;
     if (!sq) return;
     const def = sideQuestsOf(sq.npcId).find((q) => q.id === sq.questId);
@@ -1781,7 +1792,11 @@ function createGameStore() {
         return;
       }
       const residentCount = st.villagers.filter((v) => v.world === destId).length;
-      const amount = 6 + residentCount * 5;
+      // Wave 47 (B7) · growthTier is the first-ever real "growth" this system
+      // has had — each tier earned by closing that settlement's own
+      // defend->expand quest link (SETTLEMENT_GROWTH_QUEST_DEST, below in
+      // turnInSideQuest), a permanent yield bump paid off every collection.
+      const amount = 6 + residentCount * 5 + (settlement.growthTier ?? 0) * 10;
       set({ settlements: { ...st.settlements, [destId]: { ...settlement, lastCollectedAt: now } }, dirty: true });
       st.addItems({ gold: amount }, 'grant');
       audio.play('treasure', 0.7);
@@ -1854,7 +1869,11 @@ function createGameStore() {
       // blocks the quest tick, never the gold itself.
       let amount = run.amount;
       let damaged = false;
-      const risk = CARAVAN_ROUTES[key]?.riskPct ?? 0;
+      // Wave 47 (B5) · the route's own flat riskPct is no longer the whole
+      // story — the more contested the player's own standing, the more the
+      // OTHER house has reason to watch this road (effectiveCaravanRisk,
+      // data/caravan.ts). Genuinely neutral standing leaves it untouched.
+      const risk = effectiveCaravanRisk(CARAVAN_ROUTES[key]?.riskPct ?? 0, st.allegiance);
       if (!run.insured && Math.random() < risk) {
         amount = Math.max(1, Math.round(amount * CARAVAN_LOSS_SURVIVE_FRACTION));
         damaged = true;
@@ -1877,6 +1896,41 @@ function createGameStore() {
       // — and only an undamaged delivery advances the quest, since a bandit
       // hit is not the clean run the errand is asking for.
       if (!damaged) bumpSideQuest('caravan', 'any', 1);
+    },
+
+    // Wave 47 (B5) · the only place `st.settlements[destId]` mutates for a
+    // rival raid (SettlementRaidRunner.tsx ticks the fight itself, this
+    // settles the outcome once it's over). A WIN pays a gold/xp bonus scaled
+    // by how much of the plot's HP survived and bumps that settlement's own
+    // `kind:'defend'` errand (B7's "Hold the Line" quests). A LOSS never
+    // destroys anything real — `lastCollectedAt` is pushed forward by
+    // SETTLEMENT_RAID_YIELD_PENALTY_MS, a delayed (never voided) yield
+    // collection, exactly the "real, reversible consequence" this wave's
+    // design pass settled on over permanent settlement loss.
+    resolveSettlementRaid: (destId, won, hpFrac = 0) => {
+      const st = get();
+      const settlement = st.settlements[destId];
+      if (!settlement) return;
+      const now = Date.now();
+      const destName = WORLD_DESTINATION_BY_ID[destId]?.name ?? 'the settlement';
+      if (won) {
+        const bonus = Math.round(30 * hpFrac);
+        const xp = Math.round(50 * hpFrac);
+        set({ settlements: { ...st.settlements, [destId]: { ...settlement, lastRaidAt: now } }, dirty: true });
+        if (bonus > 0) st.addItems({ gold: bonus }, 'grant');
+        if (xp > 0) st.addXp('combat', xp);
+        audio.play('treasure', 0.8);
+        st.notify(`The raid is repelled — ${destName} holds! +${bonus} gold.`, true);
+        bumpSideQuest('defend', destId, 1);
+      } else {
+        set({
+          settlements: {
+            ...st.settlements,
+            [destId]: { ...settlement, lastRaidAt: now, lastCollectedAt: settlement.lastCollectedAt + SETTLEMENT_RAID_YIELD_PENALTY_MS },
+          },
+          dirty: true,
+        });
+      }
     },
 
     // Empire arc, Wave 5 — plots. `plantedAt`/`lastWateredAt` are epoch ms,
@@ -2526,6 +2580,15 @@ function createGameStore() {
       // companion" system, same shape as the rest of this function's own
       // narrow, hand-named side effects.
       if (def.id === 'r_squire') st.recruitCompanion();
+      // Wave 47 (B7) · closing a settlement's own defend->expand quest link
+      // is a real, permanent yield-tier milestone — same narrow, hand-named
+      // side-effect precedent as r_squire's recruitCompanion() just above.
+      const growthDest = SETTLEMENT_GROWTH_QUEST_DEST[def.id];
+      if (growthDest && st.settlements[growthDest]) {
+        const s = st.settlements[growthDest];
+        set({ settlements: { ...st.settlements, [growthDest]: { ...s, growthTier: (s.growthTier ?? 0) + 1 } }, dirty: true });
+        st.notify(`${WORLD_DESTINATION_BY_ID[growthDest]?.name ?? 'The settlement'} grows — yield rises.`, true);
+      }
       // a delivery hands off to whoever's actually standing here, not the
       // (physically absent) giver back home
       st.notify(def.kind === 'deliver'

@@ -43,6 +43,24 @@ export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
       xpSkill: 'mining', xp: 60, rewardItems: { gold: 25 },
       requires: ['settle_clear', 'frostpass_clear'],
     },
+    // Wave 47 (B5/B7) · a real settlement raid (game/settlementRaid.ts),
+    // not flavor text — this errand only closes when resolveSettlementRaid
+    // (gameStore.ts) calls bumpSideQuest('defend', destId, 1) on a WIN.
+    {
+      id: 'ruins_hold_the_line', kind: 'defend', target: 'template-08', need: 1,
+      label: "Rival riders test any claim that's picked a side — hold Fenwick when they come for it.",
+      xpSkill: 'combat', xp: 70, rewardItems: { gold: 30 },
+      requires: ['ruins_want_ore'],
+    },
+    // The chain's first real "growth" milestone — gated on having actually
+    // defended the place, paid off through collectSettlementYield's own
+    // per-growthTier bonus (gameStore.ts).
+    {
+      id: 'ruins_expand', kind: 'gather', target: 'stone', need: 30,
+      label: "Fenwick's earned room to grow — bring 30 stone to raise a real granary.",
+      xpSkill: 'building', xp: 90, rewardItems: { gold: 35 },
+      requires: ['ruins_hold_the_line'],
+    },
   ],
   // Wave 26: the empire arc's second site, The Frozen Pass (template-07) —
   // Torvald's own two errands, same depth/shape as Fenwick's pool above
@@ -91,6 +109,20 @@ export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
       xpSkill: 'mining', xp: 60, rewardItems: { gold: 25 },
       requires: ['frostpass_clear', 'camp_clear'],
     },
+    // Wave 47 (B5/B7) · same real-raid-defense shape as ruins_hold_the_line
+    // above — see that entry's own comment.
+    {
+      id: 'frostpass_hold_the_line', kind: 'defend', target: 'template-07', need: 1,
+      label: "A claim on a mountain pass draws its own kind of rival — hold Torvald's ground when they come testing it.",
+      xpSkill: 'combat', xp: 70, rewardItems: { gold: 30 },
+      requires: ['pass_want_stone'],
+    },
+    {
+      id: 'frostpass_expand', kind: 'gather', target: 'iron_ore', need: 15,
+      label: "The vein runs deeper than first thought — bring 15 iron ore to sink a real shaft.",
+      xpSkill: 'mining', xp: 90, rewardItems: { gold: 35 },
+      requires: ['frostpass_hold_the_line'],
+    },
   ],
   // Wave 44: the empire arc's third site, The Siege Camp (template-04) --
   // Garrick's own two-errand chain (same gather-then-kill shape as
@@ -121,7 +153,33 @@ export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
       xpSkill: 'woodcutting', xp: 60, rewardItems: { gold: 25 },
       requires: ['camp_clear', 'frostpass_clear'],
     },
+    // Wave 47 (B5/B7) · same real-raid-defense shape as ruins_hold_the_line
+    // above — see that entry's own comment.
+    {
+      id: 'camp_hold_the_line', kind: 'defend', target: 'template-04', need: 1,
+      label: "An old siege camp draws its own kind of trouble — hold this ground when rivals come testing it.",
+      xpSkill: 'combat', xp: 70, rewardItems: { gold: 30 },
+      requires: ['camp_want_lumber'],
+    },
+    {
+      id: 'camp_expand', kind: 'gather', target: 'wood', need: 25,
+      label: "The palisade's held — bring 25 wood to raise a proper watchtower over it.",
+      xpSkill: 'woodcutting', xp: 90, rewardItems: { gold: 35 },
+      requires: ['camp_hold_the_line'],
+    },
   ],
+};
+
+/** Wave 47 (B7) · which settlement's own `growthTier` (gameStore.ts's
+ *  `settlements` record) advances when the given side-quest id turns in —
+ *  read by turnInSideQuest right after the ordinary reward grant, the same
+ *  narrow hand-named-side-effect precedent as 'r_squire' recruiting Tam. A
+ *  real, permanent yield-tier bump, gated on real completed content
+ *  (the defense link each one `requires`), not a second disconnected system. */
+export const SETTLEMENT_GROWTH_QUEST_DEST: Record<string, string> = {
+  ruins_expand: 'template-08',
+  frostpass_expand: 'template-07',
+  camp_expand: 'template-04',
 };
 
 /** Wave 26 · generalizes `foundSettlement()`/DialoguePanel's settlement UI

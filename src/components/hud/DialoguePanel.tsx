@@ -9,8 +9,9 @@ import { NPC_BY_ID, sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
 import { SETTLEMENT_FOUNDING } from '@/game/data/settlementQuests';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_MARKUP, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
-  caravanPartnersOf, caravanQuoteGold, caravanRouteKey, caravanTradeableItems,
+  caravanPartnersOf, caravanQuoteGold, caravanRouteKey, caravanTradeableItems, effectiveCaravanRisk,
 } from '@/game/data/caravan';
+import { contestedPressure, HOUSE_NAME, leaningHouse } from '@/game/data/allegiance';
 import { ITEMS } from '@/game/data/items';
 import { audio } from '@/lib/audio';
 import { useEnemyStore, canChallengeStorm } from '@/game/combat';
@@ -306,10 +307,22 @@ export default function DialoguePanel() {
               ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
               : names[0];
             if (settlements[world]) {
+              // Wave 47 (B7) · the same contestedPressure scalar B5's raids
+              // and caravan risk read, made visible here rather than a
+              // second, disconnected rivalry concept — the house the player
+              // has NOT been leaning toward is the one with reason to test
+              // this claim (see SettlementRaidRunner.tsx's own attacker pick).
+              const pressure = contestedPressure(allegiance);
+              const rival = pressure > 0 ? (leaningHouse(allegiance) === 'leo' ? 'cedric' : 'leo') : null;
               return (
                 <div className="quest-item">
                   <div className="q-name">🏘️ Settlement Yield</div>
                   <div className="q-desc">{nameList} send word of what the settlement has produced.</div>
+                  {rival && (
+                    <div className="q-desc" style={{ opacity: 0.75, fontStyle: 'italic' }}>
+                      Word is riders loyal to {HOUSE_NAME[rival]} have been probing the road.
+                    </div>
+                  )}
                   <button
                     className="menu-btn small"
                     style={{ margin: '8px 0 0' }}
@@ -482,7 +495,11 @@ export default function DialoguePanel() {
                           </label>
                           <div className="q-desc">
                             Quote: {quote} gold on arrival
-                            {route ? ` (${Math.round(route.riskPct * 100)}% risk uninsured)` : ''}.
+                            {/* Wave 47 (B5) · the quoted risk is never a lie about
+                                what actually gets rolled — a contested standing
+                                raises it above the route's own flat riskPct
+                                (effectiveCaravanRisk, data/caravan.ts). */}
+                            {route ? ` (${Math.round(effectiveCaravanRisk(route.riskPct, allegiance) * 100)}% risk uninsured)` : ''}.
                           </div>
                           <button
                             className="menu-btn small"
