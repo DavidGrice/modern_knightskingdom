@@ -18,7 +18,7 @@ import { ITEMS } from './data/items';
 import { bestChestplateOwned } from './data/armor';
 import type { ItemId } from './types';
 import { raidStrength } from './difficulty';
-import { bossTierScale } from './bossEncounter';
+import { bossTierScale, rollBossLegendaryDrop } from './bossEncounter';
 import { worldEnv } from './env';
 import { arenaState } from './arena';
 import { fortDamageReduction } from './fort';
@@ -749,8 +749,18 @@ export const MELEE: Record<MeleeWeaponId, MeleeStats> = {
  * data/recipes.ts's own header comment on the new recipes) — so
  * `meleeStatsFor('spear', ...)` always falls through to the flat MELEE.spear
  * row below, unchanged.
+ *
+ * Wave 50 (C2) · a 4th rung, 'legendary', continues the exact same arithmetic
+ * sequence one step further: Wave 49's own three tiers are base/forged/
+ * crested x(6/6, 7/6, 8/6) of MELEE[kind]'s flat dmg — legendary is x(9/6) =
+ * 1.5. Single-target DPS across all four tiers: sword 5.45/6.36/7.27/8.18,
+ * halberd 4.74/5.47/6.21/7.11 — ratio 0.870/0.860/0.854/0.869, still the same
+ * near-invariant Wave 49 established, so the sword-vs-halberd tradeoff
+ * survives at the new top rung too. UNLIKE the forged/crested tiers,
+ * legendary has NO recipe (see data/recipes.ts) — it drops only, from
+ * bossEncounter.ts's BOSS_LEGENDARY_DROP.
  */
-export type MeleeTier = 'base' | 'forged' | 'crested';
+export type MeleeTier = 'base' | 'forged' | 'crested' | 'legendary';
 
 interface MeleeTierDmg { dmg: number; wornDmg: number }
 
@@ -759,11 +769,13 @@ const MELEE_TIERS: Partial<Record<MeleeWeaponId, Record<MeleeTier, MeleeTierDmg>
     base: { dmg: 3, wornDmg: 1.5 },
     forged: { dmg: 3.5, wornDmg: 1.75 },
     crested: { dmg: 4, wornDmg: 2 },
+    legendary: { dmg: 4.5, wornDmg: 2.25 },
   },
   halberd: {
     base: { dmg: 4.5, wornDmg: 2.2 },
     forged: { dmg: 5.2, wornDmg: 2.5 },
     crested: { dmg: 5.9, wornDmg: 2.9 },
+    legendary: { dmg: 6.75, wornDmg: 3.3 },
   },
 };
 
@@ -776,11 +788,13 @@ const MELEE_TIER_ITEMS: Partial<Record<MeleeWeaponId, { tier: MeleeTier; item: I
     { tier: 'base', item: 'sword' },
     { tier: 'forged', item: 'sword_forged' },
     { tier: 'crested', item: 'sword_crested' },
+    { tier: 'legendary', item: 'sword_legendary' },
   ],
   halberd: [
     { tier: 'base', item: 'halberd' },
     { tier: 'forged', item: 'halberd_forged' },
     { tier: 'crested', item: 'halberd_crested' },
+    { tier: 'legendary', item: 'halberd_legendary' },
   ],
 };
 
@@ -809,18 +823,49 @@ export function ownsMeleeSlot(kind: MeleeWeaponId, inv: Partial<Record<ItemId, n
   return bestMeleeTierOwned(kind, inv) !== null;
 }
 
+/**
+ * Wave 50 (C4) · enchanting. A permanent, one-way +10% dmg/wornDmg post-
+ * multiply, orthogonal to (applied AFTER) the tier lookup above — it stacks
+ * with whichever tier is currently best-owned, including C2's new
+ * 'legendary', with zero extra wiring. The rune is a plain marker `ItemId`
+ * sitting in the SAME `inv` this function already receives (never a new
+ * `SaveGame` field, never a signature change at this function's one call
+ * site — see playerAttack) — dyes.ts's "consumable spent once, permanent
+ * save-scoped effect" shape, adapted: a flat ItemId rather than a
+ * `SaveGame`-level string array, because `gameStore.ts` cannot import
+ * `MeleeWeaponId` from this file (this file imports gameStore.ts, not the
+ * reverse — the same cycle dyes' own loosened `string[]` type sidesteps).
+ * Spear has no entry: it was never brought into the tier system either.
+ */
+const ENCHANT_ITEM: Partial<Record<MeleeWeaponId, ItemId>> = {
+  sword: 'sword_rune',
+  halberd: 'halberd_rune',
+};
+const ENCHANT_MULT = 1.1;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /** `MELEE[kind]` with `dmg`/`wornDmg` swapped for whichever tier is actually
  *  owned — every other field is left exactly as MELEE[kind] already has it
  *  (see this table's own header comment for why that's load-bearing). Falls
  *  back to the flat MELEE[kind] numbers when nothing is owned yet — bare-
  *  fisted 'sword' still resolves through here; it's `playerAttack`'s own
  *  `held` gate (not this function) that turns an unowned sword into flat 1
- *  damage regardless of what this returns. */
+ *  damage regardless of what this returns. A permanent enchantment rune (see
+ *  ENCHANT_ITEM above), once owned, then multiplies whatever dmg/wornDmg the
+ *  tier lookup produced. */
 export function meleeStatsFor(kind: MeleeWeaponId, inv: Partial<Record<ItemId, number>>): MeleeStats {
   const base = MELEE[kind];
   const tier = bestMeleeTierOwned(kind, inv);
   const over = tier ? MELEE_TIERS[kind]?.[tier] : undefined;
-  return over ? { ...base, dmg: over.dmg, wornDmg: over.wornDmg } : base;
+  const stats = over ? { ...base, dmg: over.dmg, wornDmg: over.wornDmg } : base;
+  const rune = ENCHANT_ITEM[kind];
+  if (rune && (inv[rune] ?? 0) > 0) {
+    return { ...stats, dmg: round2(stats.dmg * ENCHANT_MULT), wornDmg: round2(stats.wornDmg * ENCHANT_MULT) };
+  }
+  return stats;
 }
 
 // ---- Wave 40 (A6) · real melee depth: dodge-roll, parry timing, i-frames,
@@ -1035,7 +1080,15 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
     // (see Enemies.tsx's flee-guard), so reaching this branch with
     // finalStand unset should be effectively unreachable, but the gate stays
     // as the deliberate second line of defense against that assumption.
-    if (e.kind === 'cedric' && e.finalStand) st.markCedricDefeated();
+    // Wave 50 (C2): the legendary-halberd roll is computed HERE (this file
+    // already safely imports bossEncounter.ts) and merely passed in as a
+    // value — gameStore.ts deliberately does not import bossEncounter.ts
+    // (see markCedricDefeated's own comment there for the real import cycle
+    // that would create). Only rolled on the one-shot capstone (cedricCaptures
+    // === 0), never on a farmable rematch.
+    if (e.kind === 'cedric' && e.finalStand) {
+      st.markCedricDefeated(st.cedricCaptures === 0 ? rollBossLegendaryDrop('cedric') : null);
+    }
   }
 }
 
@@ -1449,8 +1502,11 @@ export function stepBolt(b: Bolt, dt: number): boolean {
           .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
           .join(', ');
         st.notify(rHaul ? `${KIND_LABEL[e.kind]} shot down! Looted ${rHaul}.` : `${KIND_LABEL[e.kind]} shot down!`, true);
-        // Cedric's Siege: see playerAttack's matching gate above for why.
-        if (e.kind === 'cedric' && e.finalStand) st.markCedricDefeated();
+        // Cedric's Siege: see playerAttack's matching gate above for why
+        // (Wave 50 (C2): same legendary-roll pass-through as that call site).
+        if (e.kind === 'cedric' && e.finalStand) {
+          st.markCedricDefeated(st.cedricCaptures === 0 ? rollBossLegendaryDrop('cedric') : null);
+        }
       }
       // NOT removed: a stuck bolt stays in the world (Bolts.tsx parents it to
       // the struck mob). It expires with the corpse, not on contact.

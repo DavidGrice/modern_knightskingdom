@@ -21,10 +21,10 @@ import type { WeaponId } from '@/lib/weaponParts';
 // HALBERD_WEAPON_ID tables (kept local here rather than shared, since this
 // file already keeps its own weapon-mount tables like MOUNT below).
 const SWORD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
-  base: 'sword', forged: 'sword_forged', crested: 'sword_crested',
+  base: 'sword', forged: 'sword_forged', crested: 'sword_crested', legendary: 'sword_legendary',
 };
 const HALBERD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
-  base: 'halberd', forged: 'halberd_forged', crested: 'halberd_crested',
+  base: 'halberd', forged: 'halberd_forged', crested: 'halberd_crested', legendary: 'halberd_legendary',
 };
 
 function Axe() {

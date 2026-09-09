@@ -149,6 +149,29 @@ export const RECIPES: Recipe[] = [
     cost: { halberd_forged: 1, iron_bar: 6, plank: 5 }, station: 'forge', skill: 'smithing', skillXp: 140,
     requiresUnlock: 'smithing',
   },
+  // Wave 50 (C4) · enchanting. NOT another rung on the tier chain above (no
+  // `sword`/`halberd` in its own cost, consumes nothing) — a permanent,
+  // orthogonal +10% multiply combat.ts's meleeStatsFor applies on top of
+  // whichever tier is currently worn (base..legendary), so it composes with
+  // C2's new tiers for free. Priced by dyes.ts's own "how hard to get hold
+  // of, not how it looks" logic, using the SAME two ordinary gatherables
+  // Tyrian purple (the dearest dye in the realm) spends — herb and flowers —
+  // at higher quantities (8/8 vs. Tyrian's 5/3), plus an iron_bar cost that
+  // deliberately exceeds even the Crested tier's own re-forge cost (6->8
+  // sword, 6->9 halberd) and the highest skillXp of any recipe in the game.
+  // No gold cost: a full read of every recipe above confirms gold is never
+  // spent anywhere in this economy, only earned — inventing that mechanic
+  // here would be new, unproven plumbing this feature doesn't need.
+  {
+    id: 'sword_rune', name: 'Enchant the Sword', icon: '🔮', output: 'sword_rune', outputCount: 1,
+    cost: { iron_bar: 8, herb: 8, flowers: 8 }, station: 'forge', skill: 'smithing', skillXp: 150,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'halberd_rune', name: 'Enchant the Halberd', icon: '🔮', output: 'halberd_rune', outputCount: 1,
+    cost: { iron_bar: 9, herb: 8, flowers: 8 }, station: 'forge', skill: 'smithing', skillXp: 160,
+    requiresUnlock: 'smithing',
+  },
   // ---- campfire ----
   {
     id: 'cooked_fish', name: 'Cook Fish', icon: '🍖', output: 'cooked_fish', outputCount: 1,

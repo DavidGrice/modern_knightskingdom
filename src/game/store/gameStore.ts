@@ -475,7 +475,12 @@ interface GameState {
   enterArena: (envId: ArenaEnvId) => void;
   leaveArena: () => void;
   markLoreSeen: (npcId: string) => void;
-  markCedricDefeated: () => void;
+  /** Wave 50 (C2) · `legendaryDrop` is a value combat.ts already rolled
+   *  (bossEncounter.ts's rollBossLegendaryDrop, only on the one-shot capstone
+   *  win) and merely hands in here — see this action's own body comment for
+   *  why the roll can't be computed in THIS file. null/undefined = no drop
+   *  (every rematch, and a capstone that simply missed the roll). */
+  markCedricDefeated: (legendaryDrop?: ItemId | null) => void;
   /** Wave 38 (A1): a jailed Cedric breaks free — see cedricSiege.ts's
    *  cedricJailbreakAllowed for the gate that decides when this may fire. */
   freeCedric: () => void;
@@ -2258,7 +2263,7 @@ function createGameStore() {
     // from here would be a real cycle (gameStore -> bossEncounter ->
     // difficulty -> gameStore) — combat.ts/the siege components are the
     // correct, cycle-safe place to read that table instead.
-    markCedricDefeated: () => {
+    markCedricDefeated: (legendaryDrop) => {
       const st = get();
       if (st.defeatedCedric) return;
       const first = st.cedricCaptures === 0;
@@ -2278,6 +2283,17 @@ function createGameStore() {
         st.grantArmory('chestplate', 1);
         st.shiftAllegiance(35, "You ended Cedric's rebellion at his own camp");
         st.notify("🔒 Cedric's rebellion ends here — the Bull is dragged in chains at last!", true);
+        // Wave 50 (C2): a real chance at his own halberd, now legendary — the
+        // roll itself lives in combat.ts (which safely imports
+        // bossEncounter.ts) and is passed in as a plain value, since THIS
+        // file cannot import bossEncounter.ts without a real cycle
+        // (gameStore -> bossEncounter -> difficulty -> gameStore, see this
+        // action's own long-standing comment above). Capstone-only — never
+        // rolled on a rematch, matching this whole branch's own one-shot gate.
+        if (legendaryDrop) {
+          st.addItems({ [legendaryDrop]: 1 }, 'grant');
+          st.notify(`✨ Among his chained effects: a ${ITEMS[legendaryDrop].name}!`, true);
+        }
       } else {
         // a real but smaller stake each time he's recaptured — mirrors
         // bossEncounter.ts's BOSS_VICTORY_REWARD.cedric verbatim

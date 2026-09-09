@@ -55,7 +55,10 @@ export const DEEDS: DeedDef[] = [
     // re-forged). Inlined rather than importing combat.ts's ownsMeleeSlot:
     // gameStore.ts imports THIS file, and combat.ts imports gameStore.ts, so
     // that import would be a real cycle, not just a longer one.
-    check: (s) => ((s.inventory.sword ?? 0) > 0 || (s.inventory.sword_forged ?? 0) > 0 || (s.inventory.sword_crested ?? 0) > 0)
+    // Wave 50 (C2): a dropped Legendary Sword is the exact same regression
+    // class — added here rather than left for a future wave to rediscover.
+    check: (s) => ((s.inventory.sword ?? 0) > 0 || (s.inventory.sword_forged ?? 0) > 0 || (s.inventory.sword_crested ?? 0) > 0
+      || (s.inventory.sword_legendary ?? 0) > 0)
       && (s.inventory.shield ?? 0) > 0 },
   { id: 'sharpshooter', name: 'Sharpshooter', icon: '🏹', desc: 'Own a crossbow.',
     check: (s) => (s.inventory.crossbow ?? 0) > 0 },

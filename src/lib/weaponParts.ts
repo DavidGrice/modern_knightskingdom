@@ -13,7 +13,11 @@ export type WeaponId = 'sword' | 'halberd' | 'spear' | 'crossbow' | 'bow' | 'arr
   // clone lives INSIDE that per-id cache — the only granularity a tint can be
   // applied at without ever risking the base mold's shared material (see the
   // tint application below for the full reasoning).
-  | 'sword_forged' | 'sword_crested' | 'halberd_forged' | 'halberd_crested';
+  | 'sword_forged' | 'sword_crested' | 'halberd_forged' | 'halberd_crested'
+  // Wave 50 (C2) · the drop-only 'legendary' rung above 'crested' — same
+  // "real, distinct WeaponId per tint/donor combo" shape as the pair above,
+  // for the identical per-id-cache reason.
+  | 'sword_legendary' | 'halberd_legendary';
 
 interface WeaponDef {
   donor: string;
@@ -84,6 +88,19 @@ const WEAPONS: Record<WeaponId, WeaponDef> = {
   // dark forged -> pale crested" palette rather than two invented ones.
   halberd_forged: { donor: 'minifiggenericgood00', role: 'halberd', length: 1.15, tint: '#6f7480' },
   halberd_crested: { donor: 'minifiggenericgood00', role: 'halberd', length: 1.15, tint: '#e7e2d0' },
+  // Wave 50 (C2) · the drop-only 'legendary' rung. part_roles.json's full
+  // 'sword'-role donor census (re-run this wave) turns up exactly ONE real
+  // candidate Wave 49 left unclaimed: minifigprincessstorm01 (mesh
+  // 034_shape17) — minifigcedricbull01 also carries the role but is larger
+  // (41,213 B vs. 37,327 B for Storm's donor), and Wave 49's own file-size
+  // tiebreak picks the smaller one. Halberd still has only the ONE real
+  // 'halberd'-role donor in the whole rig (minifiggenericgood00, unchanged
+  // from Wave 49's own honest scope-down) — so legendary is tint-only there,
+  // same as forged/crested. Both new tints share one gold/amber (#f2b632), a
+  // 4th rung on the existing "steel -> dark forged -> pale crested" shared
+  // palette, so the two weapon lines keep reading as one coherent ladder.
+  sword_legendary: { donor: 'minifigprincessstorm01', role: 'sword', length: 0.62, tint: '#f2b632' },
+  halberd_legendary: { donor: 'minifiggenericgood00', role: 'halberd', length: 1.15, tint: '#f2b632' },
 };
 
 // King Leo's shield. `022_shape10` (the old pick) sits dead-center over the
