@@ -26,7 +26,7 @@ import AllegianceMeter from './AllegianceMeter';
 import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
 import { EDIBLES, ITEMS, UTILITY_POTIONS, consumeVerb } from '@/game/data/items';
 import { CHESTPLATES, bestChestplateOwned } from '@/game/data/armor';
-import { activeMelee, combatState, isMeleeSlot, type WeaponSlot } from '@/game/combat';
+import { activeMelee, bestMeleeTierOwned, combatState, isMeleeSlot, ownsMeleeSlot, type WeaponSlot } from '@/game/combat';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
@@ -80,12 +80,20 @@ function EquipmentSection() {
   }, []);
 
   if (!character) return null;
-  const hasSword = (inventory.sword ?? 0) > 0;
+  // Wave 49 (C1) · owns ANY tier, not just the base item — a Forged/Crested
+  // sword or halberd re-forges (consumes) the tier below it, so a flat
+  // inventory.sword/halberd count would wrongly read as unowned the moment
+  // either is upgraded.
+  const hasSword = ownsMeleeSlot('sword', inventory);
   const hasShield = (inventory.shield ?? 0) > 0;
   const hasCrossbow = (inventory.crossbow ?? 0) > 0;
   const hasLongbow = (inventory.longbow ?? 0) > 0;
-  const hasHalberd = (inventory.halberd ?? 0) > 0;
+  const hasHalberd = ownsMeleeSlot('halberd', inventory);
   const hasSpear = (inventory.spear ?? 0) > 0;
+  // the best tier of each currently owned, for the paperdoll's own held
+  // model — mirrors how `plate` (below) already reads the best chestplate
+  const swordTier = bestMeleeTierOwned('sword', inventory) ?? 'base';
+  const halberdTier = bestMeleeTierOwned('halberd', inventory) ?? 'base';
   const hasHelmet = (inventory.helmet ?? 0) > 0;
   // Wave 9 · armor is tiered now (data/armor.ts). There is no armor equip
   // slot — owning a plate IS wearing it, the same rule armorReduction uses —
@@ -135,9 +143,9 @@ function EquipmentSection() {
             {/* the paperdoll holds what is READIED (Wave 7), so clicking a
                 tile below is visibly answered by the figure, not just by a
                 highlight — falls back to the sword the way it always did */}
-            {hasHalberd && active === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+            {hasHalberd && active === 'halberd' && createPortal(<HeldHalberd side={-1} tier={halberdTier} />, rig.joints.rightarm)}
             {hasSpear && active === 'spear' && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
-            {hasSword && active !== 'halberd' && active !== 'spear' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+            {hasSword && active !== 'halberd' && active !== 'spear' && createPortal(<HeldSword side={-1} tier={swordTier} />, rig.joints.rightarm)}
             {hasShield && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
             {hasHelmet && createPortal(<HeldHelmet />, rig.joints.head)}
             {plate && createPortal(<Chestplate tier={plate.id} />, rig.joints.body)}

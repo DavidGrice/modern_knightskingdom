@@ -9,11 +9,23 @@ import { loadPalette, paletteColor } from '@/lib/minifig';
 import { loadFpsArms, type FpsArm, type FpsArms } from '@/lib/rigExtract';
 import { labHands } from '@/game/data/labCapabilities';
 import { playerState } from './PlayerController';
-import { combatState, FULL_DRAW_TIME, activeMelee, type MeleeWeaponId } from '@/game/combat';
+import { combatState, FULL_DRAW_TIME, activeMelee, bestMeleeTierOwned, ownsMeleeSlot, type MeleeTier, type MeleeWeaponId } from '@/game/combat';
 import { couchingTourneyLance } from '@/game/joust';
 import { ridingState } from '@/game/riding';
 import RealWeapon from '../character/RealWeapon';
 import RealShield from '../character/RealShield';
+import type { WeaponId } from '@/lib/weaponParts';
+
+// Wave 49 (C1) · which real WeaponId the readied sword/halberd's own best-
+// owned tier renders — mirrors Equipment.tsx's identical SWORD_WEAPON_ID/
+// HALBERD_WEAPON_ID tables (kept local here rather than shared, since this
+// file already keeps its own weapon-mount tables like MOUNT below).
+const SWORD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
+  base: 'sword', forged: 'sword_forged', crested: 'sword_crested',
+};
+const HALBERD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
+  base: 'halberd', forged: 'halberd_forged', crested: 'halberd_crested',
+};
 
 function Axe() {
   return (
@@ -392,6 +404,10 @@ export default function Viewmodel() {
   // Wave 7 · which melee weapon is readied, and whether we're in the saddle
   // (the spear couches once mounted). Same polling reason as everything above.
   const [meleeTool, setMeleeTool] = useState<MeleeWeaponId>('sword');
+  // Wave 49 (C1) · the best tier of whichever melee weapon is readied — polled
+  // alongside meleeTool itself, same reason (combatState/the store are plain
+  // mutable reads React can't otherwise see change).
+  const [meleeTier, setMeleeTier] = useState<MeleeTier>('base');
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     const t = setInterval(() => {
@@ -403,7 +419,9 @@ export default function Viewmodel() {
         && (bow ? (inv.longbow ?? 0) > 0 : (inv.crossbow ?? 0) > 0),
       );
       setBowMode(bow);
-      setMeleeTool(activeMelee());
+      const activeKind = activeMelee();
+      setMeleeTool(activeKind);
+      setMeleeTier(bestMeleeTierOwned(activeKind, inv) ?? 'base');
       setMounted(ridingState.active);
       // Wave 7 · WAS `ridingState.active && combatState.galloping`, which
       // handed the tourney lance to every mounted player holding Shift
@@ -447,9 +465,14 @@ export default function Viewmodel() {
     // ownership-resolved before it gets here.
     if (meleeTool === 'halberd') return 'halberd';
     if (meleeTool === 'spear') return 'spear';
-    if ((inventory.sword ?? 0) > 0) return 'sword';
+    // Wave 49 (C1) fix: ownsMeleeSlot recognizes ANY owned tier — a flat
+    // `inventory.sword` count reads 0 the moment a Forged/Crested sword is
+    // forged (re-forging consumes the tier below, chestplate-chain style),
+    // which used to fall through to bare 'fist' despite the player visibly
+    // owning (and having readied) a real sword.
+    if (ownsMeleeSlot('sword', inventory)) return 'sword';
     return 'fist';
-  }, [lanceMode, rangedMode, bowMode, meleeTool, targetKind, inventory.pickaxe, inventory.fishing_rod, inventory.axe, inventory.hammer, inventory.sword]);
+  }, [lanceMode, rangedMode, bowMode, meleeTool, targetKind, inventory]);
   // ownership-based, same convention as `tool`'s sword branch — a crafted
   // shield should be visibly carried, not only appear once you block with it
   const hasShield = (inventory.shield ?? 0) > 0;
@@ -578,10 +601,14 @@ export default function Viewmodel() {
               <RealWeapon id="axe" fallback={<Axe />} />
             </group>
           )}
-          {/* blade up and angled forward, as a sword is carried at the ready */}
+          {/* blade up and angled forward, as a sword is carried at the ready.
+              Wave 49 (C1): the readied tier's own real WeaponId — a bare
+              MELEE fallback (procedural <Sword/>) is still shown for a fresh
+              character with no sword at all, since 'base' still resolves to
+              the id 'sword' either way. */}
           {tool === 'sword' && (
             <group rotation={MOUNT.sword}>
-              <RealWeapon id="sword" fallback={<Sword />} />
+              <RealWeapon id={SWORD_WEAPON_ID[meleeTier]} fallback={<Sword />} />
             </group>
           )}
           {/* L62 (rest) · couched: tucked under the arm and levelled at the
@@ -601,9 +628,10 @@ export default function Viewmodel() {
               hand. Deliberately NOT gated on riding — the whole point of the
               defender reference implementation is that weapon choice and
               saddle are independent. */}
+          {/* Wave 49 (C1): same tier-aware id swap as the sword branch above. */}
           {tool === 'halberd' && (
             <group rotation={MOUNT.halberd} scale={0.6}>
-              <RealWeapon id="halberd" fallback={null} />
+              <RealWeapon id={HALBERD_WEAPON_ID[meleeTier]} fallback={null} />
             </group>
           )}
           {/* Wave 7 · the spear. Mounted it COUCHES — same rest rotation the

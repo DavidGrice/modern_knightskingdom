@@ -78,3 +78,65 @@ export const BUY_OFFERS: BuyOffer[] = [
 export function merchantPresent(time: number): boolean {
   return time > 0.3 && time < 0.72;
 }
+
+// ---------------------------------------------------------------------------
+// Wave 49 (C3) · a dynamic market. One signed "pressure" level per item drives
+// BOTH directions of its price: selling nudges it toward -1 (you flooded the
+// market — it's now cheap in both directions), buying nudges it toward +1
+// (scarcity — pricier in both directions). A single coherent lever, not two.
+//
+// Read lazily, the same "stamp a time, decay-on-read" convention this
+// codebase already uses for `lastTaxAt`/`lastCollectedAt` (gameStore.ts) and
+// `settlementRaidCooldownMs`'s own pressure-interpolated cooldown
+// (settlementRaid.ts) — generalized here from a binary gate/interpolated
+// bound to a continuous value that decays linearly back to its 0 baseline.
+//
+// Numbers justified against real feel: one unit moves the price ~1%
+// (MARKET_NUDGE_PER_UNIT × MARKET_SENSITIVITY) — imperceptible, so a single
+// sale never "feels broken." A Sell All of ~25 units of one good swings it to
+// the floor (-25%) — a real, earned "you crashed that market" moment. 20
+// minutes to fully recover sits deliberately above the 5-minute tax gate and
+// the 6-15-minute raid-pressure band (settlementRaidCooldownMs's own floor/
+// ceiling) because a market swing should span "go do something else and come
+// back," not "wait through one loading screen." The ±25% cap keeps the price
+// bounded on both ends — never free, never worthless — compounding safely
+// with the 1g floor gameStore.ts's buyOffer already clamps to.
+export interface MarketEntry {
+  /** signed supply/demand pressure, clamped to [-1, 1]; 0 = baseline */
+  level: number;
+  /** epoch ms of the last trade that moved this item's level */
+  lastTradeAt: number;
+}
+
+/** price swing per unit bought(+)/sold(-), before MARKET_SENSITIVITY scales
+ *  it into an actual percentage — see this section's header for the math. */
+export const MARKET_NUDGE_PER_UNIT = 0.04;
+/** level === ±1 means the price is ±25% off baseline */
+export const MARKET_SENSITIVITY = 0.25;
+/** real minutes for a full ±1 swing to linearly decay back to 0 */
+export const MARKET_RECOVERY_MS = 20 * 60_000;
+
+/** `entry.level`, decayed linearly toward 0 for the real time elapsed since
+ *  `lastTradeAt` — a fresh entry (or none at all) is baseline (0). */
+export function decayedMarketLevel(entry: MarketEntry | undefined, now: number): number {
+  if (!entry) return 0;
+  const elapsed = now - entry.lastTradeAt;
+  const remaining = Math.max(0, 1 - elapsed / MARKET_RECOVERY_MS);
+  return entry.level * remaining;
+}
+
+/** decay-then-nudge-then-clamp — the one write path every trade goes
+ *  through. `delta` is signed: positive for a purchase (scarcity), negative
+ *  for a sale (oversupply). */
+export function nudgeMarketLevel(entry: MarketEntry | undefined, delta: number, now: number): MarketEntry {
+  const level = Math.max(-1, Math.min(1, decayedMarketLevel(entry, now) + delta));
+  return { level, lastTradeAt: now };
+}
+
+/** the live, signed price-swing fraction this item's current pressure
+ *  implies — e.g. +0.25 means 25% pricier (scarce), -0.25 means 25% cheaper
+ *  (oversupplied). Applied identically to both the sell price and the buy
+ *  price for the same item (see this section's header note — one lever). */
+export function marketPriceMultiplier(entry: MarketEntry | undefined, now: number): number {
+  return decayedMarketLevel(entry, now) * MARKET_SENSITIVITY;
+}

@@ -67,6 +67,16 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   dye_madder: { id: 'dye_madder', name: 'Madder Dye', icon: '🟠' },
   dye_tyrian: { id: 'dye_tyrian', name: 'Tyrian Dye', icon: '🟣' },
   dye_bark: { id: 'dye_bark', name: 'Bark Dye', icon: '🟤' },
+  // Wave 49 (C1) · the sword/halberd tiers above the base weapon, the same
+  // re-forge-the-tier-below chain the chestplate above already established.
+  // Icons reused across both lines (🔗 for "forged", 👑 for "crested") the
+  // same way 🏹 is already shared by crossbow/longbow — the weapon-select row
+  // and the Satchel both show the item's NAME alongside the icon, so context
+  // (not a unique glyph) is what tells a Forged Sword from a Forged Halberd.
+  sword_forged: { id: 'sword_forged', name: 'Forged Sword', icon: '🔗' },
+  sword_crested: { id: 'sword_crested', name: 'Crested Sword', icon: '👑' },
+  halberd_forged: { id: 'halberd_forged', name: 'Forged Halberd', icon: '🔗' },
+  halberd_crested: { id: 'halberd_crested', name: 'Crested Halberd', icon: '👑' },
 };
 
 /** foods that can be eaten from the satchel, and the vigour they restore.

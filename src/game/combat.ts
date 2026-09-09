@@ -729,6 +729,100 @@ export const MELEE: Record<MeleeWeaponId, MeleeStats> = {
   spear: { dmg: 3.5, wornDmg: 1.8, reach: 3.9, cone: 0.6, cd: 0.7, stamina: 10, sweep: false, charge: 2.2 },
 };
 
+/**
+ * Wave 49 (C1) · multi-tier sword and halberd, reusing data/armor.ts's own
+ * "one tiered slot, re-forge the tier below" shape (a Forged Sword's recipe
+ * consumes a base Sword, exactly like a Forged Plate consumes an Iron one).
+ *
+ * The one real difference from armor: MELEE above is a deliberate TYPE-vs-
+ * TYPE tradeoff table (this table's own header comment — halberd trades
+ * single-target DPS for reach+sweep), not a strictly-better ladder. A tier
+ * therefore only ever scales `dmg`/`wornDmg` — every other MeleeStats field
+ * (reach/cone/cd/stamina/sweep/charge) stays exactly what MELEE[kind] already
+ * says at every tier, which is what keeps the halberd/sword DPS ratio (and so
+ * the whole tradeoff) intact all the way up the ladder: sword single-target
+ * DPS runs 5.45/6.36/7.27 across the three tiers, halberd 4.74/5.47/6.21 —
+ * the ratio between them stays 0.870/0.860/0.854, a near-invariant, not a
+ * strictly-better weapon making the sword-vs-halberd choice moot.
+ *
+ * Spear is deliberately NOT in this table — it stays untiered this wave (see
+ * data/recipes.ts's own header comment on the new recipes) — so
+ * `meleeStatsFor('spear', ...)` always falls through to the flat MELEE.spear
+ * row below, unchanged.
+ */
+export type MeleeTier = 'base' | 'forged' | 'crested';
+
+interface MeleeTierDmg { dmg: number; wornDmg: number }
+
+const MELEE_TIERS: Partial<Record<MeleeWeaponId, Record<MeleeTier, MeleeTierDmg>>> = {
+  sword: {
+    base: { dmg: 3, wornDmg: 1.5 },
+    forged: { dmg: 3.5, wornDmg: 1.75 },
+    crested: { dmg: 4, wornDmg: 2 },
+  },
+  halberd: {
+    base: { dmg: 4.5, wornDmg: 2.2 },
+    forged: { dmg: 5.2, wornDmg: 2.5 },
+    crested: { dmg: 5.9, wornDmg: 2.9 },
+  },
+};
+
+/** worst first, mirroring data/armor.ts's CHESTPLATES ordering exactly — the
+ *  Satchel item each (weapon, tier) pair is worn from. Spear has no entry
+ *  here on purpose (untiered), so `bestMeleeTierOwned` falls through to a
+ *  plain single-ItemId ownership check for it. */
+const MELEE_TIER_ITEMS: Partial<Record<MeleeWeaponId, { tier: MeleeTier; item: ItemId }[]>> = {
+  sword: [
+    { tier: 'base', item: 'sword' },
+    { tier: 'forged', item: 'sword_forged' },
+    { tier: 'crested', item: 'sword_crested' },
+  ],
+  halberd: [
+    { tier: 'base', item: 'halberd' },
+    { tier: 'forged', item: 'halberd_forged' },
+    { tier: 'crested', item: 'halberd_crested' },
+  ],
+};
+
+/** The best tier of `kind` currently owned, or null (nothing owned — bare
+ *  fists for a sword, no polearm in hand for the other two). Mirrors
+ *  `bestChestplateOwned`'s own "best of what I own, worst-first scan"
+ *  exactly. Spear has no ladder: 'base' whenever a spear is owned, matching
+ *  its pre-Wave-49 single-tier behavior byte for byte. */
+export function bestMeleeTierOwned(kind: MeleeWeaponId, inv: Partial<Record<ItemId, number>>): MeleeTier | null {
+  const ladder = MELEE_TIER_ITEMS[kind];
+  if (!ladder) return (inv[kind] ?? 0) > 0 ? 'base' : null;
+  for (let i = ladder.length - 1; i >= 0; i--) {
+    if ((inv[ladder[i].item] ?? 0) > 0) return ladder[i].tier;
+  }
+  return null;
+}
+
+/** Owns ANY tier of `kind` — the real fix for two bugs a naive tier add would
+ *  otherwise ship: forging a tier consumes the item below it (chestplate-
+ *  chain style), so a flat `(inv[kind]??0)>0` check reads 0 the moment a
+ *  Forged/Crested tier is made, wrongly scoring a real weapon in hand as
+ *  bare-fisted. Used by `playerAttack`'s `held` gate, `activeMelee`'s own
+ *  ownership check and `cycleWeapon`'s `ownsSlot`, replacing three ad hoc
+ *  single-item checks that only ever worked before tiers existed. */
+export function ownsMeleeSlot(kind: MeleeWeaponId, inv: Partial<Record<ItemId, number>>): boolean {
+  return bestMeleeTierOwned(kind, inv) !== null;
+}
+
+/** `MELEE[kind]` with `dmg`/`wornDmg` swapped for whichever tier is actually
+ *  owned — every other field is left exactly as MELEE[kind] already has it
+ *  (see this table's own header comment for why that's load-bearing). Falls
+ *  back to the flat MELEE[kind] numbers when nothing is owned yet — bare-
+ *  fisted 'sword' still resolves through here; it's `playerAttack`'s own
+ *  `held` gate (not this function) that turns an unowned sword into flat 1
+ *  damage regardless of what this returns. */
+export function meleeStatsFor(kind: MeleeWeaponId, inv: Partial<Record<ItemId, number>>): MeleeStats {
+  const base = MELEE[kind];
+  const tier = bestMeleeTierOwned(kind, inv);
+  const over = tier ? MELEE_TIERS[kind]?.[tier] : undefined;
+  return over ? { ...base, dmg: over.dmg, wornDmg: over.wornDmg } : base;
+}
+
 // ---- Wave 40 (A6) · real melee depth: dodge-roll, parry timing, i-frames,
 // combo chain. This codebase's whole extraction has ~15 animation clips
 // total and none of them are a roll/parry-flourish/finisher — see the
@@ -798,7 +892,10 @@ const FINISHER_STAGGER_S = 1.8;
  *  made before showing a crossbow. */
 export function activeMelee(): MeleeWeaponId {
   const mw = combatState.meleeWeapon;
-  if (mw !== 'sword' && (useGameStore.getState().inventory[mw] ?? 0) > 0) return mw;
+  // Wave 49 (C1) fix: ownsMeleeSlot recognizes ANY owned tier, not just the
+  // base item — readying a halberd while owning only a Forged/Crested one
+  // used to silently fall back to bare-fisted 'sword' every frame.
+  if (mw !== 'sword' && ownsMeleeSlot(mw, useGameStore.getState().inventory)) return mw;
   return 'sword';
 }
 
@@ -822,7 +919,13 @@ export const SWAP_HINT: Record<WeaponSlot, string> = {
  *  own gating. */
 export function cycleWeapon(): void {
   const st = useGameStore.getState();
-  const ownsSlot = (k: WeaponSlot) => k === 'sword' || (st.inventory[k] ?? 0) > 0;
+  // Wave 49 (C1) fix: 'sword' keeps its own long-standing special case — it
+  // is the bare-fisted baseline, always a valid slot to cycle to whether or
+  // not a real sword has ever been forged (activeMelee's own fallback is the
+  // same rule) — but halberd now recognizes ANY owned tier via ownsMeleeSlot
+  // instead of a flat base-item count, the same fix activeMelee/playerAttack
+  // both needed.
+  const ownsSlot = (k: WeaponSlot) => k === 'sword' || (isMeleeSlot(k) ? ownsMeleeSlot(k, st.inventory) : (st.inventory[k] ?? 0) > 0);
   if (!WEAPON_SLOTS.some((k) => k !== 'sword' && ownsSlot(k))) return;
   const current: WeaponSlot = combatState.weapon === 'melee' ? combatState.meleeWeapon : combatState.rangedWeapon;
   let idx = WEAPON_SLOTS.indexOf(current);
@@ -945,7 +1048,8 @@ export function playerAttack(): boolean {
   const st = useGameStore.getState();
   const kind = activeMelee();
   // deliberately not named `w` — that is this module's window handle
-  const wp = MELEE[kind];
+  // Wave 49 (C1): tier-aware dmg/wornDmg, every other field still MELEE[kind]
+  const wp = meleeStatsFor(kind, st.inventory);
   // Wave 32 · Page calling's small Battle-Ready passive: swings cost a touch
   // less stamina, armed or not — a training-economy nudge, deliberately NOT
   // more flat damage (Knights' Order and Heavy Hand already own that slot).
@@ -954,7 +1058,11 @@ export function playerAttack(): boolean {
   if (combatState.stamina < staminaCost) return false;
   combatState.stamina -= staminaCost;
   combatState.attackAt = performance.now();
-  const held = (st.inventory[kind] ?? 0) > 0;
+  // Wave 49 (C1) fix: ownsMeleeSlot recognizes ANY owned tier — without this,
+  // forging a tier (which consumes the item below it) drops inventory[kind]
+  // to 0 and the player would be scored as bare-fisted despite visibly
+  // wielding a Forged/Crested weapon.
+  const held = ownsMeleeSlot(kind, st.inventory);
   // a worn-out weapon still swings, just softer — durability is a nudge
   // toward the workbench, not a hard block on fighting
   const worn = (st.durability[kind] ?? 100) <= 0;

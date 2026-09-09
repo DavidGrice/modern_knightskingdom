@@ -11,7 +11,7 @@ import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } 
 import { bestChestplateOwned } from '@/game/data/armor';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { playerState } from './PlayerController';
-import { activeMelee, combatState, type MeleeWeaponId } from '@/game/combat';
+import { activeMelee, bestMeleeTierOwned, combatState, type MeleeWeaponId } from '@/game/combat';
 
 export default function PlayerAvatar() {
   const character = useGameStore((s) => s.character);
@@ -25,13 +25,20 @@ export default function PlayerAvatar() {
   // file otherwise only re-renders when clip/meleeTool/rig actually change.
   const [dodging, setDodging] = useState(false);
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
-  const hasSword = useGameStore((s) => (s.inventory.sword ?? 0) > 0);
+  // Wave 49 (C1) fix: owns ANY tier, not just the base item (see combat.ts's
+  // own ownsMeleeSlot comment — re-forging consumes the tier below).
+  const hasSword = useGameStore((s) => bestMeleeTierOwned('sword', s.inventory) !== null);
   const hasShield = useGameStore((s) => (s.inventory.shield ?? 0) > 0);
   // Wave 7 · third person shows what you have READIED, not just "a sword if
   // you own one" — otherwise a halberd wielder swings a sword out here while
   // the first-person view (and the damage) say polearm.
   const [meleeTool, setMeleeTool] = useState<MeleeWeaponId>('sword');
   const hasHelmet = useGameStore((s) => (s.inventory.helmet ?? 0) > 0);
+  // Wave 49 (C1) · the best tier of the readied sword/halberd, for the
+  // Held*'s own held mesh — mirrors how `plateTier` just below already reads
+  // the best chestplate.
+  const swordTier = useGameStore((s) => bestMeleeTierOwned('sword', s.inventory) ?? 'base');
+  const halberdTier = useGameStore((s) => bestMeleeTierOwned('halberd', s.inventory) ?? 'base');
   // Wave 9 · the player wears the BEST plate they own (there is no armor equip
   // slot — owning it is wearing it, which is also how armorReduction reads it)
   const plateTier = useGameStore((s) => bestChestplateOwned(s.inventory)?.id ?? null);
@@ -94,8 +101,8 @@ export default function PlayerAvatar() {
           setClip('anim_r_restpose');
         }}
       />
-      {rig && meleeTool === 'sword' && hasSword && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-      {rig && meleeTool === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+      {rig && meleeTool === 'sword' && hasSword && createPortal(<HeldSword side={-1} tier={swordTier} />, rig.joints.rightarm)}
+      {rig && meleeTool === 'halberd' && createPortal(<HeldHalberd side={-1} tier={halberdTier} />, rig.joints.rightarm)}
       {rig && meleeTool === 'spear' && createPortal(<HeldSpear side={-1} />, rig.joints.rightarm)}
       {rig && hasShield && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
       {rig && hasHelmet && createPortal(<HeldHelmet />, rig.joints.head)}

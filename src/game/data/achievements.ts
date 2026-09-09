@@ -48,7 +48,15 @@ export const DEEDS: DeedDef[] = [
   { id: 'first_blood', name: 'Nightwatch', icon: '⚔️', desc: 'Defeat a creature of the night.',
     check: (s) => (s.xp.combat ?? 0) > 0 },
   { id: 'armed', name: 'Knight’s Arms', icon: '🛡️', desc: 'Carry a sword and a shield.',
-    check: (s) => (s.inventory.sword ?? 0) > 0 && (s.inventory.shield ?? 0) > 0 },
+    // Wave 49 (C1) fix: any tier counts as "a sword" — re-forging (chestplate-
+    // chain style) consumes the tier below, so a player who forged straight
+    // to a Crested Sword before ever owning a shield would otherwise find
+    // this permanently unearnable (inventory.sword reads 0 forever once
+    // re-forged). Inlined rather than importing combat.ts's ownsMeleeSlot:
+    // gameStore.ts imports THIS file, and combat.ts imports gameStore.ts, so
+    // that import would be a real cycle, not just a longer one.
+    check: (s) => ((s.inventory.sword ?? 0) > 0 || (s.inventory.sword_forged ?? 0) > 0 || (s.inventory.sword_crested ?? 0) > 0)
+      && (s.inventory.shield ?? 0) > 0 },
   { id: 'sharpshooter', name: 'Sharpshooter', icon: '🏹', desc: 'Own a crossbow.',
     check: (s) => (s.inventory.crossbow ?? 0) > 0 },
   { id: 'wealthy', name: 'Merchant’s Friend', icon: '🪙', desc: 'Hold 50 gold at once.',
