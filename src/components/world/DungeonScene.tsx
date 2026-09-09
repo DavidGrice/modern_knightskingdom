@@ -7,7 +7,7 @@
 // just ordinary entries in useEnemyStore, already rendered by Enemies.tsx
 // regardless of where in the world they are, exactly like every other
 // location-agnostic list (buildings, blueprints) this project already relies on.
-import { useMemo, useRef, Suspense } from 'react';
+import { useMemo, useRef, useState, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { dungeonState, type DungeonRoom } from '@/game/dungeon';
@@ -15,8 +15,98 @@ import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { InstancedProp, type InstancedNode } from './InstancedProps';
 import { Torch } from './Buildings';
 import RealPropPart from '../character/RealPropPart';
+import RiggedFigure from '../character/RiggedFigure';
+import { navSteer, type NavAgent } from '@/game/navgrid';
+import { playerState } from '@/game/playerState';
+import type { CharacterConfig } from '@/game/types';
 
 const STONEWALL = BUILDABLE_BY_ID.stonewall;
+
+// Wave 48 (B9) · the escort captive's look — reuses, by value, the exact
+// verified-shipped "reformed prisoner" palette data/npcs.ts's
+// INTERIOR_RESIDENTS['oc6094-2'] (Cutter) already uses, rather than guessing
+// new palette indices for a one-off dungeon NPC. There is no cage/manacle
+// prop anywhere in data/buildables.ts/lib/propParts.ts (PropPartId is
+// literally only 'chest'), so this stays a plain RiggedFigure, no new asset.
+const CAPTIVE_CONFIG: CharacterConfig = {
+  name: 'Captive', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
+  armColor: 34, handColor: 18, legColor: 34, hipColor: 34,
+};
+
+// Wave 48 (B9) · follow tuning, adapted from companion.json's real, tuned
+// `follow.stopDistance`/`follow.runDistance` (2.0/6 — a companion's own
+// polite-distance/fall-behind thresholds) down to a slower human-captive
+// pace rather than the companion's faster 1.6/4.4/8.5 walk/run.
+const CAPTIVE_STOP_DIST = 2.0;
+const CAPTIVE_RUN_DIST = 6;
+const CAPTIVE_WALK_SPEED = 2.6;
+const CAPTIVE_RUN_SPEED = 4.8;
+
+// Wave 48 (B9) · the escort captive, freed via PlayerController.tsx's
+// 'dungeon_captive' interact (dungeon.ts's DungeonRoom.objective doc). Unlike
+// RelicMarker above (purely static, a `.visible` toggle), this one moves —
+// styled after Defenders.tsx's DefenderFigure per-frame pattern (ref + a
+// local `clip` state + its own unthrottled useFrame), NOT copied from
+// RelicMarker/ResidentFigure, neither of which ever move anything. Dungeon
+// enemies aren't AgentManager-driven either (they're plain useEnemyStore
+// entries) — so this is a small, hand-rolled per-frame follower driven by
+// the real standalone navSteer primitive (region: 'dungeon', so it paths
+// around the crypt's real walls), the same lightweight shape
+// Villagers.tsx/Merchant.tsx already prove out, not a new Agent.
+// Decision/clear-condition logic (has the captive reached layout.entryPos?)
+// lives in Enemies.tsx's existing 1Hz dungeon loop, not here — this
+// component only moves the figure and reports its own position back onto
+// the shared room object every frame (room.captiveX/captiveZ), mirroring how
+// `cleared`/`spawned` are already the shared truth Enemies.tsx owns.
+function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: number }) {
+  const group = useRef<THREE.Group>(null);
+  const [clip, setClip] = useState('anim_r_restpose');
+  const yaw = useRef(0);
+  const nav = useRef<NavAgent>({ x: room.cx, z: room.cz, region: 'dungeon' });
+
+  useFrame((_, dt) => {
+    const g = group.current;
+    if (!g) return;
+    if (!room.captiveFreed) {
+      g.position.set(room.cx - ox, 0, room.cz - oz);
+      if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+      return;
+    }
+    const agent = nav.current;
+    const { nx, nz, dist } = navSteer(agent, playerState.x, playerState.z, dt);
+    if (dist > CAPTIVE_STOP_DIST) {
+      const speed = dist > CAPTIVE_RUN_DIST ? CAPTIVE_RUN_SPEED : CAPTIVE_WALK_SPEED;
+      agent.x += nx * speed * dt;
+      agent.z += nz * speed * dt;
+      const desired = Math.atan2(-nx, -nz);
+      let diff = desired - yaw.current;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      yaw.current += diff * Math.min(1, dt * 4);
+      const wantClip = dist > CAPTIVE_RUN_DIST ? 'anim_c_run' : 'anim_c_walk';
+      if (clip !== wantClip) setClip(wantClip);
+    } else if (clip !== 'anim_r_restpose') {
+      setClip('anim_r_restpose');
+    }
+    // the shared leaf-module write Enemies.tsx's 1Hz loop reads to decide
+    // delivery (Math.hypot against layout.entryPos, gated on
+    // dungeon.ts's ESCORT_EXTRACTION_RADIUS) — this component owns movement,
+    // that one owns the clear decision, exactly like spawned/cleared already
+    // split between Enemies.tsx and PlayerController.tsx.
+    room.captiveX = agent.x;
+    room.captiveZ = agent.z;
+    g.position.set(agent.x - ox, 0, agent.z - oz);
+    g.rotation.y = yaw.current + Math.PI;
+  });
+
+  return (
+    <Suspense fallback={null}>
+      <group ref={group} position={[room.cx - ox, 0, room.cz - oz]}>
+        <RiggedFigure config={CAPTIVE_CONFIG} height={1.75} clip={clip} lodExempt />
+      </group>
+    </Suspense>
+  );
+}
 
 // Wave 13 · the relic a 'retrieve' room asks the player to take (see
 // dungeon.ts's DungeonRoom.objective doc). `relicTaken` is a plain mutation
@@ -89,8 +179,12 @@ export default function DungeonScene() {
         // Wave 13 · a retrieve room reads warmer (a hint of gold) than a
         // plain combat chamber — a small, cheap "something's here" tell
         // that doesn't depend on the relic prop having streamed in yet.
+        // Wave 48 (B9) · escort reads cool (a cell-like tone) and survive
+        // reads a dusky, tense red — same cheap-tell doctrine, extended.
         const color = room.isBoss ? '#5a2e2e' : room.isEntry ? '#6b5a3a'
-          : room.objective === 'retrieve' ? '#4a4530' : '#3f3f45';
+          : room.objective === 'retrieve' ? '#4a4530'
+          : room.objective === 'escort' ? '#3a4550'
+          : room.objective === 'survive' ? '#4a3030' : '#3f3f45';
         return (
           <group key={room.index}>
             <FloorTile x={room.cx - ox} z={room.cz - oz} w={room.halfX * 2} d={room.halfZ * 2} color={color} />
@@ -103,6 +197,7 @@ export default function DungeonScene() {
               </group>
             </Suspense>
             {room.objective === 'retrieve' && <RelicMarker room={room} ox={ox} oz={oz} />}
+            {room.objective === 'escort' && <CaptiveFigure room={room} ox={ox} oz={oz} />}
           </group>
         );
       })}

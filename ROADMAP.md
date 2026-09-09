@@ -9187,3 +9187,81 @@ call: full settlement-ownership transfer ("ownership changes hands") was ruled o
   risk at neutral allegiance, and Wave 43's Defend the Plot runs fully independently alongside an active
   settlement raid with zero cross-contamination. `npx tsc --noEmit` / `npm run build`: both clean,
   verified independently.
+
+## Wave 48: escort + survive Sealed Crypt objectives (B9) — SHIPPED 2026-09-08
+
+Fifteenth wave of the new 27-wave plan. `dungeon.ts`'s own `DungeonRoom.objective` doc comment had named
+these two as deferred since Wave 13 ("need a follow-the-player NPC or a wave/timer system this dungeon
+doesn't have") — this wave built both as genuinely distinct completion conditions, not data variants of
+`combat`/`retrieve`, and re-confirmed the rest of the plan's own text held with zero drift this time
+(unusual — most waves in this plan have found at least one stale claim).
+
+- [COMPLETE] ✅ **'escort'** — a captive (reusing, by value, the exact verified-shipped "reformed
+  prisoner" palette `data/npcs.ts`'s Cutter already uses, rather than guessing new colors) stands guarded
+  at the room's centre. Freeing them (`PlayerController.tsx`'s new `dungeon_captive` interact, same
+  distance-gated convention as the existing relic pickup) never touches `cleared` by itself — only
+  walking the freed captive back to `layout.entryPos` does. Movement is a new, small, hand-rolled
+  per-frame follower (`DungeonScene.tsx`'s `CaptiveFigure`, styled after `Defenders.tsx`'s own
+  per-figure pattern) driven by the real standalone `navSteer` primitive already used by
+  Villagers.tsx/Merchant.tsx — region `'dungeon'`, so it paths around the crypt's real walls rather than
+  beelining through them. Deliberately not built on AgentManager/Reasoner: dungeon enemies themselves
+  aren't Agent-driven either (plain `useEnemyStore` entries), so adding that machinery for a one-off
+  captive would have been new, unnecessary architecture. The room's own guard (reusing `combat`'s exact
+  `enemyKind`/`enemyCount`/`spawn()` shapes, count fixed at 1) makes the escort a real fight, not a free
+  walk-out — explicit, reasoned scope-down: the captive itself has no HP/downed state (cannot be lost,
+  only delayed), matching `falcon.ts`'s zero-vulnerability companion precedent rather than building a
+  second combat state machine for a one-off NPC.
+- [COMPLETE] ✅ **'survive'** — no enemies until the player physically steps inside the room's own AABB
+  (deliberately not an instant dungeon-wide start the way `combat` spawns immediately — that would let a
+  player dawdle elsewhere until the clock already ran out, then walk into an empty, auto-cleared room for
+  free). Once started: a 50-second timer, hostiles trickling in on a 7-second cadence up to 3 concurrent
+  (repurposing `enemyCount`'s meaning for this objective, documented in place rather than adding a
+  parallel field), `cleared` flipping only on timer expiry — never on a kill, the genuinely different
+  completion condition the plan asked for. Expiry cleans up only that room's own survivors via a
+  room-scoped `remove(id)` loop, not the store's `removeByWorld('dungeon')` (confirmed too broad — it
+  would wrongly wipe every other room's live enemies mid-session).
+- **Generation weighting retuned** to make room for both: `RETRIEVE_CHANCE` 0.3→0.20, new
+  `ESCORT_CHANCE`/`SURVIVE_CHANCE` at 0.15 each, `combat` keeping the remaining 0.50 (still the clear
+  plurality the dungeon's own design doc calls for, just no longer a default-by-elimination 0.70). The
+  simpler `generateFallbackLayout()` safety-net path (used only if all 5 real-generator attempts fail to
+  pack a layout — confirmed vanishingly rare given `REACH_LIMIT`/`MARGIN` in an open plane) deliberately
+  keeps rolling only `none`/`combat`, unchanged, exactly as it already did for `retrieve`.
+- `DungeonStatus.tsx`'s existing 250ms-polled HUD line generalized for free once `cleared` is set
+  correctly by both new objectives, plus two small additions for the mid-attempt state the base line
+  alone doesn't convey: a live "Hold the line! {n}s" countdown for an active survive timer, and "Lead the
+  captive to the entrance!" once an escort captive is freed but not yet delivered.
+- **Verified live end-to-end for both objectives, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing gitignored `public/assets`/`public/help`), fixed
+  locally via directory junctions to the main checkout's real copies, removed afterward with the main
+  checkout confirmed untouched. With assets restored, on real natural (non-forced) dungeon rolls: exactly
+  1 guard spawns per escort room; the guard is a genuine threat (player HP measured dropping ~10→7.49
+  over 2.5s of lingering in melee range); the freed captive's real trajectory was captured bending around
+  a corner on a 2-hop room (x-coordinate measured decreasing then reversing mid-route — geometrically
+  impossible for a straight beeline, proving real corridor-waypoint pathing rather than wall-clipping),
+  with measured walk (2.6 m/s, dist<6m) vs run (4.8 m/s, dist>6m) transitions matching the tuned
+  constants exactly; delivery correctly flipped `cleared` only once within 6m of `entryPos`, never on the
+  guard's death. For survive: the deadline measured staying exactly 0 while outside the room, starting
+  the instant the player entered (~49.4-50s measured remaining); cadence spawns respected the 3-concurrent
+  cap; killing every spawned enemy before expiry explicitly did NOT clear the room (confirmed
+  `cleared:false` with 0 alive and ~18.7s still remaining — the load-bearing "not a data variant of
+  combat" check); expiry flipped `cleared:true` and removed exactly that room's 2 remaining survivors
+  while a sibling room's own live enemy (the escort guard) was confirmed still alive afterward, proving
+  the room-scoped cleanup doesn't over-reach the way `removeByWorld` would. Full-crypt-clear reward path
+  confirmed on an 8-room layout containing both new objectives alongside combat/retrieve/entry: correct
+  84 gold (`20 + rooms·8`) and the full Armory grant. Regression-checked 'none'/'combat'/'retrieve' and
+  the HUD counter, all unchanged. Zero console/page errors throughout. `npx tsc --noEmit` / `npm run
+  build`: both clean, verified independently (both by the workflow's own Verify pass and, separately,
+  by direct review of the merged diff against the live worktree afterward).
+- **One pre-existing, non-blocking fragility found and correctly left unfixed** (confirmed via diff
+  review to predate this wave — not part of its changes): `DungeonScene.tsx`'s
+  `useMemo(() => dungeonState.layout, [])` freezes the captured layout reference for the component's
+  lifetime. If `returnHome()` and `enterDungeon()` were ever called back-to-back within the same
+  synchronous tick (bypassing React's normal unmount-then-remount across separate frames), room
+  decorations (the pre-existing `RelicMarker`, and this wave's new `CaptiveFigure`) would keep reading a
+  discarded layout while every other system (the interact scan, `Enemies.tsx`'s 1Hz loop, the HUD) reads
+  the live `dungeonState.layout` fresh each time. Confirmed unreachable through real gameplay (a real
+  player always triggers these via separate UI clicks spanning many real frames) — reproduced only by a
+  same-tick scripted test technique. Worth a `useSyncExternalStore`-style read (or at least a guarding
+  comment) the next time this file is touched, but correctly out of scope for this wave's own diff.

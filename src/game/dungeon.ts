@@ -88,18 +88,41 @@ export interface DungeonRoom {
   isBoss: boolean;
   /** Wave 13 · what this room actually asks of the player. 'none' (the entry
    *  room only) needs nothing — a safe room to get your bearings, unchanged.
-   *  'combat' is the original and, until now, only objective this dungeon
-   *  has ever had: spawn enemyCount of enemyKind, cleared flips when the
-   *  last one dies (Enemies.tsx). 'retrieve' is the first alternative: no
-   *  enemies at all, a Sealed Reliquary sits at the room's centre
-   *  (DungeonScene.tsx), and cleared flips the moment the player takes it
-   *  (PlayerController.tsx's 'dungeon_relic' interact) instead of the last
-   *  enemy dying. Escort/survive are real too but need a follow-the-player
-   *  NPC or a wave/timer system this dungeon doesn't have — deferred, see
-   *  ROADMAP.md rather than attempted alongside this one. */
-  objective: 'none' | 'combat' | 'retrieve';
-  enemyKind: EnemyKind;
+   *  'combat' is the original objective this dungeon started with: spawn
+   *  enemyCount of enemyKind, cleared flips when the last one dies
+   *  (Enemies.tsx). 'retrieve' is the first alternative: no enemies at all, a
+   *  Sealed Reliquary sits at the room's centre (DungeonScene.tsx), and
+   *  cleared flips the moment the player takes it (PlayerController.tsx's
+   *  'dungeon_relic' interact) instead of the last enemy dying.
+   *
+   *  Wave 48 (B9) · two more, each a genuinely different completion
+   *  condition, not a reskin of the two above:
+   *  'escort' — a captive stands at the room's centre, guarded by
+   *  enemyCount (always 1) of enemyKind. Freeing them
+   *  (PlayerController.tsx's 'dungeon_captive' interact) sets
+   *  `captiveFreed`, after which DungeonScene.tsx's CaptiveFigure follows
+   *  the player every frame via navSteer and writes its live position into
+   *  captiveX/captiveZ. `cleared` flips only once the freed captive is
+   *  walked all the way back to layout.entryPos (Enemies.tsx) — the guard's
+   *  own life/death never touches `cleared`, so this stays structurally
+   *  distinct from both 'combat' (kill-count) and 'retrieve' (single
+   *  pickup).
+   *  'survive' — no enemies until the player physically enters the room
+   *  (`surviveDeadline` stays 0 until then — see its own doc for the
+   *  dawdle-and-walk-in-free exploit that gate closes). Once started,
+   *  hostiles trickle in on a cadence up to enemyCount concurrent, and
+   *  `cleared` flips when the timer expires — never when the last one dies,
+   *  which is what makes this genuinely different from 'combat' rather than
+   *  a timer wrapped around the same kill condition. */
+  objective: 'none' | 'combat' | 'retrieve' | 'escort' | 'survive';
+  /** for 'combat' and 'escort', a one-shot spawn count (escort always rolls
+   *  1 — a single guard, lighter than combat's 1-2). For 'survive',
+   *  repurposed as the max number of this room's enemies allowed alive at
+   *  once during the timer (Enemies.tsx gates the next cadence spawn on
+   *  this) — a genuinely different meaning for the same field, documented
+   *  here rather than added as a second parallel field. */
   enemyCount: number;
+  enemyKind: EnemyKind;
   spawned: boolean;
   cleared: boolean;
   /** only meaningful for objective:'retrieve' — true once the relic prop has
@@ -108,6 +131,35 @@ export interface DungeonRoom {
    *  drawing the prop" flag, rather than overloading `cleared`, which
    *  DungeonStatus.tsx/Enemies.tsx already read as a pure completion flag. */
   relicTaken: boolean;
+  /** Wave 48 (B9) · only meaningful for objective:'escort'. True once
+   *  PlayerController.tsx's 'dungeon_captive' interact frees the captive —
+   *  before that DungeonScene.tsx's CaptiveFigure renders stationary at
+   *  (cx, cz); after, it follows the player via navSteer every frame. */
+  captiveFreed: boolean;
+  /** Wave 48 (B9) · only meaningful for objective:'escort' (and only once
+   *  captiveFreed) — the captive's own live world position, written every
+   *  frame by CaptiveFigure (the same "leaf module the frame loop reads"
+   *  pattern relicTaken already uses) so Enemies.tsx's 1Hz loop can check
+   *  delivery against layout.entryPos without owning any movement state
+   *  itself. Initialized to the room centre, so an unfreed captive already
+   *  reads as "hasn't gone anywhere." */
+  captiveX: number;
+  captiveZ: number;
+  /** Wave 48 (B9) · only meaningful for objective:'survive'. 0 means the
+   *  timer hasn't started — Enemies.tsx's 1Hz loop sets this to
+   *  `Date.now() + SURVIVE_DURATION_MS` the moment the player is physically
+   *  inside the room's AABB, deliberately NOT the instant the layout
+   *  generates the way 'combat' spawns immediately: a dungeon-wide instant
+   *  start would let a player dawdle in earlier rooms until survive's clock
+   *  already ran out, then walk into an empty, auto-cleared room for free —
+   *  doesn't hurt 'combat' (its clear condition needs an actual kill) but
+   *  would break 'survive' outright. */
+  surviveDeadline: number;
+  /** Wave 48 (B9) · only meaningful for objective:'survive', once
+   *  surviveDeadline is set — the next cadence timestamp Enemies.tsx is
+   *  allowed to spawn another hostile at, additionally gated on fewer than
+   *  enemyCount of this room's enemies currently being alive. */
+  surviveNextSpawn: number;
 }
 
 export interface DungeonCorridor {
@@ -302,10 +354,31 @@ function shuffledSides(rnd: () => number): Side[] {
   return a;
 }
 
-/** chance any given non-entry, non-boss room becomes a 'retrieve' objective
- *  instead of 'combat' — high enough that most 5-8 room descents see at
- *  least one, low enough that combat stays the dungeon's main character. */
-const RETRIEVE_CHANCE = 0.3;
+/** Wave 48 (B9) · a cumulative per-room roll against these three, in this
+ *  order (retrieve, then escort, then survive) — see the finalization
+ *  branch below. Whatever's left over stays 'combat', which keeps the
+ *  remaining 0.50: still the clear plurality/"main character" the doc above
+ *  always called for, just no longer the default-by-elimination 0.70 it was
+ *  before this wave. Across a typical 3-6 eligible (non-entry, non-boss)
+ *  rooms this gives roughly 48-59% odds of at least one of each alternative
+ *  per descent, and 90%+ odds of at least one ordinary combat room. */
+const RETRIEVE_CHANCE = 0.2;
+const ESCORT_CHANCE = 0.15;
+const SURVIVE_CHANCE = 0.15;
+
+/** Wave 48 (B9) · 'survive' timer/cadence, and 'escort' delivery radius —
+ *  kept here with this generator's other tuning constants (RETRIEVE_CHANCE
+ *  above) rather than local to Enemies.tsx/PlayerController.tsx, so a future
+ *  balance pass has one place to edit. 6m verified against room geometry
+ *  (SIZE_CLASSES' half-extents are 4/8/12, so this safely covers even the
+ *  smallest 8x8 entry room plus a stride into its doorway) and against
+ *  inter-room spacing (MARGIN + CORRIDOR_LENGTH + room half-extents put any
+ *  non-entry room's centre well over 16m from entryPos, so there's no
+ *  false-positive risk of an adjacent room's captive reading as "delivered"
+ *  without real travel). */
+export const SURVIVE_DURATION_MS = 50_000;
+export const SURVIVE_CADENCE_MS = 7_000;
+export const ESCORT_EXTRACTION_RADIUS = 6;
 
 function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
   const totalRooms = 5 + Math.floor(rnd() * 4); // 5..8
@@ -416,16 +489,31 @@ function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
     } else if (isBoss) {
       enemyKind = 'gilbert';
       enemyCount = 1;
-    } else if (rnd() < RETRIEVE_CHANCE) {
-      objective = 'retrieve'; // no enemies — a relic to find instead
     } else {
-      enemyKind = rnd() < 0.55 ? 'skeleton' : 'bandit';
-      enemyCount = 1 + Math.floor(rnd() * 2);
+      const roll = rnd();
+      if (roll < RETRIEVE_CHANCE) {
+        objective = 'retrieve'; // no enemies — a relic to find instead
+      } else if (roll < RETRIEVE_CHANCE + ESCORT_CHANCE) {
+        objective = 'escort'; // a captive to free and walk back to entryPos
+        enemyKind = rnd() < 0.55 ? 'skeleton' : 'bandit';
+        enemyCount = 1; // a single guard — lighter than combat's 1-2
+      } else if (roll < RETRIEVE_CHANCE + ESCORT_CHANCE + SURVIVE_CHANCE) {
+        objective = 'survive'; // hold the room until the timer runs out
+        enemyKind = rnd() < 0.55 ? 'skeleton' : 'bandit';
+        enemyCount = 3; // max concurrent alive during the timer (see doc)
+      } else {
+        enemyKind = rnd() < 0.55 ? 'skeleton' : 'bandit';
+        enemyCount = 1 + Math.floor(rnd() * 2);
+      }
     }
     return {
       index: r.index, cx: r.cx, cz: r.cz, halfX: r.halfX, halfZ: r.halfZ, parent: r.parent,
       isEntry, isBoss, objective, enemyKind, enemyCount, spawned: false,
       cleared: objective === 'none', relicTaken: false,
+      // Wave 48 (B9) · inert defaults — only escort/survive rooms ever
+      // mutate these away from these values (see DungeonRoom's own docs).
+      captiveFreed: false, captiveX: r.cx, captiveZ: r.cz,
+      surviveDeadline: 0, surviveNextSpawn: 0,
     };
   });
 
@@ -497,10 +585,10 @@ function generateFallbackLayout(): DungeonLayout {
     const isBoss = r.index === totalRooms - 1;
     let enemyKind: EnemyKind = 'skeleton';
     let enemyCount = 0;
-    // deliberately no 'retrieve' rooms here — this fallback exists purely as
-    // a can-never-softlock safety net (see the doc comment above), so it
-    // stays maximally simple rather than rolling the same variety the real
-    // generator does
+    // deliberately no 'retrieve'/'escort'/'survive' rooms here — this
+    // fallback exists purely as a can-never-softlock safety net (see the doc
+    // comment above), so it stays maximally simple rather than rolling the
+    // same variety the real generator does
     const objective: DungeonRoom['objective'] = isEntry ? 'none' : 'combat';
     if (isBoss) {
       enemyKind = 'gilbert';
@@ -513,6 +601,10 @@ function generateFallbackLayout(): DungeonLayout {
       index: r.index, cx: r.cx, cz: r.cz, halfX: r.halfX, halfZ: r.halfZ, parent: r.parent,
       isEntry, isBoss, objective, enemyKind, enemyCount, spawned: false,
       cleared: objective === 'none', relicTaken: false,
+      // Wave 48 (B9) · type-completeness only — this path never rolls
+      // escort/survive, so these inert defaults are never meaningfully read.
+      captiveFreed: false, captiveX: r.cx, captiveZ: r.cz,
+      surviveDeadline: 0, surviveNextSpawn: 0,
     };
   });
 
