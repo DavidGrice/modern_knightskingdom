@@ -62,7 +62,22 @@ export type ItemId =
   // to make tier N+1). Spear is deliberately NOT tiered this wave — see
   // combat.ts's own MELEE_TIERS header comment for why scoping it out keeps
   // the type-vs-type tradeoff table honest under time pressure.
-  | 'sword_forged' | 'sword_crested' | 'halberd_forged' | 'halberd_crested';
+  | 'sword_forged' | 'sword_crested' | 'halberd_forged' | 'halberd_crested'
+  // Wave 50 (C2) · a 4th, drop-only rung above 'crested' — no recipe, ever
+  // (see data/recipes.ts's own header note by the tier chain above): these
+  // are rolled by bossEncounter.ts's BOSS_LEGENDARY_DROP off the three real
+  // Satchel-bound boss-victory moments (both dragon routs, Cedric's one-shot
+  // capstone), never crafted. Still just another rung on combat.ts's own
+  // MELEE_TIER_ITEMS ladder, so nothing about how a tiered ItemId is worn/
+  // read/displayed had to change to add it.
+  | 'sword_legendary' | 'halberd_legendary'
+  // Wave 50 (C4) · a one-way, permanent enchantment marker per weapon line —
+  // a plain flat ItemId sitting in inventory forever (dyes.ts's "spend once,
+  // opens a row for the rest of the save" shape, adapted: see combat.ts's own
+  // ENCHANT_ITEM comment for why a marker ItemId rather than a dyes-style
+  // `SaveGame` string array). Read by `meleeStatsFor` as a flat +10% post-
+  // multiply on top of whichever tier (base..legendary) is currently worn.
+  | 'sword_rune' | 'halberd_rune';
 
 export interface CharacterConfig {
   name: string;

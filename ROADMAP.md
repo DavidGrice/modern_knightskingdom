@@ -9359,3 +9359,82 @@ the tier below" shape for C1, and the `lastTaxAt`/`lastCollectedAt`/`settlementR
   both clean, verified independently (both by the workflow's own Verify pass and, separately, by direct
   review of the merged diff against the live worktree afterward, including confirming the tint-isolation
   claim structurally via `loadWeapon`'s real `Map<WeaponId, Promise<...>>` cache declaration).
+
+## Wave 50: equipment rarity + stat rolls (C2) + an enchanting/upgrade system (C4) — SHIPPED 2026-09-09
+
+Seventeenth wave of the new 27-wave plan. Both items were resolved against a real, explicitly-weighed
+architecture fork rather than defaulting silently: this codebase has NO per-instance item identity
+anywhere in its history (even `durability` is keyed by weapon TYPE, not by which specific crafted copy
+you hold, confirmed independently during Wave 49's own review) — true "random stat rolls" onto one
+specific picked-up copy would have been a genuinely new architecture axis with a wide blast radius
+across the Satchel, crafting, sell/buy, and the save format. Both items instead extend Wave 49's own
+just-shipped tiered-`ItemId`-plus-lookup-table shape one rung further, reusing (not inventing) the exact
+pattern that fork already proved out.
+
+- [COMPLETE] ✅ **C2 · a real, drop-only `legendary` tier** — a 4th rung above `crested` on both the
+  sword and halberd lines (`sword_legendary`/`halberd_legendary`), continuing Wave 49's own arithmetic
+  sequence one step further (dmg scales ×9/6 relative to the base weapon, vs. forged's ×7/6 and
+  crested's ×8/6) — sword/halberd single-target DPS ratio stays at 0.869 across all four tiers, matching
+  the near-invariant 0.870/0.860/0.854 sequence Wave 49 established, so the type-vs-type tradeoff
+  survives at the new top rung too. **Deliberately NO recipe, ever** — legendary drops only, from a new
+  `BOSS_LEGENDARY_DROP` roll table (`bossEncounter.ts`) fired at each of the 3 real Satchel-bound
+  boss-victory moments: the green dragon rout (8%, the lowest-tier, most repeatable fight — stingiest by
+  design), the black dragon rout (15%, the tier ceiling, rarer to even reach), and Cedric's one-shot
+  capstone defeat only, never a farmable rematch (25%, the best odds of the three, since it can never be
+  repeated). A real, load-bearing plan-text correction, found and stated rather than carried forward:
+  `LOOT_TABLES` (the table the plan's own wording pointed at) has `cedric: []` and `storm: []` — there is
+  no populated "boss loot table" to hang a rarity roll off; the real boss-reward mechanism is
+  `BOSS_VICTORY_REWARD` (Wave 38), confirmed to grant only raw materials/gold, zero equipment, before
+  this wave. Visual differentiation reused Wave 49's own donor-tiebreak method exactly: a full
+  `part_roles.json` re-scan found one real, still-unclaimed `sword`-role donor
+  (`minifigprincessstorm01`, the smaller of two remaining candidates by file size) for the Crested
+  Sword's real mesh-swap precedent to extend to Legendary; halberd still has exactly one real
+  `halberd`-role donor in the whole rig, so both its upper tiers stay tint-only, an honest, stated
+  scope-down. **A real regression closed proactively, the same class Wave 49 found and fixed twice**:
+  the "Knight's Arms" deed check was extended to recognize a dropped Legendary Sword too, before anyone
+  had to rediscover the gap.
+- [COMPLETE] ✅ **C4 · a permanent weapon enchantment** — two new forge recipes (`sword_rune`/
+  `halberd_rune`, 150/160 skillXp, the highest of any recipe in the game) apply a flat, one-way +10%
+  `dmg`/`wornDmg` post-multiply inside `meleeStatsFor()`, composing automatically with whichever tier
+  (including C2's new `legendary`) is currently worn — fully independent of C2's own tier ladder, zero
+  extra wiring needed since `meleeStatsFor` already generalizes over both. Priced by `dyes.ts`'s own
+  "how hard to get hold of, not how it looks" logic, spending the same two ordinary gatherables Tyrian
+  purple (the dearest dye in the realm) does — herb and flowers, at higher quantities — plus an
+  `iron_bar` cost deliberately exceeding even the Crested tier's own re-forge cost. No gold cost: a full
+  read of every recipe in the game confirmed gold is never spent anywhere in this economy, only earned —
+  inventing that mechanic here would have been new, unproven plumbing the feature didn't need. The rune
+  itself is a plain marker `ItemId` sitting in inventory forever (one-way, no un-enchant path, matching
+  dyes' own "opens a row forever" precedent) rather than a literal per-item socket — reasoned explicitly:
+  a socket needs the same per-instance identity C2's own fork already ruled out, for the identical
+  reasons, and this codebase's real `SaveGame`-string-array dye mechanism couldn't be reused verbatim
+  either, since `gameStore.ts` cannot import `MeleeWeaponId` from `combat.ts` (the reverse is already
+  true) — a flat `ItemId` sidesteps that cycle for free, reading through the exact same `inv` map
+  `meleeStatsFor` already receives.
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing gitignored `node_modules`/`public/assets`/
+  `public/help`), fixed locally via directory junctions to the main checkout's real copies, removed
+  afterward with the main checkout confirmed untouched. With assets restored: measured REAL per-hit
+  damage via the actual `playerAttack()` function at every tier of both weapon lines — sword
+  3.0/3.5/4.0/4.5, halberd 4.5/5.2/5.9/6.75, all exact matches; ran the green- and black-dragon legendary
+  roll 300 times each via real `end(true)` calls (6.0% vs. designed 8%, 13.0% vs. designed 15%, both
+  within statistical noise) and confirmed a real grant snapshot showed the flat reward and the legendary
+  drop coexisting correctly in inventory; exercised Cedric's one-shot capstone via the real store action
+  with a forced roll value (a genuine hit granting the halberd alongside the existing chestplate/
+  allegiance/notify rewards, a genuine miss granting none of it, and a repeat call while already defeated
+  correctly no-op'ing, confirming the new optional argument didn't disturb the existing idempotency
+  guard). Confirmed the enchant's exact ×1.1 multiply at three tiers per weapon, including the
+  half-up-rounding edge case (6.75×1.1=7.425 → 7.43, matching the coded `round2` exactly), and — the
+  wave's own explicit persistence ask — crafted a rune, force-saved via the real `toSave()`+localStorage
+  path, reloaded the page, resumed the same save via the real menu UI, and re-measured combat to confirm
+  the rune survived the full save/reload/resume round trip rather than only live-session state. Real
+  `craft()` flow tested end-to-end for both new recipes (missing unlock, short-by-one-ingredient, and
+  exact-cost paths all behaving correctly, ingredients deducted to exactly 0 on success). Zero regression
+  to the existing chestplate chain, the market, or any of Wave 49's own tiers, confirmed via `git diff`
+  showing only the 12 intended files touched. Zero console/page errors throughout. `npx tsc --noEmit` /
+  `npm run build`: both clean, verified independently (both by the workflow's own Verify pass and,
+  separately, by direct review of the merged diff against the live worktree afterward, including
+  independently re-deriving the DPS-ratio and enchant-multiply math by hand and confirming the
+  `cedricCaptures === 0` capstone-only gate at combat.ts's two call sites is doubly redundant-but-safe
+  with `markCedricDefeated`'s own internal `first` guard, not a real gap).

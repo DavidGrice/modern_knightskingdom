@@ -58,3 +58,32 @@ export const BOSS_VICTORY_REWARD: Record<BossId, BossReward> = {
   blackDragon: { items: { gold: 50, iron_bar: 3, plank: 4 }, xp: 60 }, // moved verbatim, unchanged
   cedric: { items: { gold: 70, iron_bar: 4, plank: 6, stone: 6 }, xp: 90 }, // NEW: rematch-only reward
 };
+
+/**
+ * Wave 50 (C2) · a small, separate drop-CHANCE table for combat.ts's new
+ * 'legendary' MeleeTier (see combat.ts's own MELEE_TIERS header for the
+ * fixed-tier vs. per-instance-roll fork this resolved). Deliberately NOT
+ * folded into BOSS_VICTORY_REWARD above: that table is a flat, ALWAYS-
+ * granted payout, while this one is a rare, independent roll layered on top
+ * of it at each fight's own real Satchel-bound victory moment (both dragon
+ * routs, Cedric's one-shot capstone — see combat.ts's markCedricDefeated
+ * call sites and DragonSiege.tsx/BlackDragonSiege.tsx's own `end()`). Odds
+ * climb with each fight's own unlock tier, the same relative-difficulty
+ * ordering `bossTierScale` itself already reasons about: the green dragon
+ * (lowest unlockTier, the most repeatable of the three) is the stingiest,
+ * Cedric's own unfarmable one-shot capstone the most generous.
+ */
+const BOSS_LEGENDARY_DROP: Record<BossId, { item: ItemId; chance: number }> = {
+  dragon: { item: 'sword_legendary', chance: 0.08 },
+  blackDragon: { item: 'sword_legendary', chance: 0.15 },
+  cedric: { item: 'halberd_legendary', chance: 0.25 },
+};
+
+/** Roll one boss's own legendary-drop chance — null on a miss (the common
+ *  case). Callers add the result to the player's own inventory via
+ *  `addItems`/`grant` themselves, alongside their own existing reward/notify
+ *  logic, rather than this function reaching into the store. */
+export function rollBossLegendaryDrop(id: BossId): ItemId | null {
+  const d = BOSS_LEGENDARY_DROP[id];
+  return Math.random() < d.chance ? d.item : null;
+}

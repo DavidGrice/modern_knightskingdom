@@ -18,7 +18,8 @@ import { audio } from '@/lib/audio';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt } from '@/game/types';
 import { dragonAllowed } from '@/game/difficulty';
-import { bossTierScale, BOSS_VICTORY_REWARD } from '@/game/bossEncounter';
+import { bossTierScale, BOSS_VICTORY_REWARD, rollBossLegendaryDrop } from '@/game/bossEncounter';
+import { ITEMS } from '@/game/data/items';
 import { dragonAir, dragonAirBlack, loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
@@ -179,12 +180,19 @@ export default function DragonSiege() {
       st.addItems(BOSS_VICTORY_REWARD.dragon.items, 'grant');
       st.addXp('combat', BOSS_VICTORY_REWARD.dragon.xp);
     }
+    // Wave 50 (C2): a small, independent chance at a real legendary weapon on
+    // top of the flat reward above — see bossEncounter.ts's own
+    // BOSS_LEGENDARY_DROP for why the green dragon carries the stingiest odds
+    // of the three fights (lowest unlockTier, the most repeatable).
+    const drop = routed ? rollBossLegendaryDrop('dragon') : null;
+    if (drop) st.addItems({ [drop]: 1 }, 'grant');
     st.notify(
       routed
         ? '🐉 Stung and shrieking, the dragon breaks off into the dark — the homestead stands!'
         : '🐉 The dragon wheels away, sated… for now. The homestead endures.',
       true,
     );
+    if (drop) st.notify(`✨ Among the scorched hoard: a ${ITEMS[drop].name}!`, true);
     audio.play('horn', 0.8);
   };
   endRef.current = end;

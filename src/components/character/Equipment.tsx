@@ -24,10 +24,10 @@ import type { CarrierTier, ChestplateTier, ItemId } from '@/game/types';
 // already rendered before this wave, so neither needs to change (the Armory/
 // defender pool is a deliberate scope-down this wave, see recipes.ts).
 const SWORD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
-  base: 'sword', forged: 'sword_forged', crested: 'sword_crested',
+  base: 'sword', forged: 'sword_forged', crested: 'sword_crested', legendary: 'sword_legendary',
 };
 const HALBERD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
-  base: 'halberd', forged: 'halberd_forged', crested: 'halberd_crested',
+  base: 'halberd', forged: 'halberd_forged', crested: 'halberd_crested', legendary: 'halberd_legendary',
 };
 
 export function HeldSword({ side = -1, tier = 'base' }: { side?: number; tier?: MeleeTier }) {

@@ -77,6 +77,16 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   sword_crested: { id: 'sword_crested', name: 'Crested Sword', icon: '👑' },
   halberd_forged: { id: 'halberd_forged', name: 'Forged Halberd', icon: '🔗' },
   halberd_crested: { id: 'halberd_crested', name: 'Crested Halberd', icon: '👑' },
+  // Wave 50 (C2) · the drop-only rung above Crested — never forged, so no
+  // icon collision with the re-forge chain above matters; ✨ marks "this came
+  // from a boss, not the workbench" at a glance in the Satchel.
+  sword_legendary: { id: 'sword_legendary', name: 'Legendary Sword', icon: '✨' },
+  halberd_legendary: { id: 'halberd_legendary', name: 'Legendary Halberd', icon: '✨' },
+  // Wave 50 (C4) · the permanent enchantment marker for each weapon line —
+  // 🔮 distinct from every tier icon above (🔗/👑/✨) so a glance at the
+  // Satchel tells "which tier" apart from "is it enchanted".
+  sword_rune: { id: 'sword_rune', name: 'Sword Enchantment', icon: '🔮' },
+  halberd_rune: { id: 'halberd_rune', name: 'Halberd Enchantment', icon: '🔮' },
 };
 
 /** foods that can be eaten from the satchel, and the vigour they restore.

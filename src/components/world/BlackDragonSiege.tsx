@@ -26,7 +26,8 @@ import { audio } from '@/lib/audio';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt } from '@/game/types';
 import { blackDragonAllowed } from '@/game/difficulty';
-import { bossTierScale, BOSS_VICTORY_REWARD } from '@/game/bossEncounter';
+import { bossTierScale, BOSS_VICTORY_REWARD, rollBossLegendaryDrop } from '@/game/bossEncounter';
+import { ITEMS } from '@/game/data/items';
 import { dragonAir, dragonAirBlack, loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
@@ -187,12 +188,19 @@ export default function BlackDragonSiege() {
       st.addItems(BOSS_VICTORY_REWARD.blackDragon.items, 'grant');
       st.addXp('combat', BOSS_VICTORY_REWARD.blackDragon.xp);
     }
+    // Wave 50 (C2): a real chance at a legendary weapon on top of the flat
+    // reward above — better odds than the green dragon (bossEncounter.ts's
+    // own BOSS_LEGENDARY_DROP), since this fight sits at the curve's ceiling
+    // and is rarer to even reach.
+    const drop = routed ? rollBossLegendaryDrop('blackDragon') : null;
+    if (drop) st.addItems({ [drop]: 1 }, 'grant');
     st.notify(
       routed
         ? '🐉 Stung and shrieking, the black dragon breaks off into the dark — the homestead stands!'
         : '🐉 The black dragon wheels away, sated… for now. The homestead endures.',
       true,
     );
+    if (drop) st.notify(`✨ Among the scorched hoard: a ${ITEMS[drop].name}!`, true);
     audio.play('horn', 0.8);
   };
   endRef.current = end;
