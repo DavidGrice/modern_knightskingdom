@@ -58,7 +58,7 @@ interface Target {
   label: string;
   actionable: boolean;
   duration: number; // seconds of holding E; 0 = instant
-  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'talk_companion' | 'examine_skeleton' | 'launch';
+  kind: 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'dungeon_captive' | 'talk_companion' | 'examine_skeleton' | 'launch';
   station?: string;
 }
 
@@ -737,6 +737,18 @@ export default function PlayerController() {
             };
           }
         }
+        // Wave 48 (B9) · an 'escort' room's captive, same distance-only
+        // convention as the relic just above — checked at the room's own
+        // (cx, cz) since the captive hasn't moved from there until freed.
+        for (const room of dungeonState.layout.rooms) {
+          if (room.objective === 'escort' && !room.captiveFreed
+            && Math.hypot(room.cx - pos.current.x, room.cz - pos.current.z) < INTERACT_RANGE) {
+            return {
+              id: String(room.index), kind: 'dungeon_captive', duration: 1.0, actionable: true,
+              label: 'Free the Prisoner',
+            };
+          }
+        }
       }
       return { id: 'travel_return', kind: 'travel_return', duration: 0, actionable: true, label: 'Return Home' };
     }
@@ -1254,6 +1266,20 @@ export default function PlayerController() {
         // respects buys the player a real beat to let go of E first.
         talkCooldown.current = 0.6;
         audio.play('treasure', 0.8);
+      }
+    } else if (t.kind === 'dungeon_captive') {
+      // Wave 48 (B9) · same shared-leaf-module mutation as dungeon_relic
+      // just above, and the same anti-double-trigger grace (talkCooldown) —
+      // freeing doesn't clear the room by itself (DungeonRoom.objective's own
+      // doc), only walking the captive back to layout.entryPos does
+      // (Enemies.tsx's 1Hz loop), so this branch never touches `cleared`.
+      const layout = dungeonState.layout;
+      const room = layout?.rooms.find((r) => String(r.index) === t.id);
+      if (room && !room.captiveFreed) {
+        room.captiveFreed = true;
+        st.notify('The prisoner is free — lead them back to the entrance!', true);
+        talkCooldown.current = 0.6;
+        audio.play('treasure', 0.6);
       }
     } else if (t.kind === 'dismount') {
       const fx = -Math.sin(yaw.current);
