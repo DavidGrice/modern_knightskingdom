@@ -118,6 +118,37 @@ export const RECIPES: Recipe[] = [
     cost: { chestplate_forged: 1, iron_bar: 6, plank: 2 }, station: 'forge', skill: 'smithing', skillXp: 100,
     requiresUnlock: 'smithing',
   },
+  // Wave 49 (C1) · the sword and halberd get the exact same "re-forge the
+  // tier below" chain the chestplate above pioneered: each tier consumes ONE
+  // of the tier under it plus more bar and plank, so the ladder reads as one
+  // weapon you keep improving, never three independent recipes off bare bars
+  // (see combat.ts's MELEE_TIERS header for why the stats stay a fair
+  // tradeoff at every rung). Costs track the chestplate chain's own ratio —
+  // roughly 2x/3.75x raw all-in, 1.5x/2.5x skillXp — rounded to clean
+  // numbers the same way 70/100 aren't exact multiples of chestplate's own
+  // base cost either. Same forge station and `smithing` gate as every other
+  // weapon recipe, so neither jumps the quest line. Spear stays untiered —
+  // a clean future item rather than an invented curve under time pressure.
+  {
+    id: 'sword_forged', name: 'Forge the Sword', icon: '🔗', output: 'sword_forged', outputCount: 1,
+    cost: { sword: 1, iron_bar: 3, plank: 1 }, station: 'forge', skill: 'smithing', skillXp: 60,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'sword_crested', name: 'Crest the Sword', icon: '👑', output: 'sword_crested', outputCount: 1,
+    cost: { sword_forged: 1, iron_bar: 5, plank: 2 }, station: 'forge', skill: 'smithing', skillXp: 100,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'halberd_forged', name: 'Forge the Halberd', icon: '🔗', output: 'halberd_forged', outputCount: 1,
+    cost: { halberd: 1, iron_bar: 4, plank: 3 }, station: 'forge', skill: 'smithing', skillXp: 85,
+    requiresUnlock: 'smithing',
+  },
+  {
+    id: 'halberd_crested', name: 'Crest the Halberd', icon: '👑', output: 'halberd_crested', outputCount: 1,
+    cost: { halberd_forged: 1, iron_bar: 6, plank: 5 }, station: 'forge', skill: 'smithing', skillXp: 140,
+    requiresUnlock: 'smithing',
+  },
   // ---- campfire ----
   {
     id: 'cooked_fish', name: 'Cook Fish', icon: '🍖', output: 'cooked_fish', outputCount: 1,

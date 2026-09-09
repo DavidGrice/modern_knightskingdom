@@ -9265,3 +9265,97 @@ doesn't have") — this wave built both as genuinely distinct completion conditi
   player always triggers these via separate UI clicks spanning many real frames) — reproduced only by a
   same-tick scripted test technique. Worth a `useSyncExternalStore`-style read (or at least a guarding
   comment) the next time this file is touched, but correctly out of scope for this wave's own diff.
+
+## Wave 49: multi-tier weapon crafting (C1) + a dynamic market (C3) — SHIPPED 2026-09-09
+
+Sixteenth wave of the new 27-wave plan. Both items reuse real, existing precedent from this project's
+own history rather than inventing new mechanisms — the chestplate chain's "one tiered slot, re-forge
+the tier below" shape for C1, and the `lastTaxAt`/`lastCollectedAt`/`settlementRaidCooldownMs`
+"stamp-a-time, decay-on-read" convention for C3.
+
+- [COMPLETE] ✅ **C1 · sword and halberd tiers** — `sword_forged`/`sword_crested` and
+  `halberd_forged`/`halberd_crested`, each re-forging (consuming) the tier below plus more bar/plank,
+  exactly like `chestplate_forged`/`chestplate_crested` already do. A real, load-bearing difference from
+  armor was found and solved rather than copied blindly: `MELEE`'s per-type stats are a deliberate
+  sword-vs-halberd-vs-spear tradeoff table (reach/sweep/cone/stamina), not a strictly-better ladder like
+  armor — so a new `MELEE_TIERS` table scales ONLY `dmg`/`wornDmg` per tier, by the same multiplier
+  across both weapon lines, keeping the halberd/sword single-target-DPS ratio near-invariant
+  (0.870/0.860/0.854 across the three tiers) rather than letting a tier upgrade quietly erase the
+  type-vs-type choice. The weapon-select UI needed zero changes — the existing 5-tile type row still
+  works exactly as before; a new `bestMeleeTierOwned()`/`ownsMeleeSlot()` pair (mirroring
+  `bestChestplateOwned()`) makes each tile's live combat stats automatically track whichever tier of
+  that type is currently owned. Went with the bolder visual option over the cheap one: a real second
+  `sword`-role donor (`minifigjohnmayne02`, picked from 3 real candidates in `part_roles.json` via a
+  file-size tiebreaker, the same technique Wave 34's axe donor used) gives the Crested Sword a genuinely
+  different mesh; the Forged Sword and both halberd tiers (confirmed zero second `halberd`-role donor
+  exists) get a material tint instead — verified structurally safe (the tint is applied inside
+  `loadWeapon()`'s own per-`WeaponId` promise cache, so it can never bleed onto a different tier's or
+  the base mold's shared material). Spear stays untiered this wave (plan text says "at least sword and
+  halberd"), and defender/Armory loadouts don't get the new tiers either — both named as deliberate,
+  stated scope-downs, not silent gaps.
+  **Two real bugs found and fixed, both regressions a naive "just add a recipe" implementation would
+  have shipped**: re-forging a tier consumes the base item, dropping `inventory.sword`/`inventory
+  .halberd` to 0 — `playerAttack()`'s own damage-eligibility check (`held`), `activeMelee()`'s weapon-
+  readiness fallback, and `cycleWeapon()`'s ownership scan all still read that flat count directly and
+  would have scored a real, visibly-wielded Crested Sword as bare-fisted. Fixed by routing all three
+  through the new `ownsMeleeSlot()` (owns ANY tier). A second instance of the identical bug was found
+  live during implementation, in a file the initial diff had missed: `Viewmodel.tsx`'s own `tool`
+  `useMemo` had a second, independent raw `inventory.sword` check gating the first-person weapon mesh —
+  fixed and reverified with a real in-hand screenshot. A third, unrelated pre-existing bug was found and
+  fixed along the way: the "Knight's Arms" deed (carry a sword and a shield) had the same raw-count
+  check, permanently unearnable by anyone who re-forges before ever owning a shield — fixed inline in
+  `achievements.ts` (not via a `combat.ts` import, which would create a real `gameStore → achievements →
+  combat → gameStore` cycle).
+- [COMPLETE] ✅ **C3 · a dynamic market** — a single signed "pressure" level per `ItemId`
+  (`MarketEntry.level`, −1..+1, persisted in a new `SaveGame.marketState` field) drives both the sell
+  and buy price for that good in the same direction: selling floods the market (nudges toward −1,
+  cheaper both ways), buying drains it (nudges toward +1, pricier both ways) — one coherent lever, not
+  two independent ones. Read lazily via `decayedMarketLevel()`, linearly decaying any swing back to 0
+  over a real 20-minute half-life, the same "stamp a time, decay-on-read" shape `lastTaxAt`/
+  `lastCollectedAt` already use, generalized from a binary gate to a continuous value. Numbers reasoned
+  against real feel, not guessed: one traded unit moves the price ~1% (imperceptible on its own); a
+  ~25-unit sell-off swings a good to its ±25% floor/ceiling (a real, earned "you crashed that market"
+  moment); 20 minutes to fully recover sits deliberately above the tax gate's 5 minutes and the
+  settlement-raid cooldown's 6-15 minute band, since a market swing should span "go do something else,"
+  not "wait through one loading screen." A real plan-text correction, stated rather than carried
+  forward: `guilds.ts`'s rank-gated vendor stock does NOT "prove fluctuation is buildable" as the plan's
+  own wording claimed — it's a flat, static price merely gated by membership rank, and is a fully
+  separate store action (`buyGuildOffer`) untouched by anything this item built; what it actually
+  proves is a reusable per-context stock-list shape, not a fluctuation mechanism. Guild vendor pricing
+  is explicitly, deliberately left unfluctuating this wave. `ShopPanel.tsx` gets a necessary (not just
+  decorative) live "▲ scarce (+N%)" / "▼ oversupplied (−N%)" tag, since a 25% swing on a 1-2g good
+  (wood/stone) rounds away in the displayed gold number without one — plus a light 4-second refresh
+  interval so a swing visibly decays while the panel sits open.
+  **One minor, pre-existing display gap found and correctly left unfixed as out of scope**: confirmed
+  via `git show main:...ShopPanel.tsx` that the Wanderer class's small "Fair Dealer" +2% haggle bonus
+  has never been shown on the ticket's displayed price (only applied at the real charge in
+  `gameStore.ts`'s `sellItem`/`buyOffer`) — predates this wave entirely and this wave's own new market
+  tag follows the exact same (already-incomplete) display formula rather than introducing or worsening
+  the gap. Worth a one-line fix whenever `ShopPanel.tsx` is next touched.
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing gitignored `node_modules`/`public/assets`/
+  `public/help`), fixed locally via directory junctions to the main checkout's real copies, removed
+  afterward with the main checkout confirmed untouched. With assets restored: crafted the full sword
+  and halberd ladders via real Crafting-panel clicks, confirming exact re-forge consumption at every
+  step (25 iron_bar / 15 plank total, matching the design table) and measuring REAL per-hit damage via
+  the actual `playerAttack()` function against a freshly spawned enemy — base/forged/crested sword dealt
+  exactly 3/3.5/4, halberd 4.5/5.2/5.9, matching `MELEE_TIERS` exactly, with the weapon-select tile
+  requiring no manual re-equip (best-owned-tier auto-wins). Confirmed the always-owned-sword quirk is
+  handled correctly: after fully re-forging to Crested Sword, `inventory.sword` reads 0, yet the sword
+  still deals real (non-bare-fist) damage. Confirmed zero regression to the existing chestplate chain.
+  For the market: sold 15 iron_bar one at a time via the real "Sell 1" button, measured the level moving
+  to exactly −0.6 and the displayed/charged price moving from 8g to 7g exactly, confirmed the level
+  clamps at exactly −1.0 under aggressive over-selling, confirmed the existing Wit/Silver-Tongue haggle
+  formula still applies ON TOP of (not replaced by) the market multiplier (9g at wit=5 + Silver Tongue
+  + the −25% floor, matching `8·(1−0.25+0.20+0.15)` exactly), confirmed buying the same oversupplied
+  good is also cheaper (not pricier) — the "one lever, both directions" design working as intended — and
+  tested real wall-clock decay by advancing `Date.now()` forward from the floor (+10 real-equivalent
+  minutes showed ≈−12%, +25 minutes showed a full return to baseline with the tag gone, while the
+  underlying stored `level` itself stayed untouched until the next real trade). I independently
+  re-derived every one of these figures by hand from `MELEE_TIERS`/`decayedMarketLevel`'s own formulas
+  and confirmed they match. Zero console/page errors throughout. `npx tsc --noEmit` / `npm run build`:
+  both clean, verified independently (both by the workflow's own Verify pass and, separately, by direct
+  review of the merged diff against the live worktree afterward, including confirming the tint-isolation
+  claim structurally via `loadWeapon`'s real `Map<WeaponId, Promise<...>>` cache declaration).

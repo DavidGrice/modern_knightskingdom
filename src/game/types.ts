@@ -1,5 +1,6 @@
 // Shared game types.
 import type { RectSection } from './data/grounds';
+import type { MarketEntry } from './data/trade';
 
 export type ScreenName = 'auth' | 'menu' | 'options' | 'credits' | 'create' | 'game' | 'stats' | 'help';
 
@@ -53,7 +54,15 @@ export type ItemId =
   // the SAME as `CarrierTier`'s own two members so the item and the worn tier
   // are one vocabulary (see CARRIER_ITEM in data/villagers.ts) — a third tier
   // would be added in both places or in neither, never half.
-  | 'basket' | 'cart';
+  | 'basket' | 'cart'
+  // Wave 49 (C1) · the sword and halberd tiers above the plain base item,
+  // the same "each tier RE-FORGES the one below" shape the chestplate chain
+  // pioneered (data/recipes.ts's own header comment on that chain explains
+  // why: a countable ItemId per tier is what lets the Forge consume tier N
+  // to make tier N+1). Spear is deliberately NOT tiered this wave — see
+  // combat.ts's own MELEE_TIERS header comment for why scoping it out keeps
+  // the type-vs-type tradeoff table honest under time pressure.
+  | 'sword_forged' | 'sword_crested' | 'halberd_forged' | 'halberd_crested';
 
 export interface CharacterConfig {
   name: string;
@@ -433,6 +442,11 @@ export interface SaveGame {
    *  (data/caravan.ts) — absent = none in flight. See CaravanRun's own doc
    *  comment for the shape. */
   caravans?: Record<string, CaravanRun>;
+  /** Wave 49 (C3) · the traveling merchant's live supply/demand pressure per
+   *  item, absent = every item still sits at its flat SELL_PRICES/BUY_OFFERS
+   *  baseline (every save written before this existed). See data/trade.ts's
+   *  own header comment for the decay-on-read formula this drives. */
+  marketState?: Partial<Record<ItemId, MarketEntry>>;
 }
 
 /**

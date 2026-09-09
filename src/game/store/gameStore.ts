@@ -55,7 +55,7 @@ import {
 import { SETTLEMENT_RAID_YIELD_PENALTY_MS } from '../settlementRaid';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { resetCompanionCombat } from '../companion';
-import { SELL_PRICES } from '../data/trade';
+import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT, type MarketEntry } from '../data/trade';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
@@ -290,6 +290,11 @@ interface GameState {
   attrSpent: Partial<Record<AttrId, number>>; // player attribute points invested (playerAttributes.ts)
   dyes: string[];                // Wave 9: palette rows opened with a brewed dye (data/dyes.ts)
   durability: Partial<Record<ItemId, number>>; // 0-100 wear per degradable tool, absent = full
+  /** Wave 49 (C3) · the traveling merchant's live supply/demand pressure per
+   *  item — see data/trade.ts's own header comment for the decay-on-read
+   *  formula this drives. Absent per-item = that item still sits at its flat
+   *  SELL_PRICES/BUY_OFFERS baseline. */
+  marketState: Partial<Record<ItemId, MarketEntry>>;
   perks: string[];               // skill-perk ids picked at rank-ups (see data/perks.ts)
   stats: LifetimeStats;          // lifetime counters shown on the Stats page
   claimedWorlds: Record<string, ClaimedPlot>; // template-world id -> claimed building plot, absent = unclaimed
@@ -988,6 +993,7 @@ function freshSaveFields(character: CharacterConfig, difficulty: DifficultyId): 
     interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
     blackDragonSieges: 0, blackDragonRouted: false,
     cedricSieges: 0, cedricRouted: false,
+    marketState: {},
   };
 }
 
@@ -1157,6 +1163,7 @@ function createGameStore() {
     attrSpent: {},
     dyes: [],
     durability: {},
+    marketState: {},
     perks: [],
     stats: { ...ZERO_STATS },
     claimedWorlds: {},
@@ -1279,7 +1286,7 @@ function createGameStore() {
         skillTree: s.skillTree ?? [],
         attrSpent: s.attrSpent ?? {},
         dyes: s.dyes ?? [],
-        durability: s.durability ?? {}, perks: s.perks ?? [],
+        durability: s.durability ?? {}, marketState: s.marketState ?? {}, perks: s.perks ?? [],
         stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
         claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, caravans: s.caravans ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
         waterworks: loadedWater,
@@ -1349,7 +1356,7 @@ function createGameStore() {
         skillTree: s.skillTree,
         attrSpent: s.attrSpent,
         dyes: s.dyes,
-        durability: s.durability, perks: s.perks,
+        durability: s.durability, marketState: s.marketState, perks: s.perks,
         stats: s.stats,
         claimedWorlds: s.claimedWorlds, settlements: s.settlements, caravans: s.caravans, cultivatedPlots: s.cultivatedPlots,
         // saved from the leaf module for the same reason `stabled` is: it is
@@ -2648,17 +2655,28 @@ function createGameStore() {
       if (n <= 0) return;
       const inv = { ...st.inventory };
       inv[item] = held - n;
+      const now = Date.now();
+      // Wave 49 (C3) · this item's live supply/demand pressure, folded in as
+      // one more additive haggle term right alongside Wit/Silver Tongue/
+      // Wanderer below — a market you've flooded pays less, a scarce one
+      // pays more, in BOTH directions (see data/trade.ts's own header note:
+      // one signed lever drives both the sell and buy price).
+      const marketMul = marketPriceMultiplier(st.marketState[item], now);
       // Wit attribute: a sharper tongue haggles +4% per point. Silver Tongue
       // trade-off perk: a flat +15% on top (its own downside lives in
       // Storm's own duel cooldown — see Enemies.tsx's 'storm' branch). Wave
       // 32: the Wanderer's own small Fair Dealer passive — no signature
       // skill to hang a nudge off, so it gets a tiny universal haggle instead.
-      const take = Math.round(price * n * (1 + (st.attrSpent.wit ?? 0) * 0.04
+      const take = Math.round(price * n * (1 + marketMul + (st.attrSpent.wit ?? 0) * 0.04
         + (st.perks.includes('silver_tongue') ? 0.15 : 0)
         + (st.character?.classId === 'wanderer' ? 0.02 : 0)));
       inv.gold = (inv.gold ?? 0) + take;
       set({
         inventory: inv,
+        // selling floods the market — nudge this item's pressure toward
+        // oversupply (-1), decaying back to baseline over real time (see
+        // nudgeMarketLevel's own decay-then-nudge-then-clamp shape)
+        marketState: { ...st.marketState, [item]: nudgeMarketLevel(st.marketState[item], -n * MARKET_NUDGE_PER_UNIT, now) },
         stats: { ...st.stats, goldEarnedLifetime: st.stats.goldEarnedLifetime + take },
         dirty: true,
       });
@@ -2667,6 +2685,11 @@ function createGameStore() {
 
     buyOffer: (item, qty, price) => {
       const st = get();
+      const now = Date.now();
+      // Wave 49 (C3) · the same live market pressure sellItem() reads,
+      // applied the other direction: a scarce item (positive pressure) costs
+      // MORE to buy, exactly as it also pays more to sell into.
+      const marketMul = marketPriceMultiplier(st.marketState[item], now);
       // Wave 23 · Wit attribute: the same haggle sellItem() gives when
       // selling, spent the other way here — Wit becomes a full haggle stat
       // in both directions. Silver Tongue trade-off perk: the same ±15%
@@ -2674,7 +2697,7 @@ function createGameStore() {
       // Wit. Clamped to 1g so a maxed haggler is never handed goods for free.
       // Wave 32: the Wanderer's small Fair Dealer passive, the same tiny cut
       // sellItem() gives as a bonus, spent the other direction here.
-      const cost = Math.max(1, Math.round(price * (1 - (st.attrSpent.wit ?? 0) * 0.04
+      const cost = Math.max(1, Math.round(price * (1 + marketMul - (st.attrSpent.wit ?? 0) * 0.04
         - (st.perks.includes('silver_tongue') ? 0.15 : 0)
         - (st.character?.classId === 'wanderer' ? 0.02 : 0))));
       if ((st.inventory.gold ?? 0) < cost) {
@@ -2684,7 +2707,12 @@ function createGameStore() {
       const inv = { ...st.inventory };
       inv.gold = (inv.gold ?? 0) - cost;
       inv[item] = (inv[item] ?? 0) + qty;
-      set({ inventory: inv, dirty: true });
+      set({
+        inventory: inv,
+        // buying drains stock — nudge this item's pressure toward scarcity (+1)
+        marketState: { ...st.marketState, [item]: nudgeMarketLevel(st.marketState[item], qty * MARKET_NUDGE_PER_UNIT, now) },
+        dirty: true,
+      });
       audio.play('brick_connect', 0.6);
     },
 

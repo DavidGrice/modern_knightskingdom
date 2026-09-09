@@ -14,13 +14,27 @@
 import RealWeapon from './RealWeapon';
 import RealShield from './RealShield';
 import RealHelmet from './RealHelmet';
+import type { WeaponId } from '@/lib/weaponParts';
+import type { MeleeTier } from '@/game/combat';
 import type { CarrierTier, ChestplateTier, ItemId } from '@/game/types';
 
-export function HeldSword({ side = -1 }: { side?: number }) {
+// Wave 49 (C1) · which real WeaponId a tier actually renders. Every existing
+// caller (Defenders.tsx, NpcEquipPanel.tsx) calls Held*/HeldHalberd with no
+// `tier` at all — the default below is 'base', byte-for-byte the mold both
+// already rendered before this wave, so neither needs to change (the Armory/
+// defender pool is a deliberate scope-down this wave, see recipes.ts).
+const SWORD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
+  base: 'sword', forged: 'sword_forged', crested: 'sword_crested',
+};
+const HALBERD_WEAPON_ID: Record<MeleeTier, WeaponId> = {
+  base: 'halberd', forged: 'halberd_forged', crested: 'halberd_crested',
+};
+
+export function HeldSword({ side = -1, tier = 'base' }: { side?: number; tier?: MeleeTier }) {
   return (
     <group position={[side * 0.12, -0.5, 0.21]} rotation={[0.15, 0, side * -0.08]}>
       <RealWeapon
-        id="sword"
+        id={SWORD_WEAPON_ID[tier]}
         fallback={
           <mesh position-y={0.2}>
             <boxGeometry args={[0.05, 0.5, 0.016]} />
@@ -32,10 +46,10 @@ export function HeldSword({ side = -1 }: { side?: number }) {
   );
 }
 
-export function HeldHalberd({ side = -1 }: { side?: number }) {
+export function HeldHalberd({ side = -1, tier = 'base' }: { side?: number; tier?: MeleeTier }) {
   return (
     <group position={[side * 0.12, -0.48, 0.2]} rotation={[0.2, 0, side * -0.06]}>
-      <RealWeapon id="halberd" />
+      <RealWeapon id={HALBERD_WEAPON_ID[tier]} />
     </group>
   );
 }

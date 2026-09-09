@@ -6,7 +6,14 @@ import * as THREE from 'three';
 import { loadDonor } from './minifig';
 import { loadPartRoles, partRolesFor } from './rigParts';
 
-export type WeaponId = 'sword' | 'halberd' | 'spear' | 'crossbow' | 'bow' | 'arrow' | 'bolt' | 'axe';
+export type WeaponId = 'sword' | 'halberd' | 'spear' | 'crossbow' | 'bow' | 'arrow' | 'bolt' | 'axe'
+  // Wave 49 (C1) · the sword/halberd tiers above the base mold. Real,
+  // distinct WeaponIds (not a `tier` param on the base one) because
+  // loadWeapon's own cache is keyed one Promise per id, and its material
+  // clone lives INSIDE that per-id cache — the only granularity a tint can be
+  // applied at without ever risking the base mold's shared material (see the
+  // tint application below for the full reasoning).
+  | 'sword_forged' | 'sword_crested' | 'halberd_forged' | 'halberd_crested';
 
 interface WeaponDef {
   donor: string;
@@ -22,6 +29,12 @@ interface WeaponDef {
    *  hand picks a hand that may be nowhere near it and skews the result —
    *  its own long axis is unambiguous, so use that instead. */
   straight?: boolean;
+  /** Wave 49 (C1) · a hex color lerped into this mold's own material once,
+   *  inside loadWeapon's per-id cache — see that function's own comment for
+   *  why this is safe (isolated per WeaponId, never touches a different id's
+   *  material, e.g. the base 'sword' mold a Forged/Crested tier is tinted
+   *  FROM). Absent = untinted, the mold's original material verbatim. */
+  tint?: string;
 }
 
 // Every one of these is a donor the rig lab VERIFIED as holding that weapon
@@ -48,6 +61,29 @@ const WEAPONS: Record<WeaponId, WeaponDef> = {
   // rather than the mold's literal ~0.83m reading — this is a one-handed,
   // shield-paired weapon like the sword, not a two-handed haft.
   axe: { donor: 'minifiggilbertbad01', role: 'axe', length: 0.58 },
+  // Wave 49 (C1) · the sword's Crested tier gets a REAL second donor rather
+  // than a tint on the base mold. part_roles.json's full 'sword'-role scan
+  // turned up 3 real minifig candidates beyond the base minifigrichardstrong03
+  // (a 4th, oc4807, is a vehicle prop with no hand_L/hand_R — ruled out) —
+  // minifigcedricbull01, minifigjohnmayne02, minifigprincessstorm01 — none
+  // already warmed by preload.ts's ENEMY_DONORS, so tiebroken on real OBJ file
+  // size the same way Wave 34's axe donor was: minifigjohnmayne02 (33,302 B)
+  // is the smallest of the three, and John Mayne's donor family is already
+  // proven-safe in this exact pipeline (his `01` variant is the longbow mold
+  // above). Forged stays on the base mold with a dark steel tint — a real
+  // donor swap for a MIDDLE tier would cost a second asset fetch for a rung
+  // that's about to be re-forged again anyway.
+  sword_forged: { donor: 'minifigrichardstrong03', role: 'sword', length: 0.62, tint: '#6f7480' },
+  sword_crested: { donor: 'minifigjohnmayne02', role: 'sword', length: 0.62, tint: '#e7e2d0' },
+  // Halberd has exactly ONE real 'halberd'-role donor in the whole rig lab
+  // (minifiggenericgood00, the existing base mold) — no second candidate
+  // exists to give its top tier a real mesh swap the way the sword's got one.
+  // An honest, stated scope-down: both halberd tiers above base are tint-only
+  // on the same mold, using the identical two tint colors the sword's own
+  // middle/top tiers use, so the two weapon lines read as one shared "steel ->
+  // dark forged -> pale crested" palette rather than two invented ones.
+  halberd_forged: { donor: 'minifiggenericgood00', role: 'halberd', length: 1.15, tint: '#6f7480' },
+  halberd_crested: { donor: 'minifiggenericgood00', role: 'halberd', length: 1.15, tint: '#e7e2d0' },
 };
 
 // King Leo's shield. `022_shape10` (the old pick) sits dead-center over the
@@ -243,6 +279,16 @@ export function loadWeapon(id: WeaponId): Promise<THREE.Group | null> {
       const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map((m) => {
         const c = (m as THREE.Material).clone();
         (c as THREE.MeshPhongMaterial).side = THREE.DoubleSide;
+        // Wave 49 (C1) · tier tint, applied HERE — inside this id's own
+        // once-per-WeaponId cache, on a material this call just cloned. Safe
+        // and isolated: this Promise (and this clone) is never shared with a
+        // different WeaponId's own cache entry, so tinting 'sword_forged'
+        // here can never bleed onto the base 'sword' mold even though both
+        // read the same donor. Lerped rather than replaced so the mold's own
+        // texture/shading still shows through, just recolored.
+        if (def.tint && (c as THREE.MeshPhongMaterial).color) {
+          (c as THREE.MeshPhongMaterial).color.lerp(new THREE.Color(def.tint), 0.375);
+        }
         return c;
       });
       const out = new THREE.Mesh(geo, Array.isArray(mesh.material) ? mats : mats[0]);
