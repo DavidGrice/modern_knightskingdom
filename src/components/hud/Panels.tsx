@@ -26,7 +26,7 @@ import AllegianceMeter from './AllegianceMeter';
 import { HeldSword, HeldHalberd, HeldSpear, ArmShield, HeldHelmet, Chestplate } from '../character/Equipment';
 import { EDIBLES, ITEMS, UTILITY_POTIONS, consumeVerb } from '@/game/data/items';
 import { CHESTPLATES, bestChestplateOwned } from '@/game/data/armor';
-import { activeMelee, bestMeleeTierOwned, combatState, isMeleeSlot, ownsMeleeSlot, type WeaponSlot } from '@/game/combat';
+import { activeMelee, bestMeleeTierOwned, combatState, isMeleeSlot, ownsMeleeSlot, weaponSlotOfItem, type WeaponSlot } from '@/game/combat';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
@@ -338,12 +338,22 @@ function InventoryPanel() {
           const capped = isBulkGood(id as ItemId);
           const full = capped && (n ?? 0) >= cap;
           const stored = capped ? ` · ${n}/${cap} stored${full ? ' (FULL)' : ''}` : '';
+          // Wave 51 (C5) · any weapon-family item (base or a tiered re-forge)
+          // is a real drag SOURCE here, same mechanism EquipmentSection's own
+          // weapon row already proved — dataTransfer carries the resolved
+          // base WeaponSlot (not the raw item id), so it lands on that row's
+          // existing onWeaponDrop unchanged. Helmet/chestplate/carrier items
+          // have no reachable same-panel drop target this wave and stay
+          // click-only (donate via NpcEquipPanel's own Armory row).
+          const weaponSlot = weaponSlotOfItem(id as ItemId);
           return (
             <div
               className="inv-slot"
               key={id}
-              title={`${hint ? `${def?.name} — ${hint}` : def?.name}${stored}`}
+              title={`${hint ? `${def?.name} — ${hint}` : def?.name}${stored}${weaponSlot ? ' · drag onto your Weapon row to equip' : ''}`}
               style={full ? { cursor: usable ? 'pointer' : undefined, borderColor: 'var(--gold)' } : usable ? { cursor: 'pointer', borderColor: '#7a9a4f' } : undefined}
+              draggable={!!weaponSlot}
+              onDragStart={weaponSlot ? (e) => e.dataTransfer.setData('text/plain', weaponSlot) : undefined}
               onClick={() => usable && use(id as ItemId)}
             >
               <div className="icon"><Ico e={def?.icon ?? '❔'} /></div>

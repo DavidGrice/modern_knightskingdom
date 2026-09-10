@@ -193,6 +193,21 @@ export interface PlacedBuilding {
    *  honest cost of freeform placement without an oriented-box collision
    *  system, and it is why freeform is off by default and aimed at decor. */
   yaw?: number;
+  /** Wave 51 (C6) freeform mode: a purely-visual per-instance size multiplier,
+   *  set alongside `yaw` by the same mode. Absent (every non-freeform
+   *  placement, and every save written before Wave 51) means 1 — the piece's
+   *  catalogue size exactly — so nothing older changes.
+   *
+   *  Deliberately the SAME shape `yaw` already is, for the SAME reason: every
+   *  footprint/overlap/collision test in the game (evalPlacement, sizeFor,
+   *  collisionBoxesFor, buildingsInRect) reads the catalogue's fixed `size`
+   *  and stays that way — `scale` never reaches any of them. A piece scaled
+   *  up therefore looks bigger than what actually blocks movement/placement
+   *  around it, and a piece scaled down still occupies its full catalogue
+   *  footprint; that is the honest cost of freeform resizing without a
+   *  second, scaled collision system, and it is why this — like `yaw` — is
+   *  visual-only and lives in the same off-by-default freeform mode. */
+  scale?: number;
   /** Phase 19 build-then-construct: 0..1 construction progress. Absent = 1
    *  (fully built), so every building from an older save just works. */
   built?: number;

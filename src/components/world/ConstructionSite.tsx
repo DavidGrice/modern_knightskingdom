@@ -81,7 +81,7 @@ function RisingModel({
 }
 
 export default function ConstructionSiteModel({
-  url, size, progress, worldY,
+  url, size, progress, worldY, scale = 1,
 }: {
   url: string;
   size: [number, number, number];
@@ -89,6 +89,16 @@ export default function ConstructionSiteModel({
   progress: number;
   /** the site's own base height in world space, which the clip plane is measured from */
   worldY: number;
+  /** Wave 51 (C6) · freeform's per-instance visual size (PlacedBuilding.scale)
+   *  — Buildings.tsx's own caller wraps this whole component in a scaled
+   *  parent group, which correctly grows the WIREFRAME (unclipped) and the
+   *  stakes for free. The RISING solid model's clip plane can't ride along
+   *  the same way: Three.js's `clippingPlanes` are genuine world-space
+   *  planes, never transformed by an object's own (or its parent's) local
+   *  matrix — so `topY` below has to fold `scale` in by hand, or a site
+   *  scaled up would finish "rising" at the catalogue's UNSCALED height and
+   *  sit with its own top permanently clipped off once actually built. */
+  scale?: number;
 }) {
   const [w, h, d] = size;
   const stakes: [number, number][] = [
@@ -100,7 +110,7 @@ export default function ConstructionSiteModel({
       <RisingModel url={url} height={h} topY={0} wire />
       {/* the work: the real piece, rising out of the ground */}
       {progress > 0.005 && (
-        <RisingModel url={url} height={h} topY={worldY + h * progress} wire={false} />
+        <RisingModel url={url} height={h} topY={worldY + h * progress * scale} wire={false} />
       )}
       {/* surveyor's stakes, so an unstarted site still reads as claimed ground */}
       {stakes.map(([px, pz], i) => (

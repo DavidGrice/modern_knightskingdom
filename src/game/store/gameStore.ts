@@ -591,7 +591,7 @@ interface GameState {
   tickRespawns: () => void;
   craft: (recipeId: string) => boolean;
   canAfford: (cost: Partial<Record<ItemId, number>>) => boolean;
-  placeBuilding: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number) => boolean;
+  placeBuilding: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number, scale?: number) => boolean;
   /** Wave 9 · lay a whole run of one wall-family piece in a single action.
    *  `cells` are the already-stepped centres BuildController's row drag drew,
    *  in order from the anchor outward; each is re-offered to walls.ts's
@@ -636,7 +636,7 @@ interface GameState {
    *  ghost flow an ordinary building uses */
   pickupKeep: () => void;
   cancelMove: () => void;
-  finishMove: (x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number) => boolean;
+  finishMove: (x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number, scale?: number) => boolean;
   undoLast: () => void;
   /** Wave 9 · build-view tool/mode switches (all transient, never saved) */
   setBuildTool: (tool: BuildTool) => void;
@@ -4221,7 +4221,7 @@ function createGameStore() {
       return { y, valid: true };
     },
 
-    placeBuilding: (type, x, z, rot, yaw) => {
+    placeBuilding: (type, x, z, rot, yaw, scale) => {
       const st = get();
       const b = BUILDABLE_BY_ID[type];
       if (!b) return false;
@@ -4264,6 +4264,11 @@ function createGameStore() {
       // lattice, so a snapped piece's record is byte-for-byte what it always
       // was and no save grows a field it does not need
       if (yaw !== undefined && Math.abs(yaw - (rot * Math.PI) / 2) > 1e-4) placed.yaw = yaw;
+      // Wave 51 (C6) · same convention as `yaw` immediately above — only
+      // carry a `scale` when it is genuinely off 1, so a piece placed at the
+      // default size (every non-freeform placement, and everything placed
+      // before this wave) stores nothing new at all.
+      if (scale !== undefined && Math.abs(scale - 1) > 1e-4) placed.scale = scale;
       placeHistory = [...placeHistory.slice(-24), [placed.id]];
       set({ inventory: inv, buildings: [...st.buildings, placed], dirty: true });
       audio.play('brick_link', 0.6);
@@ -4644,7 +4649,7 @@ function createGameStore() {
       });
     },
 
-    finishMove: (x, z, rot, yaw) => {
+    finishMove: (x, z, rot, yaw, scale) => {
       const st = get();
       const mv = st.movingBuilding;
       if (!mv) return false;
@@ -4668,10 +4673,17 @@ function createGameStore() {
       // would have been had freeform never been touched
       const freeYaw = mv.type !== 'keep' && yaw !== undefined && Math.abs(yaw - (placeRot * Math.PI) / 2) > 1e-4
         ? yaw : undefined;
+      // Wave 51 (C6) · same rule, same reason, for `scale` — set down with
+      // freeform off (or as the keep, which never took a `scale` from
+      // BuildController in the first place) squares it back to 1, the same
+      // "honest reading of the mode you are holding it in" this file's own
+      // freeYaw comment above already states for facing.
+      const freeScale = mv.type !== 'keep' && scale !== undefined && Math.abs(scale - 1) > 1e-4
+        ? scale : undefined;
       set({
         // world stamped to wherever it's actually being set down — covers the
         // edge case of a pickup→travel→place happening in one build session
-        buildings: [...st.buildings, { ...mv, x, z, y, rot: placeRot, yaw: freeYaw, world: st.destination ?? null }],
+        buildings: [...st.buildings, { ...mv, x, z, y, rot: placeRot, yaw: freeYaw, scale: freeScale, world: st.destination ?? null }],
         movingBuilding: null,
         ...(restoredKeep ? { keep: restoredKeep } : {}),
         dirty: true,

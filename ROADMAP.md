@@ -9438,3 +9438,102 @@ pattern that fork already proved out.
   independently re-deriving the DPS-ratio and enchant-multiply math by hand and confirming the
   `cedricCaptures === 0` capstone-only gate at combat.ts's two call sites is doubly redundant-but-safe
   with `markCedricDefeated`'s own internal `first` guard, not a real gap).
+
+## Wave 51: Satchel drag-and-drop + a real villager equipment pool (C5) + freeform per-instance building scale (C6) — SHIPPED 2026-09-09
+
+Eighteenth wave of the new 27-wave plan. C5's own premise turned out to be significantly stale — two
+real corrections found and stated rather than carried forward — and C6 reused a directly analogous,
+already-proven Wave-9 shape almost verbatim.
+
+- [COMPLETE] ✅ **C5 corrections, found live before any code was written**: "villager gear caps at
+  helmet/chestplate" is wrong — carriers (`CARRIERS`, Wave 9) and a real, Armory-backed defender weapon
+  loadout (`DEFENDER_LOADOUTS`) already extend well past that. And drag-and-drop for villager gear is
+  **already built** — `NpcEquipPanel.tsx`'s own header already states it, confirmed live at its real
+  `draggable`/`onDrop` call sites for helmet/chestplate. A further, load-bearing structural finding: the
+  plan's own suggested target ("drag a Satchel item straight onto a villager's gear slot") is not
+  buildable at all — `Panels.tsx` renders exactly one HUD panel at a time, and the Satchel grid
+  (`InventoryPanel`) and the villager slots (`NpcEquipPanel`) are never mounted together, and native
+  HTML5 drag-and-drop requires source and target to coexist in the DOM for one continuous gesture. This
+  ruled out that specific idea rather than leaving it a judgment call.
+- [COMPLETE] ✅ **C5 · the two real, same-panel drag upgrades that ARE buildable**: the raw Satchel grid
+  (confirmed genuinely lacking any drag behavior, unlike the two surfaces above) is now a real drag
+  source for weapon-family items, via a new `weaponSlotOfItem()` reverse-lookup so a dragged tiered item
+  (`sword_forged`, `halberd_crested`, …) resolves to its base slot and lands on the existing weapon row's
+  `onWeaponDrop` unchanged. And `NpcEquipPanel`'s own Armory-stock tiles are now draggable on a Satchel
+  spare too, auto-donating 1 before equipping when Armory stock reads 0 — collapsing the old two-step
+  "Donate 1, then drag" into one motion, reusing the existing `donateToArmory` action verbatim (a no-op
+  when stock is already ≥1, so nothing about today's behavior changes for that case).
+- [COMPLETE] ✅ **C5 · a real villager equipment pool, closing a gap Wave 21 explicitly named and
+  deferred** — `villagerCombat.ts`'s own header comment already stated outright that an ordinary
+  villager "has no level/loadout/trait system to scale [combat] off of, and inventing one is real
+  content scope this wave doesn't need." A new `villagerGearHpBonus(gear)` reads the SAME
+  helmet/chestplate fields any villager could already cosmetically wear, reusing `chestplateHp()`
+  (confirmed to have exactly one prior caller in the whole codebase, `Defenders.tsx`, and already fully
+  generic) at half a defender's own bonus, plus +1 for a helmet (vs. a defender's +3) — bare 8 HP →
+  fully crested+helmeted 17 HP, deliberately kept clear of even an unarmored level-1 defender's own 24 HP
+  floor. Damage output was investigated and deliberately left flat: a defender's own damage formula
+  never reads armor either (only loadout/level/courage/trait feed it), so extending it here would have
+  broken this codebase's own established "armor is toughness, never damage" taxonomy, and the only
+  integer headroom available (1→2) would tie, not stay under, the exact bare-defender floor the constant
+  's own comment says must never be matched. A wider ask — giving ordinary villagers real weapon-loadout
+  access, not just gear-derived HP — was investigated and explicitly scoped out: the `job === 'defender'`
+  gate turned out to be four separate subsystems wide (store refusal, rendering, AI scoring, leveling),
+  a materially larger and riskier effort than this item's own framing supported, left as a candidate for
+  its own future, dedicated wave rather than reopened here.
+- [COMPLETE] ✅ **C6 · a real, purely-visual per-instance `PlacedBuilding.scale`**, built as close to
+  verbatim as possible to Wave 9's own `yaw` field — the identical "second, visual-only field, absent
+  means 1, collision/footprint stay reading the catalogue's own fixed size, off by default and aimed at
+  decor" shape, restated in `scale`'s own doc comment for the identical honest reason `yaw`'s already
+  gives for rotation. Lives in the same `freeformBuild` mode (not a new toggle), controlled by the
+  previously-unclaimed `[`/`]` key pair (confirmed unbound anywhere in the whole codebase), with Shift
+  for a bigger step mirroring `R`'s own existing Shift-for-a-full-quarter-turn convention. A single
+  uniform scalar, not per-axis — investigated and rejected non-uniform scaling since no placed piece in
+  this catalog has an established use case for stretching one axis independently, and it would visibly
+  misalign several pieces' own delicate stone-centering offsets. Range clamped to 0.5-2.0 (exact
+  reciprocals, so scaling up then back down returns to precisely 1.0 with no rounding drift) — a
+  deliberately conservative bound given collision never scales, so a wider range would only widen the
+  gap between what a piece looks like and what it actually blocks. The build-mode ghost preview makes
+  this honesty visible rather than hiding it: the footprint plane (what `evalPlacement` actually tests)
+  stays outside the new scaled group entirely, while the box+wireframe (what you see) sit inside it,
+  pivoted at the piece's own base so it grows/shrinks from the ground rather than floating or burrowing.
+  Threaded through every real render branch in `Buildings.tsx` (all 9 procedural fixture types, the
+  generic `PropModel` fallback which already had a working, simply-unused `scale` prop, and the
+  animated-rig branch via a new `RiggedProp.scale` prop) — with the 4 cart-type buildables explicitly,
+  deliberately excluded, since their live-tracked push-physics position is a materially different,
+  riskier system than the static `b.x`/`b.z` path every other buildable uses.
+  **A real, subtle bug found and fixed during implementation, directly analogous to Wave 31's own keep
+  clip-plane finding**: `ConstructionSiteModel`'s "rising" reveal effect uses a genuine world-space
+  Three.js clip plane, which is never transformed by a parent group's own scale — naively wrapping it in
+  a scaled group (as the initial research plan's own "same one-line addition" framing assumed) would
+  have permanently clipped the top off any scaled-up building for its entire construction duration.
+  Fixed by threading `scale` into the clip-height math by hand (`topY = worldY + h·progress·scale`)
+  rather than relying on the parent transform.
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing gitignored `node_modules`/`public/assets`/
+  `public/help`), fixed locally via directory junctions to the main checkout's real copies, removed
+  afterward with the main checkout confirmed untouched. For C5: real HTML5 drag events fired a Satchel
+  sword onto the weapon row and flipped the readied weapon for real; a real one-drag Armory donate+equip
+  produced the correct Satchel-count drop and `villager.gear.helmet` flip, screenshotted with both real
+  in-game notify banners; the gear→HP wiring was read live off the actually-mounted component
+  (`window.__kkvillagercombat`: bare 8, fully geared 17, exactly matching the formula); a real combat
+  exchange through the actual damage-application code showed the bare villager downed in 4 hits while
+  the armored one held through 2 hits at identical per-hit damage (a bigger HP pool, never damage
+  reduction, matching the stated design); and the same villager made a real defender showed a live 43 HP
+  — a decisive, real "loses cleanly to a defender" margin. For C6: real `[`/`]` keypresses in freeform
+  mode drove the actual `freeScale` state into a real placement (`scale:1.5` for 5 presses, exactly
+  matching `1 + 5×0.1`); a default (non-freeform) placement stored no `scale` field at all; a
+  side-by-side screenshot showed a 2x-scaled piece dramatically larger than its default-sized twin; and
+  collision honesty was proven BOTH ways live — a small piece was correctly allowed to overlap a
+  2x-scaled neighbor's enlarged VISUAL mesh (screenshotted, showing real mesh clipping) while still being
+  correctly BLOCKED from the same neighbor's true, unscaled 1x collision box. Zero console/page errors
+  throughout either item. One real, pre-existing, non-blocking UX wrinkle found and correctly left alone
+  as out of scope: `NpcEquipPanel`'s own panel height cap means a real drag between the Armory row and
+  the paperdoll slots needs the browser's native edge-hover auto-scroll to bring both ends into view at
+  once in one gesture — unchanged Wave-9 panel geometry, not a Wave-51 regression, and standard HTML5
+  drag-and-drop already supports the auto-scroll gesture. `npx tsc --noEmit` / `npm run build`: both
+  clean, verified independently (both by the workflow's own Verify pass and, separately, by direct
+  review of the merged diff against the live worktree afterward, including independently re-deriving
+  the villager HP-bonus arithmetic by hand and confirming the clip-plane fix's math against the ghost
+  -preview's own pivot-at-base scaling behavior).
