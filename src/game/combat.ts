@@ -823,6 +823,25 @@ export function ownsMeleeSlot(kind: MeleeWeaponId, inv: Partial<Record<ItemId, n
   return bestMeleeTierOwned(kind, inv) !== null;
 }
 
+/** Wave 51 (C5) · the reverse of the tier tables above — given a raw Satchel
+ *  item id, which `WeaponSlot` (if any) it belongs to. A tiered item
+ *  (`sword_forged`, `halberd_crested`, …) resolves back to its BASE slot
+ *  (`sword`, `halberd`) exactly like `bestMeleeTierOwned` already walks the
+ *  ladder the other way — so a Satchel drag of any tier lands on the same
+ *  `onWeaponDrop` (Panels.tsx) the plain-item weapon tiles already use,
+ *  with no change to that handler at all. `crossbow`/`longbow`/`spear` have
+ *  no ladder (see MELEE_TIER_ITEMS' own header) and are already WeaponSlot
+ *  ids verbatim, so those just match themselves. Returns null for anything
+ *  that isn't a weapon-family item (food, bricks, chestplates, …) — the
+ *  Satchel grid uses this to decide which tiles are drag sources at all. */
+export function weaponSlotOfItem(item: ItemId): WeaponSlot | null {
+  if ((WEAPON_SLOTS as readonly string[]).includes(item)) return item as WeaponSlot;
+  for (const kind of Object.keys(MELEE_TIER_ITEMS) as MeleeWeaponId[]) {
+    if (MELEE_TIER_ITEMS[kind]?.some((t) => t.item === item)) return kind;
+  }
+  return null;
+}
+
 /**
  * Wave 50 (C4) · enchanting. A permanent, one-way +10% dmg/wornDmg post-
  * multiply, orthogonal to (applied AFTER) the tier lookup above — it stacks

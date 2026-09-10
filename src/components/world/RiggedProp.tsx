@@ -54,6 +54,7 @@ export default function RiggedProp({
   yaw = 0,
   buildingId,
   gaitSpeed = 0,
+  scale = 1,
 }: {
   assetId: string;
   height: number;
@@ -64,6 +65,13 @@ export default function RiggedProp({
   /** metres/second, for anything with a walk cycle (the horses). 0 means
    *  standing, which for a horse means grazing rather than frozen. */
   gaitSpeed?: number;
+  /** Wave 51 (C6) · mirrors PropModel's own `scale` prop exactly — a plain
+   *  uniform multiplier on the root group, so a freeform-scaled catapult or
+   *  banner still winds up/waves exactly like an unscaled one (every rigged
+   *  part above is animated by rotating/repositioning existing child
+   *  objects, none of it by writing new world-space geometry, so a parent
+   *  scale is free to apply on top with nothing to reconcile). */
+  scale?: number;
 }) {
   const [rig, setRig] = useState<Rig | null>(null);
   const root = useRef<THREE.Group>(null);
@@ -248,7 +256,7 @@ export default function RiggedProp({
 
   if (!rig) return null;
   return (
-    <group ref={root} position={position} rotation-y={yaw}>
+    <group ref={root} position={position} rotation-y={yaw} scale={scale}>
       <primitive object={rig.group} />
     </group>
   );

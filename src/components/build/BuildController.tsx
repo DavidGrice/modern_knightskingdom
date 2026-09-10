@@ -59,6 +59,21 @@ const ROT_EASE = 9;                        // per second, toward the target quar
 // Wave 9 · freeform's fine rotation step. 24 taps of R walks a full circle,
 // which is enough to angle a bench toward a fire without becoming a job.
 const FINE_YAW_STEP = Math.PI / 12;        // 15°
+// Wave 51 (C6) · freeform's per-instance scale, [ / ] (an unclaimed key pair
+// — grep across the whole codebase found neither bound anywhere). A pair
+// rather than one key: unlike rotation, scale is not cyclic and genuinely
+// needs both directions. Hold-shift-for-a-bigger-step directly mirrors R's
+// own Shift-for-a-full-quarter-turn convention above.
+const SCALE_STEP = 0.1;
+const SCALE_SHIFT_STEP = 0.5;
+// 0.5-2.0: collision never scales (see PlacedBuilding.scale's own comment),
+// so a wider range would only widen the visible gap between what a piece
+// looks like and what it actually blocks/occupies — the honesty this
+// feature already accepts, not something worth stretching further. 2.0 and
+// 0.5 are exact reciprocals, so scaling up then back down returns to
+// exactly 1.0 with no rounding drift.
+const SCALE_MIN = 0.5;
+const SCALE_MAX = 2.0;
 // Wave 9 · the most pieces one row-fill drag will ever try to lay. A flick of
 // the wrist across an orthographic view is a very long way in world metres,
 // and "I meant six, it laid four hundred" is not a mistake undo should have to
@@ -105,6 +120,10 @@ export default function BuildController() {
   // with `rot` whenever the mode is switched, so turning freeform on and off
   // never silently spins the piece you were holding
   const [freeYaw, setFreeYaw] = useState(0);
+  // Wave 51 (C6) · freeform's true per-instance scale (see PlacedBuilding.scale)
+  // — kept in step the same way freeYaw is: it carries across a piece switch,
+  // and a pickup adopts whatever the picked-up piece already had (below).
+  const [freeScale, setFreeScale] = useState(1);
   const mouseDown = useRef(false);
   const holdCellKey = useRef<string | null>(null);
   const holdTime = useRef(0);
@@ -161,6 +180,11 @@ export default function BuildController() {
   const freeRot = ((((Math.round(freeYaw / (Math.PI / 2)) % 4) + 4) % 4)) as 0 | 1 | 2 | 3;
   const useRot = freeform ? freeRot : rot;
   const useYaw = freeform ? freeYaw : (rot * Math.PI) / 2;
+  // Wave 51 (C6) · same on/off-freeform gate as useYaw above — a scale only
+  // ever reaches placeBuilding/finishMove while freeform is actually on, so
+  // every grid-snapped placement stays exactly 1x regardless of whatever
+  // freeScale happens to be holding from a previous freeform session.
+  const useScale = freeform ? freeScale : 1;
 
   // row-fill only offers itself for the pieces a run is actually made of —
   // the same set walls.ts already magnets together, and for the same reason
@@ -203,6 +227,18 @@ export default function BuildController() {
           setRot((r) => (((r + 1) % 4) as 0 | 1 | 2 | 3));
         }
       }
+      // Wave 51 (C6) · [ / ] resize, freeform only — gated the same way R's
+      // MEANING changes between modes above, rather than firing (and silently
+      // doing nothing useful) while on the grid, where every placement is
+      // always exactly 1x.
+      if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+        if (!useGameStore.getState().freeformBuild) return;
+        const step = e.shiftKey ? SCALE_SHIFT_STEP : SCALE_STEP;
+        const dir = e.code === 'BracketRight' ? 1 : -1;
+        setFreeScale((s) => THREE.MathUtils.clamp(
+          Math.round((s + dir * step) * 100) / 100, SCALE_MIN, SCALE_MAX,
+        ));
+      }
       if (e.code === 'KeyU') undoLast();
       if (e.code === 'KeyQ') setAzQuarter((q) => q - 1);
       if (e.code === 'KeyE') setAzQuarter((q) => q + 1);
@@ -214,7 +250,9 @@ export default function BuildController() {
         if (on) setFreeYaw((rotRef.current * Math.PI) / 2);
         else setRot(((((Math.round(freeYawRef.current / (Math.PI / 2)) % 4) + 4) % 4)) as 0 | 1 | 2 | 3);
         st.setFreeformBuild(on);
-        st.notify(on ? 'Freeform placement — off the grid. R turns in small steps.' : 'Back on the grid.');
+        st.notify(on
+          ? 'Freeform placement — off the grid. R turns in small steps, [ and ] resize.'
+          : 'Back on the grid.');
       }
       if (e.code === 'KeyX') {
         const st = useGameStore.getState();
@@ -246,6 +284,7 @@ export default function BuildController() {
     if (moving) {
       setRot(moving.rot);
       setFreeYaw(moving.yaw ?? (moving.rot * Math.PI) / 2);
+      setFreeScale(moving.scale ?? 1);
     }
   }, [moving]);
 
@@ -408,7 +447,7 @@ export default function BuildController() {
         setPlaceFrac(frac);
         if (frac >= 1) {
           if (blueprintSelection) placeBlueprintAt(blueprintSelection, ghost.x, ghost.z, useRot);
-          else if (activeType) placeBuilding(activeType, ghost.x, ghost.z, useRot, useYaw);
+          else if (activeType) placeBuilding(activeType, ghost.x, ghost.z, useRot, useYaw, useScale);
           holdCellKey.current = null;
           holdTime.current = 0;
           setPlaceFrac(0);
@@ -646,7 +685,7 @@ export default function BuildController() {
           // relocating an already-built piece has no "pop into being" moment
           // to soften, so the move tool stays an instant click, not a hold
           if (moving) {
-            if (ghost && valid) finishMove(ghost.x, ghost.z, useRot, useYaw);
+            if (ghost && valid) finishMove(ghost.x, ghost.z, useRot, useYaw, useScale);
             return;
           }
           // nothing selected: this press is a pickup-tool click on an
@@ -707,26 +746,41 @@ export default function BuildController() {
       {activeType && def && ghost && rowCells.length === 0 && (
         <group position={[ghost.x, 0, ghost.z]}>
           <group rotation-y={gyaw}>
-            {/* while hold-to-place is in progress, the box itself rises from
-                the ground toward full height — the footprint plane below
-                stays full-size the whole time so the landing spot is always
-                clear, only the "it's coming into being" cue animates */}
-            <mesh position-y={gy + (gh * (!moving && placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1)) / 2}>
-              <boxGeometry args={[gsx, gh * (!moving && placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1), gsz]} />
-              <meshBasicMaterial color={valid ? '#42d95e' : '#e04434'} transparent opacity={0.42 + 0.28 * placeFrac} depthWrite={false} />
-            </mesh>
+            {/* footprint — deliberately OUTSIDE the scaled group below and
+                always drawn at the catalogue's real 1x size: this plane is
+                what evalPlacement/collisionBoxesFor actually test, so it has
+                to stay honest about what you can walk through/build against
+                regardless of how big or small the visual next to it looks
+                (see PlacedBuilding.scale's own comment). */}
             <mesh rotation-x={-Math.PI / 2} position-y={gy + 0.07}>
               <planeGeometry args={[gsx, gsz]} />
               <meshBasicMaterial color={valid ? '#42d95e' : '#e04434'} transparent opacity={0.55} depthWrite={false} />
             </mesh>
-            {/* crisp wireframe of the FULL final volume — the translucent box
-                above animates its height while a hold is in progress, so on
-                its own it never shows the finished silhouette. Drawn at full
-                size regardless, so you always see exactly what you're
-                committing to. */}
-            <lineSegments position-y={gy + gh / 2} geometry={ghostEdges}>
-              <lineBasicMaterial color={valid ? '#d8ffe2' : '#ffd8d2'} transparent opacity={0.9} depthTest={false} />
-            </lineSegments>
+            {/* Wave 51 (C6) · the scaled VISUAL — box + wireframe, the two
+                things a freeform resize actually changes what you SEE.
+                Positioned at the piece's own base elevation (gy) with the
+                resize applied as this group's OWN scale, so it grows/shrinks
+                from that base exactly the way a real scaled PropModel grows
+                from its own grounded local origin (PropModel.tsx) — never up
+                off the ground or down into it. */}
+            <group position-y={gy} scale={useScale}>
+              {/* while hold-to-place is in progress, the box itself rises from
+                  the ground toward full height — the footprint plane above
+                  stays full-size the whole time so the landing spot is always
+                  clear, only the "it's coming into being" cue animates */}
+              <mesh position-y={(gh * (!moving && placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1)) / 2}>
+                <boxGeometry args={[gsx, gh * (!moving && placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1), gsz]} />
+                <meshBasicMaterial color={valid ? '#42d95e' : '#e04434'} transparent opacity={0.42 + 0.28 * placeFrac} depthWrite={false} />
+              </mesh>
+              {/* crisp wireframe of the FULL final volume — the translucent box
+                  above animates its height while a hold is in progress, so on
+                  its own it never shows the finished silhouette. Drawn at full
+                  size regardless, so you always see exactly what you're
+                  committing to. */}
+              <lineSegments position-y={gh / 2} geometry={ghostEdges}>
+                <lineBasicMaterial color={valid ? '#d8ffe2' : '#ffd8d2'} transparent opacity={0.9} depthTest={false} />
+              </lineSegments>
+            </group>
             {/* Facing arrow: which way the piece actually points, so rotating
                 with R is no longer guesswork.
                 It sits on local **−Z**, not +Z. Every model is normalised by

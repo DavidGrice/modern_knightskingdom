@@ -170,10 +170,15 @@ export function ArmorySection() {
           return (
             <div
               key={item}
-              className={`inv-slot ${stock > 0 ? 'armory-draggable' : ''}`}
-              draggable={stock > 0}
+              className={`inv-slot ${stock > 0 || spare > 0 ? 'armory-draggable' : ''}`}
+              // Wave 51 (C5) · draggable on a Satchel spare too, not just real
+              // Armory stock — onDrop/onPlateDrop below auto-donate 1 before
+              // equipping when stock reads 0, collapsing the old two-step
+              // "Donate 1, then drag" into one motion. A no-op when stock is
+              // already ≥1 (donateToArmory's own call there never fires).
+              draggable={stock > 0 || spare > 0}
               onDragStart={(e) => e.dataTransfer.setData('text/plain', item)}
-              title={`${stock} in the Armory${spare > 0 ? ` · ${spare} spare in your Satchel` : ''}`}
+              title={`${stock} in the Armory${spare > 0 ? ` · ${spare} spare in your Satchel (drag equips straight from there)` : ''}`}
             >
               <div className="icon">{icon}</div>
               <div className="iname">{label}</div>
@@ -259,6 +264,8 @@ export default function NpcEquipPanel() {
   const villagerId = useGameStore((s) => s.equippingVillagerId);
   const villagers = useGameStore((s) => s.villagers);
   const armory = useGameStore((s) => s.armory);
+  const inventory = useGameStore((s) => s.inventory);
+  const donateToArmory = useGameStore((s) => s.donateToArmory);
   const equipVillagerGear = useGameStore((s) => s.equipVillagerGear);
   const unequipVillagerGear = useGameStore((s) => s.unequipVillagerGear);
   const equipVillagerChestplate = useGameStore((s) => s.equipVillagerChestplate);
@@ -294,9 +301,14 @@ export default function NpcEquipPanel() {
 
   function onDrop(e: React.DragEvent, slot: GearSlot) {
     e.preventDefault();
-    const item = e.dataTransfer.getData('text/plain');
+    const item = e.dataTransfer.getData('text/plain') as ItemId;
     if (item !== SLOT_ITEM[slot]) return; // only that slot's own item kind lands here
-    if (!villager!.gear?.[slot]) equipVillagerGear(villager!.id, slot);
+    if (villager!.gear?.[slot]) return;
+    // Wave 51 (C5) · a drag with no Armory stock but a Satchel spare auto-
+    // donates 1 first — the same one-drag-does-both upgrade ArmorySection's
+    // own tile now advertises. No-op when stock is already there.
+    if ((armory[item] ?? 0) <= 0 && (inventory[item] ?? 0) > 0) donateToArmory(item, 1);
+    equipVillagerGear(villager!.id, slot);
   }
 
   /** dropping a plate tile straight onto a tier tile — swapping in place is
@@ -304,7 +316,9 @@ export default function NpcEquipPanel() {
    *  doesn't have to refuse a drop onto an occupied slot */
   function onPlateDrop(e: React.DragEvent, tier: (typeof CHESTPLATES)[number]) {
     e.preventDefault();
-    if (e.dataTransfer.getData('text/plain') !== tier.item) return;
+    const item = e.dataTransfer.getData('text/plain') as ItemId;
+    if (item !== tier.item) return;
+    if ((armory[item] ?? 0) <= 0 && (inventory[item] ?? 0) > 0) donateToArmory(item, 1);
     equipVillagerChestplate(villager!.id, tier.id);
   }
 
@@ -390,8 +404,8 @@ export default function NpcEquipPanel() {
             </div>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--parchment-dark)', marginTop: 8 }}>
-              {villager.name} doesn't fight, but a little armor never hurts — purely for show on a
-              working villager.
+              {villager.name} doesn't fight back like a defender, but a little armor still makes them
+              harder to knock down — extra vigour to weather a stray blow in a raid, not extra bite.
             </div>
           )}
         </div>

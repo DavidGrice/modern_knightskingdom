@@ -263,6 +263,10 @@ export default function BuildBar() {
             <b>Aerial Build View</b> — hold click to place · <b>shift-drag</b> lays a wall run ·
             click a piece to move it · <b>R</b> rotate · <b>U</b> undo · right-click removes ·{' '}
             <b>WASD</b>/middle-drag pan · <b>Q</b>/<b>E</b> turn the view · scroll zoom · <b>B</b>/<b>Esc</b> return
+            {/* Wave 51 (C6) · only worth saying while the control does
+                anything — [ / ] are inert outside freeform (BuildController's
+                own key handler no-ops there too) */}
+            {freeform && <> · <b>[</b>/<b>]</b> resize (hold shift for a bigger step)</>}
           </>
         )}
       </div>
@@ -305,7 +309,7 @@ export default function BuildBar() {
           <button
             className={freeform ? 'selected' : ''}
             onClick={() => setFreeformBuild(!freeform)}
-            title="Ignore the grid: place at the cursor and turn in small steps (F). Pieces still cost the same and still collide as their nearest square footprint."
+            title="Ignore the grid: place at the cursor, turn in small steps (R), and resize with [ / ] — hold shift for a bigger step of either. Pieces still cost the same and still collide/stack at their catalogue size no matter how big or small they look."
           >
             ✥ Freeform
           </button>

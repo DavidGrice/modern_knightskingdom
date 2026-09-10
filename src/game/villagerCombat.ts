@@ -13,6 +13,14 @@
 // the two apart is what stops a future defender retune from silently
 // touching the population this wave is tuning to sit clearly BELOW that
 // floor (see `villagerStrike`'s own comment).
+//
+// Wave 51 (C5) — armor a villager already owns/wears (helmet/chestplate,
+// Wave 9) now feeds a real, bounded HP edge here — see `villagerGearHpBonus`
+// below, applied by Villagers.tsx. Damage stays flat (see `villagerStrike`'s
+// own comment for why that was investigated and deliberately left alone).
+
+import type { Villager } from './types';
+import { chestplateHp } from './data/armor';
 
 export interface VillagerCombatState {
   hp: number;
@@ -31,6 +39,20 @@ export interface VillagerCombatState {
  *  need. */
 export const VILLAGER_MAX_HP = 8;
 
+/** Wave 51 (C5) · worn armor's contribution to `VILLAGER_MAX_HP`, on top of
+ *  the flat floor above — HALF a defender's own bonus for the same plate
+ *  (`chestplateHp`, data/armor.ts) and +1 (not Defenders.tsx's +3) for a
+ *  helmet, so gearing up an ordinary villager can never close the gap on an
+ *  equivalent defender, only narrow it: bare 8 -> iron+helmet 12 ->
+ *  forged+helmet 14 -> crested+helmet 17, all still clearly under an
+ *  unarmored level-1 defender's own 24 HP floor (`18 + level*6`,
+ *  game/defenders.ts). Fully generic over `Villager['gear']` — no new item
+ *  types or gear slots, reading the exact fields Defenders.tsx already
+ *  reads for its own defenders. */
+export function villagerGearHpBonus(gear?: Villager['gear']): number {
+  return Math.floor(chestplateHp(gear) / 2) + (gear?.helmet ? 1 : 0);
+}
+
 /** What a flat-footed villager's swing takes off a raider. Deliberately NOT
  *  `defenderStrike()` (game/defenders.ts): that formula's own bare-fisted
  *  floor (loadout undefined, level defaulted to 1) already evaluates to ~2
@@ -38,7 +60,16 @@ export const VILLAGER_MAX_HP = 8;
  *  DEFENDER hits for — which fails "clearly below a defender" on the one
  *  population this number has to stay below. A dedicated flat constant, with
  *  no courage/attribute scaling of any kind, is what keeps even a
- *  high-courage villager from ever matching a real defender's floor. */
+ *  high-courage villager from ever matching a real defender's floor.
+ *
+ *  Wave 51 (C5) investigated extending this the same way `villagerGearHpBonus`
+ *  above extends HP, and deliberately rejected it: `defenderStrike()` itself
+ *  never reads gear either (only loadout/level/courage/trait feed a
+ *  defender's own damage) — in this codebase's taxonomy, armor is a
+ *  toughness stat, never a damage input. The only headroom for a flat +1
+ *  bump (-> 2) would TIE, not stay under, the exact bare-defender floor this
+ *  constant's own header above says must never be matched. Left flat on
+ *  purpose — this is not an oversight for a future pass to "fix". */
 const VILLAGER_STRIKE_DMG = 1;
 
 export function villagerStrike(): number {

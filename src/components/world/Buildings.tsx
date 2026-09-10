@@ -377,20 +377,24 @@ function ConstructionSite({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding
   const y = b.y ?? 0;
   const [w, h, d] = def.size;
   const yaw = b.yaw ?? (b.rot * Math.PI) / 2;
+  // Wave 51 (C6) · a site under construction previews at its own eventual
+  // scale too — see BuildingMesh's identical `scale` read below for why this
+  // is visual-only and reads exactly the same field.
+  const scale = b.scale ?? 1;
   const stakes: [number, number][] = [
     [-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2],
   ];
   if (def.model) {
     return (
-      <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw}>
+      <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw} scale={scale}>
         <Suspense fallback={null}>
-          <ConstructionSiteModel url={def.model} size={def.size} progress={progress} worldY={y} />
+          <ConstructionSiteModel url={def.model} size={def.size} progress={progress} worldY={y} scale={scale} />
         </Suspense>
       </group>
     );
   }
   return (
-    <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw}>
+    <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw} scale={scale}>
       {/* the finished silhouette, ghost-faint */}
       <mesh position-y={h / 2}>
         <boxGeometry args={[w, h, d]} />
@@ -427,32 +431,37 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
   const solidWorld = solidOffsetRotated(b.type, b.rot);
   const px = b.x - originOffset.x;
   const pz = b.z - originOffset.z;
+  // Wave 51 (C6) · freeform's per-instance visual size (PlacedBuilding.scale)
+  // — absent/1 for every pre-Wave-51 save and every non-freeform placement,
+  // so this is a no-op everywhere except a piece someone deliberately resized.
+  // Threaded into every branch below except the cart one (see its own note).
+  const scale = b.scale ?? 1;
   if (b.type === 'campfire') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><Campfire /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><Campfire /></group>;
   }
   if (b.type === 'forge') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><Forge /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><Forge /></group>;
   }
   if (b.type === 'torch') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><Torch /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><Torch /></group>;
   }
   if (b.type === 'bed') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><Bed /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><Bed /></group>;
   }
   if (b.type === 'quintain') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><Quintain id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><Quintain id={b.id} /></group>;
   }
   if (b.type === 'farmplot') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><FarmPlot id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><FarmPlot id={b.id} /></group>;
   }
   if (b.type === 'gate') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><GateFixture id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><GateFixture id={b.id} /></group>;
   }
   if (b.type === 'door') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><DoorFixture id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><DoorFixture id={b.id} /></group>;
   }
   if (b.type === 'window') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><WindowFixture id={b.id} /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><WindowFixture id={b.id} /></group>;
   }
   // Wave 35 (G5) · oc6096-1/oc6032b3 push/hitch through the same
   // PlayerController mechanism as warcart/bladecart (cartState/cartLivePos,
@@ -460,11 +469,16 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
   // mesh would stay frozen at its placed b.x/b.z while cartState tracks it
   // moving — CartMesh already reads cartLivePos generically, keyed by
   // building id, so routing here is the only change this needs.
+  //
+  // Wave 51 (C6) · deliberately excluded from `scale` — CartMesh is a
+  // materially different, riskier problem (its grab-handle/collision
+  // positions likely assume catalogue size, and it tracks a LIVE pushed
+  // position, not this static b.x/b.z), out of scope this wave.
   if (b.type === 'warcart' || b.type === 'bladecart' || b.type === 'oc6096-1' || b.type === 'oc6032b3') {
     return <CartMesh b={b} def={def} yaw={yaw} originOffset={originOffset} />;
   }
   if (b.type === 'market_stall') {
-    return <group position={[px, y, pz]} rotation-y={yaw}><MarketStall /></group>;
+    return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><MarketStall /></group>;
   }
   // pieces the rig lab charted moving parts for (catapult arms, flag cloth,
   // flames) render through the OBJ-based rig so those parts actually move;
@@ -479,6 +493,7 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
           position={[px, y, pz]}
           yaw={yaw}
           buildingId={b.id}
+          scale={scale}
         />
       </Suspense>
     );
@@ -486,7 +501,7 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
   return (
     <Suspense
       fallback={
-        <mesh position={[px, y + def.size[1] / 2, pz]} rotation-y={yaw}>
+        <mesh position={[px, y + def.size[1] / 2, pz]} rotation-y={yaw} scale={scale}>
           <boxGeometry args={[def.size[0] * 0.9, def.size[1], def.size[2] * 0.9]} />
           <meshStandardMaterial color="#9a8a6a" transparent opacity={0.4} />
         </mesh>
@@ -502,6 +517,7 @@ export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuild
         height={def.size[1]}
         position={[px - solidWorld[0], y, pz - solidWorld[1]]}
         yaw={yaw}
+        scale={scale}
       />
     </Suspense>
   );

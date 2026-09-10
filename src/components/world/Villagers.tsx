@@ -23,7 +23,7 @@ import { waterAt } from '@/game/waterworks';
 import { bestStore } from '@/game/storage';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
-import { registerVillagerCombat } from '@/game/villagerCombat';
+import { registerVillagerCombat, VILLAGER_MAX_HP, villagerGearHpBonus } from '@/game/villagerCombat';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '@/game/types';
@@ -99,6 +99,14 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   // state still exists), and both call sites racing to create the same entry
   // first is harmless.
   const vc = useMemo(() => registerVillagerCombat(villager.id), [villager.id]);
+  // Wave 51 (C5) · worn armor's HP bonus, applied the same way Defenders.tsx
+  // applies `chestplateHp`/helmet to `ds.maxHp` — a plain per-render
+  // statement OUTSIDE `registerVillagerCombat` itself (not baked into the
+  // idempotent registration above), so re-gearing mid-fight is picked up
+  // live. Only ever clamps `hp` DOWN when the new cap is now lower than the
+  // current health — re-gearing can never be used as a free heal.
+  vc.maxHp = VILLAGER_MAX_HP + villagerGearHpBonus(villager.gear);
+  if (vc.hp > vc.maxHp) vc.hp = vc.maxHp;
 
   // Wave 31 · the canonical home/destination ternary (already proven in
   // Enemies.tsx/Companion.tsx) applied for real here: a settlement resident
