@@ -20,6 +20,7 @@ export default function Vitals() {
   const character = useGameStore((s) => s.character);
   const xp = useGameStore((s) => s.xp);
   const completedQuests = useGameStore((s) => s.completedQuests);
+  const cedricCaptures = useGameStore((s) => s.cedricCaptures);
 
   const [snap, setSnap] = useState({
     hp: 10, maxHp: 10, stamina: 100, maxStamina: 100, flash: 0, blocking: false,
@@ -52,7 +53,7 @@ export default function Vitals() {
   }, []);
 
   const totalLevel = SKILLS.reduce((t, s) => t + levelFromXp(xp[s.id]), 0);
-  const rank = rankFromTotalLevel(totalLevel, completedQuests);
+  const rank = rankFromTotalLevel(totalLevel, completedQuests, cedricCaptures);
   // progress across the current total level, from the summed skill XP
   const totalXp = SKILLS.reduce((t, s) => t + xp[s.id], 0);
   const perLevel = 90;

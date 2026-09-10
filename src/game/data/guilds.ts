@@ -114,6 +114,9 @@ export const GUILDS: GuildDef[] = [
       { item: 'axe', qty: 1, price: 18 },
       { item: 'plank', qty: 6, price: 14, minRank: 1 },
       { item: 'basket', qty: 1, price: 22, minRank: 2 },
+      // Wave 52 (D4): the first max-rank-only reward — timber craft turned
+      // to arms, mirroring axe's own "first real purpose via this vendor".
+      { item: 'spear', qty: 1, price: 40, minRank: 3 },
     ],
   },
   {
@@ -133,6 +136,8 @@ export const GUILDS: GuildDef[] = [
       { item: 'pickaxe', qty: 1, price: 18 },
       { item: 'iron_bar', qty: 3, price: 30, minRank: 1 },
       { item: 'cart', qty: 1, price: 52, minRank: 2 },
+      // Wave 52 (D4): max-rank-only — the ore they mine, forged into plate.
+      { item: 'chestplate_forged', qty: 1, price: 75, minRank: 3 },
     ],
   },
   {
@@ -152,6 +157,8 @@ export const GUILDS: GuildDef[] = [
       { item: 'fishing_rod', qty: 1, price: 15 },
       { item: 'cooked_fish', qty: 4, price: 16, minRank: 1 },
       { item: 'fish_stew', qty: 2, price: 20, minRank: 2 },
+      // Wave 52 (D4): max-rank-only — outlast the longest bite.
+      { item: 'potion_stamina', qty: 1, price: 24, minRank: 3 },
     ],
   },
   {
@@ -171,6 +178,8 @@ export const GUILDS: GuildDef[] = [
       { item: 'hammer', qty: 1, price: 18 },
       { item: 'stone', qty: 8, price: 14, minRank: 1 },
       { item: 'cart', qty: 1, price: 50, minRank: 2 },
+      // Wave 52 (D4): max-rank-only — siege-works engineers arm the wall.
+      { item: 'halberd_forged', qty: 1, price: 68, minRank: 3 },
     ],
   },
   {
@@ -190,6 +199,8 @@ export const GUILDS: GuildDef[] = [
       { item: 'shield', qty: 1, price: 25 },
       { item: 'halberd', qty: 1, price: 45, minRank: 1 },
       { item: 'chestplate_crested', qty: 1, price: 90, minRank: 2 },
+      // Wave 52 (D4): max-rank-only — completes the matched crested set.
+      { item: 'sword_crested', qty: 1, price: 110, minRank: 3 },
     ],
   },
 ];

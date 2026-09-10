@@ -142,9 +142,11 @@ useGameStore.subscribe((s) => {
   combatState.maxStamina = Math.round((100
     + Math.round(total * 1.5)                     // general levels
     + (s.perks.includes('iron_grip') ? 15 : 0)
+    + (s.perks.includes('iron_discipline') ? 20 : 0) // Iron Discipline trade-off (Wave 52)
     + (s.skillTree.includes('combat2') ? 10 : 0)  // Second Wind talent
     + (s.attrSpent.courage ?? 0) * 5)             // Courage attribute
-    * (s.perks.includes('berserker') ? 0.8 : 1)); // Berserker trade-off: −20%
+    * (s.perks.includes('berserker') ? 0.8 : 1)   // Berserker trade-off: −20%
+    * (s.perks.includes('quick_draw') ? 0.85 : 1)); // Quick Draw trade-off: −15% (Wave 52)
   // the trade-off perks above are the first thing in this subscriber that
   // can ever make maxStamina go DOWN (every other term here only adds) — a
   // stamina value left above the new lower ceiling from a stale render would
@@ -1143,6 +1145,7 @@ export function playerAttack(): boolean {
   // passive itself, +1 -> +2.
   const orderBonus = (st.guild === 'knights' ? (atGuildMaxRank(st.guild, st.guildRanks, 'knights') ? 2 : 1) : 0)
     + (st.skillTree.includes('combat3') ? 1 : 0)
+    + (st.skillTree.includes('combat4') ? 1 : 0) // Master-at-Arms mastery talent (Wave 52)
     + Math.floor((st.attrSpent.might ?? 0) / 2); // Might attribute
   const baseDmg = held ? (worn ? wp.wornDmg : wp.dmg) : 1; // nothing held = bare fists
   // Berserker trade-off: +30% damage with a weapon in hand specifically (its
@@ -1298,7 +1301,7 @@ export function fireBolt(): boolean {
     // so it should hit meaningfully harder than a free sword swing (3): one
     // shot drops a skeleton, two drop a bandit. The battlement bonus stays
     // proportional rather than a flat +1.
-    damage: 7 * (onBattlement() ? 1.25 : 1),
+    damage: 7 * (onBattlement() ? 1.25 : 1) * (st.perks.includes('quick_draw') ? 1.2 : 1),
   });
   combatState.attackAt = performance.now();
   audio.play('crossbow', 0.8);
@@ -1343,7 +1346,7 @@ export function fireArrow(power: number): boolean {
     // 6..16 across the draw: a snap shot is worse than a bolt, a full draw
     // is the strongest single hit in the game — which is the point of a
     // weapon that makes you stand still to use it. +25% from a battlement.
-    damage: (6 + power * 10) * (onBattlement() ? 1.25 : 1),
+    damage: (6 + power * 10) * (onBattlement() ? 1.25 : 1) * (st.perks.includes('quick_draw') ? 1.2 : 1),
   });
   combatState.attackAt = performance.now();
   audio.play('longbow', 0.85);

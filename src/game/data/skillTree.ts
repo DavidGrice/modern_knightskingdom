@@ -12,7 +12,7 @@ import { RESPEC_BASE_GOLD, RESPEC_GOLD_PER_POINT } from './playerAttributes';
 export interface TalentDef {
   id: string;
   skill: SkillId;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   name: string;
   desc: string;
   cost: number;      // talent points (tier number)
@@ -32,43 +32,48 @@ const ICONS: Record<SkillId, string> = {
 
 function branch(
   skill: SkillId,
-  names: [string, string, string],
-  descs: [string, string, string],
+  names: [string, string, string, string],
+  descs: [string, string, string, string],
 ): TalentDef[] {
-  return ([1, 2, 3] as const).map((tier) => ({
+  return ([1, 2, 3, 4] as const).map((tier) => ({
     id: `${skill}${tier}`,
     skill,
     tier,
     name: names[tier - 1],
     desc: descs[tier - 1],
     cost: tier,
-    reqLevel: tier === 1 ? 2 : tier === 2 ? 5 : 8,
+    reqLevel: tier === 1 ? 2 : tier === 2 ? 5 : tier === 3 ? 8 : 11,
     icon: ICONS[skill],
   }));
 }
 
+// Wave 52 (D3): a 4th "mastery" tier per skill, continuing the existing
+// 2/5/8 level-gate sequence's own +1-per-step second-order pattern (11).
+// Each mastery is a single-constant sharpening of that same skill's own
+// tier-3 capstone mechanism (never a new hook point) — see the exact call
+// sites in gameStore.ts/combat.ts (each skillTree.includes('<skill>4') check).
 export const TALENTS: TalentDef[] = [
   ...branch('woodcutting',
-    ['Timber Sense', 'Deep Rings', 'Forest Bounty'],
-    ['+10% Woodcutting XP.', '15% chance of an extra log per chop.', 'Trees yield flowers twice as often.']),
+    ['Timber Sense', 'Deep Rings', 'Forest Bounty', 'Ancient Growth'],
+    ['+10% Woodcutting XP.', '15% chance of an extra log per chop.', 'Trees yield flowers twice as often.', 'Trees always yield their flower.']),
   ...branch('mining',
-    ['Stone Sense', 'Ore Eye', 'Vein Splitter'],
-    ['+10% Mining XP.', 'Ordinary boulders yield ore 15% more often.', 'Iron veins give bonus stone twice as often.']),
+    ['Stone Sense', 'Ore Eye', 'Vein Splitter', 'Deep Vein Mastery'],
+    ['+10% Mining XP.', 'Ordinary boulders yield ore 15% more often.', 'Iron veins give bonus stone twice as often.', 'Iron veins always give bonus stone.']),
   ...branch('smithing',
-    ['Forge Sense', 'Tempered Edges', 'Guild Rates'],
-    ['+10% Smithing XP.', 'Tools and weapons wear 20% slower.', 'Workbench repairs cost half the materials.']),
+    ['Forge Sense', 'Tempered Edges', 'Guild Rates', 'Master Forge'],
+    ['+10% Smithing XP.', 'Tools and weapons wear 20% slower.', 'Workbench repairs cost half the materials.', 'Workbench repairs cost only a twentieth of the materials.']),
   ...branch('fishing',
-    ['Water Sense', 'Steady Line', 'Full Net'],
-    ['+10% Fishing XP.', 'The bite window lasts 300ms longer.', '15% chance to land two fish at once.']),
+    ['Water Sense', 'Steady Line', 'Full Net', 'River Sovereign'],
+    ['+10% Fishing XP.', 'The bite window lasts 300ms longer.', '15% chance to land two fish at once.', '30% chance to land two fish at once.']),
   ...branch('building',
-    ['Brick Sense', 'Sure Hammer', 'Raised Right'],
-    ['+10% Building XP.', 'Construction swings count 15% extra.', 'Another +15% on construction swings.']),
+    ['Brick Sense', 'Sure Hammer', 'Raised Right', 'Grand Architect'],
+    ['+10% Building XP.', 'Construction swings count 15% extra.', 'Another +15% on construction swings.', 'Another +20% on construction swings.']),
   ...branch('combat',
-    ['Battle Sense', 'Second Wind', 'Heavy Hand'],
-    ['+10% Combat XP.', '+10 maximum stamina.', '+1 melee damage.']),
+    ['Battle Sense', 'Second Wind', 'Heavy Hand', 'Master-at-Arms'],
+    ['+10% Combat XP.', '+10 maximum stamina.', '+1 melee damage.', '+1 more melee damage.']),
   ...branch('farming',
-    ['Field Sense', 'Rich Soil', 'Heavy Sheaves'],
-    ['+10% Farming XP.', 'Crops grow 12% faster.', 'Harvests yield +1 wheat.']),
+    ['Field Sense', 'Rich Soil', 'Heavy Sheaves', 'Bountiful Harvest'],
+    ['+10% Farming XP.', 'Crops grow 12% faster.', 'Harvests yield +1 wheat.', 'Harvests yield +2 wheat instead of +1.']),
 ];
 
 export const TALENT_BY_ID = Object.fromEntries(TALENTS.map((t) => [t.id, t])) as Record<string, TalentDef>;

@@ -32,22 +32,36 @@ export interface RankDef {
   title: string;
 }
 
-// Rank climbs with the sum of all skill levels; the last two also need their quests.
+// Rank climbs with the sum of all skill levels; the last three also need a
+// real gate stacked on top of the level floor (a milestone quest for
+// Knight/Paladin, a lifetime boss-capture count for Marshal — see below).
 export const RANKS: RankDef[] = [
   { name: 'Peasant', minTotalLevel: 0, title: 'a humble villager' },
   { name: 'Laborer', minTotalLevel: 3, title: 'a hard worker of the realm' },
   { name: 'Squire', minTotalLevel: 8, title: 'sworn to service' },
   { name: 'Knight', minTotalLevel: 16, title: 'defender of the kingdom' },
   { name: 'Paladin', minTotalLevel: 28, title: 'champion of the realm' },
+  // Wave 52 (D1): the rank above Paladin. Gated on cedricCaptures >= 1
+  // (gameStore.ts) rather than a new quest or the black dragon's own ambient
+  // RNG roll — Cedric's Final Stand is player-initiated on demand once
+  // unlocked, deterministic to win once attempted, and already the game's
+  // own narrative climax for the main antagonist arc. minTotalLevel
+  // continues the existing 3/5/8 step-diff sequence's own +1 second-order
+  // pattern (12 + 5 = 17) rather than a round-number guess. Two real,
+  // already-mechanized consequences ride on this rank existing at all: a 5th
+  // perk slot (perkSlotsEarned's index-into-RANKS below) and NG+ eligibility
+  // itself moving to require it (MainMenu.tsx's TOP_RANK, by design).
+  { name: 'Marshal', minTotalLevel: 45, title: "the King's own right hand" },
 ];
 
-export function rankFromTotalLevel(total: number, completedQuests: string[]): RankDef {
+export function rankFromTotalLevel(total: number, completedQuests: string[], cedricCaptures = 0): RankDef {
   let rank = RANKS[0];
   for (const r of RANKS) {
     if (total < r.minTotalLevel) break;
-    // the last two ranks additionally require their milestone quests
+    // the last three ranks additionally require their own real gate
     if (r.name === 'Knight' && !completedQuests.includes('knights_arms')) break;
     if (r.name === 'Paladin' && !completedQuests.includes('paladins_keep')) break;
+    if (r.name === 'Marshal' && cedricCaptures < 1) break;
     rank = r;
   }
   return rank;
@@ -57,9 +71,11 @@ export function totalSkillLevel(xp: Record<SkillId, number>): number {
   return SKILLS.reduce((t, s) => t + levelFromXp(xp[s.id]), 0);
 }
 
-// One perk slot per rank-up past Peasant (Laborer/Squire/Knight/Paladin —
-// 4 chances), matching each rank's own index in RANKS.
-export function perkSlotsEarned(xp: Record<SkillId, number>, completedQuests: string[]): number {
-  const rank = rankFromTotalLevel(totalSkillLevel(xp), completedQuests);
+// One perk slot per rank-up past Peasant (Laborer/Squire/Knight/Paladin/
+// Marshal — 5 chances as of Wave 52), matching each rank's own index in
+// RANKS — adding Marshal above made this a 5th slot for free, no change to
+// this function itself needed.
+export function perkSlotsEarned(xp: Record<SkillId, number>, completedQuests: string[], cedricCaptures = 0): number {
+  const rank = rankFromTotalLevel(totalSkillLevel(xp), completedQuests, cedricCaptures);
   return RANKS.findIndex((r) => r.name === rank.name);
 }
