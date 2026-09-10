@@ -43,7 +43,7 @@ function describe(save: SaveGame): SlotInfo {
   const active = idx >= 0 ? QUESTS[idx] : null;
   return {
     name: `${save.character?.name ?? 'Wanderer'}'s Holdfast`,
-    rank: rankFromTotalLevel(total, done).name,
+    rank: rankFromTotalLevel(total, done, save.cedricCaptures ?? 0).name,
     chapterNo: (idx >= 0 ? idx : QUESTS.length - 1) + 1,
     chapterName: active?.name ?? 'The chronicle is told',
     day: (save.dayCount ?? 0) + 1,

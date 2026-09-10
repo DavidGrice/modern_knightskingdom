@@ -31,7 +31,7 @@ import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { CEDRIC_CAMP } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
-import { RECIPES, STATION_LABELS, STATION_TABS, UNLOCK_HINTS } from '@/game/data/recipes';
+import { RECIPES, repairCostFor, STATION_LABELS, STATION_TABS, UNLOCK_HINTS } from '@/game/data/recipes';
 import { SKILLS, levelFromXp, perkSlotsEarned, xpForLevel } from '@/game/data/ranks';
 import { DEEDS } from '@/game/data/achievements';
 import { PERKS, PERK_BY_ID } from '@/game/data/perks';
@@ -419,6 +419,7 @@ function CraftingPanel() {
   const canAfford = useGameStore((s) => s.canAfford);
   const durability = useGameStore((s) => s.durability);
   const repairTool = useGameStore((s) => s.repairTool);
+  const skillTree = useGameStore((s) => s.skillTree);
 
   const [tab, setTab] = useState<Recipe['station']>(
     () => (nearStations[0] as Recipe['station'] | undefined) ?? 'hand',
@@ -480,12 +481,10 @@ function CraftingPanel() {
           <div className="creator-section" style={{ marginBottom: 8 }}>Repair</div>
           {wornTools.map((id) => {
             const dur = durability[id] ?? 100;
-            const recipe = RECIPES.find((r) => r.output === id);
-            // the axe is a starting tool with no recipe of its own — same
-            // flat fallback base cost the store's repairTool action uses
-            const baseCost = recipe?.cost ?? (id === 'axe' ? { wood: 3 } : {});
-            const repairCost: Partial<Record<ItemId, number>> = {};
-            for (const [k, n] of Object.entries(baseCost)) repairCost[k as ItemId] = Math.max(1, Math.round((n as number) * 0.3));
+            // shared with the store's own repairTool action so the preview
+            // and the afford-check can never drift from what's actually
+            // charged (also reflects the Guild Rates/Master Forge talents)
+            const repairCost = repairCostFor(id, skillTree);
             const cost = Object.entries(repairCost).map(([k, n]) => `${n}× ${ITEMS[k as ItemId]?.name ?? k}`).join(' · ');
             const afford = canAfford(repairCost);
             return (
@@ -739,6 +738,7 @@ function GuildPanel() {
   // its own comment) — the vendor's ticket price must agree with what a
   // purchase will really deduct, same reasoning as ShopPanel's own mirror.
   const silverTongue = useGameStore((s) => s.perks.includes('silver_tongue'));
+  const honestWeight = useGameStore((s) => s.perks.includes('honest_weight'));
   const wit = useGameStore((s) => s.attrSpent.wit ?? 0);
   const g = destination ? GUILD_BY_WORLD[destination] : null;
   if (!g) return null;
@@ -811,7 +811,7 @@ function GuildPanel() {
 
           <div className="creator-section" style={{ marginTop: 16 }}>Guild Store</div>
           {g.vendor.map((o) => {
-            const cost = Math.max(1, Math.round(o.price * (1 - wit * 0.04 - (silverTongue ? 0.15 : 0))));
+            const cost = Math.max(1, Math.round(o.price * (1 - wit * 0.04 - (silverTongue ? 0.15 : 0) - (honestWeight ? 0.08 : 0))));
             const locked = (o.minRank ?? 0) > rankIdx;
             return (
               <div className="recipe-row" key={o.item}>
@@ -919,9 +919,10 @@ function GuildErrands({ guildId }: { guildId: string }) {
   );
 }
 
-// The Talent Tree (Phase 21): seven skill branches, three tiers each, node
-// icons drawn from the original game's own assets (piece thumbnails, the
-// castle-stone sprite, a portrait) rather than emoji.
+// The Talent Tree (Phase 21): seven skill branches, four tiers each as of
+// Wave 52's "mastery" tier, node icons drawn from the original game's own
+// assets (piece thumbnails, the castle-stone sprite, a portrait) rather than
+// emoji.
 function TalentTree() {
   const xp = useGameStore((s) => s.xp);
   const skillTree = useGameStore((s) => s.skillTree);
@@ -1105,8 +1106,9 @@ function SkillsPanel() {
   const deeds = useGameStore((s) => s.deeds);
   const perks = useGameStore((s) => s.perks);
   const completedQuests = useGameStore((s) => s.completedQuests);
+  const cedricCaptures = useGameStore((s) => s.cedricCaptures);
   const choosePerk = useGameStore((s) => s.choosePerk);
-  const slotsEarned = perkSlotsEarned(xp, completedQuests);
+  const slotsEarned = perkSlotsEarned(xp, completedQuests, cedricCaptures);
   const unpicked = PERKS.filter((p) => !perks.includes(p.id));
   // trade-off perks (2026-07-29) get their own row rather than blending into
   // the plain upside five — the point is that the cost is legible BEFORE

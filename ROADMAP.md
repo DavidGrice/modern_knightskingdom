@@ -9537,3 +9537,114 @@ already-proven Wave-9 shape almost verbatim.
   review of the merged diff against the live worktree afterward, including independently re-deriving
   the villager HP-bonus arithmetic by hand and confirming the clip-plane fix's math against the ghost
   -preview's own pivot-at-base scaling behavior).
+
+## Wave 52: progression endgame batch — D1 rank above Paladin, D2 perk pool, D3 talent mastery tier, D4 guild max-rank content, D5 challenge tier rewards — SHIPPED 2026-09-10
+
+Nineteenth wave of the new 27-wave plan, and the first genuine 5-item batch in this segment. Research
+found two real mechanisms the plan's own brief hadn't flagged that reshaped D1's design, and one place
+where re-verifying live reversed a "NEW FINDING" this session's own earlier grounding pass had gotten
+wrong — both are worth reading in full below.
+
+- [COMPLETE] ✅ **D1 · a 6th rank, Marshal** (`minTotalLevel: 45`, continuing the existing 3/5/8/12
+  step-diff sequence's own +1 second-order pattern exactly, rather than a round number), gated on
+  `cedricCaptures >= 1` — the same two-part "level floor + real gate" shape Knight/Paladin already use,
+  chosen over the black dragon's own ambient RNG roll (not player-initiated; a player can be eligible
+  for months of in-game nights and never see the fight) specifically because Cedric's Final Stand is
+  player-initiated on demand, deterministic once attempted, and already the game's own narrative climax
+  for the main antagonist arc. Two real mechanisms not named in the plan's own brief were found live and
+  shaped the design: (1) `MainMenu.tsx`'s `TOP_RANK` (`RANKS[RANKS.length-1].name`) gates New Game+
+  eligibility and was ALREADY written, by a prior wave's own comment, to anticipate exactly this —
+  shipping Marshal means a save already at Paladin loses NG+ eligibility until it reaches Marshal too,
+  itself a second real, substantive "genuinely new" consequence the plan's own text asked for, not just
+  a title; (2) rank-transition detection (ceremony/notify/perk-nudge) previously lived ONLY inline
+  inside `addXp`, so a rank crossed by anything other than a skill-XP tick would silently announce
+  nothing — since Marshal's own gate is a boss-capture count, not XP, this was a real trap a naive
+  implementation would have shipped silently broken. Fixed by extracting the shared logic into a new
+  `announceRankChange()` helper, called from both `addXp` (unchanged behavior) and from
+  `markCedricDefeated`'s first-capture branch (the actual fix — confirmed live to fire the full
+  ceremony/notify/perk-nudge sequence the instant `cedricCaptures` flips 0→1, even with the level floor
+  already met beforehand).
+- [COMPLETE] ✅ **D2 · a 5th perk slot + 4 new perks** — the 5th slot required zero code change
+  (`perkSlotsEarned`'s `RANKS.findIndex()` already generalizes over however many ranks exist). Two plain,
+  no-downside perks (Honest Weight: +8% trade prices everywhere including caravan quotes; Forager's
+  Fortune: 10% chance of +1 on any personal harvest) and two trade-offs (Iron Discipline: +20 max
+  stamina but 25% faster tool wear; Quick Draw: +20% bow/crossbow damage but −15% max stamina) — pool
+  now 12 (7 plain/5 trade-off), a stated, reasoned drift from the prior 5:3 ratio toward more trade-off
+  variety now that a 5th slot exists. `useTool`'s wear formula was refactored from a flat either/or value
+  to a multiplicative chain so Iron Discipline can genuinely stack against the existing Steady Hands
+  perk (verified the refactor reproduces Steady Hands' old exact `1.4` value: `2 × 0.7`).
+- [COMPLETE] ✅ **D3 · a 4th "mastery" talent tier**, one per skill (7 new nodes), gated at skill level
+  11 — continuing the existing 2/5/8 sequence's own flat +3 spacing exactly. Every mastery node is a
+  single-constant sharpening of that same skill's own existing tier-3 hook (never a new hook point):
+  guaranteed flower/bonus-stone yield (was a chance), doubled fish double-catch odds, +1 more melee
+  damage, +2 wheat instead of +1 (fixed at both real call sites, matching Wave-9's own "keep the
+  duplicate in sync" precedent), another +20% construction swing, and Master Forge's repair-cost cut.
+- [COMPLETE] ✅ **D4 · one `minRank: 3` vendor item per guild** (a themed weapon/armor/potion per guild's
+  own real identity, all confirmed-existing items with real recipes, no cross- or within-guild id
+  collisions). **A real, load-bearing correction to this session's own earlier grounding, not just the
+  plan's text**: an earlier finding this session made — that guild passives are "confirmed FLAT, no
+  rank-scaling mechanism exists" — was re-verified live during Research and found WRONG. All 5 guilds
+  already have real, Wave-22-shipped `atGuildMaxRank()`-gated passive scaling (e.g. the Knights' own
+  melee-damage bonus doubling from +1 to +2 at max rank), confirmed still working correctly and
+  untouched by this wave. This narrowed D4's real remaining scope to vendor content only — the harder,
+  more novel half of "max rank unlocks nothing new" turned out to already be shipped.
+- [COMPLETE] ✅ **D5 · a real gold+XP reward at every challenge tier** (not just II/III — Research found
+  and stated more precisely than the plan's own text that NO tier of ANY track paid out anything
+  mechanical before this wave, confirmed via `checkChallenges()`'s own notify-and-sound-only body).
+  Reward numbers are indexed by tier POSITION (I/II/III: 15g/40xp, 35g/80xp, 80g/160xp), not by each
+  track's own raw threshold, since the 9 tracks sit on genuinely incomparable difficulty scales (400
+  trees vs. 10,000 gold) — tier position is each track's own real, already-authored difficulty curve.
+  `golden_fortune` (no natural skill to pay XP into) gets doubled flat gold instead (30/70/160).
+  Confirmed live and reasoned explicitly that rewarding tier I too (previously payout-free for the 4
+  non-guild-linked tracks) cannot double-purpose or interfere with the separate guild-eligibility gate
+  in any way — `guildEligible()` reads live off `stats` directly, completely independent of
+  `checkChallenges()`'s own "already notified" bookkeeping.
+- **A real bug found by Verify and fixed, closing a genuine content-balance gap in D3's own Master
+  Forge node**: the first cut's `repairTool` cost math floored EACH ingredient individually
+  (`Math.max(1, Math.round(cost*frac))`), and since every recipe in the game has a per-ingredient
+  quantity topping out at 9, a twentieth of that (Master Forge, frac 0.05) rounds to 0 and gets floored
+  back up to 1 — identical to Guild Rates' own, much larger 0.15 fraction, for every real recipe in the
+  game including the single largest one. A player who bought the harder, later mastery talent would
+  never see it save more material than the easier tier-3 talent already did. Fixed by flooring only the
+  OVERALL total (never per-ingredient): an ingredient that rounds to 0 is simply dropped, and only if
+  EVERY ingredient rounds to 0 is exactly 1 unit of the single priciest ingredient charged instead —
+  verified live that the flagged recipe (`halberd_rune`) now genuinely costs less at Master Forge (1
+  total material) than at Guild Rates (3 total), while a repair can still never become entirely free.
+  **A second, related bug found while fixing the first, not in the original report**: `Panels.tsx` and
+  `StationMenuPanel.tsx` each carried their own duplicate repair-cost calculation, hardcoded to the base
+  0.3 fraction and completely blind to the Guild Rates/Master Forge talents — meaning the displayed
+  preview and the Repair button's affordability gate could both show/require a cost HIGHER than what
+  `repairTool` would actually charge, capable of leaving Repair wrongly disabled for a player who had
+  earned either talent. Fixed by extracting the shared logic into one new `repairCostFor()` helper
+  (`data/recipes.ts`) and pointing the store action and both UI files at it, so preview/afford-gate/
+  actual-charge can never drift apart again.
+- **Verified live end-to-end for all 5 items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing gitignored `node_modules`/`public/assets`/
+  `public/help`), fixed locally via directory junctions to the main checkout's real copies, removed
+  afterward with the main checkout confirmed untouched. Real evidence per item: the full rank ladder
+  crossed live via real `addXp` calls (Knight/Paladin ceremonies firing correctly with proper quest-flag/
+  level ordering); reaching total level 45 with zero Cedric captures correctly stayed at Paladin,
+  proving the real dual gate; calling `markCedricDefeated` directly (not `addXp`) with a 0→1 capture
+  crossing correctly triggered the Marshal ceremony end to end (HUD name, notify text, perk nudge) — the
+  exact gap the design's own fix targeted. Exactly 4 perk slots available at Paladin, exactly 5 at
+  Marshal, confirmed via both direct store calls and a real DOM click; all 4 new perks measured with
+  real percentage-exact effects (Honest Weight ±8% on real sell/buy prices, Forager's Fortune ~12% extra
+  yield across 500 trials against a 0% baseline, Iron Discipline/Quick Draw's exact stamina and
+  multiplicative-wear numbers). All 7 mastery talents gated correctly on both level-11 AND the tier-3
+  prerequisite, with 6 of 7 measured via real percentage/yield sampling (woodcutting 200/200 guaranteed
+  vs. tier-3's ~40%, mining 200/200 vs. ~60%, fishing ~31% vs. ~13%, farming's floor exactly 4 vs. 3,
+  building's swing exactly 0.15 vs. 0.13) and the 7th (combat's flat +1) confirmed by direct source
+  inspection rather than a live damage measurement, stated honestly as a real, deliberate testing
+  limitation rather than glossed over. All 5 guild max-rank items confirmed refused at rank 2 and
+  granted at rank 3 with real inventory/gold deltas, with the pre-existing Wave-22 passive scaling
+  independently re-measured (~29% against a documented 30%) to confirm it's untouched. Challenge
+  rewards confirmed exact for both a guild-linked track (woodcutter, all 3 tiers) and the non-guild
+  `golden_fortune` track, including confirming a skipped tier still pays out correctly and a repeat
+  check never double-pays. `npx tsc --noEmit` / `npm run build`: both clean, verified independently
+  (both by the workflow's own Fix+Reverify pass and, separately, by direct review of the complete
+  15-file merged diff against the live worktree afterward, including independently re-deriving the
+  Marshal level-curve arithmetic, every D3 percentage change, and the `repairCostFor` floor-fix math by
+  hand for both the flagged large recipe and a small 3-ingredient recipe that legitimately still ties
+  between the two talents as an unavoidable integer-floor consequence, not a remaining defect).

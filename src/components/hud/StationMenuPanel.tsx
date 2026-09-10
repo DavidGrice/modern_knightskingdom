@@ -7,7 +7,7 @@
 // physically standing at, with a single link back to the full book for
 // anyone who does want to browse everything.
 import { useGameStore } from '@/game/store/gameStore';
-import { RECIPES, STATION_LABELS, UNLOCK_HINTS } from '@/game/data/recipes';
+import { RECIPES, repairCostFor, STATION_LABELS, UNLOCK_HINTS } from '@/game/data/recipes';
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
@@ -28,6 +28,7 @@ export default function StationMenuPanel() {
   const canAfford = useGameStore((s) => s.canAfford);
   const durability = useGameStore((s) => s.durability);
   const repairTool = useGameStore((s) => s.repairTool);
+  const skillTree = useGameStore((s) => s.skillTree);
 
   if (!activeStation) {
     return (
@@ -55,10 +56,10 @@ export default function StationMenuPanel() {
           <div className="creator-section" style={{ marginBottom: 8 }}>Repair</div>
           {wornTools.map((id) => {
             const dur = durability[id] ?? 100;
-            const recipe = RECIPES.find((r) => r.output === id);
-            const baseCost = recipe?.cost ?? (id === 'axe' ? { wood: 3 } : {});
-            const repairCost: Partial<Record<ItemId, number>> = {};
-            for (const [k, n] of Object.entries(baseCost)) repairCost[k as ItemId] = Math.max(1, Math.round((n as number) * 0.3));
+            // shared with the store's own repairTool action so the preview
+            // and the afford-check can never drift from what's actually
+            // charged (also reflects the Guild Rates/Master Forge talents)
+            const repairCost = repairCostFor(id, skillTree);
             const cost = Object.entries(repairCost).map(([k, n]) => `${n}× ${ITEMS[k as ItemId]?.name ?? k}`).join(' · ');
             const afford = canAfford(repairCost);
             return (

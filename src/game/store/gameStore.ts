@@ -57,7 +57,7 @@ import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { resetCompanionCombat } from '../companion';
 import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT, type MarketEntry } from '../data/trade';
 import { DEEDS } from '../data/achievements';
-import { CHALLENGES, challengeProgress } from '../data/challenges';
+import { CHALLENGES, challengeProgress, CHALLENGE_TIER_REWARD, GOLDEN_FORTUNE_GOLD } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
 import { CLASS_BY_ID, callingSignature } from '../data/classes';
 import { attrsOf, tradeLevelOf, tradeXpOf, tripSpeedMult, SIDE_GOODS, type AttrId } from '../data/attributes';
@@ -68,7 +68,7 @@ import { GUILD_BY_ID, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE 
 import { TALENT_BY_ID, talentBuyable, talentPointsSpent, talentRespecCost } from '../data/skillTree';
 import { CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement } from '../data/villagers';
 import { QUESTS } from '../data/quests';
-import { RECIPES } from '../data/recipes';
+import { RECIPES, repairCostFor } from '../data/recipes';
 import { capOf, labDamagedForm } from '../data/labCapabilities';
 import { ITEMS } from '../data/items';
 import { CHESTPLATE_BY_TIER, CHESTPLATE_ITEM, chestplateTierOf } from '../data/armor';
@@ -80,7 +80,7 @@ import {
 } from '../data/buildables';
 import { STARTER_BLUEPRINT_BY_ID } from '../data/blueprints';
 import { wallSnap } from '../walls';
-import { levelFromXp, perkSlotsEarned, rankFromTotalLevel, RANKS, SKILLS, totalSkillLevel, xpForLevel } from '../data/ranks';
+import { levelFromXp, perkSlotsEarned, rankFromTotalLevel, RANKS, SKILLS, totalSkillLevel, xpForLevel, type RankDef } from '../data/ranks';
 import { audio } from '@/lib/audio';
 import { worldEnv, seasonOf } from '../env';
 import { playerState, resetPlayerState } from '../playerState';
@@ -416,7 +416,7 @@ interface GameState {
   setTargetKind: (k: string | null) => void;
   playEmote: (clip: string) => void;
   pokeNpc: (id: string, clip?: string) => void;
-  beginCeremony: (rank: 'Knight' | 'Paladin') => void;
+  beginCeremony: (rank: 'Knight' | 'Paladin' | 'Marshal') => void;
   joustRichard: () => void;
   openDialogue: (npcId: string) => void;
   acceptSideQuest: (npcId: string, questId: string) => void;
@@ -1094,6 +1094,28 @@ function createGameStore() {
     }
     const next = activeQuestOf(get().completedQuests);
     if (next) notify(`New quest: ${next.name}`);
+  }
+
+  // Wave 52 (D1): the ceremony/notify/perk-nudge sequence that used to live
+  // only inline inside addXp, extracted so a rank crossed WITHOUT any XP
+  // changing (Marshal's gate is cedricCaptures, not a skill level) still
+  // gets announced. markCedricDefeated's first-capture branch calls this
+  // directly since it never calls addXp itself.
+  function announceRankChange(rBefore: RankDef, rAfter: RankDef) {
+    if (rAfter.name === rBefore.name) return;
+    const offerPerk = () => {
+      if (get().perks.length < perkSlotsEarned(get().xp, get().completedQuests, get().cedricCaptures)) {
+        get().notify('A new strength awaits — check your Abilities (K).', true);
+      }
+    };
+    if (rAfter.name === 'Knight' || rAfter.name === 'Paladin' || rAfter.name === 'Marshal') {
+      get().beginCeremony(rAfter.name as 'Knight' | 'Paladin' | 'Marshal');
+      setTimeout(offerPerk, 5300); // after the ceremony's own sequence finishes
+    } else {
+      audio.play('horn', 0.8);
+      get().notify(`You are now a ${rAfter.name} — ${rAfter.title}!`, true);
+      offerPerk();
+    }
   }
 
   return {
@@ -1848,7 +1870,7 @@ function createGameStore() {
       const n = Math.min(amount, cap, held);
       if (n <= 0) return;
       const insuranceCost = insured
-        ? Math.ceil(caravanQuoteGold(item, n, st.attrSpent.wit ?? 0, st.perks.includes('silver_tongue')) * CARAVAN_INSURANCE_RATE)
+        ? Math.ceil(caravanQuoteGold(item, n, st.attrSpent.wit ?? 0, st.perks.includes('silver_tongue'), st.perks.includes('honest_weight')) * CARAVAN_INSURANCE_RATE)
         : 0;
       if (insured && (st.inventory.gold ?? 0) < insuranceCost) {
         st.notify(`Not enough gold to insure the run — ${insuranceCost} needed.`);
@@ -1890,7 +1912,7 @@ function createGameStore() {
         amount = Math.max(1, Math.round(amount * CARAVAN_LOSS_SURVIVE_FRACTION));
         damaged = true;
       }
-      const payout = caravanQuoteGold(run.item, amount, st.attrSpent.wit ?? 0, st.perks.includes('silver_tongue'));
+      const payout = caravanQuoteGold(run.item, amount, st.attrSpent.wit ?? 0, st.perks.includes('silver_tongue'), st.perks.includes('honest_weight'));
       const caravans = { ...st.caravans };
       delete caravans[key];
       set({ caravans, dirty: true });
@@ -2212,7 +2234,13 @@ function createGameStore() {
       const st = get();
       const before = st.durability[id] ?? 100;
       if (before <= 0) return;
-      let wear = st.perks.includes('steady_hands') ? 1.4 : 2;
+      // Wave 52 (D2): refactored to a multiplicative chain so Iron Discipline
+      // (a trade-off that speeds wear) can stack against Steady Hands (which
+      // slows it) instead of the two being mutually exclusive flat values.
+      // Verified this reproduces Steady Hands' old 1.4 exactly: 2 * 0.7 = 1.4.
+      let wear = 2;
+      if (st.perks.includes('steady_hands')) wear *= 0.7;
+      if (st.perks.includes('iron_discipline')) wear *= 1.25;
       if (st.skillTree.includes('smithing2')) wear *= 0.8; // Tempered Edges talent
       // Wave 32: Smith's Prentice calling's small Forge-Scarred passive —
       // less than half of Tempered Edges' own cut, stacks with it.
@@ -2224,15 +2252,8 @@ function createGameStore() {
 
     repairTool: (id) => {
       const st = get();
-      const recipe = RECIPES.find((r) => r.output === id);
-      // the axe is a starting tool with no recipe of its own (never crafted),
-      // so it has no cost to take 30% of — give it a flat, thematic fallback
-      const baseCost = recipe?.cost ?? (id === 'axe' ? { wood: 3 } : null);
-      if (!baseCost) return;
-      const cost: Partial<Record<ItemId, number>> = {};
-      // Guild Rates talent (smithing3): repairs at half the usual fraction
-      const frac = st.skillTree.includes('smithing3') ? 0.15 : 0.3;
-      for (const [k, n] of Object.entries(baseCost)) cost[k as ItemId] = Math.max(1, Math.round((n as number) * frac));
+      const cost = repairCostFor(id, st.skillTree);
+      if (Object.keys(cost).length === 0) return;
       if (!st.canAfford(cost)) { st.notify('Not enough materials to repair that.'); return; }
       const inv = { ...st.inventory };
       for (const [k, n] of Object.entries(cost)) inv[k as ItemId] = (inv[k as ItemId] ?? 0) - (n as number);
@@ -2244,7 +2265,7 @@ function createGameStore() {
     choosePerk: (id) => {
       const st = get();
       if (st.perks.includes(id) || !PERKS.some((p) => p.id === id)) return;
-      if (st.perks.length >= perkSlotsEarned(st.xp, st.completedQuests)) return;
+      if (st.perks.length >= perkSlotsEarned(st.xp, st.completedQuests, st.cedricCaptures)) return;
       set({ perks: [...st.perks, id], dirty: true });
       audio.play('treasure', 0.8);
       const def = PERKS.find((p) => p.id === id)!;
@@ -2276,6 +2297,17 @@ function createGameStore() {
       audio.play('treasure', 0.9);
       audio.play('horn', 1);
       if (first) {
+        // Wave 52 (D1): this is the ONLY moment cedricCaptures can cross
+        // 0 -> 1, which is Marshal's own real gate (ranks.ts) — and this
+        // action never calls addXp, so without this explicit check a rank
+        // crossed purely by this capture (level floor already met) would
+        // grant no ceremony/notify/perk-nudge until some unrelated later XP
+        // tick. announceRankChange is the same helper addXp itself uses.
+        const totalLv = totalSkillLevel(st.xp);
+        announceRankChange(
+          rankFromTotalLevel(totalLv, st.completedQuests, st.cedricCaptures),
+          rankFromTotalLevel(totalLv, st.completedQuests, st.cedricCaptures + 1),
+        );
         // the capstone payout for finishing the whole arc (a weathered
         // homestead siege first, then this) — bigger than any rematch
         st.addItems({ gold: 250, iron_bar: 10, stone: 20 }, 'grant');
@@ -2685,6 +2717,9 @@ function createGameStore() {
       // skill to hang a nudge off, so it gets a tiny universal haggle instead.
       const take = Math.round(price * n * (1 + marketMul + (st.attrSpent.wit ?? 0) * 0.04
         + (st.perks.includes('silver_tongue') ? 0.15 : 0)
+        // Wave 52 (D2): Honest Weight — the same +8% in both directions,
+        // no downside, stacking additively alongside Silver Tongue's own term.
+        + (st.perks.includes('honest_weight') ? 0.08 : 0)
         + (st.character?.classId === 'wanderer' ? 0.02 : 0)));
       inv.gold = (inv.gold ?? 0) + take;
       set({
@@ -2715,6 +2750,7 @@ function createGameStore() {
       // sellItem() gives as a bonus, spent the other direction here.
       const cost = Math.max(1, Math.round(price * (1 + marketMul - (st.attrSpent.wit ?? 0) * 0.04
         - (st.perks.includes('silver_tongue') ? 0.15 : 0)
+        - (st.perks.includes('honest_weight') ? 0.08 : 0)
         - (st.character?.classId === 'wanderer' ? 0.02 : 0))));
       if ((st.inventory.gold ?? 0) < cost) {
         st.notify('Not enough gold!');
@@ -2752,8 +2788,9 @@ function createGameStore() {
       const plots = { ...st.plots };
       delete plots[buildingId]; // back to untilled
       set({ plots, dirty: true });
-      // Heavy Sheaves talent (farming3): +1 wheat every harvest
-      const sheaves = st.skillTree.includes('farming3') ? 1 : 0;
+      // Heavy Sheaves talent (farming3): +1 wheat every harvest.
+      // Bountiful Harvest mastery talent (farming4): +2 instead.
+      const sheaves = st.skillTree.includes('farming4') ? 2 : st.skillTree.includes('farming3') ? 1 : 0;
       st.addItems({ wheat: 2 + sheaves + (Math.random() < 0.35 ? 1 : 0) }, 'gather');
       st.addXp('farming', 12);
       audio.play('treasure', 0.5);
@@ -3700,9 +3737,18 @@ function createGameStore() {
         const { tierIndex } = challengeProgress(c, st.stats);
         const known = tiers[c.id] ?? -1;
         if (tierIndex <= known) continue;
-        // notify once per tier crossed in case several were skipped between checks
+        // notify once per tier crossed in case several were skipped between
+        // checks. Wave 52 (D5): every tier now pays a real gold+skill-XP
+        // reward too (all three tiers, not just II/III — tier I was
+        // previously payout-free for the 4 non-guild-linked tracks, which
+        // was the more inconsistent state) — numbers indexed by tier
+        // position (I/II/III), not by each track's own raw threshold, since
+        // the tracks aren't on one comparable difficulty scale.
         for (let i = known + 1; i <= tierIndex; i++) {
-          st.notify(`${c.icon} Challenge: ${c.tiers[i].label}!`, true);
+          const r = c.skill ? CHALLENGE_TIER_REWARD[i] : { gold: GOLDEN_FORTUNE_GOLD[i], xp: 0 };
+          st.notify(`${c.icon} Challenge: ${c.tiers[i].label}! +${r.gold}g${c.skill ? ` · +${r.xp} ${c.skill} XP` : ''}`, true);
+          st.addItems({ gold: r.gold }, 'grant');
+          if (c.skill) st.addXp(c.skill, r.xp);
         }
         tiers = { ...tiers, [c.id]: tierIndex };
         audio.play('treasure', 0.7);
@@ -3904,26 +3950,11 @@ function createGameStore() {
       if (lvAfter > lvBefore) {
         st.notify(`${skill.charAt(0).toUpperCase() + skill.slice(1)} level ${lvAfter}!`, true);
         const totalAfter = totalSkillLevel(xp);
-        const rBefore = rankFromTotalLevel(totalBefore, st.completedQuests);
-        const rAfter = rankFromTotalLevel(totalAfter, st.completedQuests);
-        if (rAfter.name !== rBefore.name) {
-          // a perk pick awaits whenever earned slots outrun taken perks —
-          // surfaced in the Abilities panel (K) rather than a forced modal,
-          // so the player can defer it instead of choosing on the spot
-          const offerPerk = () => {
-            if (get().perks.length < perkSlotsEarned(get().xp, get().completedQuests)) {
-              st.notify('A new strength awaits — check your Abilities (K).', true);
-            }
-          };
-          if (rAfter.name === 'Knight' || rAfter.name === 'Paladin') {
-            st.beginCeremony(rAfter.name);
-            setTimeout(offerPerk, 5300); // after the ceremony's own sequence finishes
-          } else {
-            audio.play('horn', 0.8);
-            st.notify(`You are now a ${rAfter.name} — ${rAfter.title}!`, true);
-            offerPerk();
-          }
-        }
+        // cedricCaptures is unchanged by this action — passed through as-is
+        // so a level-driven crossing still respects Marshal's own extra gate
+        const rBefore = rankFromTotalLevel(totalBefore, st.completedQuests, st.cedricCaptures);
+        const rAfter = rankFromTotalLevel(totalAfter, st.completedQuests, st.cedricCaptures);
+        announceRankChange(rBefore, rAfter);
       }
     },
 
@@ -3934,8 +3965,12 @@ function createGameStore() {
       if (node.kind === 'fishing') {
         // one bite, one fish — already a single chunky action, unaffected
         // by the multi-hit drip fix below
-        let fish = st.skillTree.includes('fishing3') && Math.random() < 0.15 ? 2 : 1;
+        let fish = st.skillTree.includes('fishing4') ? (Math.random() < 0.3 ? 2 : 1)
+          : st.skillTree.includes('fishing3') && Math.random() < 0.15 ? 2 : 1;
         if (st.perks.includes('hermit')) fish *= 2; // Hermit trade-off perk
+        // Forager's Fortune perk (Wave 52, D2): a plain, no-downside chance
+        // at one more, independent of Hermit's own always-double
+        if (st.perks.includes('foragers_fortune') && Math.random() < 0.1) fish += 1;
         // Wave 9 · report what the stores actually took, not what was on the
         // hook — a "You got 2 fish!" over a full store is indistinguishable
         // from a bug. addItems raises its own "stores are full" toast.
@@ -3968,7 +4003,8 @@ function createGameStore() {
               + (st.attrSpent.diligence ?? 0) * 0.04 // Diligence attribute
               + (callingSignature(st.character?.classId, 'woodcutting') ? 0.05 : 0);
             totals.wood = (totals.wood ?? 0) + (Math.random() < extraChance ? 2 : 1);
-            const flowerChance = st.skillTree.includes('woodcutting3') ? 0.36 : 0.18;
+            // Ancient Growth mastery talent (woodcutting4): flowers guaranteed
+            const flowerChance = st.skillTree.includes('woodcutting4') ? 1 : st.skillTree.includes('woodcutting3') ? 0.36 : 0.18;
             if (Math.random() < flowerChance) totals.flowers = (totals.flowers ?? 0) + 1;
             xpTotal += 10;
             st.useTool('axe');
@@ -3976,7 +4012,8 @@ function createGameStore() {
             xpSkill = 'mining';
             if (node.variant === 'iron') {
               // Vein Splitter talent: bonus stone from veins twice as often
-              const veinBonus = (st.skillTree.includes('mining3') ? 0.6 : 0.3) + (st.attrSpent.diligence ?? 0) * 0.04;
+              // Deep Vein Mastery mastery talent (mining4): bonus stone guaranteed
+              const veinBonus = (st.skillTree.includes('mining4') ? 1 : st.skillTree.includes('mining3') ? 0.6 : 0.3) + (st.attrSpent.diligence ?? 0) * 0.04;
               totals.iron_ore = (totals.iron_ore ?? 0) + 1;
               if (Math.random() < veinBonus) totals.stone = (totals.stone ?? 0) + 1;
               xpTotal += 16;
@@ -4007,6 +4044,14 @@ function createGameStore() {
         // any one of them, so it applies uniformly across tree/rock/herb
         if (st.perks.includes('hermit')) {
           for (const k of Object.keys(totals) as ItemId[]) totals[k] = (totals[k] ?? 0) * 2;
+        }
+        // Forager's Fortune perk (Wave 52, D2): one roll per harvest action
+        // (not per hit — hits are already batched above), +1 of the node's
+        // own primary resource on a hit. A plain sibling to Hermit's
+        // always-double trade-off, no downside.
+        if (st.perks.includes('foragers_fortune') && Math.random() < 0.1) {
+          const primary: ItemId | null = node.kind === 'tree' ? 'wood' : node.kind === 'rock' ? 'stone' : node.kind === 'herb' ? 'herb' : null;
+          if (primary) totals[primary] = (totals[primary] ?? 0) + 1;
         }
         // Wave 9 · the node is still fully spent (the swing happened either
         // way — the wasted yield IS the cost of letting your stores overflow),
@@ -4084,7 +4129,7 @@ function createGameStore() {
       // swinging the sickle must not level it. Their equivalent, trade
       // mastery, is granted by the completed HAUL (awardTradeXp in haul.ts),
       // which is where every other trade earns it too.
-      const sheaves = st.skillTree.includes('farming3') ? 1 : 0;
+      const sheaves = st.skillTree.includes('farming4') ? 2 : st.skillTree.includes('farming3') ? 1 : 0;
       return { item: 'wheat' as ItemId, amount: 2 + sheaves + (Math.random() < 0.35 ? 1 : 0) };
     },
 
@@ -4556,6 +4601,7 @@ function createGameStore() {
       const swingBonus = (st.guild === 'builders' ? (atGuildMaxRank(st.guild, st.guildRanks, 'builders') ? 0.45 : 0.3) : 0)
         + (st.skillTree.includes('building2') ? 0.15 : 0)
         + (st.skillTree.includes('building3') ? 0.15 : 0)
+        + (st.skillTree.includes('building4') ? 0.20 : 0) // Grand Architect mastery talent
         + (callingSignature(st.character?.classId, 'building') ? 0.05 : 0);
       const swing = amount * (1 + swingBonus);
       const before = b.built ?? 0;

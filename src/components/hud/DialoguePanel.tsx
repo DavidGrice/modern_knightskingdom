@@ -436,9 +436,10 @@ export default function DialoguePanel() {
               const tradeable = caravanTradeableItems(inventory);
               const wit = attrSpent.wit ?? 0;
               const silverTongue = perks.includes('silver_tongue');
+              const honestWeight = perks.includes('honest_weight');
               const held = caravanItem ? (inventory[caravanItem] ?? 0) : 0;
               const qty = Math.max(1, Math.min(caravanQty, cap, held || 1));
-              const quote = caravanItem ? caravanQuoteGold(caravanItem, qty, wit, silverTongue) : 0;
+              const quote = caravanItem ? caravanQuoteGold(caravanItem, qty, wit, silverTongue, honestWeight) : 0;
               const insuranceCost = caravanItem ? Math.ceil(quote * CARAVAN_INSURANCE_RATE) : 0;
 
               return (

@@ -1,4 +1,4 @@
-import type { Recipe } from '../types';
+import type { ItemId, Recipe } from '../types';
 
 export const RECIPES: Recipe[] = [
   // ---- by hand ----
@@ -248,6 +248,46 @@ export const RECIPES: Recipe[] = [
     cost: { flowers: 5, herb: 3 }, station: 'campfire', skill: 'farming', skillXp: 28,
   },
 ];
+
+// Shared by gameStore's repairTool action AND both repair-preview UIs
+// (Panels.tsx's Crafting-book Repair section, StationMenuPanel.tsx's
+// quick-menu) so the displayed/afford-checked cost can never drift from the
+// cost actually charged — before Wave 52 (D3) the two UI copies hardcoded
+// the base 0.3 fraction and never looked at the smithing3/smithing4 talents
+// at all, so a player with either repair-discount talent could see (and be
+// gated on) a HIGHER preview cost than what repairTool would really charge.
+//
+// The `Math.max(1, ...)` per-ingredient floor also used to make Guild Rates
+// (0.15) and Master Forge (0.05) charge identically for every real recipe:
+// every ingredient quantity in this file tops out at 9, so a twentieth of it
+// rounds to 0 and gets floored back up to 1 exactly like a much bigger
+// fraction would. Flooring only the OVERALL total (never per-ingredient)
+// fixes that: multi-ingredient recipes (the enchant runes, the crested
+// armor/weapon tiers) now genuinely cost less material at Master Forge than
+// at Guild Rates, and a repair can still never be entirely free — if every
+// ingredient rounds to 0, exactly 1 unit of the single priciest ingredient
+// is charged instead of 1 of every ingredient.
+export function repairCostFor(id: ItemId, skillTree: string[]): Partial<Record<ItemId, number>> {
+  const recipe = RECIPES.find((r) => r.output === id);
+  // the axe is a starting tool with no recipe of its own (never crafted),
+  // so it has no cost to take a fraction of — give it a flat, thematic fallback
+  const baseCost: Partial<Record<ItemId, number>> = recipe?.cost ?? (id === 'axe' ? { wood: 3 } : {});
+  const entries = Object.entries(baseCost) as [ItemId, number][];
+  if (entries.length === 0) return {};
+  // Guild Rates talent (smithing3): repairs at half the usual fraction.
+  // Master Forge mastery talent (smithing4): a twentieth of materials.
+  const frac = skillTree.includes('smithing4') ? 0.05 : skillTree.includes('smithing3') ? 0.15 : 0.3;
+  const cost: Partial<Record<ItemId, number>> = {};
+  for (const [k, n] of entries) {
+    const scaled = Math.round(n * frac);
+    if (scaled > 0) cost[k] = scaled;
+  }
+  if (Object.keys(cost).length === 0) {
+    const [priciest] = [...entries].sort((a, b) => b[1] - a[1])[0];
+    cost[priciest] = 1;
+  }
+  return cost;
+}
 
 export const STATION_LABELS: Record<Recipe['station'], string> = {
   hand: 'By hand',

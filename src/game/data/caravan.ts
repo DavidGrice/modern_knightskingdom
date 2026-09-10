@@ -111,11 +111,13 @@ export function caravanTradeableItems(inventory: Partial<Record<ItemId, number>>
   return (Object.keys(SELL_PRICES) as ItemId[]).filter((id) => (inventory[id] ?? 0) > 0);
 }
 
-/** The exact same Wit/Silver-Tongue haggle formula `sellItem()` already uses
- *  (gameStore.ts: `1 + wit*0.04 + (silverTongue ? 0.15 : 0)`), run through
- *  the caravan's own markup instead of the flat merchant rate — no new
- *  pricing table invented, one rounding at the end same as sellItem(). */
-export function caravanQuoteGold(item: ItemId, qty: number, wit: number, silverTongue: boolean): number {
+/** The exact same Wit/Silver-Tongue/Honest-Weight haggle formula `sellItem()`
+ *  already uses (gameStore.ts: `1 + wit*0.04 + (silverTongue ? 0.15 : 0) +
+ *  (honestWeight ? 0.08 : 0)`), run through the caravan's own markup instead
+ *  of the flat merchant rate — no new pricing table invented, one rounding
+ *  at the end same as sellItem(). `honestWeight` defaults false so any
+ *  caller that predates Wave 52's perk keeps working unchanged. */
+export function caravanQuoteGold(item: ItemId, qty: number, wit: number, silverTongue: boolean, honestWeight = false): number {
   const price = SELL_PRICES[item] ?? 0;
-  return Math.round(price * qty * CARAVAN_MARKUP * (1 + wit * 0.04 + (silverTongue ? 0.15 : 0)));
+  return Math.round(price * qty * CARAVAN_MARKUP * (1 + wit * 0.04 + (silverTongue ? 0.15 : 0) + (honestWeight ? 0.08 : 0)));
 }
