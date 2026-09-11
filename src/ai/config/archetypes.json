@@ -98,7 +98,29 @@
     "action is ever assembled to read it. 'guard' itself is UNTOUCHED and",
     "remains reserved for a real future full migration off Defenders.tsx — see",
     "rosterSync.ts's own header and PHASE_STATUS.md's phase 7 section for the",
-    "full reasoning this wave's design pass grounded itself in."
+    "full reasoning this wave's design pass grounded itself in.",
+    "Updated 2026-09-10 (Wave 53, E1): 'ambient' drops 'wander' and gains",
+    "'roam' (actions/roam.ts) — a real, load-bearing content fix, not a",
+    "rename. Verified live that 'wander' can never win for this archetype:",
+    "its own `no_renderer` gate requires tier D (off-region — a home-meadow",
+    "songbird the player can see is never that), and its `roster_villager`",
+    "gate reads `bb.job`, which Agent.think only ever sets from a live",
+    "`gs.villagers` roster lookup no wildlife id can ever match — so keeping",
+    "'wander' listed here would misrepresent live behaviour against this",
+    "file's own 'state gaps precisely' convention (see the phase-1 note",
+    "above on why 'wander'/'socialize'/'idle' were once aspirational for the",
+    "same reason). 'roam' is a new, narrower Action built specifically for a",
+    "rendered, non-roster wildlife agent — see its own header for the full",
+    "argument for why it is a new file rather than a widened wander.ts gate.",
+    "'idle' stays listed and stays exactly as aspirational as it always was",
+    "(still zero registered Action anywhere) — the wildlife renderer",
+    "(AmbientWildlife.tsx) plays its own small hop/bob idle animation off",
+    "agent.bb.movement.status directly between roams (verified live: the",
+    "donor mesh has no public/assets/props/objrig/l254600.* OBJ-rig export,",
+    "so RiggedProp's own rig-driven graze sway — which needs that export —",
+    "cannot apply here the way it does for Wildlife.tsx's horses; see",
+    "AmbientWildlife.tsx's own header), so nothing here needs `idle` to ever",
+    "resolve to a real Action for wildlife to read as alive."
   ],
   "villager": {
     "label": "Villager",
@@ -131,6 +153,6 @@
   "ambient": {
     "label": "Ambient",
     "needProfile": "villager",
-    "intrinsic": ["wander", "idle"]
+    "intrinsic": ["roam", "idle"]
   }
 }

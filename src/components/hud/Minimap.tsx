@@ -14,7 +14,7 @@ import { BATTLE_DOME, CEDRIC_CAMP, CEDRIC_WORLD, KEEP_INTERIOR, POND, STORM_WORL
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
-import { NPCS } from '@/game/data/npcs';
+import { NPCS, isNpcPresent } from '@/game/data/npcs';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { worldEnv } from '@/game/env';
 import { playerState } from '../fps/PlayerController';
@@ -328,6 +328,12 @@ export default function Minimap() {
       ctx.fillStyle = '#e8c141';
       for (const n of NPCS) {
         if ((n.world ?? null) !== (st.destination ?? null)) continue;
+        // Wave 53 (E5) · this loop never checked isNpcRevealed at all — a
+        // pre-existing, adjacent gap noticed while wiring court hours in
+        // (an un-revealed NPC's dot would already draw). isNpcPresent folds
+        // both checks into the one line, same pattern this file's own
+        // merchant icon below already established for a time-gated dot.
+        if (!isNpcPresent(n, st.completedQuests, worldEnv.time)) continue;
         ctx.beginPath();
         ctx.arc(px(n.x), pz(n.z), 3, 0, Math.PI * 2);
         ctx.fill();

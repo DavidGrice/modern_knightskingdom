@@ -286,6 +286,12 @@ export interface WanderConfig {
 
 export interface AmbientConfig {
   wander: WanderConfig;
+  /** Wave 53 (E1) — the ambient-archetype songbird population's own roam
+   *  geometry (actions/roam.ts). Same `WanderConfig` shape as `wander`
+   *  above (both are "pick a walkable point on a ring, walk to it, pause"),
+   *  tuned smaller/quicker — see ambient.json's own `_doc` for why this
+   *  isn't just `wander` reused. */
+  roam: WanderConfig;
 }
 
 /** §3.2 — how a target kind resolves to a real point an agent can stand at.

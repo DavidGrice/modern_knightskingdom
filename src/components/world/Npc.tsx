@@ -14,7 +14,7 @@ import RiggedFigure from '../character/RiggedFigure';
 import { ResourceProp } from '../character/Equipment';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import type { ItemId } from '@/game/types';
-import { NPCS, isNpcRevealed, type NpcDef } from '@/game/data/npcs';
+import { NPCS, isNpcRevealed, isCourtHours, type NpcDef } from '@/game/data/npcs';
 import { NIGHT_GATHER_SPOT } from '@/game/data/world';
 import { worldEnv } from '@/game/env';
 import { navSteer } from '@/game/navgrid';
@@ -78,6 +78,24 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     }
     const g = group.current;
     if (!g) return;
+    // Wave 53 (E5) · King Leo/Queen Leonora only (`def.courtHours`): the
+    // court holds by day, not at night. A per-frame `g.visible` toggle here
+    // — not a change to the `revealed` array either default export or
+    // DestinationCourtNpcs computes at render time — because `worldEnv.time`
+    // is a plain mutable value nothing subscribes to (game/env.ts's own
+    // header): those two arrays only ever recompute when completedQuests/
+    // destination/villagers changes, none of which fire as the clock ticks
+    // through dawn/dusk. Gating here, in the one place this component
+    // already runs every real frame, is what makes the court actually
+    // appear/disappear on schedule instead of only refreshing on an
+    // unrelated event hours later (or never). See NpcDef.courtHours' own doc
+    // for why the dead CourtNpc.schedule day/night lerp below can't be
+    // reused for this instead.
+    if (def.courtHours && !isCourtHours(worldEnv.time)) {
+      g.visible = false;
+      return;
+    }
+    g.visible = true;
     mob.clip = clipRef.current;
 
     // Phase 3, iteration 3.4 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR

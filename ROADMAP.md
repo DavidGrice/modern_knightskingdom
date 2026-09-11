@@ -9648,3 +9648,110 @@ wrong — both are worth reading in full below.
   Marshal level-curve arithmetic, every D3 percentage change, and the `repairCostFor` floor-fix math by
   hand for both the flagged large recipe and a small 3-ingredient recipe that legitimately still ties
   between the two talents as an unavoidable integer-floor consequence, not a remaining defect).
+
+## Wave 53: a wildlife ambient spawner (E1) + a real traveling-merchant route (E4) + NPC daily schedules (E5) — SHIPPED 2026-09-10
+
+Twentieth wave of the new 27-wave plan, and the deepest research pass of this whole segment (over 20
+files read in full, including an exhaustive full-text scan of the entire 264-entry asset-capabilities
+catalog). Found a genuinely load-bearing gap the plan's own text didn't anticipate for E1, a real
+architecture fork for E4 resolved against this project's own standing caution, and two real,
+independently-verified implementation-time corrections when live facts contradicted the closed design.
+
+- [COMPLETE] ✅ **E1 · a real, Agent-driven wildlife population** — a new `roam` Action (`actions/`
+  `roam.ts`), a new small spawner module (`wildlifeSync.ts`, matching `rosterSync.ts`/`courtAmbientSync`
+  `.ts`'s established shape), and a new Companion.tsx-style renderer (`AmbientWildlife.tsx`) — the first
+  non-humanoid entity in this codebase ever driven by a genuine `agentManager`-spawned Agent. **The real,
+  load-bearing finding that reshaped this item entirely**: the plan's own claim that `ambient`'s intrinsic
+  `wander` action already "has real action consumers" is true only in the sense that `wander.ts` exists —
+  it structurally can NEVER win for a visible, non-roster wildlife agent. Its own `no_renderer` gate
+  requires LOD tier D (off-region — never true for a meadow creature the player is meant to see), and its
+  `roster_villager` gate reads `bb.job`, which is only ever set from a live roster lookup no wildlife id
+  can ever match — confirmed by reading every gate directly, not inferred from the archetype's name. So
+  spawning under `ambient` unmodified would have produced a permanently stationary agent; "wire the
+  ambient archetype" could not be satisfied by a spawner alone. Rather than widen `wander.ts`'s own tuned,
+  load-bearing gates (which would risk starving Villagers.tsx's four shipped cascade branches for a
+  population that doesn't need those restrictions in the first place), a genuinely new, narrowly-scoped
+  Action was built instead — the same shape of fix Wave 11 made for `villager` itself, applied here to a
+  different archetype. `ambient`'s own intrinsic list changes from `["wander","idle"]` to `["roam","idle"]`
+  — `idle` stays deliberately unregistered (confirmed still zero implementation anywhere), since the
+  quadruped/bird renderer's own manual hop/bob animation already supplies a convincing "alive, not frozen"
+  read between roams without needing a `PLAY_ANIM` intent at all. **A second real finding, from an
+  exhaustive asset audit, not a guess**: a full-text scan of all 264 entries in this project's real asset-
+  capabilities catalog confirms zero deer, rabbit, or any second ground-creature mesh exists anywhere in
+  the extraction — every animal-tagged entry is 6 horses, 2 dragons, 2 bats, and exactly one bird (the
+  wild falcon's own donor, "Parrot," `l254600`). Honest scope-down, stated plainly rather than guessed
+  around: ships exactly one new species, a small ground-hopping songbird flock (4 birds, home-meadow only)
+  reusing that same real donor mesh a second time at a different scale and role — explicitly not a
+  procedural/placeholder deer or rabbit, which would have read as a visible downgrade next to this
+  project's real-extracted-mesh standard.
+- [COMPLETE] ✅ **E4 · a real multi-stop merchant route**, resolved against a genuine, explicitly-weighed
+  architecture fork rather than defaulting to whichever was easier: this project's own prior planning
+  ("Wave 19 onward" plan's "Explicitly Deferred" section) already reasoned through and declined a
+  wholesale migration of legacy per-frame cascades onto the Agent/Reasoner system as "a long-game rewrite,
+  not a next step" — but that caution is about a whole-roster rewrite, not one bounded NPC, and the
+  merchant's own job (an authored, fixed daily schedule with no competing needs to weigh) is exactly the
+  case the Reasoner/utility-AI system was built to replace, not extend. Chose to extend the existing
+  `navSteer`-driven cascade instead of a full Agent migration, reasoning explicitly that a real Agent would
+  buy nothing behaviorally for a scripted sequence `navSteer` already expresses cheaply, while putting the
+  merchant's own carefully-guarded external contract (`MERCHANT_SPOT`/`merchantPresent`, read live by
+  `PlayerController`/`Minimap`/`Defenders.tsx`'s guard post) at real risk for no gain. **The real content
+  addition, grounded entirely in already-placed geometry, not invented coordinates**: the merchant's
+  existing road route was found to already run 0.4m past Alric's own real homestead spot (and ~4m past
+  Beda's) on both legs, breezed through at full walk speed with zero acknowledgment — his day route now
+  genuinely stops there (a real "passing through the village" beat) on the way in and out, splitting the
+  single old walk into a real 8-stage cycle with two live-measured, level-appropriate dwells. Trade/pricing
+  (Wave 49's dynamic market) is explicitly untouched — a pure movement/presence change layered on top.
+- [COMPLETE] ✅ **E5 · a shared schedule primitive + a real new court-hours schedule** — a full audit of
+  every "is this NPC/feature active right now" check in the codebase found not one existing binary day/
+  night flip (the plan's own framing) but **three** independent, hand-rolled time-window literals sharing
+  no code (`isWorkingHours`/`isWatchHours` in `villagers.ts`, `merchantPresent` in `trade.ts`) — plus a
+  **fourth, already-dead** schedule concept (`Npc.tsx`'s `CourtNpc.schedule` day/night lerp, confirmed via
+  its own gate logic to structurally return zero real NPCs under every currently-shipped court character).
+  Built one new shared `activeWindow(time, start, end, inclusive)` primitive (`data/schedule.ts`),
+  preserving each of the three existing checks' own exact inclusive/exclusive boundary convention
+  byte-for-byte rather than picking one style and calling the others close enough, and used it to add the
+  first genuinely new schedule: King Leo and Queen Leonora now hold court by day only, hidden from the
+  world (and the minimap) at night — the cleanest, most-grounded choice available, since the dead
+  `CourtNpc.schedule` mechanism can't be reused for them (both live at a real destination, not the
+  homestead its own night-gather-spot geometry assumes). Confirmed live that reading the day/night state
+  correctly required gating inside the NPC's own always-running per-frame loop rather than a render-time
+  reveal list, since the game clock is a plain mutable value with no store subscription to re-trigger a
+  React re-render off of — a render-time filter would have looked correct in code but only actually
+  updated on an unrelated later event.
+- **Two real implementation-time deviations from the closed research design, both independently verified
+  correct rather than taken on faith**: (1) the research's own file plan called for rendering the songbird
+  through `RiggedProp` (reusing its automatic graze-sway animation "for free") — Implement found live that
+  `RiggedProp`'s rig loader requires a matching OBJ+MTL export this donor mesh does not have, which would
+  have silently rendered an invisible bird rather than an animated one; fixed by rendering through the
+  same plain GLB path the existing wild falcon already proves works for this exact mesh, with a small
+  hand-authored hop/bob animation in place of the rig-driven sway. (2) the research's own file list
+  included `courtAmbientSync.ts` for the court-hours gate; Implement found this Agent-lifecycle module has
+  no player-visible render output of its own (`Npc.tsx` owns the actual on-screen toggle) and carries the
+  same clock-reactivity problem the `Npc.tsx` fix above already solves correctly — gating it too would have
+  been a no-op dressed up as a fix, so it was deliberately left untouched, stated plainly rather than
+  silently included to match the original file count.
+- **Verified live end-to-end for all 3 items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing gitignored `public/help`; `node_modules`/`public/`
+  `assets` junctions already existed), fixed locally via directory junctions to the main checkout's real
+  copies, removed afterward with the main checkout confirmed untouched. Real evidence per item: all 4
+  songbird Agents confirmed alive via `agentManager.agents` with genuinely cycling `MOVE_TO` intents and
+  measured real position drift across 16s of elapsed frames, and confirmed correctly tiered from C to D
+  the instant the player travels away (home-only, as designed); the merchant's full 8-stage day cycle
+  forced end-to-end via a new debug handle, every walking leg converging to within ~0.5m of its real target
+  inside its tuned time buffer with zero teleport-pop, and a screenshot at the new village stop showing the
+  cart standing directly beside a real, named, already-placed NPC; King/Queen's presence proven via three
+  independent live signals (minimap dot count, the real "Talk to..." interact prompt, and a direct
+  Three.js scene-graph visibility read) all correctly flipping across a forced day/night cycle. One test-
+  methodology artifact caught and correctly self-diagnosed during Implement's own verification (a
+  compressed day-length test produced an apparent large teleport-pop that vanished once retested at the
+  real tuned day length — a test-setup mismatch, not a design bug). Zero console/page errors throughout.
+  `npx tsc --noEmit` / `npm run build`: both clean, verified independently (both by the workflow's own
+  Verify pass — 0 findings, no fix pass needed — and, separately, by direct review of the complete 19-file
+  merged diff against the live worktree afterward, including independently re-deriving every one of
+  `wander.ts`'s own cited gate values by direct read to confirm the "wander cannot drive this" finding,
+  confirming the songbird's exact asset path is byte-identical to the wild falcon's own proven GLB
+  reference, hand-verifying `activeWindow`'s boundary math against all three pre-existing checks it
+  replaced, and hand-checking the merchant's new 8-window `stageFor()` arithmetic for internal consistency
+  and symmetry between the morning and evening legs).

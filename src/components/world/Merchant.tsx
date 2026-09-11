@@ -56,7 +56,6 @@ const MERCHANT_KEEP_PROPS = false;
 // WALK_SPEED, confirming that shortfall lands in the off-road tail, not the
 // road leg) — call it ~66.5s to fully close the gap. 0.1 (72s) leaves ~5.5s
 // of margin over that measurement rather than trimming it to the wire.
-const WALK_BUFFER = 0.1;
 const WALK_SPEED = 1.2;
 
 // The actual road's far entry point — the same spot every newcomer walks in
@@ -67,12 +66,64 @@ const WALK_SPEED = 1.2;
 // only true by coincidence of direction, not by following the road itself.
 const OFF_STAGE = roadEntry();
 
-type Stage = 'away' | 'arriving' | 'present' | 'leaving';
+// Wave 53 (E4) · a real multi-stop day route, layered entirely on the SAME
+// OFF_STAGE<->MERCHANT_SPOT walk this file already tuned above — no new
+// coordinates invented anywhere. VILLAGE_STOP is Alric's own real corner
+// (data/npcs.ts: farmer_alric, x=-40, z=38), snapped onto the road's own
+// leg-2 centreline z (road.ts: `SZ * ROAD_TILE` = 3 * 12.8 = 38.4 — leg 2's
+// westward trunk runs x:0 to x:-115.2 along exactly that row). The
+// merchant's existing route ALREADY threads directly through this row on
+// both legs today — this is 0.4m off Alric's own spot and ~4m off Beda's
+// (x=-35, z=42) — so this is a real "passing through the village" beat at a
+// point his cart was already breezing past with zero acknowledgment, not an
+// invented stop with its own new geometry.
+const VILLAGE_STOP = { x: -40, z: 38.4 };
+
+// The walk becomes three legs each way instead of one: OFF_STAGE<->
+// VILLAGE_STOP, a dwell AT VILLAGE_STOP, then VILLAGE_STOP<->MERCHANT_SPOT.
+// Split against this file's own already-measured ~66.5s OFF_STAGE<-
+// >MERCHANT_SPOT walk (Wave 46's own live sampling above) by real road
+// distance along that same route: OFF_STAGE to the VILLAGE_STOP row is
+// ~52.8m on-road (leg 3's own 25.6m N-S run down to the leg-2 junction, then
+// 27.2m of leg 2's own E-W run west to x=-40); VILLAGE_STOP to MERCHANT_SPOT
+// is the remaining ~49.6m on-road (leg 2's own last 36.8m west to the camp
+// spur's junction, then 12.8m down the spur) plus the same ~9.6m off-road
+// tail Wave 46 already measured into camp. VILLAGE_DWELL is new — not
+// derived from the old walk, a real deliberate pause — and WALK_BUFFER
+// widens to fit all three legs, the "widen the existing buffer to absorb the
+// added dwell time" this wave's own research called for.
+// LIVE-VERIFIED this wave (real headless Chrome — see this repo's own
+// CLAUDE.md for the required launch flags — worldEnv.time scrubbed via the
+// window.__kkenv debug handle across the new windows, merchant position
+// sampled at each transition): he reaches VILLAGE_STOP and MERCHANT_SPOT
+// with margin to spare at both boundaries, no teleport-pop at either seam.
+const TO_VILLAGE_BUFFER = 0.047; // ~34s at the default 720s day
+const VILLAGE_DWELL = 0.021; // ~15s dwell at the village corner
+const VILLAGE_TO_SPOT_BUFFER = 0.056; // ~40s at the default 720s day
+const WALK_BUFFER = TO_VILLAGE_BUFFER + VILLAGE_DWELL + VILLAGE_TO_SPOT_BUFFER;
+
+type Stage =
+  | 'away' | 'to_village_am' | 'village_am' | 'arriving'
+  | 'present' | 'leaving' | 'village_pm' | 'to_offstage';
 
 function stageFor(time: number): Stage {
   if (merchantPresent(time)) return 'present';
-  if (time > 0.3 - WALK_BUFFER && time <= 0.3) return 'arriving';
-  if (time >= 0.72 && time < 0.72 + WALK_BUFFER) return 'leaving';
+  // morning approach: OFF_STAGE -> VILLAGE_STOP -> (dwell) -> MERCHANT_SPOT,
+  // counting the three sub-windows down to 0.3 (present's own start)
+  const toVillageStart = 0.3 - WALK_BUFFER;
+  const villageAmStart = 0.3 - VILLAGE_TO_SPOT_BUFFER - VILLAGE_DWELL;
+  const arrivingStart = 0.3 - VILLAGE_TO_SPOT_BUFFER;
+  if (time > toVillageStart && time <= villageAmStart) return 'to_village_am';
+  if (time > villageAmStart && time <= arrivingStart) return 'village_am';
+  if (time > arrivingStart && time <= 0.3) return 'arriving';
+  // evening departure: MERCHANT_SPOT -> VILLAGE_STOP -> (dwell) -> OFF_STAGE,
+  // the same three windows mirrored up from 0.72 (present's own end)
+  const leavingEnd = 0.72 + VILLAGE_TO_SPOT_BUFFER;
+  const villagePmEnd = leavingEnd + VILLAGE_DWELL;
+  const toOffstageEnd = 0.72 + WALK_BUFFER;
+  if (time >= 0.72 && time < leavingEnd) return 'leaving';
+  if (time >= leavingEnd && time < villagePmEnd) return 'village_pm';
+  if (time >= villagePmEnd && time < toOffstageEnd) return 'to_offstage';
   return 'away';
 }
 
@@ -105,6 +156,16 @@ export default function Merchant() {
   const [clip, setClip] = useState('anim_r_restpose');
   const [gaitSpeed, setGaitSpeed] = useState(0);
   const state = useRef({ x: OFF_STAGE.x, z: OFF_STAGE.z, yaw: MERCHANT_SPOT.yaw, stage: 'away' as Stage });
+  // Wave 53 (E4) · debug/test only, same convention as this project's other
+  // __kk* handles (AgentManager's __kkai, Locomotion's __kkloco, road.ts's
+  // own __kkroadEntry/__kkonRoad) — lets a live smoke test read the
+  // merchant's real stage/position without adding a UI element, which is
+  // how this wave's own multi-stop timing was actually verified (real
+  // headless Chrome, worldEnv.time scrubbed via __kkenv, sampled against
+  // this handle at each stage transition).
+  if (typeof window !== 'undefined') {
+    (window as unknown as Record<string, unknown>).__kkmerchant = state.current;
+  }
 
   useFrame((_, dt) => {
     const g = group.current;
@@ -113,9 +174,13 @@ export default function Merchant() {
     const stage = stageFor(worldEnv.time);
 
     // a stage change either end resets the walk cleanly, rather than
-    // inheriting stale navSteer path state from the opposite direction
+    // inheriting stale navSteer path state from the opposite direction.
+    // Only entering `to_village_am` (from `away`) needs an explicit
+    // position reset — every other transition already starts exactly where
+    // the PREVIOUS stage left him (present pins MERCHANT_SPOT, village_am/
+    // village_pm pin VILLAGE_STOP), so there is nothing stale to clear.
     if (stage !== s.stage) {
-      if (stage === 'arriving') { s.x = OFF_STAGE.x; s.z = OFF_STAGE.z; }
+      if (stage === 'to_village_am') { s.x = OFF_STAGE.x; s.z = OFF_STAGE.z; }
       s.stage = stage;
     }
 
@@ -133,7 +198,7 @@ export default function Merchant() {
       s.yaw = MERCHANT_SPOT.yaw;
       g.position.set(s.x, homeGroundY(s.x, s.z), s.z);
       // RiggedFigure convention (see Villagers.tsx) — the same +Math.PI the
-      // arriving/leaving branch below already applies; missing here meant
+      // walking branch below already applies; missing here meant
       // the merchant stood backwards (back to the player) the entire time
       // he's actually interactable, found investigating a reported rig bug.
       g.rotation.y = s.yaw + Math.PI;
@@ -142,8 +207,28 @@ export default function Merchant() {
       return;
     }
 
-    // arriving or leaving: walk toward whichever end this stage is headed
-    const [tx, tz] = stage === 'arriving' ? [MERCHANT_SPOT.x, MERCHANT_SPOT.z] : [OFF_STAGE.x, OFF_STAGE.z];
+    if (stage === 'village_am' || stage === 'village_pm') {
+      // Wave 53 (E4) · a real "passing through the village" beat — pinned
+      // exactly on VILLAGE_STOP, same restpose/gaitSpeed-0 treatment as
+      // `present` above, just without overriding yaw: he keeps facing
+      // whichever way the walk that got him here already turned him
+      // (west on the way out, east on the way back), rather than snapping
+      // to a second authored facing the way MERCHANT_SPOT's own yaw does.
+      s.x = VILLAGE_STOP.x;
+      s.z = VILLAGE_STOP.z;
+      g.position.set(s.x, homeGroundY(s.x, s.z), s.z);
+      g.rotation.y = s.yaw + Math.PI;
+      if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+      if (gaitSpeed !== 0) setGaitSpeed(0);
+      return;
+    }
+
+    // to_village_am / arriving / leaving / to_offstage: walk toward
+    // whichever end this leg is headed
+    const [tx, tz] = stage === 'to_village_am' ? [VILLAGE_STOP.x, VILLAGE_STOP.z]
+      : stage === 'arriving' ? [MERCHANT_SPOT.x, MERCHANT_SPOT.z]
+      : stage === 'leaving' ? [VILLAGE_STOP.x, VILLAGE_STOP.z]
+      : [OFF_STAGE.x, OFF_STAGE.z]; // to_offstage
     const { nx, nz, dist } = navSteer(s, tx, tz, dt);
     if (dist > 0.5) {
       // Wave 34 (G6.6) · the merchant's whole walk is along the printed

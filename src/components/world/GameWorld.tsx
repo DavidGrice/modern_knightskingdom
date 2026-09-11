@@ -9,6 +9,7 @@ import FpsMeter from './FpsMeter';
 import PerfMeter from './PerfMeter';
 import Weather from './Weather';
 import Wildlife from './Wildlife';
+import AmbientWildlife from './AmbientWildlife';
 import ResourceNodes from './ResourceNodes';
 import Grounds from './Grounds';
 import KeepAssembly from './KeepAssembly';
@@ -70,6 +71,11 @@ export default function GameWorld() {
       <DayNight />
       <Weather />
       <Wildlife />
+      {/* Wave 53 (E1) — the real Agent-driven songbird flock; home-meadow
+          only, same gate Merchant/StarterVillage/MerchantCamp already use
+          below. Self-wrapped in its own Suspense (see its own file), so it
+          needs no outer boundary here, same as Wildlife above. */}
+      {!destination && <AmbientWildlife />}
       <Suspense fallback={null}>
         <GameSky variant={skyVariant} />
       </Suspense>

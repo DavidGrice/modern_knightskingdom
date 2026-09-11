@@ -43,6 +43,7 @@ import { resetVillagerAgentSync } from '@/ai/rosterSync';
 import { resetNpcAgentSync } from '@/ai/npcSync';
 import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
 import { resetCompanionAgentSync } from '@/ai/companionSync';
+import { resetWildlifeAgentSync } from '@/ai/wildlifeSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
@@ -952,6 +953,7 @@ function resetSessionModules() {
   resetNpcAgentSync();
   resetCourtAmbientAgentSync();
   resetCompanionAgentSync();
+  resetWildlifeAgentSync();
   // Tam's own combat state is keyed by a FIXED id (unlike a roster
   // villager's fresh 'v<n>' one every game) — without this a new session
   // would silently inherit whatever HP the last one left him at. See

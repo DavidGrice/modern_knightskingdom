@@ -45,7 +45,11 @@ function distVol(x: number, z: number, max = 34): number {
  * SHARES materials, and `useNormalizedProp` hands out a cached model, so
  * mutating in place would leak into every other user of that model.
  */
-function liftBlackMaterials(root: THREE.Object3D, tone = 0x4a4038) {
+// Exported (Wave 53, E1): AmbientWildlife.tsx's own second use of this same
+// donor mesh (l254600) needs the identical black-material fix — see that
+// file's own header for why it renders the plain GLB path this function
+// belongs to rather than RiggedProp.
+export function liftBlackMaterials(root: THREE.Object3D, tone = 0x4a4038) {
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || !mesh.material) return;
