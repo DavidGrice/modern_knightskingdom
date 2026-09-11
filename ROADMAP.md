@@ -9847,3 +9847,88 @@ bug in the resulting HP formula that Fix correctly diagnosed and repaired.
   independently re-deriving the entire HP-formula fix by hand — the level-share interpolation, the
   gear-share rescaling against `VILLAGER_GEAR_HP_MAX`, and the ceiling-only-reached-by-both-axes
   property — across every value the workflow itself reported, all matching exactly).
+
+## Wave 55: multi-quest choice menus (F1) + guild narrative arcs (F2) — SHIPPED 2026-09-11
+
+Twenty-second wave of the new 27-wave plan. Research re-verified both items live against the real
+codebase rather than trusting the plan's own wording, and found the real shape of each item was bigger
+(F1) or differently-gated (F2) than the plan's phrasing implied.
+
+- [COMPLETE] ✅ **F1 — real multi-quest choice menus, single active slot unchanged**: `st.sideQuest`
+  (`gameStore.ts`) is confirmed a genuine game-wide single slot, not a per-NPC throttle —
+  `acceptSideQuest` refuses outright with `if (!def || st.sideQuest) return;`. Investigated live
+  whether that slot needed widening into a real collection (the plan's wording could be read either
+  way) and found no real need anywhere in the quest system for concurrently-tracked quests, against a
+  real, live-confirmed gap the other reading actually closes: King, Queen, Richard, Cedric's war
+  council, and the Wyeth/John/Alric/Beda pools all already contain multiple simultaneously-unblocked
+  quests (up to 5 for Richard) that the old single-slot rotating `offer` could never show together.
+  Chose the smaller reading — surface the full "choose one of these" set, still accept only one at a
+  time — reusing the existing `SideQuestDef`/`sideQuestBlocker` shapes exactly. New shared helper
+  `sideQuestOffers` (`data/npcs.ts`, next to `sideQuestBlocker`) filters a pool down to "neither done nor
+  blocked" in one place; `DialoguePanel.tsx`, `Panels.tsx`'s `ParleyPanel` (Cedric's war council) and
+  `GuildErrands` (all 5 guild boards) each swap their old single-`offer` rotation for one `.map()` over
+  `sideQuestOffers(...)`, with a small "N errands available — choose one" line appearing only when there
+  are 2+.
+- **A real, previously-unfixed bug found and fixed for free by this refactor**: `DialoguePanel`'s
+  rotation got a "skip anything in `completedSideQuests`" fix back in Wave 26, but `ParleyPanel` and
+  `GuildErrands` never got the same fix — both only ever checked `sideQuestBlocker` (which never checks
+  "is this quest itself already done," only its prerequisites), so their rotation index
+  (`completedQuests.length`, a **main**-quest count unrelated to guild/rebellion quest turn-ins) could
+  land back on an already-finished errand. Clicking Accept on it then silently no-op'd against
+  `acceptSideQuest`'s own `completedSideQuests` guard — affecting all 5 guild boards and Cedric's war
+  council intermittently, tied to unrelated main-quest progress. `sideQuestOffers` filters on
+  `completed` directly for all three call sites, closing this by construction.
+- [COMPLETE] ✅ **F2 — a 5-quest narrative arc per guild, distinct per guild's own established theme,
+  chained off each guild's existing quest 3**: read all 5 guilds' `blurb`/`passiveLabel`/`passiveDesc`
+  and all 15 existing guild quests before writing anything — found the plan's own "identical
+  gather→gather/craft→kill shape" claim was imprecise (miners and anglers have no kill step at all,
+  builders has no craft/kill, knights is kill-only), so each new arc was grounded in that guild's real
+  verb mix and voice rather than a template with nouns swapped: Woodsmen's *The Long Cut* (a forest
+  blight), Miners' *Down the Old Shaft* (an old sealed dig), Anglers' *The Long Wait* (a river legend),
+  Builders' *Raise the Works* (a second siege tower), Knights' *The Muster* (a real muster ending in a
+  Storm ring duel). `kn_drill`/`kn_champion` reuse the existing `joust`/`duel` kinds — confirmed live via
+  `joustRichard()`/`resolveDuel()` that both already bump whatever errand is active regardless of its
+  giver, the same decoupling `r_lists`/`s_firstblood` already rely on, so this is proven reuse, not a new
+  mechanic.
+- **The real reason this needed to be an arc, not a capstone — a genuinely dead piece of shipped
+  content, found by tracing every rep-granting call site**: `turnInSideQuest`'s hardcoded
+  `st.addGuildRep(sq.npcId, 15)` is the *only* place guild rep is ever granted in the whole codebase, and
+  each of the 15 existing guild quests can only ever turn in once — so 45 was the hard ceiling on
+  achievable guild rep, forever landing at rank index 1 (min 30) and never reaching rank 2 (min 80) or
+  rank 3 (min 160). That means Wave 52/D4's real, shipped max-rank-only vendor rows
+  (`spear`/`chestplate_forged`/`potion_stamina`/`halberd_forged`/`sword_crested`) were mathematically
+  unreachable by any player. Sized each arc (20+24+26+32+38 = 140 new rep per guild) specifically to
+  close that gap with real margin (45 + 140 = 185, clearing 160) rather than ship a cosmetic-only
+  capstone that left D4's rewards permanently dead — new table `GUILD_ARC_REP` (`data/npcs.ts`, same
+  hand-named-lookup precedent as the existing `SETTLEMENT_GROWTH_QUEST_DEST`) overrides the flat `?? 15`
+  only for the 25 new arc quest ids, leaving every one of the 15 original quests' rep grant byte-
+  identical. Each arc's capstone also hands the player one unit of that guild's own D4 max-rank vendor
+  item, a deliberate "here's a taste of what your own hall now sells you" echo.
+  Gating question answered explicitly: chained sequentially off each guild's existing quest 3
+  (`requires`), not rank-gated — rank-gating would have been circular, since nothing could reach rank
+  2/3 without this content and the content can't require the rank it exists to unlock.
+- **Verified live end-to-end, real headless Chrome against a real running dev server** (this repo's own
+  `CLAUDE.md` conventions followed throughout — `--headless=new --use-angle=d3d11 --mute-audio`, zero
+  mouse/audio disruption). Same recurring environment-only gap as every prior wave's worktree
+  verification (missing `public/assets`), fixed locally via a directory junction to the main checkout's
+  real copy, removed afterward with the main checkout confirmed untouched. Real evidence, driven through
+  `window.__kk` (the project's own live store handle) rather than assumed from reading code: King's
+  dialogue panel showed exactly the 3 live-predicted simultaneous offers (`k_iron_levy`/`k_feast`/
+  `k_muster`) with the "3 errands available" line, accepting one correctly collapsed the offer list to
+  zero while leaving the main-quest card and the newly-active errand's own progress card in place;
+  Cedric's war council (`ParleyPanel`) showed all 3 of its own independent quests at once; a simulated
+  Knights' Order member sitting at 122 guild rep with the original 3 plus the new arc's first 4 quests
+  completed saw exactly one offer (`kn_champion`, chain-gated as designed) and, on turn-in, guild rep
+  moved from 122 to exactly 160 (a real +38, not the flat +15) with a `sword_crested` landing in
+  inventory. Zero console/page errors and zero failed asset requests across the entire run. `npx tsc
+  --noEmit` / `npm run build`: both clean, verified independently (both by the workflow's own Verify
+  pass and, separately, by direct review of the complete 5-file merged diff against the live worktree
+  afterward, including independently re-deriving the `GUILD_ARC_REP` arc-total arithmetic by hand —
+  20+24+26+32+38=140, plus the pre-existing 45, totals 185, clearing rank 3's 160 threshold).
+
+**Files changed**: `src/game/data/npcs.ts` (F1: new `sideQuestOffers` helper; F2: 25 new quest defs — 5
+per guild — appended to `GUILD_QUESTS`, plus the new exported `GUILD_ARC_REP` table); `src/game/store/
+gameStore.ts` (F2: `turnInSideQuest`'s guild-rep grant reads `GUILD_ARC_REP[def.id] ?? 15` instead of a
+flat `15`, one import added); `src/components/hud/DialoguePanel.tsx` (F1: rotating `offer` → `.map()`'d
+`offers`); `src/components/hud/Panels.tsx` (F1: same change in `ParleyPanel` and `GuildErrands`, plus the
+incidental completed-quest bugfix in both).

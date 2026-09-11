@@ -47,7 +47,7 @@ import { resetWildlifeAgentSync } from '@/ai/wildlifeSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { workSignals, clearAllWorkSignals } from '../workSignal';
-import { NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
+import { GUILD_ARC_REP, NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SETTLEMENT_FOUNDING, SETTLEMENT_GROWTH_QUEST_DEST, SETTLEMENT_NODES } from '../data/settlementQuests';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_LOSS_SURVIVE_FRACTION, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
@@ -2681,8 +2681,12 @@ function createGameStore() {
         ? 'The load is handed over — word of it will get back to ' + sideQuestGiverName(sq.npcId) + '.'
         : `${sideQuestGiverName(sq.npcId)} thanks you for your service!`, true);
       // Wave 22 · a guild errand builds rank within the guild, never the
-      // per-NPC reputation record — same +15 constant either way
-      if (GUILD_BY_ID[sq.npcId]) st.addGuildRep(sq.npcId, 15); else st.addReputation(sq.npcId, 15);
+      // per-NPC reputation record — same +15 constant either way, except
+      // Wave 55 (F2)'s 5 new per-guild arc quests (GUILD_ARC_REP), sized to
+      // finally make rank 2/3 — and Wave 52/D4's max-rank vendor rows —
+      // reachable at all; every pre-existing guild quest id is absent from
+      // that table and keeps its exact live +15 via the `?? 15` fallback.
+      if (GUILD_BY_ID[sq.npcId]) st.addGuildRep(sq.npcId, GUILD_ARC_REP[def.id] ?? 15); else st.addReputation(sq.npcId, 15);
       // remember it, so chains can require it and it never re-offers as new
       if (!st.completedSideQuests.includes(def.id)) {
         set({ completedSideQuests: [...st.completedSideQuests, def.id] });
