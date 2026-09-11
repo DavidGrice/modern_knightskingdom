@@ -18,6 +18,7 @@ import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
 import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
 import { mirrorCourtAmbientPositions, syncCourtAmbientAgents } from './courtAmbientSync';
 import { syncCompanionAgent } from './companionSync';
+import { syncWildlifeAgents } from './wildlifeSync';
 // iteration 2.9 — side-effect import only: nothing here calls resolveAnchor
 // yet (phase 5's gather/haul actions are the first real caller), but it
 // needs to be in the client bundle for its own window.__kkanchor debug
@@ -90,6 +91,12 @@ export default function AiRuntime() {
     // the same way Npc.tsx's CourtNpc does for its own MOVE_TO/FACE branches
     // — there is no separate mob registry for his position to drift from.
     syncCompanionAgent(st.companionRecruited, st.destination ?? null);
+    // Wave 53 (E1) — the ambient wildlife population (a fixed home-meadow
+    // songbird flock, wildlifeSync.ts). No mirror call: unlike a roster
+    // villager/NPC, nothing else ever moves a songbird's transform — there
+    // is no separate mob registry for its Agent's own position to drift
+    // from, same reasoning as companion's own no-mirror comment just above.
+    syncWildlifeAgents();
     // Phase 2, iteration 2.4 — a window-mode destination grid follows the
     // player, not any individual agent (nothing spawns agents in a
     // destination yet; this keeps the grid correctly centred for whenever

@@ -1,6 +1,7 @@
 import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeState, VillagerJob } from '../types';
 import { hashId } from './villagerLooks';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
+import { activeWindow } from './schedule';
 
 // Villager recruitment: once your homestead has enough beds and buildings,
 // generic villagers (the extraction's unnamed good/bad minifig variants)
@@ -19,16 +20,23 @@ export const VILLAGER_NAMES = [
 // job IS the night watch, driven separately by Defenders.tsx).
 export const WORK_START = 5 / 24;
 export const WORK_END = 20 / 24;
+// Wave 53 (E5) · both thin wrappers around the shared activeWindow primitive
+// (data/schedule.ts) now — same values, same inclusive `>=`/`<=` boundary,
+// byte-identical behavior to the hand-rolled checks these replace. Built
+// while auditing every "is this active right now" check in the codebase and
+// finding three independent ones (this pair, plus trade.ts's own
+// merchantPresent) sharing no code despite being the same question asked
+// three times — see schedule.ts's own header for the full reasoning.
 export function isWorkingHours(time: number): boolean {
-  return time >= WORK_START && time <= WORK_END;
+  return activeWindow(time, WORK_START, WORK_END);
 }
 
 // Defenders keep the OPPOSITE shift to the working folk (2026-07-20): the
 // skeletons rise and the raiders come at night, so that's when the watch
-// stands. By day they stand down and rest. Note this window WRAPS midnight,
-// which is exactly why it can't just reuse isWorkingHours' inverted range.
+// stands. By day they stand down and rest. Note this window WRAPS midnight
+// (start > end) — activeWindow's own wrap branch, exercised for real here.
 export function isWatchHours(time: number): boolean {
-  return time >= WORK_END || time <= WORK_START;
+  return activeWindow(time, WORK_END, WORK_START);
 }
 
 // Phase 5, iteration 5.6 — extracted from Villagers.tsx's own raid-flee/

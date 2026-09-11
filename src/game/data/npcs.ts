@@ -7,6 +7,8 @@ import { SETTLEMENT_QUESTS } from './settlementQuests';
 import { DELIVERY_QUESTS } from './deliveryQuests';
 import { GUILD_BY_ID } from './guilds';
 import { QUESTS } from './quests';
+import { activeWindow } from './schedule';
+import { WORK_START, WORK_END } from './villagers';
 
 // The royal court, stationed around the realm. Each NPC greets with their
 // original voice line and offers repeatable side quests from a themed pool.
@@ -113,11 +115,51 @@ export interface NpcDef {
    *  world-absolute coordinates near that destination's travel landing
    *  point, and their feet follow the bake's real terrain height. */
   world?: string;
+  /** Wave 53 (E5) · true only for King Leo and Queen Leonora — the court
+   *  holds session by day and is not in session at night (isCourtHours,
+   *  below). Distinct from `revealAfterQuest`'s one-time-forever gate: this
+   *  one flips back and forth every in-game day. The dead `Npc.tsx`
+   *  `CourtNpc.schedule` day/night LERP (its own `revealAfterQuest &&
+   *  !world` condition) can't cover this — neither King nor Queen satisfy
+   *  `!world` (both live at `template-01`), and that mechanism's own
+   *  NIGHT_GATHER_SPOT is homestead-coordinate geometry anyway — so this is
+   *  a genuinely new, narrower presence gate: HIDE outside court hours
+   *  rather than walk somewhere else. See Npc.tsx's own CourtNpc for where
+   *  it's actually applied (a per-frame visibility check, not a list
+   *  filter — worldEnv.time is a plain mutable value with no store
+   *  subscription to re-trigger a render off of, so this can't live in the
+   *  render-time `revealed` array the way `isNpcRevealed` does; see that
+   *  file's own comment for the full reasoning). */
+  courtHours?: boolean;
 }
 
 /** whether an NPC has appeared yet — see revealAfterQuest above. */
 export function isNpcRevealed(npc: NpcDef, completedQuests: string[]): boolean {
   return !npc.revealAfterQuest || completedQuests.includes(npc.revealAfterQuest);
+}
+
+/** Wave 53 (E5) · the court's own hours — named independently of
+ *  isWorkingHours (data/villagers.ts) rather than a re-export, even though
+ *  it shares that function's exact WORK_START/WORK_END bounds today: a
+ *  villager's working day and the crown's own court hours are two different
+ *  concepts that just happen to agree right now, and coupling them by
+ *  sharing one function would make a future change to either silently drag
+ *  the other along with it. */
+export const COURT_START = WORK_START;
+export const COURT_END = WORK_END;
+export function isCourtHours(time: number): boolean {
+  return activeWindow(time, COURT_START, COURT_END);
+}
+
+/** whether an NPC is both revealed AND, for one with its own `courtHours`
+ *  gate, actually in session right now. Used wherever a check needs to know
+ *  if this NPC is really there to talk to this instant, not just whether
+ *  they've ever appeared — PlayerController's destination interact loop and
+ *  Minimap's own NPC-dot loop (both already run every frame off a live
+ *  `worldEnv.time` read, so the gate is genuinely reactive there — see each
+ *  file's own call site). */
+export function isNpcPresent(npc: NpcDef, completedQuests: string[], time: number): boolean {
+  return isNpcRevealed(npc, completedQuests) && (!npc.courtHours || isCourtHours(time));
 }
 
 /** Court NPCs that actually move under `navSteer` — `Npc.tsx`'s own
@@ -198,6 +240,8 @@ export const NPCS: NpcDef[] = [
     // sync with world.ts's NPC_KING, which uses this exact same call.
     ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 0, -253.333), yaw: Math.PI,
     world: 'template-01',
+    // Wave 53 (E5) · the court holds by day; see NpcDef.courtHours' own doc.
+    courtHours: true,
     greetSound: 'greeting_king',
     portrait: '/assets/minifigs/minifigkingleo00.png',
     lines: [
@@ -246,6 +290,8 @@ export const NPCS: NpcDef[] = [
     // local (33.333, -246.667), derived from the pre-halving (1005, 963).
     ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 33.333, -246.667), yaw: Math.PI,
     world: 'template-01',
+    // Wave 53 (E5) · the court holds by day; see NpcDef.courtHours' own doc.
+    courtHours: true,
     greetSound: 'greeting_queen',
     portrait: '/assets/minifigs/minifigqueenleonora00.png',
     lines: [

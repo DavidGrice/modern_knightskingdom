@@ -1,4 +1,5 @@
 import type { ItemId } from '../types';
+import { activeWindow } from './schedule';
 
 // The traveling merchant's ledger. He buys your surplus at these prices and
 // sells a small stock at a healthy markup — a proper medieval margin.
@@ -74,9 +75,18 @@ export const BUY_OFFERS: BuyOffer[] = [
   { item: 'crossbow', qty: 1, price: 60 },
 ];
 
-/** the merchant keeps daylight hours */
+/** the merchant keeps daylight hours.
+ *
+ *  Wave 53 (E5) · a thin wrapper around the shared activeWindow primitive
+ *  (data/schedule.ts) — same 0.3/0.72 bounds, same EXCLUSIVE `>`/`<`
+ *  boundary (the third argument), byte-identical to the literal this
+ *  replaces. This was a real, independent hand-rolled window before this
+ *  wave, sharing no code with isWorkingHours/isWatchHours (data/villagers.ts)
+ *  despite asking the same question — see schedule.ts's own header. */
+export const MERCHANT_PRESENT_START = 0.3;
+export const MERCHANT_PRESENT_END = 0.72;
 export function merchantPresent(time: number): boolean {
-  return time > 0.3 && time < 0.72;
+  return activeWindow(time, MERCHANT_PRESENT_START, MERCHANT_PRESENT_END, false);
 }
 
 // ---------------------------------------------------------------------------

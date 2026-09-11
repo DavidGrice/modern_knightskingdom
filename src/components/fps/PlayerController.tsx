@@ -13,7 +13,7 @@ import {
   POND, RESIDENT_TALK_RANGE, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
 } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
-import { NPCS, NPC_BY_ID, isNpcRevealed, INTERIOR_RESIDENTS } from '@/game/data/npcs';
+import { NPCS, NPC_BY_ID, isNpcRevealed, isNpcPresent, INTERIOR_RESIDENTS } from '@/game/data/npcs';
 import { INTERIORS, pocketFor } from '@/game/data/interiors';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { audio } from '@/lib/audio';
@@ -679,7 +679,14 @@ export default function PlayerController() {
     if (st.destination) {
       for (const n of NPCS) {
         if (n.world !== st.destination) continue;
-        if (!isNpcRevealed(n, st.completedQuests)) continue;
+        // Wave 53 (E5) verify-fix · isNpcPresent, not just isNpcRevealed:
+        // King Leo/Queen Leonora now hide outside court hours (Npc.tsx's own
+        // per-frame g.visible toggle) — without this, "Talk to King Leo"
+        // could still be offered at his empty post at night. This whole
+        // findTarget() call already runs every real frame (see its own call
+        // site), so worldEnv.time is genuinely reactive here, unlike a
+        // render-time filter — see npcs.ts's isNpcPresent doc.
+        if (!isNpcPresent(n, st.completedQuests, worldEnv.time)) continue;
         const mob = npcMobs[n.id];
         const nx = mob?.x ?? n.x;
         const nz = mob?.z ?? n.z;

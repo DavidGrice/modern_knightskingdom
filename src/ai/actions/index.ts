@@ -62,6 +62,14 @@
 // reuses `engage_threat`'s own combat shape behind its own distinct
 // `is_companion` gate — see that file's header for why it is not simply
 // `engage_threat_villager` under a new name.
+//
+// Wave 53 (E1) adds `roam` (roam.ts) — a brand NEW Action for the `ambient`
+// archetype's new wildlife population, NOT a reuse of `wander` (verified
+// live that `wander`'s own two gates — tier D only, real roster job only —
+// can never pass for a rendered, non-roster wildlife agent; see roam.ts's
+// own header for the full argument). `archetypes.json`'s `ambient` entry
+// drops `wander` from its intrinsic list in this same wave for exactly that
+// reason — it could never win there anyway.
 import { registerActions, type Action } from '../core/Reasoner';
 import { FLEE_TO_SAFETY } from './flee';
 import { SLEEP } from './sleep';
@@ -77,11 +85,12 @@ import { ENGAGE_THREAT_VILLAGER } from './engageThreatVillager';
 import { WANDER } from './wander';
 import { FOLLOW_LEADER } from './followLeader';
 import { ASSIST_LEADER } from './assistLeader';
+import { ROAM } from './roam';
 
 export const ACTIONS: Action[] = [
   FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
   IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
-  FOLLOW_LEADER, ASSIST_LEADER,
+  FOLLOW_LEADER, ASSIST_LEADER, ROAM,
 ];
 registerActions(ACTIONS);
 
@@ -89,6 +98,6 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkactions = {
     FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
     IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
-    FOLLOW_LEADER, ASSIST_LEADER,
+    FOLLOW_LEADER, ASSIST_LEADER, ROAM,
   };
 }
