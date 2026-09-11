@@ -35,7 +35,7 @@ import { RECIPES, repairCostFor, STATION_LABELS, STATION_TABS, UNLOCK_HINTS } fr
 import { SKILLS, levelFromXp, perkSlotsEarned, xpForLevel } from '@/game/data/ranks';
 import { DEEDS } from '@/game/data/achievements';
 import { PERKS, PERK_BY_ID } from '@/game/data/perks';
-import { sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
+import { sideQuestOffers, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
 import { CHALLENGES, challengeProgress } from '@/game/data/challenges';
 import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE } from '@/game/data/guilds';
 import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable, talentRespecCost } from '@/game/data/skillTree';
@@ -581,22 +581,18 @@ function ParleyPanel() {
   const betrayCedric = useGameStore((s) => s.betrayCedric);
   if (alliance === 'cedric') {
     const pool = sideQuestsOf('cedric');
-    // Wave 13 · skip anything currently blocked (e.g. ced_warlord before
-    // ced_banner is done) instead of offering a job that would just bounce
-    // off acceptSideQuest's own guard — same fix DialoguePanel's own offer
-    // rotation got, applied here for Cedric's separate panel
-    const offer = (() => {
-      if (pool.length === 0) return null;
-      const start = (completedQuests.length + pool.length) % pool.length;
-      for (let i = 0; i < pool.length; i++) {
-        const q = pool[(start + i) % pool.length];
-        if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, 'cedric')) return q;
-      }
-      return null;
-    })();
+    // Wave 55 (F1) · used to rotate a single candidate the same way
+    // DialoguePanel's old `offer` did, and — unlike DialoguePanel — never
+    // got Wave 26's "skip already-completed" fix, so the rotation could
+    // land back on a finished quest and Take the Job would silently no-op
+    // against acceptSideQuest's own completedSideQuests guard.
+    // `sideQuestOffers` (npcs.ts) fixes that by construction and surfaces
+    // every simultaneously-unblocked quest (Cedric's own 3 are independent,
+    // not chained) as a real choice menu instead of one at a time.
+    const offers = sideQuestOffers('cedric', completedSideQuests, completedQuests, allegiance, 'cedric');
     const mine = sideQuest?.npcId === 'cedric' ? sideQuest : null;
     const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
-    const rewardText = (def: NonNullable<typeof offer>) =>
+    const rewardText = (def: SideQuestDef) =>
       [
         `${def.xp} ${def.xpSkill} XP`,
         ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
@@ -628,14 +624,23 @@ function ParleyPanel() {
             </div>
           </div>
         )}
-        {!sideQuest && offer && (
-          <div className="quest-item">
-            <div className="q-name">⚔ {offer.label}</div>
-            <div className="q-desc">Reward: {rewardText(offer)}</div>
-            <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest('cedric', offer.id)}>
-              Take the Job
-            </button>
-          </div>
+        {!sideQuest && offers.length > 0 && (
+          <>
+            {offers.length > 1 && (
+              <div style={{ fontSize: 12, color: 'var(--parchment-dark)', fontStyle: 'italic', marginBottom: 4 }}>
+                {offers.length} jobs on offer — choose one:
+              </div>
+            )}
+            {offers.map((offer) => (
+              <div className="quest-item" key={offer.id}>
+                <div className="q-name">⚔ {offer.label}</div>
+                <div className="q-desc">Reward: {rewardText(offer)}</div>
+                <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest('cedric', offer.id)}>
+                  Take the Job
+                </button>
+              </div>
+            ))}
+          </>
         )}
         {sideQuest && sideQuest.npcId !== 'cedric' && (
           <div style={{ fontSize: 13, color: 'var(--parchment-dark)' }}>
@@ -859,18 +864,18 @@ function GuildErrands({ guildId }: { guildId: string }) {
   const abandonSideQuest = useGameStore((s) => s.abandonSideQuest);
 
   const pool = sideQuestsOf(guildId);
-  const offer = (() => {
-    if (pool.length === 0) return null;
-    const start = (completedQuests.length + pool.length) % pool.length;
-    for (let i = 0; i < pool.length; i++) {
-      const q = pool[(start + i) % pool.length];
-      if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, alliance)) return q;
-    }
-    return null;
-  })();
+  // Wave 55 (F1) · same fix as ParleyPanel's Cedric branch just above — this
+  // rotation never got Wave 26's "skip already-completed" fix either, so
+  // every one of the 5 guild boards could silently re-offer (and no-op
+  // Accept on) an already-finished errand. `sideQuestOffers` also surfaces
+  // every guild's real choice menu, though today each guild's 3 original
+  // quests plus F2's new 5-quest arc are all `requires`-chained, so exactly
+  // one is ever unblocked at once — the capability is real, the content
+  // just isn't parallel here yet.
+  const offers = sideQuestOffers(guildId, completedSideQuests, completedQuests, allegiance, alliance);
   const mine = sideQuest?.npcId === guildId ? sideQuest : null;
   const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
-  const rewardText = (def: NonNullable<typeof offer>) =>
+  const rewardText = (def: SideQuestDef) =>
     [
       `${def.xp} ${def.xpSkill} XP`,
       ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
@@ -898,21 +903,30 @@ function GuildErrands({ guildId }: { guildId: string }) {
           </div>
         </div>
       )}
-      {!sideQuest && offer && (
-        <div className="quest-item">
-          <div className="q-name">{offer.label}</div>
-          <div className="q-desc">Reward: {rewardText(offer)}</div>
-          <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest(guildId, offer.id)}>
-            Take the Job
-          </button>
-        </div>
+      {!sideQuest && offers.length > 0 && (
+        <>
+          {offers.length > 1 && (
+            <div style={{ fontSize: 12, color: 'var(--parchment-dark)', fontStyle: 'italic', marginBottom: 4 }}>
+              {offers.length} errands available — choose one:
+            </div>
+          )}
+          {offers.map((offer) => (
+            <div className="quest-item" key={offer.id}>
+              <div className="q-name">{offer.label}</div>
+              <div className="q-desc">Reward: {rewardText(offer)}</div>
+              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest(guildId, offer.id)}>
+                Take the Job
+              </button>
+            </div>
+          ))}
+        </>
       )}
       {sideQuest && sideQuest.npcId !== guildId && (
         <div style={{ fontSize: 13, color: 'var(--parchment-dark)' }}>
           You already carry an errand for someone else. Finish it first.
         </div>
       )}
-      {!offer && !mine && (
+      {offers.length === 0 && !mine && (
         <div className="loading-note">Nothing to ask of you right now.</div>
       )}
     </>

@@ -5,7 +5,7 @@
 // side-quest offer / progress / turn-in, and the main quest hint from Leo.
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
-import { NPC_BY_ID, sideQuestBlocker, sideQuestsOf } from '@/game/data/npcs';
+import { NPC_BY_ID, sideQuestOffers, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
 import { SETTLEMENT_FOUNDING } from '@/game/data/settlementQuests';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_MARKUP, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
@@ -104,37 +104,22 @@ export default function DialoguePanel() {
   // ordinary "talk to them" flow — logged in ROADMAP.md, left open.
   // QuestLogPanel/HUD/ParleyPanel already all read through sideQuestsOf();
   // this brings the last holdout into line with them.
-  const pool = useMemo(() => (npc ? sideQuestsOf(npc.id) : []), [npc]);
-  // offer rotates daily-ish: pick by completed-quest count so it varies,
-  // skipping anything currently blocked so the panel never shows a quest
-  // that would just bounce off acceptSideQuest's own guard.
   //
-  // Wave 26 bugfix: also skip anything already in `completedSideQuests` —
-  // `sideQuestBlocker` only ever checks precursor/allegiance/alliance gates,
-  // never "already done" (QuestLogPanel computes that as its own separate
-  // `done` flag, precisely so a finished errand still displays distinctly
-  // from a blocked one there — folding it into sideQuestBlocker itself would
-  // have made QuestLogPanel show a done quest as 'locked'). Without this,
-  // the rotation index is keyed on `completedQuests.length` (MAIN quests),
-  // which a side quest turn-in never changes — so a single-slot pool like
-  // Torvald's (frostpass_shelter -> frostpass_clear) kept re-offering the
-  // just-completed first errand forever, and the second one — the one that
-  // actually unlocks the deed — could never surface through the ordinary
-  // "talk to them" flow. Live-reproduced during Wave 26 verification; the
-  // exact same shape (a 2-quest chain, second `requires` the first) is
-  // shared byte-for-byte with Fenwick's settle_scout/settle_clear, so this
-  // was a real, pre-existing gap this wave was simply the first to exercise
-  // on a fresh save.
-  const offer = useMemo(() => {
-    if (!npc || pool.length === 0) return null;
-    const start = (completedQuests.length + pool.length) % pool.length;
-    for (let i = 0; i < pool.length; i++) {
-      const q = pool[(start + i) % pool.length];
-      if (completedSideQuests.includes(q.id)) continue;
-      if (!sideQuestBlocker(q, completedSideQuests, completedQuests, allegiance, alliance)) return q;
-    }
-    return null; // every candidate is blocked or already done
-  }, [npc, pool, completedQuests.length, completedSideQuests, allegiance, alliance]);
+  // Wave 55 (F1) · used to rotate through the pool and surface exactly ONE
+  // candidate (picked by completed-quest count so it varied) — several real
+  // NPCs (King, Queen, Richard, Cedric's war council, guild boards) have
+  // multiple simultaneously-unblocked quests in their own pool that the old
+  // rotation could never show together. `sideQuestOffers` (npcs.ts) now
+  // returns the FULL "choose one of these" set in one correct filter, fixing
+  // a real Wave 26-adjacent bug for free: the old rotation index was keyed
+  // on `completedQuests.length` (MAIN quests, unrelated to side-quest turn-
+  // ins), so a 2-quest chain like Torvald's (frostpass_shelter ->
+  // frostpass_clear) could land back on the already-finished first errand —
+  // `sideQuestOffers` filters on `completed` directly so that can't happen.
+  const offers = useMemo(
+    () => (npc ? sideQuestOffers(npc.id, completedSideQuests, completedQuests, allegiance, alliance) : []),
+    [npc, completedSideQuests, completedQuests, allegiance, alliance],
+  );
 
   if (!npc) return null;
 
@@ -154,7 +139,7 @@ export default function DialoguePanel() {
     || (activeDef?.kind === 'deliver' && activeDef.deliverTo === npc.world)
   ) ? sideQuest : null;
   const mySideDef = mySideQuest ? activeDef : null;
-  const rewardText = (def: NonNullable<typeof offer>) =>
+  const rewardText = (def: SideQuestDef) =>
     [
       `${def.xp} ${def.xpSkill} XP`,
       ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
@@ -553,23 +538,32 @@ export default function DialoguePanel() {
             );
           })()}
 
-          {!sideQuest && offer && (
-            <div className="quest-item">
-              <div className="q-name">❓ {offer.label}</div>
-              <div className="q-desc">Reward: {rewardText(offer)}</div>
-              {offer.kind === 'deliver' && (
-                <div className="q-desc" style={{ fontStyle: 'italic' }}>
-                  Deliver to {WORLD_DESTINATION_BY_ID[offer.deliverTo ?? '']?.name ?? 'its destination'}.
+          {!sideQuest && offers.length > 0 && (
+            <>
+              {offers.length > 1 && (
+                <div style={{ fontSize: 12, color: 'var(--parchment-dark)', fontStyle: 'italic', marginBottom: 4 }}>
+                  {offers.length} errands available — choose one:
                 </div>
               )}
-              <button
-                className="menu-btn small"
-                style={{ margin: '8px 0 0' }}
-                onClick={() => acceptSideQuest(npc.id, offer.id)}
-              >
-                Accept Errand
-              </button>
-            </div>
+              {offers.map((offer) => (
+                <div className="quest-item" key={offer.id}>
+                  <div className="q-name">❓ {offer.label}</div>
+                  <div className="q-desc">Reward: {rewardText(offer)}</div>
+                  {offer.kind === 'deliver' && (
+                    <div className="q-desc" style={{ fontStyle: 'italic' }}>
+                      Deliver to {WORLD_DESTINATION_BY_ID[offer.deliverTo ?? '']?.name ?? 'its destination'}.
+                    </div>
+                  )}
+                  <button
+                    className="menu-btn small"
+                    style={{ margin: '8px 0 0' }}
+                    onClick={() => acceptSideQuest(npc.id, offer.id)}
+                  >
+                    Accept Errand
+                  </button>
+                </div>
+              ))}
+            </>
           )}
 
           {sideQuest && !mySideQuest && (
