@@ -20,7 +20,7 @@
 // own comment for why that was investigated and deliberately left alone).
 
 import type { Villager } from './types';
-import { chestplateHp } from './data/armor';
+import { chestplateHp, CHESTPLATE_BY_TIER } from './data/armor';
 
 export interface VillagerCombatState {
   hp: number;
@@ -52,6 +52,13 @@ export const VILLAGER_MAX_HP = 8;
 export function villagerGearHpBonus(gear?: Villager['gear']): number {
   return Math.floor(chestplateHp(gear) / 2) + (gear?.helmet ? 1 : 0);
 }
+
+/** `villagerGearHpBonus`'s own ceiling (crested plate + helmet), computed
+ *  rather than hard-coded so it can never silently drift from
+ *  `CHESTPLATE_BY_TIER` if a tier's `hp` is ever retuned. Wave 54 (E2)
+ *  reads this to scale Tam's own, smaller gear-HP share against the exact
+ *  same real max, rather than hard-coding a second copy of "9". */
+export const VILLAGER_GEAR_HP_MAX = Math.floor(CHESTPLATE_BY_TIER.crested.hp / 2) + 1;
 
 /** What a flat-footed villager's swing takes off a raider. Deliberately NOT
  *  `defenderStrike()` (game/defenders.ts): that formula's own bare-fisted

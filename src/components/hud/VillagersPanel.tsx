@@ -12,8 +12,9 @@ import MenuTabs from './MenuTabs';
 import { CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, JOBS, LOADOUT_REQUIRES, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
 import { ITEMS } from '@/game/data/items';
 import { ATTRS, attrsOf, carryCapacityOf, tradeLevelOf } from '@/game/data/attributes';
-import { CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
+import { CHESTPLATES, CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
 import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/data/companionTraits';
+import { TAM_TITLE } from '@/game/data/companion';
 import { ArmorySection } from './NpcEquipPanel';
 import { levelFromXp, xpForLevel } from '@/game/data/ranks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
@@ -62,6 +63,17 @@ export default function VillagersPanel() {
   const equipVillagerCarrier = useGameStore((s) => s.equipVillagerCarrier);
   const unequipVillagerCarrier = useGameStore((s) => s.unequipVillagerCarrier);
   const openVillagerEquip = useGameStore((s) => s.openVillagerEquip);
+  // Wave 54 (E2) · Tam's own independent progression — a card of his own
+  // below, not from `villagers.map` (see types.ts's `CompanionState` doc
+  // comment for why he is never pushed into that array).
+  const companionRecruited = useGameStore((s) => s.companionRecruited);
+  const companion = useGameStore((s) => s.companion);
+  const equipCompanionHelmet = useGameStore((s) => s.equipCompanionHelmet);
+  const unequipCompanionHelmet = useGameStore((s) => s.unequipCompanionHelmet);
+  const equipCompanionChestplate = useGameStore((s) => s.equipCompanionChestplate);
+  const unequipCompanionChestplate = useGameStore((s) => s.unequipCompanionChestplate);
+  const setCompanionLoadout = useGameStore((s) => s.setCompanionLoadout);
+  const unequipCompanionLoadout = useGameStore((s) => s.unequipCompanionLoadout);
   // homestead-only counts: a remote claimed-plot structure shouldn't count
   // toward villager arrivals or read as a stationable tower here
   const allBuildings = useGameStore((s) => s.buildings);
@@ -492,6 +504,156 @@ export default function VillagersPanel() {
           Your homestead is fully settled.
         </div>
       )}
+      {/* Wave 54 (E2) · Tam's own card — a real gear/loadout/XP system for
+          the one always-on companion (falcon.ts's "one always-on companion,
+          not a fleet" precedent), deliberately NOT pulled from `villagers`.
+          Reuses this file's own Loadout/Carrier row idiom rather than
+          forking NpcEquipPanel's full paperdoll — its real value-add
+          (rotating 3D preview, drag-and-drop, dye editing) doesn't apply to
+          a fixed-identity NPC. Bow is excluded: assist_leader
+          (ai/actions/assistLeader.ts) is melee-only today. */}
+      {companionRecruited && (() => {
+        const level = levelFromXp(companion.xp ?? 0);
+        const curXp = (companion.xp ?? 0) - xpForLevel(level);
+        const nextXp = xpForLevel(level + 1) - xpForLevel(level);
+        const chestTier = chestplateTierOf(companion.gear);
+        const meleeLoadouts = DEFENDER_LOADOUTS.filter((lo) => lo.id !== 'bow');
+        return (
+          <div
+            className="recipe-row"
+            style={{ alignItems: 'flex-start', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--parchment-dark)' }}
+          >
+            <div className="icon"><Ico e="🛡️" /></div>
+            <div className="r-main">
+              <div className="r-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                Tam
+                <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--parchment-dark)' }}>— {TAM_TITLE}</span>
+                {companion.gear?.helmet && <span title="Wearing a helmet">🪖</span>}
+                {chestTier && (
+                  <span title={`Wearing ${CHESTPLATE_BY_TIER[chestTier].label}`}>{CHESTPLATE_BY_TIER[chestTier].icon}</span>
+                )}
+              </div>
+              <div className="r-cost">Companion — Lv {level}</div>
+              <div className="xpbar" style={{ marginTop: 8 }}>
+                <div style={{ width: `${Math.round((curXp / Math.max(1, nextXp)) * 100)}%` }} />
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
+                Helmet — same shared Armory pool as the Roster
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button
+                  className="menu-btn small"
+                  style={{
+                    margin: 0, width: 'auto', padding: '5px 10px',
+                    opacity: !companion.gear?.helmet ? 1 : 0.65,
+                    borderColor: !companion.gear?.helmet ? 'var(--gold)' : undefined,
+                  }}
+                  onClick={unequipCompanionHelmet}
+                  title="Bare-headed — returns any helmet to the Armory"
+                >
+                  🤲 Bare-headed
+                </button>
+                {(() => {
+                  const stock = armory.helmet ?? 0;
+                  const worn = !!companion.gear?.helmet;
+                  return (
+                    <button
+                      className="menu-btn small"
+                      disabled={!worn && stock <= 0}
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: worn ? 1 : stock > 0 ? 0.85 : 0.4,
+                        borderColor: worn ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={equipCompanionHelmet}
+                      title={worn ? 'Worn — return it with Bare-headed' : `${stock} in the Armory`}
+                    >
+                      {worn || stock > 0 ? '🪖' : '🔒'} Helmet
+                    </button>
+                  );
+                })()}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
+                Chestplate
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button
+                  className="menu-btn small"
+                  style={{
+                    margin: 0, width: 'auto', padding: '5px 10px',
+                    opacity: !chestTier ? 1 : 0.65,
+                    borderColor: !chestTier ? 'var(--gold)' : undefined,
+                  }}
+                  onClick={unequipCompanionChestplate}
+                  title="Bare-chested — returns any plate to the Armory"
+                >
+                  🤲 Bare-chested
+                </button>
+                {CHESTPLATES.map((c) => {
+                  const worn = chestTier === c.id;
+                  const stock = armory[c.item] ?? 0;
+                  return (
+                    <button
+                      key={c.id}
+                      className="menu-btn small"
+                      disabled={!worn && stock <= 0}
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: worn ? 1 : stock > 0 ? 0.85 : 0.4,
+                        borderColor: worn ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={() => equipCompanionChestplate(c.id)}
+                      title={worn ? `Worn — ${c.blurb} (return it with Bare-chested)` : `${c.blurb} · ${stock} in the Armory`}
+                    >
+                      {worn || stock > 0 ? c.icon : '🔒'} {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
+                Loadout — weapons spend Armory stock; no bow (Tam fights melee-only)
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button
+                  className="menu-btn small"
+                  style={{
+                    margin: 0, width: 'auto', padding: '5px 10px',
+                    opacity: !companion.loadout ? 1 : 0.65,
+                    borderColor: !companion.loadout ? 'var(--gold)' : undefined,
+                  }}
+                  onClick={unequipCompanionLoadout}
+                  title="Bare-handed — returns any equipped weapon to the Armory"
+                >
+                  ✋ Bare-handed
+                </button>
+                {meleeLoadouts.map((lo) => {
+                  const owned = companion.loadout === lo.id;
+                  const need = LOADOUT_REQUIRES[lo.id];
+                  const afford = Object.entries(need).every(([id, n]) => (armory[id as ItemId] ?? 0) >= (n as number));
+                  const costLine = Object.entries(need).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`).join(' + ');
+                  const stockLine = Object.entries(need).map(([id]) => `${armory[id as ItemId] ?? 0} in Armory`).join(', ');
+                  return (
+                    <button
+                      key={lo.id}
+                      className="menu-btn small"
+                      disabled={!owned && !afford}
+                      style={{
+                        margin: 0, width: 'auto', padding: '5px 10px',
+                        opacity: owned ? 1 : afford ? 0.85 : 0.4,
+                        borderColor: owned ? 'var(--gold)' : undefined,
+                      }}
+                      onClick={() => setCompanionLoadout(lo.id as Exclude<DefenderLoadout, 'bow'>)}
+                      title={owned ? `Equipped — costs ${costLine} (return to Armory via Bare-handed)` : `Costs ${costLine} (${stockLine})`}
+                    >
+                      {afford || owned ? lo.icon : '🔒'} {lo.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       <ArmorySection />
       </div>
     </div>

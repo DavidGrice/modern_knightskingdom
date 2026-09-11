@@ -21,25 +21,46 @@
 // (the exact bug Enemies.tsx's own 2026-07-28 comment documents finding and
 // fixing for Gilbert). Every armed figure in this game already avoids that by
 // keeping `keepProps` false (RiggedFigure's own default) and wearing a REAL,
-// separately-portalled weapon instead — Tam does the same here, the identical
-// sword+shield loadout Defenders.tsx renders for an ordinary sworn defender.
+// separately-portalled weapon instead.
+//
+// Wave 54 (E2) — the weapon/gear portals below are no longer hardcoded to a
+// fixed sword+shield. They now read `st.companion.loadout`/`.gear`, mirroring
+// Defenders.tsx's own loadout-driven portal block (lines ~446-451) exactly:
+// sword_shield/halberd are mutually exclusive on the right arm, helmet/
+// chestplate layer on independently. Deliberate quirk, disclosed: an
+// undefined `loadout` (a freshly-recruited Tam, or one explicitly returned
+// to bare-handed) still falls back to `sword_shield` here — UNLIKE
+// Defenders.tsx, where an undefined loadout renders nothing — so Tam looks
+// exactly as he always has at zero Armory cost by default. This also means
+// the game's own `HeldSword`/`ArmShield` were never really removed for him;
+// this is just where their two mounts came from.
+//
+// HP — `companionMaxHp(level, gear)` (game/companion.ts) is recomputed every
+// frame here (the one place that owns Tam's live level/gear) and re-applied
+// to his `CompanionCombatState.maxHp`, same live-readout pattern
+// Villagers.tsx uses for `villagerGearHpBonus`: `registerCompanionCombat`
+// only SEEDS the record on first creation, so a level-up or a gear change
+// mid-session needs this explicit re-apply, clamping `hp` down only when the
+// new ceiling is now lower (never a free heal).
 import { useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import RiggedFigure from '../character/RiggedFigure';
-import { ArmShield, HeldSword } from '../character/Equipment';
+import { ArmShield, Chestplate, HeldHalberd, HeldHelmet, HeldSword } from '../character/Equipment';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { COMPANION_ID, TAM_CONFIG } from '@/game/data/companion';
-import { registerCompanionCombat } from '@/game/companion';
+import { companionMaxHp, registerCompanionCombat } from '@/game/companion';
+import { chestplateTierOf } from '@/game/data/armor';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 
 const MOVE_CLIPS = new Set(['anim_c_walk', 'anim_r_restpose']);
 
 export default function Companion() {
   const recruited = useGameStore((s) => s.companionRecruited);
+  const companion = useGameStore((s) => s.companion);
   const [clip, setClip] = useState('anim_r_restpose');
   const clipRef = useRef(clip);
   clipRef.current = clip;
@@ -58,7 +79,14 @@ export default function Companion() {
     // registerVillagerCombat(...)) uses, just a plain per-frame idempotent
     // read here since this component (unlike a per-villager VillagerFigure)
     // stays mounted across recruitment rather than mounting fresh at it.
-    const ccs = registerCompanionCombat(COMPANION_ID);
+    const maxHp = companionMaxHp(companion.level, companion.gear);
+    const ccs = registerCompanionCombat(COMPANION_ID, maxHp);
+    // Wave 54 (E2) — re-applied every frame (see this file's own header):
+    // registration above only seeds maxHp on first creation, so a level-up
+    // or a gear change mid-session needs its own live update, clamping hp
+    // down only if the new ceiling is now lower than current health.
+    ccs.maxHp = maxHp;
+    if (ccs.hp > ccs.maxHp) ccs.hp = ccs.maxHp;
 
     // Wave 25 verification fix — downed: hide and freeze in place until the
     // recovery timer clears, mirroring Villagers.tsx's/Defenders.tsx's own
@@ -119,6 +147,12 @@ export default function Companion() {
 
   if (!recruited) return null;
 
+  // Wave 54 (E2) — see this file's own header for the disclosed
+  // `?? 'sword_shield'` fallback quirk (mirrors everything else about
+  // Defenders.tsx's own loadout-driven portal block otherwise).
+  const loadout = companion.loadout ?? 'sword_shield';
+  const chestplateTier = chestplateTierOf(companion.gear);
+
   return (
     <group ref={group}>
       <RiggedFigure
@@ -129,8 +163,11 @@ export default function Companion() {
         onClipEnd={() => setClip('anim_r_restpose')}
         onReady={setRig}
       />
-      {rig && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-      {rig && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+      {rig && loadout === 'sword_shield' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+      {rig && loadout === 'sword_shield' && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
+      {rig && loadout === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+      {rig && companion.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
+      {rig && chestplateTier && createPortal(<Chestplate tier={chestplateTier} />, rig.joints.body)}
     </group>
   );
 }
