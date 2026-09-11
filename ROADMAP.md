@@ -9755,3 +9755,95 @@ independently-verified implementation-time corrections when live facts contradic
   reference, hand-verifying `activeWindow`'s boundary math against all three pre-existing checks it
   replaced, and hand-checking the merchant's new 8-window `stageFor()` arithmetic for internal consistency
   and symmetry between the morning and evening legs).
+
+## Wave 54: a full companion system beyond Tam (E2) — SHIPPED 2026-09-10
+
+Twenty-first wave of the new 27-wave plan. A single item this time, but one carrying a real,
+consequential architecture fork this session flagged explicitly before Research ever started: does "a
+proper roster entry" mean literally pushing Tam into `st.villagers`, or something else? Research
+resolved it with an exhaustive live audit, not a guess, and Verify caught a genuinely subtle balance
+bug in the resulting HP formula that Fix correctly diagnosed and repaired.
+
+- [COMPLETE] ✅ **The roster-membership question, settled by an exhaustive live audit, not assumed**:
+  a full grep-and-inspect of every real `st.villagers` consumer in the codebase (~45+ call sites across
+  `gameStore.ts` alone, plus 7 AI actions, `rosterSync.ts`, and 8+ UI files) found the literal-roster
+  option was not just riskier but outright unsafe: `assignJob`/`tickVillagers` both index `JOB_BY_ID`
+  `[v.job]`, which would **crash** for a job value with no matching `JobDef`; `rosterSync.ts` would
+  spawn a **second, colliding Agent** for Tam under the `'villager'` archetype, fighting the one
+  `companionSync.ts` already spawns; `Villagers.tsx`'s own render filter would draw him as an ordinary
+  villager figure using roster-derived looks, not his real bespoke rig; and `MAX_VILLAGERS`/tax-scaling/
+  save-slot "kin" counts would all silently absorb him. Separately confirmed the one advertised benefit
+  of literal membership — reusing `tradeLevelOf`'s existing formula "for free" — doesn't even apply:
+  Tam's real XP source is combat kills, and this codebase's own existing combat-leveling shape
+  (`levelFromXp`, the same curve `gainDefenderXp` already uses) was always the correct precedent to
+  mirror, not the trade-mastery formula. Built instead: a new, separate, save-persisted `CompanionState`
+  (`SaveGame.companion`) living entirely outside `st.villagers` — zero changes needed anywhere in the
+  ~45+ file consumer list, confirmed safe by construction rather than by hope.
+- [COMPLETE] ✅ **Independent XP and leveling**, off a real, already-live per-kill signal:
+  `assistLeader.ts`'s own `strike()` (Wave 25) already called `recordKill`/`addItems`/`notify` on every
+  raider Tam finishes, with its own header explicitly noting it skipped `gainDefenderXp()` "for the
+  exact reason... there is no leveling record on this entity to grant XP into" — a hook already
+  reserved and waiting. One new line closes it (`gs.gainCompanionXp(15)`, the same 15/kill
+  `gainDefenderXp` already uses, no new tuning invented), feeding the same `levelFromXp` curve every
+  other leveled entity in this game uses.
+- [COMPLETE] ✅ **A real gear-slot system**, reusing this codebase's exact existing vocabulary rather
+  than inventing a parallel one: helmet/chestplate (tiered, Armory-backed, near-verbatim copies of the
+  existing villager equip actions) plus a melee weapon loadout (`DEFENDER_LOADOUTS`, the same
+  Armory spend/refund logic `setDefenderLoadout` already uses). `Companion.tsx`'s previously-hardcoded
+  sword+shield look now renders whatever is actually equipped, mirroring `Defenders.tsx`'s own
+  loadout-driven portal block exactly. A real, explicit, disclosed scope-down: bow is excluded from
+  Tam's loadout entirely — live-checked that even for a real defender, sword_shield vs. halberd is
+  already purely cosmetic (identical damage formula), and bow is the one mechanically distinct,
+  LOS-gated ranged option; `assistLeader.ts` has no LOS check or ranged branch of any kind today, so
+  giving Tam a working bow would be a real new combat feature, not a reuse — named explicitly as a
+  future wave's work rather than silently under-built. The full rotating-paperdoll/drag-and-drop/dye
+  equip UI (`NpcEquipPanel.tsx`) was also deliberately not forked for this — its real value-add
+  (appearance editing) doesn't apply to a fixed-identity named character — in favor of a simpler button
+  card reusing `VillagersPanel.tsx`'s own existing Loadout/Carrier row idiom.
+- **A real, subtle balance bug found live by Verify and correctly fixed**: the first cut's HP formula
+  summed an independently-capped level term (+5 max) and an independently-capped gear term (+9 max,
+  reusing Wave 51's own `villagerGearHpBonus`) and clamped only the *combined total* at a shared
+  ceiling — since either term alone already exceeded that ceiling, a companion who had leveled up even
+  modestly (level 4+, ~54 kills) got precisely zero additional benefit from gearing up, and vice versa,
+  live-confirmed by stripping all gear from a level-5 Tam and finding his max HP unchanged. This
+  directly undercut the wave's own "gear-slot system" half of its stated deliverable for most of a real
+  playthrough, even though the one externally-required invariant (Tam staying under a real defender's
+  own HP floor) still happened to hold by coincidence. Fixed by splitting the small headroom between
+  Tam's base HP and his real ceiling into two independent, smaller, genuinely-additive shares — one
+  earned by leveling alone, one by gearing alone — so the ceiling is now only reachable by maxing both
+  at once, with the gear share computed as a live fraction of Wave 51's own real ceiling constant
+  (newly exported as `VILLAGER_GEAR_HP_MAX`) rather than a second hand-copied number that could drift
+  from it silently.
+- **The load-bearing invariant this whole item was designed around, stated and preserved explicitly**:
+  a fully-leveled, fully-geared Tam caps at 20 HP — a full 4 points (17%) under an unarmored level-1
+  defender's own measured 24 HP floor, and that gap only widens over a real playthrough since a real
+  defender's own floor keeps climbing uncapped. Damage was deliberately left completely flat
+  (unchanged by either level or gear), extending Wave 51's own "armor is a toughness stat, never a
+  damage input" reasoning even more forcefully here — an ordinary villager needed a full 100% bump to
+  tie the bare-defender damage floor; Tam's own flat 1.5 needs only a 33% bump to tie it, so there was
+  even less real headroom available than the case Wave 51 already rejected.
+- **Verified live end-to-end, real headless Chrome against a real running dev server** (this repo's
+  own `CLAUDE.md` conventions followed throughout — `--headless=new --use-angle=d3d11 --mute-audio`,
+  zero mouse/audio disruption). Same recurring environment-only gap as every prior wave's worktree
+  verification (missing `public/help`; other junctions already existed), fixed locally via directory
+  junctions to the main checkout's real copies, removed afterward with the main checkout confirmed
+  untouched. Real evidence: driving the actual `gainCompanionXp` action through 88 real XP grants
+  correctly leveled Tam from 0 to Lv 5 exactly matching `floor(sqrt(xp/50))` at every step, with real
+  level-up toasts; the real Roster-panel UI correctly shows Tam's own standalone card while
+  `st.villagers.length` stays 0 throughout, confirming he never enters the roster; real Armory-stock
+  spend/refund confirmed for helmet, Castle-Crested Plate, and halberd, with a screenshot showing his
+  3D rig visibly wearing the new gear in place of the old hardcoded sword+shield; `window.__kkai`
+  confirmed exactly one Agent for `companion_tam` under the `'companion'` archetype, proving no
+  double-spawn against `rosterSync.ts`; a live-injected real defender independently measured at 24 HP
+  confirmed the ceiling invariant against real data, not just the constant's own stated value. After
+  the fix: a direct-state sweep across level 0/3/5 crossed with no-gear/iron/full-gear confirmed the
+  formula's every intermediate value by hand (16/17/18 across levels with no gear; 17/18 across iron
+  vs. full gear at level 0; 20 reached only at level 5 AND full gear together), and a full UI-driven
+  re-run of the exact originally-reported scenario confirmed stripping all gear from a level-5 Tam now
+  correctly drops him from 20 to 18, distinct from fully-geared — the precise regression the fix
+  targeted. Zero console/page errors throughout. `npx tsc --noEmit` / `npm run build`: both clean,
+  verified independently (both by the workflow's own Fix+Reverify pass and, separately, by direct
+  review of the complete 7-file merged diff against the live worktree afterward, including
+  independently re-deriving the entire HP-formula fix by hand — the level-share interpolation, the
+  gear-share rescaling against `VILLAGER_GEAR_HP_MAX`, and the ceiling-only-reached-by-both-axes
+  property — across every value the workflow itself reported, all matching exactly).

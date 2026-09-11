@@ -16,11 +16,12 @@
 //     courage/proximity/tier gates (see below for why those don't apply).
 //   - Damage is a new `companionStrike()` (game/companion.ts) — a flat
 //     constant of Tam's own, not `defenderStrike()`/`villagerStrike()`.
-//   - No `gainDefenderXp()` call, for the exact reason
-//     engage_threat_villager's own header already gives for skipping it:
-//     there is no leveling record on this entity to grant XP into, and
-//     inventing one is exactly the Wave-25b (independent leveling) scope this
-//     wave defers.
+//   - Wave 54 (E2) update: `strike()` below now calls `gs.gainCompanionXp(15)`
+//     right after `gs.recordKill(...)` — the exact hook this comment used to
+//     say didn't exist yet. Still deliberately NOT `gainDefenderXp()`: Tam's
+//     leveling record is `st.companion` (types.ts's `CompanionState`), not a
+//     `Villager`, so it needs its own store action rather than reusing that
+//     one's `st.villagers.map(...)` targeting.
 //   - No `hasLineOfSight()` check. Checked, not assumed: neither
 //     engage_threat nor engage_threat_villager — this action's own two
 //     stated models — call it at all; LOS in this codebase gates RANGED
@@ -179,8 +180,9 @@ class AssistLeaderActivity implements Activity {
   }
 
   /** One blow, at Tam's own dedicated tier. Kill bookkeeping mirrors
-   *  engage_threat's (kill recorded, loot dropped, player told) but
-   *  deliberately WITHOUT `gainDefenderXp` — see this file's own header. */
+   *  engage_threat's (kill recorded, loot dropped, player told) plus, as of
+   *  Wave 54 (E2), `gainCompanionXp` — his own leveling record, not
+   *  `gainDefenderXp` — see this file's own header. */
   private strike(agent: Agent, t: Belief): void {
     const gs = useGameStore.getState();
     const target = liveTargetFor(t.entityId);
@@ -198,6 +200,11 @@ class AssistLeaderActivity implements Activity {
     gs.recordKill(target.kind);
     gs.addItems(lootFor(target), 'grant');
     gs.notify('Tam defeats a raider!', true);
+    // Wave 54 (E2) — the hook this file's own header already reserved:
+    // Tam now has a real leveling record (`st.companion`) to grant XP into,
+    // so this is no longer a silent gap. Same 15/kill `gainDefenderXp`
+    // already uses — no new tuning needed.
+    gs.gainCompanionXp(15);
   }
 }
 

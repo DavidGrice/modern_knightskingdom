@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 import type {
-  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CultivatedPlot, DefenderLoadout, DifficultyId, ItemId,
+  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CompanionState, CultivatedPlot, DefenderLoadout, DifficultyId, ItemId,
   LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, Settlement, SkillId, Villager, VillagerJob,
   WaterFeature,
 } from '../types';
@@ -261,6 +261,13 @@ interface GameState {
    *  types.ts's own SaveGame.companionRecruited doc for the full reasoning
    *  (one boolean, not a roster, same shape as falconTamed above). */
   companionRecruited: boolean;
+  /** Wave 54 (E2) · Tam's own independent progression — see
+   *  `SaveGame.companion`'s doc comment (types.ts) for the full reasoning on
+   *  why this is a separate top-level field rather than literal `villagers`
+   *  membership. Always present in live state (unlike the optional save
+   *  field) — `loadFromSave`/`freshSaveFields` both default it to
+   *  `{ xp: 0, level: 0 }` so every reader can assume it exists. */
+  companion: CompanionState;
   /** Wave 13 · turned on Cedric's own war council once already sworn to him
    *  (see betrayCedric). A permanent burnt bridge, not a cooldown: once
    *  true, `pledgeAlliance('cedric')` refuses forever — the one thing that
@@ -541,6 +548,25 @@ interface GameState {
   stationDefender: (villagerId: string, buildingId: string | null) => void;
   setDefenderShift: (villagerId: string, shift: 'day' | 'night') => void;
   gainDefenderXp: (villagerId: string, amount: number) => void;
+  /** Wave 54 (E2) · Tam's own combat-XP gain, mirroring `gainDefenderXp`
+   *  exactly (same `levelFromXp` curve, same level-up notify) but targeting
+   *  `st.companion` instead of indexing into `st.villagers`. Called once,
+   *  from `assistLeader.ts`'s `strike()`, on every kill Tam lands. */
+  gainCompanionXp: (amount: number) => void;
+  /** Wave 54 (E2) · near-verbatim `equipVillagerGear`/`unequipVillagerGear`
+   *  adaptations for Tam's helmet slot, drawing from the same shared
+   *  Armory pool. */
+  equipCompanionHelmet: () => void;
+  unequipCompanionHelmet: () => void;
+  /** Wave 54 (E2) · near-verbatim `equipVillagerChestplate`/
+   *  `unequipVillagerChestplate` adaptations for Tam's chestplate slot. */
+  equipCompanionChestplate: (tier: ChestplateTier) => void;
+  unequipCompanionChestplate: () => void;
+  /** Wave 54 (E2) · near-verbatim `setDefenderLoadout` adaptation for Tam's
+   *  own weapon choice — same Armory spend/refund logic, `'bow'` excluded
+   *  (see `CompanionState.loadout`'s own doc comment in types.ts for why). */
+  setCompanionLoadout: (loadout: Exclude<DefenderLoadout, 'bow'>) => void;
+  unequipCompanionLoadout: () => void;
   enterInterior: (buildingId: string) => void;
   exitInterior: () => void;
   openTreasureChest: () => void;
@@ -993,7 +1019,7 @@ function freshSaveFields(character: CharacterConfig, difficulty: DifficultyId): 
     notifications: [], prompt: null, actionProgress: null, dirty: true,
     timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
     gateOpen: {}, buildingHp: {}, reputation: {},
-    destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
+    destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, companion: { xp: 0, level: 0 }, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
     durability: {}, perks: [], stats: { ...ZERO_STATS },
     claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
     villagers: [], villagerProgress: {}, armory: {},
@@ -1185,6 +1211,7 @@ function createGameStore() {
     mounts: {},
     falconTamed: false,
     companionRecruited: false,
+    companion: { xp: 0, level: 0 },
     betrayedCedric: false,
     guild: null,
     guildRanks: {},
@@ -1309,6 +1336,7 @@ function createGameStore() {
         mounts: s.mounts ?? {},
         falconTamed: s.falconTamed ?? false,
         companionRecruited: s.companionRecruited ?? false,
+        companion: s.companion ?? { xp: 0, level: 0 },
         betrayedCedric: s.betrayedCedric ?? false,
         guild: s.guild ?? null,
         guildRanks: s.guildRanks ?? {},
@@ -1379,6 +1407,7 @@ function createGameStore() {
         mounts: { ...stabledHorses.assigned },
         falconTamed: s.falconTamed,
         companionRecruited: s.companionRecruited,
+        companion: s.companion,
         betrayedCedric: s.betrayedCedric,
         guild: s.guild,
         guildRanks: s.guildRanks,
@@ -3465,6 +3494,120 @@ function createGameStore() {
       });
       set({ villagers, dirty: true });
       if (leveledUp) st.notify(`${name} the Defender has grown stronger! (Lv ${levelFromXp(villagers.find((v) => v.id === villagerId)!.xp!)})`, true);
+    },
+
+    // Wave 54 (E2) — Tam's own independent progression. Near-verbatim
+    // adaptations of the villager/defender actions directly above, targeting
+    // `st.companion` instead of `st.villagers.map(...)` — see types.ts's
+    // `CompanionState` doc comment for why this is a separate top-level
+    // record rather than literal roster membership.
+    gainCompanionXp: (amount) => {
+      const st = get();
+      const xp = (st.companion.xp ?? 0) + amount;
+      const levelBefore = levelFromXp(st.companion.xp ?? 0);
+      const levelAfter = levelFromXp(xp);
+      set({ companion: { ...st.companion, xp, level: levelAfter }, dirty: true });
+      if (levelAfter > levelBefore) st.notify(`Tam has grown stronger! (Lv ${levelAfter})`, true);
+    },
+
+    equipCompanionHelmet: () => {
+      const st = get();
+      const item: ItemId = 'helmet';
+      const stock = st.armory[item] ?? 0;
+      if (st.companion.gear?.helmet) return; // already wearing one
+      if (stock <= 0) {
+        st.notify('The Armory has no spare helmets.');
+        return;
+      }
+      set({
+        companion: { ...st.companion, gear: { ...st.companion.gear, helmet: true } },
+        armory: { ...st.armory, [item]: stock - 1 },
+        dirty: true,
+      });
+      audio.play('brick_connect', 0.6);
+      st.notify('Tam dons a helmet from the Armory.');
+    },
+
+    unequipCompanionHelmet: () => {
+      const st = get();
+      if (!st.companion.gear?.helmet) return;
+      const item: ItemId = 'helmet';
+      set({
+        companion: { ...st.companion, gear: { ...st.companion.gear, helmet: false } },
+        armory: { ...st.armory, [item]: (st.armory[item] ?? 0) + 1 },
+        dirty: true,
+      });
+      audio.play('brick_collide', 0.5);
+      st.notify('Tam returns the helmet to the Armory.');
+    },
+
+    equipCompanionChestplate: (tier) => {
+      const st = get();
+      const worn = chestplateTierOf(st.companion.gear);
+      if (worn === tier) return;
+      const def = CHESTPLATE_BY_TIER[tier];
+      if ((st.armory[def.item] ?? 0) <= 0) {
+        st.notify(`The Armory has no spare ${def.label.toLowerCase()}.`);
+        return;
+      }
+      const armory = { ...st.armory };
+      if (worn) {
+        const old = CHESTPLATE_ITEM[worn];
+        armory[old] = (armory[old] ?? 0) + 1;
+      }
+      armory[def.item] = (armory[def.item] ?? 0) - 1;
+      set({ companion: { ...st.companion, gear: { ...st.companion.gear, chestplate: tier } }, armory, dirty: true });
+      audio.play('brick_connect', 0.6);
+      st.notify(`Tam buckles on the ${def.label} — ${def.blurb}`);
+    },
+
+    unequipCompanionChestplate: () => {
+      const st = get();
+      const worn = chestplateTierOf(st.companion.gear);
+      if (!worn) return;
+      const item = CHESTPLATE_ITEM[worn];
+      set({
+        companion: { ...st.companion, gear: { ...st.companion.gear, chestplate: false } },
+        armory: { ...st.armory, [item]: (st.armory[item] ?? 0) + 1 },
+        dirty: true,
+      });
+      audio.play('brick_collide', 0.5);
+      st.notify(`Tam returns the ${CHESTPLATE_BY_TIER[worn].label.toLowerCase()} to the Armory.`);
+    },
+
+    setCompanionLoadout: (loadout) => {
+      const st = get();
+      if (st.companion.loadout === loadout) return;
+      const need = LOADOUT_REQUIRES[loadout];
+      for (const [id, n] of Object.entries(need)) {
+        if ((st.armory[id as ItemId] ?? 0) < (n as number)) {
+          st.notify('Not enough in the Armory to arm Tam that way.');
+          return;
+        }
+      }
+      const armory = { ...st.armory };
+      if (st.companion.loadout) {
+        for (const [id, n] of Object.entries(LOADOUT_REQUIRES[st.companion.loadout])) {
+          armory[id as ItemId] = (armory[id as ItemId] ?? 0) + (n as number);
+        }
+      }
+      for (const [id, n] of Object.entries(need)) {
+        armory[id as ItemId] = (armory[id as ItemId] ?? 0) - (n as number);
+      }
+      set({ companion: { ...st.companion, loadout }, armory, dirty: true });
+      const label = DEFENDER_LOADOUTS.find((d) => d.id === loadout)?.label ?? loadout;
+      st.notify(`Tam is armed with ${label} from the Armory.`);
+    },
+
+    unequipCompanionLoadout: () => {
+      const st = get();
+      if (!st.companion.loadout) return;
+      const armory = { ...st.armory };
+      for (const [id, n] of Object.entries(LOADOUT_REQUIRES[st.companion.loadout])) {
+        armory[id as ItemId] = (armory[id as ItemId] ?? 0) + (n as number);
+      }
+      set({ companion: { ...st.companion, loadout: undefined }, armory, dirty: true });
+      st.notify('Tam returns his weapon to the Armory — bare-handed for now.');
     },
 
     tickVillagers: (dt) => {

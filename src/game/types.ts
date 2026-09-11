@@ -364,6 +364,17 @@ export interface SaveGame {
    *  roster — Tam is never pushed into `villagers` (see gameStore's
    *  recruitCompanion). Absent/false = not recruited yet. */
   companionRecruited?: boolean;
+  /** Wave 54 · Tam's independent progression — XP/level off real combat
+   *  kills (assistLeader.ts's strike()) and an Armory-backed gear/loadout
+   *  choice, entirely separate from `companionRecruited` above (that flag
+   *  stays a pure boolean gate for its 7 existing consumers, untouched).
+   *  Absent = a recruited-but-never-touched-this-system Tam: level 0, no
+   *  gear, renders exactly as he always has (see game/companion.ts's
+   *  `companionMaxHp`/Companion.tsx's `loadout ?? 'sword_shield'`
+   *  fallback). See `CompanionState`'s own doc comment above for why this
+   *  is a separate top-level field rather than literal `villagers`
+   *  membership. */
+  companion?: CompanionState;
   /** Wave 13 · turned on Cedric's own camp after already pledging to him
    *  (gameStore's betrayCedric) — permanent, so `pledgeAlliance('cedric')`
    *  can refuse a known turncoat forever. Absent/false = never happened. */
@@ -702,4 +713,27 @@ export interface Villager {
  *  buildings/anchor instead of their own settlement's. */
 export function isHomeVillager(v: Villager): boolean {
   return (v.world ?? null) === null;
+}
+
+/** Wave 54 · Tam's own independent progression record — save-persisted,
+ *  but deliberately NOT a `Villager` and NOT pushed into `villagers`
+ *  (see `SaveGame.companionRecruited`'s own comment for the exhaustive
+ *  `st.villagers` consumer audit that ruled that out: `assignJob`/
+ *  `tickVillagers` both index `JOB_BY_ID[v.job]`, which would crash for a
+ *  job value with no `JobDef`, and `rosterSync.ts` would double-spawn an
+ *  Agent for an id `companionSync.ts` already spawns separately). Lives at
+ *  `SaveGame.companion`/`GameState.companion`; absent = never touched this
+ *  system (level 0, no gear — not a corrupt Tam, just an untouched one).
+ *  `gear` reuses `Villager['gear']`'s exact shape (helmet/chestplate draw
+ *  from the same Armory pool and tier vocabulary) — `carrier` is part of
+ *  that shape but never surfaced in the UI for Tam, since he never hauls
+ *  goods. `loadout` excludes 'bow': `assist_leader`
+ *  (ai/actions/assistLeader.ts) is melee-only today with no LOS check at
+ *  all — see that file's own header for why a ranged branch is real new
+ *  work, not a reuse, and is deferred to a future wave. */
+export interface CompanionState {
+  xp: number;
+  level: number;
+  loadout?: Exclude<DefenderLoadout, 'bow'>;
+  gear?: Villager['gear'];
 }
