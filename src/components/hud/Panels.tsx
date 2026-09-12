@@ -579,6 +579,7 @@ function ParleyPanel() {
   const turnInSideQuest = useGameStore((s) => s.turnInSideQuest);
   const abandonSideQuest = useGameStore((s) => s.abandonSideQuest);
   const betrayCedric = useGameStore((s) => s.betrayCedric);
+  const betrayLeo = useGameStore((s) => s.betrayLeo);
   if (alliance === 'cedric') {
     const pool = sideQuestsOf('cedric');
     // Wave 55 (F1) · used to rotate a single candidate the same way
@@ -666,6 +667,58 @@ function ParleyPanel() {
         </div>
         <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
           Leave the council
+        </button>
+      </div>
+    );
+  }
+  // Wave 56 (F4): a Leo-sworn knight gets a distinct parley of his own — not
+  // the unsworn branch's first-pledge dialogue reused verbatim. Defecting
+  // from a sworn oath reads differently than a first, neutral choice, and
+  // "Clasp arms with Cedric" here calls betrayLeo (not pledgeAlliance,
+  // which would silently no-op for anyone already sworn — see its own
+  // `if (st.alliance) return;` guard).
+  if (alliance === 'leo') {
+    return (
+      <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
+        <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+        <h2>Cedric the Bull</h2>
+        <div style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 14 }}>
+          “Still wearing that gilded fool&apos;s colors? I&apos;ve seen knights choke on their own
+          oaths before. Cast it off — swear to ME instead, and every raider between here and the
+          keep answers to you. Or draw steel and settle it that way. Your choice, turncoat.”
+        </div>
+        <div className="quest-item">
+          <div className="q-name">🐂 Turn Your Coat</div>
+          {betrayedCedric ? (
+            <div className="q-desc">
+              You already turned on this camp once. He is not fool enough to trust you a second time.
+            </div>
+          ) : (
+            <>
+              <div className="q-desc">
+                Break your oath to Leo and pledge to the Bull instead. The crown will name you
+                traitor and never forgive it — but Cedric&apos;s raiders will never again touch your
+                homestead.
+              </div>
+              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={betrayLeo}>
+                Clasp arms with Cedric
+              </button>
+            </>
+          )}
+        </div>
+        <div className="quest-item">
+          <div className="q-name">⚔ Challenge Him to Battle</div>
+          <div className="q-desc">
+            {finalStandReady
+              ? 'His Final Stand — answer his offer with steel, and finish this for good.'
+              : 'Answer his offer with steel — he fights for real, but has not yet earned his final defeat.'}
+          </div>
+          <button className="menu-btn small danger" style={{ margin: '8px 0 0' }} onClick={challenge}>
+            {finalStandReady ? 'Draw your sword — His Final Stand' : 'Draw your sword'}
+          </button>
+        </div>
+        <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
+          Walk away
         </button>
       </div>
     );

@@ -12,6 +12,7 @@ import { sampleTemplateGroundY } from './TemplateWorld';
 import PropModel from './PropModel';
 
 const CYL = '/assets/props/cylindrical';
+const B = '/assets/props/buildings';
 
 const SEG_COUNT = 22;
 const GAP_HALF = 0.35; // radians left open on the north side as the entrance
@@ -77,6 +78,25 @@ export default function BattleDome() {
             position={[Math.sin(angle) * R, 0, Math.cos(angle) * R]}
           />
         ))}
+      </Suspense>
+      {/* Wave 56 (F3): a real staged duel bridge at the ring's center — the
+          challenger crosses it from the entrance (north gap, +Z) to reach
+          Storm at the far end. oc6095b4 (the dual stand) flanks it to one
+          side as a flag/shield/halberd honor stand. Heights match each
+          piece's own real bbox Y-extent 1:1 (bricks.generated.json's
+          gen_oc6095b4/gen_oc6095b5 "size"), so useNormalizedProp's uniform
+          scale-to-height comes out to ~1 — these render at their true
+          modeled size, not stretched/shrunk to fit.
+          oc6095b5's own unrotated bbox is WIDER in X (6.3) than deep in Z
+          (4.2) — live-measured in the running app (a THREE.Box3 over the
+          mounted instance), not assumed from the plan's own "long axis
+          along Z" framing, which turned out to describe the INTENDED
+          geometry, not the yaw=0 code it shipped with. yaw=Math.PI/2 is
+          what actually swings the 6.3 side to run along Z here — confirmed
+          by re-measuring the world-space box after the rotation. */}
+      <Suspense fallback={null}>
+        <PropModel url={`${B}/oc6095b5.glb`} height={4.27} position={[0, 0, 0]} yaw={Math.PI / 2} />
+        <PropModel url={`${B}/oc6095b4.glb`} height={7.35} position={[4.5, 0, 0]} yaw={-Math.PI / 2} />
       </Suspense>
     </group>
   );

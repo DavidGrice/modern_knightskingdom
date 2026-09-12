@@ -117,8 +117,10 @@ export default function DialoguePanel() {
   // frostpass_clear) could land back on the already-finished first errand —
   // `sideQuestOffers` filters on `completed` directly so that can't happen.
   const offers = useMemo(
-    () => (npc ? sideQuestOffers(npc.id, completedSideQuests, completedQuests, allegiance, alliance) : []),
-    [npc, completedSideQuests, completedQuests, allegiance, alliance],
+    () => (npc
+      ? sideQuestOffers(npc.id, completedSideQuests, completedQuests, allegiance, alliance, reputation[npc.id] ?? 0)
+      : []),
+    [npc, completedSideQuests, completedQuests, allegiance, alliance, reputation],
   );
 
   if (!npc) return null;

@@ -15,7 +15,7 @@ import {
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { NPCS, NPC_BY_ID, isNpcRevealed, isNpcPresent, INTERIOR_RESIDENTS } from '@/game/data/npcs';
 import { INTERIORS, pocketFor } from '@/game/data/interiors';
-import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
+import { cedricFinalStandReady } from '@/game/cedricSiege';
 import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { playerState } from '@/game/playerState';
@@ -711,9 +711,11 @@ export default function PlayerController() {
       ) {
         return {
           id: 'cedric', kind: 'challenge_cedric', duration: 0, actionable: true,
+          // Wave 56 (F4): a Leo-sworn knight now gets the same parley moment
+          // as an unsworn one (ParleyPanel branches the dialogue/options by
+          // alliance itself) rather than a distinct pre-panel label.
           label: st.alliance === 'cedric' ? 'Sit the War Council'
             : cedricFinalStandReady(st) ? 'Challenge Cedric — His Final Stand'
-            : st.alliance === 'leo' ? 'Challenge Cedric the Bull'
             : 'Approach Cedric the Bull',
         };
       }
@@ -1463,26 +1465,14 @@ export default function PlayerController() {
     } else if (t.kind === 'guild_hall') {
       st.setPanel('guild');
     } else if (t.kind === 'challenge_cedric') {
-      if (!st.alliance || st.alliance === 'cedric') {
-        // unsworn: Cedric makes his offer first (Phase 19 alliance branch) —
-        // the fight is one of the parley's choices, not the only outcome.
-        // His sworn bannermen get the war council instead (ParleyPanel
-        // branches on alliance) — rebellion errands, never a fight.
-        st.setPanel('parley');
-        audio.playVoice('greeting_cedric', 0.85);
-        return;
-      }
-      {
-        const finalStand = startCedricDuel(st);
-        audio.play('warcry', 0.9);
-        audio.playVoice('greeting_cedric', 0.85);
-        st.notify(
-          finalStand
-            ? 'Cedric the Bull roars: "This ends here, would-be knight!"'
-            : 'Cedric the Bull sneers: "Come to lose your head, have you?"',
-          true,
-        );
-      }
+      // Wave 56 (F4): every alliance state gets the parley moment first —
+      // the fight is one of the panel's own choices (ParleyPanel's Leo-sworn
+      // and unsworn branches both keep "Challenge Him to Battle" alongside
+      // the peaceful option), never a silent instant duel. His sworn
+      // bannermen still get the war council instead (ParleyPanel branches on
+      // alliance) — rebellion errands, never a fight.
+      st.setPanel('parley');
+      audio.playVoice('greeting_cedric', 0.85);
     } else if (t.kind === 'fishing') {
       if (fishingState.nodeId !== t.id) {
         startFishing(t.id, worldEnv.rain > 0.4);
