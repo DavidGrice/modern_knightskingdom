@@ -211,6 +211,14 @@ export interface PlacedBuilding {
   /** Phase 19 build-then-construct: 0..1 construction progress. Absent = 1
    *  (fully built), so every building from an older save just works. */
   built?: number;
+  /** Wave 57 (F5): true while this entry is a dragon-fire ruin rather than a
+   *  fresh construction site — both reuse the exact same `built<1` state
+   *  (see damageBuilding's own leaveRuin branch), so this is the ONE extra
+   *  bit that distinguishes "burned back down, rebuild for free" from
+   *  "never finished yet". Cleared the moment constructBuilding brings
+   *  `built` back to 1; absent/false for every ordinary construction site
+   *  and every older save. */
+  ruin?: boolean;
   /** which instance this stands in — a claimed template-world plot's own
    *  destination id, or absent/null for the homestead. Every destination's
    *  real coordinates sit far apart in one shared space (see the

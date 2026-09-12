@@ -16,6 +16,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { difficultyState } from '@/game/difficulty';
+import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 
 const C = '/assets/props/creatures/';
 const FLIGHT_SECONDS = 26;
@@ -40,32 +41,13 @@ export interface DragonRig {
   head: THREE.Group;
 }
 
-/** One dragon in the air at a time — the omen and the siege both check this.
- *  G26 · the siege also publishes WHERE it is each frame, so defenders on the
- *  ground can look up and shoot at it instead of ignoring a target simply
- *  because it is not standing on the floor. */
-export const dragonAir = {
-  busy: false,
-  /** true while the siege dragon is circling and can be shot at */
-  hostile: false,
-  x: 0, y: 0, z: 0,
-  /** the siege owns the hit count; this is how anything else lands one */
-  hit: null as null | ((source: string) => void),
-};
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAir = dragonAir;
-
-/** Wave 36 (A8) · the black dragon's own mirror of dragonAir — Cedric's own
- *  beast (BlackDragonSiege.tsx) fights entirely independently of the green
- *  dragon above, so ground defenders/the coordination guard each need a
- *  second copy of the same "where is it, can it be hit" state rather than
- *  the two beasts fighting over one. */
-export const dragonAirBlack = {
-  busy: false,
-  hostile: false,
-  x: 0, y: 0, z: 0,
-  hit: null as null | ((source: string) => void),
-};
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAirBlack = dragonAirBlack;
+// Wave 57 (F5): dragonAir/dragonAirBlack now live in game/dragonAir.ts (a
+// zero-dependency leaf module — see its own header comment for why) and are
+// simply re-exported here so every existing importer of THIS file
+// (DragonSiege.tsx, BlackDragonSiege.tsx before this wave) keeps working
+// unchanged. New code should prefer importing from '@/game/dragonAir'
+// directly — CedricSiege.tsx, Defenders.tsx and ai/actions/flee.ts do.
+export { dragonAir, dragonAirBlack };
 
 export type DragonVariant = 'green' | 'black';
 

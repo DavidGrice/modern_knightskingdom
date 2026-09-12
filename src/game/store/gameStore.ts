@@ -474,7 +474,11 @@ interface GameState {
   harvestPlot: (buildingId: string) => void;
   tickPlots: (dt: number) => void;
   toggleGate: (buildingId: string) => void;
-  damageBuilding: (id: string, amount: number, cause?: string) => void;
+  /** Wave 57 (F5): trailing `leaveRuin` — true only from the two dragon
+   *  sieges (DragonSiege.tsx/BlackDragonSiege.tsx). Every other caller
+   *  (siege.ts, CedricSiege.tsx, Enemies.tsx) omits it and keeps today's
+   *  delete+half-refund behavior exactly. */
+  damageBuilding: (id: string, amount: number, cause?: string, leaveRuin?: boolean) => void;
   settleCart: (id: string) => void;
   addReputation: (npcId: string, amount: number) => void;
   /** Wave 14 · `poiId` optionally waypoints straight to a resident POI's own
@@ -2932,7 +2936,7 @@ function createGameStore() {
       );
     },
 
-    damageBuilding: (id, amount, cause) => {
+    damageBuilding: (id, amount, cause, leaveRuin) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
       if (!b) return;
@@ -2961,8 +2965,46 @@ function createGameStore() {
         audio.play('brick_collide', 0.6);
         return;
       }
-      // destroyed: rubble refund, same half-materials-back rate as demolishing by hand
       const def = BUILDABLE_BY_ID[b.type];
+      // Wave 57 (F5): a dragon-fire kill (leaveRuin=true) leaves a RUIN
+      // behind instead of deleting the entry — reuses the exact existing
+      // "under construction" state (types.ts's own `built` doc comment:
+      // "0..1 construction progress. Absent = 1 (fully built)") rather than
+      // a new entity, confirmed safe live: placeBuilding already sets
+      // `built: 0` on every FRESH placement too (see its own call sites),
+      // so a ruin is byte-identical to an ordinary just-placed construction
+      // site in every field except the new `ruin` flag — nav grid, minimap,
+      // wall-connection queries and the builder auto-build pass already
+      // handle a `built:0` entry correctly today because that state already
+      // exists. Also confirmed live that dragon fire can never hit a piece
+      // already mid-type-swap (every `wall_straight` mold in
+      // capabilities.json costs pure stone, so flammable() is always false
+      // for them), so `b.type` here is always the pristine, stable type —
+      // never a ruined wall mold.
+      //
+      // No materials refund on this path (unlike the hand-demolish half
+      // refund below), and constructBuilding charges no new materials to
+      // finish rebuilding it either (it never has, for any construction
+      // site) — so the net material cost of surviving a dragon hit is
+      // exactly zero: you neither profit nor pay twice. That's deliberately
+      // CHEAPER than the existing half-cost loss of voluntarily demolishing
+      // and replacing a building by hand (refund granted, then full cost
+      // paid again) — an involuntary loss should sting less than a
+      // voluntary one, without ever making being sieged profitable, which a
+      // refund-plus-free-rebuild combination would have been.
+      if (leaveRuin) {
+        const hpRest = { ...st.buildingHp };
+        delete hpRest[id];
+        set({
+          buildings: st.buildings.map((x) => (x.id === id ? { ...x, built: 0, ruin: true } : x)),
+          buildingHp: hpRest,
+          dirty: true,
+        });
+        audio.play('brick_collide', 0.8);
+        st.notify(`${def?.name ?? 'The building'} ${cause ?? 'was razed'} to a smoking ruin! Rebuild it to restore it.`, true);
+        return;
+      }
+      // destroyed: rubble refund, same half-materials-back rate as demolishing by hand
       const inv = { ...st.inventory };
       // a placed piece can outlive its catalog entry (a save from before a
       // buildable was renamed/removed) — refund nothing rather than throwing
@@ -3752,7 +3794,16 @@ function createGameStore() {
               // Every builder present rolls it (matching the generic
               // side-goods shape: it's a baseline craft-scaled chance the
               // trait doubles, not something the trait switches on from zero).
-              if (before < 1 && (get().buildings.find((b) => b.id === site.id)?.built ?? 0) >= 1) {
+              // Wave 57 (F5): also gated on `!site.ruin` — a second,
+              // independent double-grant surface this wave's own research
+              // didn't name (it traced constructBuilding's own completion
+              // branch, not this separate before/after check in the builder
+              // pass), found while confirming nothing else double-counts a
+              // ruin rebuild the way stats/XP/quest-counters did. `site` is
+              // the PRE-construct snapshot from just above, so `site.ruin`
+              // still reads the ruin flag construct Building is about to
+              // clear on this same call.
+              if (before < 1 && !site.ruin && (get().buildings.find((b) => b.id === site.id)?.built ?? 0) >= 1) {
                 for (const v of atSiteBuilders) {
                   const attrs = attrsOf(v.id);
                   const sideChance = attrs.craft * (hasTrait(v, 'bui_salvage') ? 2 : 1);
@@ -4827,35 +4878,54 @@ function createGameStore() {
         dirty: true,
       });
       if (after >= 1) {
-        // the real "built" moment — everything placement used to award
-        set({
-          stats: {
-            ...get().stats,
-            buildingsPlaced: get().stats.buildingsPlaced + 1,
-            buildingsByType: { ...get().stats.buildingsByType, [b.type]: (get().stats.buildingsByType[b.type] ?? 0) + 1 },
-          },
-        });
-        st.addXp('building', def.buildXp);
-        audio.play('brick_connect', 0.85);
-        bumpQuestCounters('build', b.type, 1);
-        st.notify(`${def.name} construction complete!`);
-        // Wave 13 · Timed Build Challenge (see game/buildChallenge.ts) — a
-        // finished piece raised at the challenge ground, while a run is
-        // live, counts toward it. `b.world` is the tag placeBuilding stamped
-        // at placement time (st.destination then), so this can only ever
-        // fire for a piece actually standing at BUILD_CHALLENGE_ID — the
-        // homestead-villager auto-build pass (below, this same file) never
-        // touches a building tagged that way, since no villager is ever
-        // assigned to a challenge ground.
-        if (b.world === BUILD_CHALLENGE_ID && buildChallengeState.active) {
-          buildChallengeState.built += 1;
-          if (buildChallengeState.built >= BUILD_CHALLENGE_TARGET) {
-            buildChallengeState.active = false;
-            const bonus = 40;
-            st.addItems({ gold: bonus }, 'grant');
-            st.addXp('building', 60);
-            st.notify(`Challenge complete! ${BUILD_CHALLENGE_TARGET} pieces raised before the bell — +${bonus} gold.`, true);
-            audio.play('treasure', 0.85);
+        if (b.ruin) {
+          // Wave 57 (F5): a ruin rebuilt in place — deliberately skips the
+          // ENTIRE stats/XP/quest-counter block below (only clearing the
+          // flag) rather than running it again. That block is the one place
+          // a completion normally "counts": `stats.buildingsPlaced` feeds
+          // difficulty.ts's computeThreat() (its own header brags "EVERY
+          // INPUT IS MONOTONIC BY CONSTRUCTION" so raiding/razing can't walk
+          // the tier back down) and the Architect title (data/challenges.ts,
+          // 10/50/200 pieces placed); `bumpQuestCounters('build', ...)`
+          // would let a live "build N of X" quest finish by burn-and-rebuild
+          // cycling instead of real construction. Reusing `built` for the
+          // ruin state (see damageBuilding's own leaveRuin comment) would
+          // otherwise let a player farm both for free by having the dragon
+          // repeatedly torch and rebuild the same cheap hut.
+          set({ buildings: get().buildings.map((x) => (x.id === id ? { ...x, ruin: false } : x)), dirty: true });
+          audio.play('brick_connect', 0.85);
+          st.notify(`${def.name} rebuilt from the ashes!`, true);
+        } else {
+          // the real "built" moment — everything placement used to award
+          set({
+            stats: {
+              ...get().stats,
+              buildingsPlaced: get().stats.buildingsPlaced + 1,
+              buildingsByType: { ...get().stats.buildingsByType, [b.type]: (get().stats.buildingsByType[b.type] ?? 0) + 1 },
+            },
+          });
+          st.addXp('building', def.buildXp);
+          audio.play('brick_connect', 0.85);
+          bumpQuestCounters('build', b.type, 1);
+          st.notify(`${def.name} construction complete!`);
+          // Wave 13 · Timed Build Challenge (see game/buildChallenge.ts) — a
+          // finished piece raised at the challenge ground, while a run is
+          // live, counts toward it. `b.world` is the tag placeBuilding stamped
+          // at placement time (st.destination then), so this can only ever
+          // fire for a piece actually standing at BUILD_CHALLENGE_ID — the
+          // homestead-villager auto-build pass (below, this same file) never
+          // touches a building tagged that way, since no villager is ever
+          // assigned to a challenge ground.
+          if (b.world === BUILD_CHALLENGE_ID && buildChallengeState.active) {
+            buildChallengeState.built += 1;
+            if (buildChallengeState.built >= BUILD_CHALLENGE_TARGET) {
+              buildChallengeState.active = false;
+              const bonus = 40;
+              st.addItems({ gold: bonus }, 'grant');
+              st.addXp('building', 60);
+              st.notify(`Challenge complete! ${BUILD_CHALLENGE_TARGET} pieces raised before the bell — +${bonus} gold.`, true);
+              audio.play('treasure', 0.85);
+            }
           }
         }
       } else {

@@ -8,6 +8,11 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BATTLE_DOME, STORM_WORLD } from '@/game/data/world';
 import { useGameStore } from '@/game/store/gameStore';
+import { useEnemyStore } from '@/game/combat';
+import { playerState } from '@/game/playerState';
+import { defaultLookOf } from '@/game/data/villagerLooks';
+import RiggedFigure from '../character/RiggedFigure';
+import type { CharacterConfig } from '@/game/types';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import PropModel from './PropModel';
 
@@ -28,6 +33,57 @@ function useRingAngles() {
     }
     return angles;
   }, []);
+}
+
+/** Wave 57 (F6) · a small, non-interactive figure standing at the honor
+ *  stand (oc6095b4, placed just below) — no NpcDef/roster entry, no
+ *  dialogue, no quests. Every named court NPC (King Leo, Queen Leonora,
+ *  Richard, John, Storm herself) is confirmed live nowhere near this venue
+ *  (see this wave's own research) and Storm is the duelist here, not a
+ *  spectator, so watching her duels needed a genuinely new, minimal figure
+ *  rather than relocating an established NPC and disrupting their own
+ *  dialogue/quest content. Reuses an already-loaded generic look from
+ *  VILLAGER_LOOKS (via defaultLookOf) — no new asset weight.
+ *
+ *  `x`/`z` are LOCAL to this file's own dome group (translated by
+ *  BATTLE_DOME.x/z, never rotated — see the default export below), so the
+ *  facing math below adds that offset back in before comparing against
+ *  playerState, which is always world-space.
+ *
+ *  Turns to face the player while a duel is live (any 'storm' EnemyState —
+ *  the same check DialoguePanel.tsx uses to know a duel is already running),
+ *  using this codebase's own atan2(-dx,-dz) + `rotation.y = yaw + Math.PI`
+ *  facing convention and lerp rate (Defenders.tsx, Villagers.tsx, etc.);
+ *  otherwise holds a neutral yaw facing the bridge at the ring's center.
+ *  anim_r_restpose throughout — no new clip exists to animate a "watching"
+ *  pose with. */
+function DuelSpectator({ x, z }: { x: number; z: number }) {
+  const config = useMemo<CharacterConfig>(() => ({ name: 'A courtier', ...defaultLookOf('battledome_spectator') }), []);
+  const group = useRef<THREE.Group>(null);
+  const yaw = useRef(0);
+  useFrame((_, dt) => {
+    const g = group.current;
+    if (!g) return;
+    const dueling = useEnemyStore.getState().enemies.some((e) => e.kind === 'storm');
+    const wx = x + BATTLE_DOME.x;
+    const wz = z + BATTLE_DOME.z;
+    // neutral: face the bridge at the ring's local center (0,0) — the delta
+    // to a fixed local point is the same whether computed in local or world
+    // space, since this group only translates, never rotates
+    const desired = dueling
+      ? Math.atan2(-(playerState.x - wx), -(playerState.z - wz))
+      : Math.atan2(-(0 - x), -(0 - z));
+    let diff = desired - yaw.current;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    yaw.current += diff * Math.min(1, dt * 3);
+    g.rotation.y = yaw.current + Math.PI;
+  });
+  return (
+    <group ref={group} position={[x, 0, z]}>
+      <RiggedFigure config={config} height={1.75} clip="anim_r_restpose" />
+    </group>
+  );
 }
 
 export default function BattleDome() {
@@ -98,6 +154,11 @@ export default function BattleDome() {
         <PropModel url={`${B}/oc6095b5.glb`} height={4.27} position={[0, 0, 0]} yaw={Math.PI / 2} />
         <PropModel url={`${B}/oc6095b4.glb`} height={7.35} position={[4.5, 0, 0]} yaw={-Math.PI / 2} />
       </Suspense>
+      {/* Wave 57 (F6): one minimal spectator standing at the honor stand's
+          foot, facing the bridge until a duel starts. Offset off the
+          stand's own x=4.5 center so it doesn't stand inside that prop's
+          geometry. */}
+      <DuelSpectator x={3.3} z={0.9} />
     </group>
   );
 }

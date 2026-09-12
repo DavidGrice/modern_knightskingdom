@@ -20,11 +20,26 @@ import { isBuilt } from '@/game/types';
 import { dragonAllowed } from '@/game/difficulty';
 import { bossTierScale, BOSS_VICTORY_REWARD, rollBossLegendaryDrop } from '@/game/bossEncounter';
 import { ITEMS } from '@/game/data/items';
-import { dragonAir, dragonAirBlack, loadDragonRig, type DragonRig } from './DragonOmen';
+import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
+import { loadDragonRig, type DragonRig } from './DragonOmen';
 
 const SIEGE_SECONDS = 55;
 const BREATH_EVERY = 6;   // seconds between fire passes
 const BREATH_DAMAGE = 14;
+// Wave 57 (F5): a bounded chain reaction, folded into the same BREATH_EVERY
+// tick rather than a new timer. Numbers chosen so a dense base visibly
+// catches without a siege routinely razing the whole thing: ~9-11 ticks per
+// 55s siege * 0.18 spread chance per burning building ~= 1-2 expected extra
+// ignitions in a base with real neighbors, hard-capped at 3 simultaneous
+// fires total. SPREAD_RADIUS=8m (center-to-center) catches a piece placed
+// right next to another (typical footprints run 2-8m; walls in a run touch
+// at ~0m gap) without reaching across a spread-out base — an isolated
+// flammable building with nothing flammable within 8m never spreads at all,
+// which is the intended "build densely at your own risk" read, not "never
+// build wood."
+const MAX_BURNING = 3;
+const SPREAD_RADIUS = 8;
+const SPREAD_CHANCE = 0.18;
 // Wave 38 (A1): base threshold, scaled at roll time by bossTierScale('dragon')
 // — see BlackDragonSiege.tsx's own hitsToRout prop, which this now mirrors.
 const HITS_TO_ROUT_BASE = 5;
@@ -47,12 +62,15 @@ function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (rout
     return () => { live = false; };
   }, []);
   const group = useRef<THREE.Group>(null);
-  const fire = useRef<THREE.PointLight>(null);
-  const fireBall = useRef<THREE.Mesh>(null);
+  // Wave 57 (F5): up to MAX_BURNING buildings on fire at once now, each with
+  // its own light/fireball slot (fixed-size — MAX_BURNING is a constant, not
+  // a dynamic list of hooks) and its own decaying fireT for the visual pulse.
+  const fireLights = useRef<(THREE.PointLight | null)[]>([null, null, null]);
+  const fireBalls = useRef<(THREE.Mesh | null)[]>([null, null, null]);
+  const burning = useRef<{ id: string; x: number; z: number; fireT: number }[]>([]);
   const t = useRef(0);
   const breathCd = useRef(3.5);
   const hits = useRef(0);
-  const fireT = useRef(0);
   const stoneNote = useRef(false);
   const done = useRef(false);
 
@@ -89,30 +107,72 @@ function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (rout
     rig.tail.rotation.x = Math.sin(t.current * 4.2 - 0.9) * 0.16;
     rig.head.rotation.y = Math.sin(t.current * 0.8) * 0.35;
 
-    // dragonfire: pick a standing wooden structure and scorch it
+    // dragonfire: a bounded chain reaction (Wave 57/F5) — every currently-
+    // burning building takes another hit and is dropped from the set the
+    // instant it's no longer isBuilt (destroyed, or turned to a ruin —
+    // leaveRuin:true below means ruin is the only outcome a dragon ever
+    // causes); each survivor then rolls a chance to leap to a fresh
+    // flammable neighbor, capped at MAX_BURNING total. If nothing is
+    // burning at all (siege start, or the last blaze already died out),
+    // seed one fresh random target exactly as before this wave.
     breathCd.current -= dt;
     if (breathCd.current <= 0) {
       breathCd.current = BREATH_EVERY;
-      const targets = st.buildings.filter((b) => isBuilt(b) && flammable(b.type));
-      if (targets.length) {
-        const b = targets[Math.floor(Math.random() * targets.length)];
-        st.damageBuilding(b.id, BREATH_DAMAGE, 'scorched by dragonfire');
-        audio.playAt('flame', b.x, b.z, 0.9);
-        fireT.current = 1.4;
-        if (fire.current) fire.current.position.set(b.x, 2.2, b.z);
-        if (fireBall.current) fireBall.current.position.set(b.x, 1.2, b.z);
-      } else if (!stoneNote.current) {
-        stoneNote.current = true;
-        st.notify('The flames find nothing to catch — stone holds against dragonfire!');
+      if (burning.current.length === 0) {
+        const targets = st.buildings.filter((b) => isBuilt(b) && flammable(b.type));
+        if (targets.length) {
+          const b = targets[Math.floor(Math.random() * targets.length)];
+          st.damageBuilding(b.id, BREATH_DAMAGE, 'scorched by dragonfire', true);
+          audio.playAt('flame', b.x, b.z, 0.9);
+          burning.current.push({ id: b.id, x: b.x, z: b.z, fireT: 1.4 });
+        } else if (!stoneNote.current) {
+          stoneNote.current = true;
+          st.notify('The flames find nothing to catch — stone holds against dragonfire!');
+        }
+      } else {
+        for (const entry of burning.current) {
+          st.damageBuilding(entry.id, BREATH_DAMAGE, 'scorched by dragonfire', true);
+          audio.playAt('flame', entry.x, entry.z, 0.9);
+          entry.fireT = 1.4;
+        }
+        const live = useGameStore.getState().buildings;
+        burning.current = burning.current.filter((entry) => {
+          const b = live.find((x) => x.id === entry.id);
+          return !!b && isBuilt(b);
+        });
+        const burningIds = new Set(burning.current.map((e) => e.id));
+        for (const entry of [...burning.current]) {
+          if (burning.current.length >= MAX_BURNING) break;
+          if (Math.random() >= SPREAD_CHANCE) continue;
+          const candidates = live.filter((o) => !burningIds.has(o.id) && isBuilt(o) && flammable(o.type)
+            && Math.hypot(o.x - entry.x, o.z - entry.z) <= SPREAD_RADIUS);
+          if (!candidates.length) continue;
+          const next = candidates[Math.floor(Math.random() * candidates.length)];
+          burning.current.push({ id: next.id, x: next.x, z: next.z, fireT: 1.4 });
+          burningIds.add(next.id);
+          audio.playAt('flame', next.x, next.z, 0.8);
+          st.notify('🔥 The fire leaps to a neighboring structure!', true);
+        }
       }
     }
-    if (fireT.current > 0) {
-      fireT.current = Math.max(0, fireT.current - dt);
-      const k = fireT.current / 1.4;
-      if (fire.current) fire.current.intensity = k * 30;
-      if (fireBall.current) {
-        fireBall.current.visible = k > 0;
-        fireBall.current.scale.setScalar(0.6 + (1 - k) * 1.8);
+    // per-slot fire visuals — decays every frame regardless of the tick
+    // above, same k-curve the old single-fire version used
+    for (let i = 0; i < MAX_BURNING; i++) {
+      const entry = burning.current[i];
+      const light = fireLights.current[i];
+      const ball = fireBalls.current[i];
+      if (entry) {
+        entry.fireT = Math.max(0, entry.fireT - dt);
+        const k = entry.fireT / 1.4;
+        if (light) { light.position.set(entry.x, 2.2, entry.z); light.intensity = k * 30; }
+        if (ball) {
+          ball.position.set(entry.x, 1.2, entry.z);
+          ball.visible = k > 0;
+          ball.scale.setScalar(0.6 + (1 - k) * 1.8);
+        }
+      } else {
+        if (light) light.intensity = 0;
+        if (ball) ball.visible = false;
       }
     }
 
@@ -148,11 +208,17 @@ function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (rout
       <group ref={group} position={[CIRCLE_R, 15, 0]}>
         <primitive object={rig.root} />
       </group>
-      <pointLight ref={fire} color="#ff7a2a" intensity={0} distance={26} decay={2} />
-      <mesh ref={fireBall} visible={false}>
-        <sphereGeometry args={[1, 10, 10]} />
-        <meshBasicMaterial color="#ff8c2e" transparent opacity={0.75} />
-      </mesh>
+      {/* fixed MAX_BURNING slots — one light+fireball pair reused per
+          currently-burning building, positioned/hidden every frame above */}
+      {[0, 1, 2].map((i) => (
+        <group key={i}>
+          <pointLight ref={(el) => { fireLights.current[i] = el; }} color="#ff7a2a" intensity={0} distance={26} decay={2} />
+          <mesh ref={(el) => { fireBalls.current[i] = el; }} visible={false}>
+            <sphereGeometry args={[1, 10, 10]} />
+            <meshBasicMaterial color="#ff8c2e" transparent opacity={0.75} />
+          </mesh>
+        </group>
+      ))}
     </>
   );
 }
@@ -229,6 +295,17 @@ export default function DragonSiege() {
         st.notify('🐉 DRAGONFIRE! The beast descends upon your homestead — to arms!', true);
         audio.play('horn', 0.95);
         audio.play('warcry', 0.7);
+        // Wave 57 (F5): a one-shot, dragon-specific flavor line. This
+        // extraction has no dragon-specific fear/look-up pose (~15 clips
+        // total, confirmed by a prior wave) so reusing flee_to_safety
+        // verbatim (see ai/actions/flee.ts) gives zero dragon flavor on its
+        // own — a named villager's own line, fired once in this same
+        // one-time roll branch (mirrors the horn/warcry calls just above),
+        // is the achievable distinguishing touch without new movement.
+        if (st.villagers.length) {
+          const v = st.villagers[Math.floor(Math.random() * st.villagers.length)];
+          st.notify(`${v.name} points to the sky and screams — the homestead scatters!`, true);
+        }
         setActive(true);
       }
     }

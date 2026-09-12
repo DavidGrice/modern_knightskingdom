@@ -5,6 +5,7 @@
 // branch already fled to) — only the DECISION of when to flee moves from a
 // hardcoded "if raid" check into the reasoner.
 import { useEnemyStore } from '@/game/combat';
+import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
@@ -47,7 +48,16 @@ export const FLEE_TO_SAFETY: Action = {
   considerations: [
     {
       name: 'raid_active',
-      input: () => (useEnemyStore.getState().enemies.some((e) => e.raid) ? 1 : 0),
+      // Wave 57 (F5): a dragon siege never spawns a real EnemyState (the
+      // beast is a rendering-layer-only mechanism — see DragonSiege.tsx/
+      // BlackDragonSiege.tsx, neither ever calls useEnemyStore().spawn), so
+      // this used to structurally never fire for either dragon: villagers
+      // stood in the open through an entire siege. dragonAir/dragonAirBlack
+      // (their own zero-dependency leaf module, game/dragonAir.ts) publish
+      // exactly the "is one hostile right now" bit already used for ground-
+      // defender targeting — read here too rather than inventing a second
+      // signal.
+      input: () => (useEnemyStore.getState().enemies.some((e) => e.raid) || dragonAir.hostile || dragonAirBlack.hostile ? 1 : 0),
       curve: boolCurve,
     },
   ],

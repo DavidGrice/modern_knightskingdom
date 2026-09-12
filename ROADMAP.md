@@ -10028,3 +10028,107 @@ the plan or this session's own pre-workflow grounding assumed.
   bridge/stand placement geometry by hand from each piece's own real bounding-box dimensions to confirm
   no overlap between the two new set pieces, and confirming `sideQuestBlocker`'s new trailing `rep`
   parameter is threaded correctly through every real call site touched by this wave).
+
+## Wave 57: Dragonfire Siege follow-ups (F5) + defender formations & duel spectator (F6) — SHIPPED 2026-09-11
+
+Twenty-fourth wave of the new 27-wave plan. Research re-verified every claim in the plan's own wording
+live before designing anything and found real, load-bearing corrections on both items — including one
+genuine, previously-unknown exploit the naive reading of F5's own "reuse the construction pipeline"
+idea would have shipped, caught and closed before it ever reached a save file.
+
+- [COMPLETE] ✅ **F5 · fire that spreads structure-to-structure, and a real ruin-and-rebuild path for a
+  dragon-wrecked building.** Confirmed both dragon sieges (`DragonSiege.tsx`, `BlackDragonSiege.tsx`)
+  were still fully identical single-target mechanisms — every breath tick hit exactly one random
+  flammable building, with zero adjacency logic. Added a bounded chain reaction folded into the same
+  tick (no new timer): each currently-burning building takes another hit and, while alive, rolls a
+  chance to ignite one flammable neighbor within 8m, hard-capped at 3 simultaneous fires — enough for a
+  densely-built base to visibly catch without a siege routinely razing the whole homestead, and an
+  isolated flammable building with nothing nearby never spreads at all. **A real, previously-unknown
+  fact found live**: this project has NO building-repair mechanism anywhere — `damageBuilding` has only
+  ever deleted a building outright at 0 HP (half materials refunded), with nothing that could ever heal
+  `buildingHp` back up. Rather than inventing a new "ruin" entity, this reuses the exact existing
+  `PlacedBuilding.built` (0..1 construction-progress) mechanic already wired to a full render/interact/
+  villager-auto-build pipeline — a dragon kill (`damageBuilding`'s new trailing `leaveRuin` flag, passed
+  only by the two dragon sieges) now keeps the entry, resets `built:0`, marks a new `ruin` flag, and
+  grants no refund; walking up and finishing it (free, matching how construction has always charged
+  time/swings and never materials) clears the flag and restores the building. **A real, live exploit
+  this reuse would otherwise have shipped, found and closed**: `constructBuilding`'s completion branch
+  unconditionally grants `stats.buildingsPlaced++` (which feeds `difficulty.ts`'s own monotonic threat
+  curve and the Architect title) and bumps "build N of X" quest counters on every completion — a naive
+  `built:0` reset would have let a player farm both for free by having the dragon repeatedly torch and
+  rebuild the same cheap hut. Fixed by gating that entire block on `!b.ruin`; a second, independent
+  double-grant surface the initial design didn't name — the builder-villager auto-construct pass's own
+  separate "Salvage Eye" completion check — was found and closed the same way during implementation.
+  Also confirmed live that dragon fire can never hit a wall mid-damage-mold-swap (every wall mold costs
+  pure stone, so `flammable()` is always false for the ladder that produces one), so a dragon-caused
+  ruin's `type` is always the pristine, stable type — never an already-scarred wall mold — closing off
+  what would otherwise have been a real edge case. Villagers finally react to a dragon siege at all:
+  confirmed live that `flee_to_safety` (the only raid-reaction mechanism that exists) structurally could
+  never fire during either dragon siege, since neither ever populates the enemy store its own gate reads
+  — villagers stood in the open through an entire siege. Widened the gate to also read the dragon's own
+  live hostile-state singletons, extracted into a new zero-dependency `game/dragonAir.ts` leaf module so
+  the AI action graph doesn't need to import a render component to read them. Given this project's own
+  ~15-clip animation ceiling (no dragon-specific fear pose exists), added one honest, achievable
+  distinguishing touch on top of the shared flee behavior: a one-shot, per-siege flavor line naming a
+  random villager. Court NPCs reacting to a siege was investigated and explicitly left out of scope
+  (blocked by the `court` archetype's deliberately empty-by-design action list) rather than silently
+  built or silently dropped.
+- [COMPLETE] ✅ **F6 · defender formations that vary by loadout, and a duel spectator at Storm's own
+  honor stand.** Confirmed `Defenders.tsx` still had zero mutual awareness between defenders — every
+  unit steered straight at its target with no separation, so multiple defenders converging on one raider
+  could visibly stack on the same point (a gap Wave 42's own local-avoidance work explicitly flagged and
+  left for defenders specifically, since they run their own hand-rolled loop rather than the shared
+  `navSteer` primitive). Added a small, local push-apart mirroring `Enemies.tsx`'s own existing
+  pack-separation formula, with a loadout-varied radius — melee holds a tight shieldwall just past its
+  own point-blank range, bow fans into a looser skirmish line — reached only once a defender is actually
+  engaged, so it is combat-only by construction. Iterates the live defender roster passed down from the
+  parent component (not the shared position-tracking table directly), avoiding a stale-ghost bug a
+  reassigned-off-defender-duty villager would otherwise leave behind forever. **A real correction to the
+  plan's own framing**: "courtiers who actually watch duels" assumed an existing named court NPC could
+  simply be wired to react — checked every real court NPC's actual position against every real duel venue
+  and found none is anywhere near one (Storm herself is the duelist at her own venue, not a spectator).
+  Rather than relocating an established NPC and disrupting their own dialogue/quest content, or silently
+  dropping the item, added one small, genuinely new, non-interactive figure at the honor stand prop Wave
+  56 placed with nobody standing on it — no `NpcDef`, no dialogue, no quests, reusing an already-loaded
+  generic look. It turns to face the player using this codebase's own established facing convention the
+  instant a real Storm-duel encounter is live (confirmed the `'storm'` enemy kind is spawned from exactly
+  one place in the whole codebase, so this can never mis-trigger), and holds a neutral bridge-facing pose
+  otherwise. Cedric's-camp duels and relocating an actual named courtier (a real, stronger future version
+  with an existing narrative hook) were both explicitly named as out of scope rather than silently
+  under-delivered.
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev server**
+  (`--headless=new --use-angle=d3d11 --mute-audio`, zero console/page errors across every run). Real
+  evidence per item: fire spread proven with a controlled 4-building layout (buildings ~3m/~4m away
+  progressively ignited over successive ticks with the designed spread notification, a building 600m
+  away never moved at all across 14 ticks) with the 3-fire cap independently confirmed; ruin/rebuild
+  proven both directions (a dragon-killed building survives with `built:0, ruin:true` and zero refund;
+  rebuilding clears the flag and — the key anti-exploit check — leaves `stats.buildingsPlaced`/building
+  XP completely unchanged, differentially confirmed against an ordinary fresh construction which DOES
+  increment both normally); the villager flee fix proven both ways via a real before/after comparison
+  (reverting just the one changed line left an agent idle through a forced siege trigger; restoring it
+  flipped the same agent to `flee_to_safety` within 4 seconds). Defender separation proven by
+  force-clustering 5 test defenders (3 melee, 2 bow) onto one point and watching them radiate out to a
+  stable, non-overlapping formation (final spacing 3.0–8.7m, bow pairs settling near their own wider
+  radius) while combat kills continued to resolve correctly throughout. The duel spectator proven via
+  three same-camera screenshots (neutral pose facing the bridge; rotated to squarely face the player
+  within ~1.5s of a real Storm encounter spawning; reverted to the identical neutral pose once the
+  encounter cleared). `npx tsc --noEmit` / `npm run build`: both clean, verified independently (by the
+  workflow's own Verify pass — clean, zero findings, no Fix pass needed — and, separately, by direct
+  review of the complete 11-file diff against the live worktree afterward, including independently
+  re-tracing the `constructBuilding`/builder-pass double-grant fix's exact variable-capture timing by
+  hand, re-deriving the duel spectator's local-vs-world-space facing math to confirm the two branches are
+  mathematically consistent, and confirming the `'storm'` enemy-kind check can only ever be triggered by
+  the one real duel-spawn call site in the whole codebase).
+
+**Files changed**: `src/game/dragonAir.ts` (new — `dragonAir`/`dragonAirBlack` extracted from
+`DragonOmen.tsx` into a zero-dependency leaf module); `src/components/world/DragonOmen.tsx` (re-exports
+from the new module); `src/components/world/DragonSiege.tsx` / `BlackDragonSiege.tsx` (bounded
+fire-spread chain reaction, `leaveRuin:true` on every damage call, one-shot villager flavor line,
+fixed 3-slot fire visual refs); `src/game/store/gameStore.ts` (`damageBuilding`'s new `leaveRuin`
+branch; `constructBuilding`'s completion branch gated on `!b.ruin`; the builder auto-build pass's
+"Salvage Eye" check gated on `!site.ruin`); `src/game/types.ts` (`PlacedBuilding.ruin?: boolean`);
+`src/components/fps/PlayerController.tsx` (construct-interact label reads "Rebuild" vs "Build");
+`src/ai/actions/flee.ts` (raid-active consideration also reads dragon hostile state);
+`src/components/world/CedricSiege.tsx` / `Defenders.tsx` (import-path update to the new leaf module,
+plus `Defenders.tsx`'s new loadout-scaled separation loop); `src/components/world/BattleDome.tsx` (new
+`DuelSpectator` figure at the honor stand).
