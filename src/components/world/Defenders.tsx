@@ -9,7 +9,7 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, lootFor, KIND_LABEL, type EnemyData } from '@/game/combat';
-import { registerDefender, orderFor, defenderStrike, scoutReported, type DefenderState } from '@/game/defenders';
+import { registerDefender, orderFor, defenderStrike, scoutReported, defenderState, type DefenderState } from '@/game/defenders';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
 import { chestplateHp, chestplateTierOf } from '@/game/data/armor';
@@ -19,7 +19,7 @@ import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate
 import { villagerConfig } from '@/game/data/villagerLooks';
 import { HOME_X, HOME_Z, isWatchHours, isWorkingHours } from '@/game/data/villagers';
 import { worldEnv } from '@/game/env';
-import { dragonAir } from './DragonOmen';
+import { dragonAir } from '@/game/dragonAir';
 import { horses, mountOf } from '@/game/riding';
 import RiggedProp from './RiggedProp';
 import { heightOf } from '@/game/data/buildables';
@@ -69,7 +69,7 @@ function keepOutOfWater(ds: DefenderState) {
   ds.z = out.z;
 }
 
-function DefenderFigure({ villager }: { villager: Villager }) {
+function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDefenders: Villager[] }) {
   const buildings = useGameStore((s) => s.buildings);
   const keep = useGameStore((s) => s.keep);
   const enemies = useEnemyStore((s) => s.enemies);
@@ -417,6 +417,35 @@ function DefenderFigure({ villager }: { villager: Villager }) {
     // approximated being hit back is gone; tower elevation still protects,
     // because ground enemies skip elevated defenders entirely
 
+    // Wave 57 (F6): a small, local push-apart so a shared engagement doesn't
+    // stack multiple defenders on the same point — mirrors Enemies.tsx's own
+    // pack-separation formula exactly ((dir)*(R-d)*0.5), just with a
+    // loadout-varied radius: melee holds a tight shieldwall just past its own
+    // MELEE_RANGE=1.8, bow fans into a looser skirmish line (it already has
+    // BOW_RANGE=16 of standoff once at range — this keeps the line loose on
+    // the way in too). Iterates the CURRENT roster passed down from
+    // Defenders() rather than Object.entries(defenderState) directly —
+    // defenderState is never garbage-collected, so a villager reassigned off
+    // the `defender` job would otherwise leave a permanent stale-position
+    // ghost in it that this loop would keep pushing against forever. Reached
+    // only once a defender has a live `target` (patrol/follow/rest/tower-
+    // watch all `return` earlier above), so this is combat-only by
+    // construction, same gating Enemies.tsx's own version uses
+    // (`state === 'chase' || 'attack'`).
+    const SEP_R = loadout === 'bow' ? 4.0 : 2.0;
+    for (const other of allDefenders) {
+      if (other.id === villager.id) continue;
+      const os = defenderState[other.id];
+      if (!os || os.state === 'downed') continue;
+      const sx = ds.x - os.x;
+      const sz = ds.z - os.z;
+      const sd = Math.hypot(sx, sz);
+      if (sd > 0.001 && sd < SEP_R) {
+        ds.x += (sx / sd) * (SEP_R - sd) * 0.5;
+        ds.z += (sz / sd) * (SEP_R - sd) * 0.5;
+      }
+    }
+
     // common tail for both branches above: only the chase step (the !inRange
     // branch) actually moves ds.x/z, but the water push belongs here rather
     // than duplicated inside it, since a standing-and-swinging defender is
@@ -461,7 +490,7 @@ export default function Defenders() {
   const villagers = useGameStore((s) => s.villagers).filter((v) => v.job === 'defender');
   return (
     <>
-      {villagers.map((v) => <DefenderFigure key={v.id} villager={v} />)}
+      {villagers.map((v) => <DefenderFigure key={v.id} villager={v} allDefenders={villagers} />)}
     </>
   );
 }

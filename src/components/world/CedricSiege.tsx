@@ -22,7 +22,7 @@ import { heightOf } from '@/game/data/buildables';
 import { roadEntry } from '@/game/data/road';
 import { resetRaiderRam, raiderRamState } from '@/game/raiderRam';
 import { CEDRIC_CAMP } from '@/game/data/world';
-import { dragonAir } from './DragonOmen';
+import { dragonAir } from '@/game/dragonAir';
 import { cedricSiegeAllowed, cedricJailbreakAllowed, cedricWarState } from '@/game/cedricSiege';
 import { difficultyState, MOUNTED_RAIDER_TIER } from '@/game/difficulty';
 import { BOSS_ENCOUNTERS } from '@/game/bossEncounter';

@@ -1010,9 +1010,12 @@ export default function PlayerController() {
       // build-then-construct (Phase 19): an unbuilt site's only interaction
       // is swinging the hammer at it — nothing else it "is" exists yet
       if (!isBuilt(b)) {
+        // Wave 57 (F5): a dragon-fire ruin (b.ruin) reuses this exact same
+        // under-construction state — reads as "Rebuild" rather than "Build"
+        // so the prompt doesn't imply this piece never existed.
         consider(b.x, b.z, 1.4, {
           id: b.id, kind: 'construct', duration: 0.9, actionable: true,
-          label: `Build ${def?.name ?? 'structure'} (${Math.round((b.built ?? 0) * 100)}%)`,
+          label: `${b.ruin ? 'Rebuild' : 'Build'} ${def?.name ?? 'structure'} (${Math.round((b.built ?? 0) * 100)}%)`,
         });
         continue;
       }
