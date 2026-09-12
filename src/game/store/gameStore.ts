@@ -274,6 +274,11 @@ interface GameState {
    *  keeps a one-time defection from becoming a free way to ping-pong
    *  between the two pledges. */
   betrayedCedric: boolean;
+  /** Wave 56 (F4) · the mirror of betrayedCedric: turned on the crown once
+   *  already sworn to Leo (see betrayLeo). A permanent burnt bridge, not a
+   *  cooldown: once true, `pledgeAlliance('leo')` refuses forever — the same
+   *  anti-ping-pong protection betrayedCedric gives the other direction. */
+  betrayedLeo: boolean;
   buyLand: () => void;
   /** shift the axis and tell the player why it moved */
   shiftAllegiance: (delta: number, reason: string) => void;
@@ -493,15 +498,23 @@ interface GameState {
    *  cedricJailbreakAllowed for the gate that decides when this may fire. */
   freeCedric: () => void;
   pledgeAlliance: (side: Alliance) => void;
-  /** Wave 13 · the one turncoat move this wave ships: a knight already
+  /** Wave 13 · the one turncoat move that wave shipped: a knight already
    *  sworn to Cedric can turn on his own camp and return to unsworn ground,
-   *  free to pledge Leo properly afterwards. One-directional and permanent
-   *  — see `betrayedCedric`'s own doc comment for why Leo->Cedric is NOT
-   *  the mirror of this (the interact branch that greets a Leo-sworn knight
-   *  at Cedric's camp is a duel, not a parley, so there is no symmetric
-   *  "ask to defect" moment to hang this off without redesigning that
-   *  branch — left out of scope, see ROADMAP). */
+   *  free to pledge Leo properly afterwards. One-directional and permanent.
+   *  Wave 56 (F4) built the mirror — see `betrayLeo` below — once the
+   *  interact branch that used to greet a Leo-sworn knight at Cedric's camp
+   *  with an instant duel was redesigned into a real parley. Unlike this
+   *  action (which returns you to UNSWORN, a separate later step to pledge
+   *  Leo), `betrayLeo` completes the join to Cedric in one step — see its
+   *  own doc comment for why. */
   betrayCedric: () => void;
+  /** Wave 56 (F4) · the mirror of betrayCedric: a Leo-sworn knight defects
+   *  to Cedric at his own camp — the parley branch challenge_cedric never
+   *  had for a Leo-sworn approach. Unlike betrayCedric (which returns you
+   *  to UNSWORN), this completes the join in one step, matching the exact
+   *  "Clasp arms with Cedric" call-to-action the unsworn branch already
+   *  commits immediately via pledgeAlliance('cedric'). */
+  betrayLeo: () => void;
   joinGuild: (guildId: string) => void;
   buyTalent: (talentId: string) => void;
   /** Wave 32 · hand every learned talent back for gold (cost from
@@ -1019,7 +1032,7 @@ function freshSaveFields(character: CharacterConfig, difficulty: DifficultyId): 
     notifications: [], prompt: null, actionProgress: null, dirty: true,
     timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
     gateOpen: {}, buildingHp: {}, reputation: {},
-    destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, companion: { xp: 0, level: 0 }, betrayedCedric: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
+    destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, companion: { xp: 0, level: 0 }, betrayedCedric: false, betrayedLeo: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
     durability: {}, perks: [], stats: { ...ZERO_STATS },
     claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
     villagers: [], villagerProgress: {}, armory: {},
@@ -1213,6 +1226,7 @@ function createGameStore() {
     companionRecruited: false,
     companion: { xp: 0, level: 0 },
     betrayedCedric: false,
+    betrayedLeo: false,
     guild: null,
     guildRanks: {},
     skillTree: [],
@@ -1338,6 +1352,7 @@ function createGameStore() {
         companionRecruited: s.companionRecruited ?? false,
         companion: s.companion ?? { xp: 0, level: 0 },
         betrayedCedric: s.betrayedCedric ?? false,
+        betrayedLeo: s.betrayedLeo ?? false,
         guild: s.guild ?? null,
         guildRanks: s.guildRanks ?? {},
         skillTree: s.skillTree ?? [],
@@ -1409,6 +1424,7 @@ function createGameStore() {
         companionRecruited: s.companionRecruited,
         companion: s.companion,
         betrayedCedric: s.betrayedCedric,
+        betrayedLeo: s.betrayedLeo,
         guild: s.guild,
         guildRanks: s.guildRanks,
         skillTree: s.skillTree,
@@ -2562,6 +2578,13 @@ function createGameStore() {
         st.notify("Cedric's camp wants nothing to do with a known turncoat.");
         return;
       }
+      // Wave 56 (F4) · the mirror check: a knight who already turned on the
+      // crown once (betrayLeo) can never kneel to Leo again — same
+      // ping-pong protection as betrayedCedric above, in the other direction.
+      if (side === 'leo' && st.betrayedLeo) {
+        st.notify('The crown does not forgive a knight who turned his blade against it.');
+        return;
+      }
       set({ alliance: side, panel: 'none', dirty: true });
       audio.play('horn', 0.9);
       if (side === 'leo') {
@@ -2600,6 +2623,48 @@ function createGameStore() {
       st.shiftAllegiance(20, "You turned your blade on the Bull's own camp");
     },
 
+    // Wave 56 (F4) · the mirror of betrayCedric above — see this action's
+    // own interface doc comment for why it completes the join in one step
+    // rather than returning to unsworn first. Only ever reachable from
+    // ParleyPanel's new Leo-sworn branch, which only renders at Cedric's own
+    // camp with alliance === 'leo' already true, so no extra location guard
+    // is needed here beyond the alliance check.
+    betrayLeo: () => {
+      const st = get();
+      if (st.alliance !== 'leo') return;
+      // ends in the exact same alliance:'cedric' state pledgeAlliance('cedric')
+      // already guards against for a known turncoat — refuse the same way.
+      if (st.betrayedCedric) {
+        st.notify("Cedric's camp wants nothing to do with a known turncoat.");
+        return;
+      }
+      // burn the errand you were carrying too, if it no longer qualifies now
+      // that you're Cedric's — unlike betrayCedric (whose whole War Council
+      // pool is npcId==='cedric' by construction, so a plain id check is
+      // exact), Leo's side hands out plenty of ordinary errands that have
+      // nothing to do with the pledge itself (only the crown's own capstone,
+      // needsAlliance:'leo', actually requires it) — so this checks the real
+      // gate under the NEW alliance rather than guessing a fixed npcId list.
+      const activeDef = st.sideQuest
+        ? sideQuestsOf(st.sideQuest.npcId).find((q) => q.id === st.sideQuest!.questId) : null;
+      const stillValid = !!activeDef
+        && !sideQuestBlocker(
+          activeDef, st.completedSideQuests, st.completedQuests, st.allegiance, 'cedric',
+          st.reputation[st.sideQuest!.npcId] ?? 0,
+        );
+      set({
+        alliance: 'cedric', betrayedLeo: true, panel: 'none', dirty: true,
+        sideQuest: stillValid ? st.sideQuest : null,
+      });
+      audio.play('horn', 0.9);
+      audio.playVoice('greeting_cedric', 0.85);
+      st.notify('🗡 You turn your blade against the crown you swore it to — Cedric grins: "Welcome home."', true);
+      st.addReputation('richard', -30);
+      st.addReputation('queen', -30);
+      st.notify('Word of your betrayal reaches Richard and the Queen — the crown will not forget this.');
+      st.shiftAllegiance(-25, 'You turned your blade against the crown you were sworn to');
+    },
+
     acceptSideQuest: (npcId, questId) => {
       const st = get();
       const def = sideQuestsOf(npcId).find((q) => q.id === questId);
@@ -2626,7 +2691,9 @@ function createGameStore() {
       // precursor chains and allegiance/alliance gates are enforced HERE as
       // well as in the UI, so a stale panel can never hand out work you have
       // not earned
-      const blocked = sideQuestBlocker(def, st.completedSideQuests, st.completedQuests, st.allegiance, st.alliance);
+      const blocked = sideQuestBlocker(
+        def, st.completedSideQuests, st.completedQuests, st.allegiance, st.alliance, st.reputation[npcId] ?? 0,
+      );
       if (blocked) { st.notify(blocked); return; }
       set({ sideQuest: { npcId, questId, have: 0 }, dirty: true });
       st.notify(`Errand accepted: ${def.label}`);

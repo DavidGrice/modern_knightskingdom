@@ -379,6 +379,11 @@ export interface SaveGame {
    *  (gameStore's betrayCedric) — permanent, so `pledgeAlliance('cedric')`
    *  can refuse a known turncoat forever. Absent/false = never happened. */
   betrayedCedric?: boolean;
+  /** Wave 56 (F4) · the mirror of betrayedCedric: turned on the crown after
+   *  already being sworn to Leo (gameStore's betrayLeo) — permanent, so
+   *  `pledgeAlliance('leo')` can refuse a known turncoat forever. Absent/
+   *  false = never happened. */
+  betrayedLeo?: boolean;
   /** highest CHALLENGES tier index already notified, per challenge id */
   challengeTiers?: Record<string, number>;
   /** farm plot growth: buildingId -> seconds of growth remaining (-1 = untilled) */

@@ -32,6 +32,13 @@ export interface SideQuestDef {
    *  way." True alliance-exclusive content (a capstone errand/reward each
    *  house holds back for its own sworn knight) uses this instead. */
   needsAlliance?: Alliance;
+  /** Wave 56 (F3) · standing with this errand's own giver required before
+   *  it's offered — reuses needsAllegiance/needsAlliance's exact shape,
+   *  but reads gameStore's per-NPC `reputation` record (data/npcs repTitles)
+   *  instead of either the crown/Bull axis or the one-way pledge. Storm's
+   *  two new bridge duels are the first content to use this: rep tiers she
+   *  already tracked were real but purely cosmetic before this wave. */
+  needsRep?: number;
   /** Wave 25 · a MAIN-quest id (data/quests.ts) that must already be
    *  completed — distinct from `requires` above, which only checks other
    *  SIDE-quest ids against `completedSideQuests`. Introduced for Richard's
@@ -501,7 +508,20 @@ export const NPCS: NpcDef[] = [
     // "leaning against its wall" — a real visual change, not a bug — kept as
     // the research's own recommended value rather than re-tuned by hand,
     // since nothing here actually requires the edge-hugging blocking.
-    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-06'], 0, -253.333), yaw: Math.PI,
+    //
+    // Wave 56 (F3): relocated again, onto the far end of the new duel bridge
+    // (BattleDome.tsx's oc6095b5/oc6095b4) — local (0, -324.667), so the
+    // challenger now visibly crosses the bridge to reach her instead of
+    // finding her a step inside the gap. `yaw` stays Math.PI (NOT flipped to
+    // 0): confirmed live against both PlayerController's own "yaw 0 looks
+    // -Z" comment and Npc.tsx's own desired-facing formula
+    // (`atan2(-dx,-dz)`, which gives yaw=Math.PI for a +Z-facing target) that
+    // yaw=Math.PI is what makes her face +Z — i.e. still toward the entrance
+    // gap/bridge, same direction as before the move, just from the opposite
+    // end of it now. Distance-to-walkable-union re-confirmed live at this
+    // exact new point (0.000 drift on teleport) rather than left as the
+    // prior pass's own open residual check.
+    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-06'], 0, -324.667), yaw: Math.PI,
     world: 'template-06',
     greetSound: 'greeting_storm',
     portrait: '/assets/minifigs/minifigprincessstorm00.png',
@@ -527,6 +547,25 @@ export const NPCS: NpcDef[] = [
         id: 's_firstblood', kind: 'duel', target: 'any', need: 2,
         label: 'Take first blood off her twice in the ring',
         xpSkill: 'combat', xp: 110, rewardItems: { gold: 20 },
+      },
+      // Wave 56 (F3): her repTitles tiers were real, tracked standing with
+      // nothing gating on them before this wave (confirmed live: only
+      // DialoguePanel's cosmetic title display read `rep` for her). These
+      // two reuse the one mechanic her content model supports (kind:'duel',
+      // target:'any') at higher `need` counts and richer rewards, gated on
+      // the tiers she already has — no new gate shape invented, same
+      // SideQuestDef/needsRep plumbing GuildErrands-style errands already
+      // use for their own rank gates. Her top tier (100, "Storm's Equal")
+      // deliberately gets no third quest — an honest stopping point.
+      {
+        id: 's_ringveteran', kind: 'duel', target: 'any', need: 4, needsRep: 10,
+        label: 'Best her four times on the bridge',
+        xpSkill: 'combat', xp: 180, rewardItems: { gold: 40, iron_bar: 1 },
+      },
+      {
+        id: 's_stormsrival', kind: 'duel', target: 'any', need: 6, needsRep: 40,
+        label: "Prove you're her equal — six more duels won",
+        xpSkill: 'combat', xp: 280, rewardItems: { gold: 70, iron_bar: 2 },
       },
     ],
   },
@@ -1272,9 +1311,12 @@ export function sideQuestsOf(npcId: string): SideQuestDef[] {
  *  passes it (see gameStore's acceptSideQuest, QuestLogPanel, DialoguePanel,
  *  ParleyPanel). `completedQuests` (Wave 25) is NOT similarly optional: it
  *  backs `needsQuest`, a gate real enough to need every real caller passing
- *  it from day one, same as `completed` (completedSideQuests) itself. */
+ *  it from day one, same as `completed` (completedSideQuests) itself. `rep`
+ *  (Wave 56, F3) is optional/defaulted the same way `alliance` was in Wave
+ *  13 — it only backs `needsRep`, which nothing used before this wave. */
 export function sideQuestBlocker(
-  q: SideQuestDef, completed: string[], completedQuests: string[], allegiance: number, alliance?: Alliance | null,
+  q: SideQuestDef, completed: string[], completedQuests: string[], allegiance: number,
+  alliance?: Alliance | null, rep: number = 0,
 ): string | null {
   if (q.needsQuest && !completedQuests.includes(q.needsQuest)) {
     const name = QUESTS.find((mq) => mq.id === q.needsQuest)?.name ?? q.needsQuest;
@@ -1295,6 +1337,9 @@ export function sideQuestBlocker(
       ? 'Only for a knight sworn to the crown'
       : "Only for one sworn to Cedric's rebellion";
   }
+  if (q.needsRep !== undefined && rep < q.needsRep) {
+    return `Needs ${q.needsRep}+ standing (have ${rep})`;
+  }
   return null;
 }
 
@@ -1309,10 +1354,11 @@ export function sideQuestBlocker(
  *  time (`st.sideQuest` stays a single global slot, gameStore.ts) — this
  *  only widens what gets shown, never what can be active at once. */
 export function sideQuestOffers(
-  npcId: string, completed: string[], completedQuests: string[], allegiance: number, alliance?: Alliance | null,
+  npcId: string, completed: string[], completedQuests: string[], allegiance: number,
+  alliance?: Alliance | null, rep: number = 0,
 ): SideQuestDef[] {
   return sideQuestsOf(npcId).filter((q) =>
-    !completed.includes(q.id) && !sideQuestBlocker(q, completed, completedQuests, allegiance, alliance));
+    !completed.includes(q.id) && !sideQuestBlocker(q, completed, completedQuests, allegiance, alliance, rep));
 }
 
 /** an errand's own label, wherever it lives */

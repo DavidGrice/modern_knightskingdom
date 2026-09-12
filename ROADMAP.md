@@ -9932,3 +9932,99 @@ gameStore.ts` (F2: `turnInSideQuest`'s guild-rep grant reads `GUILD_ARC_REP[def.
 flat `15`, one import added); `src/components/hud/DialoguePanel.tsx` (F1: rotating `offer` → `.map()`'d
 `offers`); `src/components/hud/Panels.tsx` (F1: same change in `ParleyPanel` and `GuildErrands`, plus the
 incidental completed-quest bugfix in both).
+
+## Wave 56: Storm's arc + duel bridge staging (F3) + the Leo→Cedric turncoat direction (F4) — SHIPPED 2026-09-11
+
+Twenty-third wave of the new 27-wave plan. Research resolved a real, apparent contradiction for F4 (the
+plan's own framing and a prior wave's own code comment both turned out accurate once the exact interact
+branch was traced), and found the F3 assets are less finished and less "just needs wiring" than either
+the plan or this session's own pre-workflow grounding assumed.
+
+- [COMPLETE] ✅ **F3 · Storm's Battle Dome becomes a real staged bridge duel** — the two rig-verified
+  set pieces (`oc6095b5`, the duel bridge; `oc6095b4`, the dual honor stand) are placed for the first
+  time ever, as fixed-world dressing inside `BattleDome.tsx` (the same non-Buildable `PropModel`
+  pattern `CedricCamp.tsx`/`MerchantCamp.tsx` already use), with Storm relocated onto the bridge's far
+  end so the challenger now visibly crosses it to reach her. **A real, load-bearing correction to both
+  the plan's own framing and this session's own pre-workflow grounding**: these two assets were assumed
+  to be "currently pure undifferentiated decoration" needing only function added (the shape Arc G's
+  prior turret/tower waves found) — Research found instead that neither is wired into ANY game-code
+  consumer at all (zero hits across `buildables.ts`/`labCapabilities.ts`), and their own rig status is
+  `"todo"` with no `part_roles.json` entry, meaning the animated-flag rendering their own capability
+  data (`hasFlags`/`hasShields`/`hasHalberds`) implies is not safely buildable today — rendered as a
+  static `PropModel` instead, an explicit, reasoned scope-down rather than guessing a part-role map by
+  hand (exactly the kind of guessing this project's own rig lab exists to eliminate). Also found and
+  fixed two placement bugs during Implement's own live verification, neither caught by static reading:
+  the bridge's real unrotated bounding box is WIDER in X than deep in Z (opposite of what the initial
+  design assumed from its own "long axis along Z" framing), corrected via a live `THREE.Box3` measurement
+  of the mounted instance; and Storm's own new facing yaw was independently cross-checked against two
+  separate authoritative sources already in the codebase (a `PlayerController.tsx` comment and `Npc.tsx`'s
+  own facing formula) rather than assumed, confirming the original yaw should stay unchanged. Two new
+  duel `SideQuestDef`s (`s_ringveteran`, `s_stormsrival`) gate on Storm's own existing `repTitles` tiers
+  via a new `needsRep` field — closing a real, confirmed gap where her 4-tier reputation ladder was
+  tracked but purely cosmetic, unconsumed by anything in the game before this wave. Her top tier
+  ("Storm's Equal") deliberately gets no third quest, an honest stopping point rather than a forced
+  capstone. Cedric's own camp deliberately does NOT get a physical duel bridge — a real, reasoned
+  scope-down: the polished tournament-set aesthetic of these two pieces (arched motifs, flags, shields)
+  actively fights his camp's own established rustic/makeshift art direction — with "and Cedric's own
+  duels" from the plan's text treated as satisfied by F4 instead, which is exactly where his own duel
+  content gets real, new depth this same wave.
+- [COMPLETE] ✅ **F4 · the missing Leo→Cedric turncoat direction, built as a real mirror of the existing
+  Cedric→Leo defection** — traced the exact interact/panel branch precisely (`PlayerController.tsx`'s
+  single `challenge_cedric` target, `Panels.tsx`'s `ParleyPanel`) and confirmed both the plan's own claim
+  and a prior wave's own code comment describing this as deliberately out of scope were accurate: a
+  Leo-sworn player approaching Cedric's camp got an instant duel with zero parley UI ever shown, while an
+  unsworn player already got a full peaceful choice panel (pledge or fight, a real coexisting choice).
+  **A second, additional blocker found live, not just a UI gap**: even if a Leo-sworn player were shown
+  that existing panel, its "Clasp arms with Cedric" button would have silently done nothing — the
+  underlying `pledgeAlliance` action refuses outright for anyone who already has a non-null alliance.
+  Built a new, dedicated `betrayLeo()` action mirroring `betrayCedric()`'s own real, already-shipped
+  shape (a permanent one-way `betrayedLeo` flag guarding `pledgeAlliance('leo')` forever after, the same
+  anti-ping-pong protection `betrayedCedric` already gives the other direction) but deliberately
+  diverging from it in one stated way: unlike `betrayCedric` (which returns the player to neutral, a
+  separate later step to properly pledge Leo), `betrayLeo` completes the join to Cedric in one step,
+  matching the exact one-click "Clasp arms with Cedric" commitment the unsworn branch's own button
+  already uses. Reputation fallout (−30 Richard/Queen, vs. the unsworn pledge's own −20) and a real
+  `shiftAllegiance(-25, ...)` were sized as a deliberately larger, more dramatic consequence than a first
+  neutral pledge, reusing `shiftAllegiance`'s own precedent rather than inventing a new penalty axis. The
+  existing "Challenge Him to Battle" duel option was kept available alongside the new parley for a
+  Leo-sworn player, not replaced by it, mirroring the unsworn branch's own established "the fight is one
+  of the parley's choices, not the only outcome" precedent exactly. The stale `betrayCedric` doc comment
+  that used to describe this exact gap as "left out of scope" was corrected in the same diff, so it no
+  longer misrepresents the codebase once this wave lands.
+- **A real, subtle bug found by Verify and correctly fixed**: the new `betrayLeo()`'s own active-side-
+  quest revalidation (a deliberate improvement over a simple fixed-npcId check, since Leo's own ordinary
+  errands have nothing to do with the alliance pledge itself) called the shared `sideQuestBlocker()`
+  helper without the new (this same wave's own) trailing `rep` parameter, so it silently defaulted to 0
+  regardless of the player's real standing — meaning ANY in-progress errand gated by the new `needsRep`
+  field (Storm's own two new duels, the only content using it) was incorrectly treated as newly invalid
+  and silently wiped from the player's single quest slot the instant they defected, even with more than
+  enough real reputation to keep it. Live-reproduced (an active `s_ringveteran` at 2/4 progress with
+  real reputation comfortably above its gate, wiped anyway) and fixed by passing the player's real
+  per-NPC reputation through, matching the exact pattern `acceptSideQuest` already uses a few lines
+  below. Re-verified both the positive case (a genuinely-still-valid errand now survives) and a negative
+  control (an errand whose rep gate the player genuinely doesn't meet still correctly clears).
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev
+  server** (this repo's own `CLAUDE.md` conventions followed throughout — `--headless=new
+  --use-angle=d3d11 --mute-audio`, zero mouse/audio disruption). Same recurring environment-only gap as
+  every prior wave's worktree verification (missing `node_modules`; `public/assets`/`public/help` were
+  already present as real copies in this particular worktree), fixed locally via a directory junction to
+  the main checkout's real copy, removed afterward with the main checkout confirmed untouched. Real
+  evidence per item: the duel bridge and dual stand confirmed rendering as real, distinctly-textured GPU
+  geometry (blue flag poles, real block-tone variation) exactly at the Battle Dome's ring center; Storm's
+  dialogue panel confirmed showing "Worthy Opponent"/real rep 15 with both `s_firstblood` and the newly
+  unlocked `s_ringveteran` listed while `s_stormsrival` (needsRep 40) stayed correctly hidden; a full
+  accept → 4 real duel wins (via the actual duel-resolution function a real win calls, not a mock) →
+  rep crossing into the next tier with a real toast → turn-in cycle completed end to end with correct
+  gold/XP. For F4: the unsworn parley panel confirmed pixel-for-pixel unchanged; a Leo-sworn player
+  confirmed getting the new, distinct "Turn Your Coat" branch instead of an instant duel, with "Challenge
+  Him to Battle" independently confirmed still spawning a real Cedric encounter; the real "Clasp arms
+  with Cedric" click confirmed producing the exact designed state change (alliance flips, `betrayedLeo`
+  sets, both reputations and allegiance move by the exact designed amounts); the new anti-ping-pong guard
+  confirmed refusing `pledgeAlliance('leo')` permanently afterward; the original, untouched
+  `betrayCedric()` mirror confirmed still working correctly and independently of the new flag. Zero
+  console/page errors throughout. `npx tsc --noEmit` / `npm run build`: both clean, verified independently
+  (both by the workflow's own Fix+Reverify pass and, separately, by direct review of the complete 8-file
+  merged diff against the live worktree afterward, including independently re-deriving the corrected
+  bridge/stand placement geometry by hand from each piece's own real bounding-box dimensions to confirm
+  no overlap between the two new set pieces, and confirming `sideQuestBlocker`'s new trailing `rep`
+  parameter is threaded correctly through every real call site touched by this wave).
