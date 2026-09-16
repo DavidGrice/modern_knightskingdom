@@ -9,6 +9,7 @@ import { callingSignature } from './data/classes';
 import { playerState } from './playerState';
 import { ridingState } from './riding';
 import { damageRaiderRam, raiderRamState, RAM_RADIUS } from './raiderRam';
+import { damageRaiderLadder, raiderLadderState, LADDER_RADIUS } from './raiderLadder';
 import { hitTestCharacter, PART_DAMAGE, PART_LABEL, type PartHit } from './hitbox';
 import type { RigJoint } from '@/lib/minifigRig';
 import { EYE_HEIGHT } from './data/world';
@@ -314,7 +315,7 @@ export function lootFor(kindOrData: EnemyKind | EnemyData): Partial<Record<ItemI
 
 export interface EnemyMob {
   x: number; z: number; yaw: number;
-  state: 'wander' | 'chase' | 'attack' | 'dying';
+  state: 'wander' | 'chase' | 'attack' | 'dying' | 'climbing';
   attackCd: number;
   wanderT: number;
   homeX: number; homeZ: number;
@@ -329,6 +330,29 @@ export interface EnemyMob {
    *  homestead — Enemies.tsx routes this via the nav grid instead of the
    *  normal wander/chase FSM until it clears itself close to home. */
   approaching?: boolean;
+  /** Wave 58 (H4): mid-ascent progress on a siege ladder, seconds since this
+   *  raider claimed a climb slot — negative while staggered-queued behind
+   *  another climber (game/raiderLadder.ts's own CLIMBER_STAGGER), then
+   *  counts up through the two-stage climb (Enemies.tsx's own
+   *  CLIMB_STAGE1_S/CLIMB_STAGE2_S). Meaningless once `state` leaves
+   *  'climbing'. */
+  climbT?: number;
+  /** Wave 58 (H4): true once this raider has hauled itself onto a keep
+   *  wall-walk via the siege ladder. Recomputed live every frame from
+   *  `ladderSocketId` against the real, current keep (Enemies.tsx's own
+   *  addendum-#3 recheck), so a wall knocked down by an UNRELATED siege hit
+   *  drops this raider too, not just a defender. */
+  elevated?: boolean;
+  /** Wave 58 (H4): the wall-walk's own real height once elevated — the same
+   *  role `DefenderState.postY` (game/defenders.ts) plays for a defender,
+   *  just carried on the mob itself since EnemyMob has no separate live
+   *  position record the way a defender does. */
+  postY?: number;
+  /** Wave 58 (H4): which keep socket this raider climbed — set the moment it
+   *  claims a climb slot, from `raiderLadderState.targetSocketId`
+   *  (game/raiderLadder.ts). Drives the "same wall-walk" defender match and
+   *  the live wall-still-standing recheck above. */
+  ladderSocketId?: string;
 }
 
 export interface EnemyData {
@@ -1189,6 +1213,19 @@ export function playerAttack(): boolean {
         hitRaiderRam(dmg);
       }
     }
+    // Wave 58 (H4) · the raiders' own siege ladder is the same kind of
+    // legitimate no-living-target fallback the ram is just above — breaking
+    // it before anyone finishes the climb is a real counter, not something
+    // only bolts can do. Independent of the ram check (not `else if`): a
+    // swing out of the ram's own range can still land on the ladder.
+    if (raiderLadderState.active && !raiderLadderState.wrecked) {
+      const ldx = raiderLadderState.x - playerState.x;
+      const ldz = raiderLadderState.z - playerState.z;
+      const ld = Math.hypot(ldx, ldz);
+      if (ld < wp.reach + LADDER_RADIUS && (ldx * fx + ldz * fz) / (ld || 1) > wp.cone) {
+        hitRaiderLadder(dmg);
+      }
+    }
     return true;
   }
   // Wave 40 (A6) · combo chain: consecutive landed swings within
@@ -1472,8 +1509,13 @@ export function stepBolt(b: Bolt, dt: number): boolean {
     // are still measured in the figure's own LOCAL frame, so without this a
     // shot aimed at the visible rider tested against an empty hitbox sitting
     // where a standing foe's would be, a full saddle-height too low.
+    // Wave 58 (H4): the SAME reasoning now applies to an elevated raider —
+    // `e.mob.postY` is its real wall-walk height (~3.6-4.2m), not a saddle's
+    // ~1m, but the fix is identical: without it every shot at a raider on
+    // the battlements tests against a hitbox still sitting at ground level,
+    // metres below where the model actually renders, and never connects.
     const hit = hitTestCharacter(
-      String(e.id), e.mob.x, e.mob.z, e.mob.yaw, e.kind === 'mountedRaider' ? MOUNT_SEAT_Y : 0,
+      String(e.id), e.mob.x, e.mob.z, e.mob.yaw, e.mob.postY ?? (e.kind === 'mountedRaider' ? MOUNT_SEAT_Y : 0),
       b.pos.x, b.pos.y, b.pos.z, nx, ny, nz,
     );
     if (!hit) continue;
@@ -1550,6 +1592,25 @@ export function stepBolt(b: Bolt, dt: number): boolean {
       return true;   // a shaft in timber does not ride along, it drops
     }
   }
+  // Wave 58 (H4) · the siege ladder, tested the same way — after the ram so a
+  // raider standing in front of it still soaks the shaft first, same reasoning
+  // as the ram's own comment above. Centred at half its own 3.2m height
+  // rather than the ram's low 0.9m: this is a tall standing structure, not a
+  // waist-high engine.
+  if (raiderLadderState.active && !raiderLadderState.wrecked) {
+    const dx = nx - b.pos.x, dy = ny - b.pos.y, dz = nz - b.pos.z;
+    const len2 = dx * dx + dy * dy + dz * dz || 1;
+    const ladderMidY = 1.6;
+    let t = ((raiderLadderState.x - b.pos.x) * dx + (ladderMidY - b.pos.y) * dy + (raiderLadderState.z - b.pos.z) * dz) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const px = b.pos.x + dx * t, py = b.pos.y + dy * t, pz = b.pos.z + dz * t;
+    const d2l = (px - raiderLadderState.x) ** 2 + (py - ladderMidY) ** 2 + (pz - raiderLadderState.z) ** 2;
+    if (d2l < LADDER_RADIUS * LADDER_RADIUS) {
+      hitRaiderLadder(b.damage);
+      audio.play('thud', 0.7);
+      return true;
+    }
+  }
   b.pos.x = nx; b.pos.y = ny; b.pos.z = nz;
   return b.pos.y <= 0.05 || b.age > 3;
 }
@@ -1569,6 +1630,26 @@ function hitRaiderRam(amount: number) {
   st.addItems(salvage, 'grant');
   st.addXp('combat', 60);
   st.notify("The raiders' ram is wrecked! Salvaged 4× Wood Log, 2× Plank, 1× Iron Bar.", true);
+}
+
+/** Wave 58 (H4) · the ladder's own version of hitRaiderRam just above — same
+ *  shared shape (melee and ranged both land here once), smaller salvage
+ *  since it's a lighter, cheaper structure than the ram. Any raider still
+ *  mid-climb or fighting from the wall-walk this ladder reached falls the
+ *  instant `raiderLadderState.wrecked` goes true (Enemies.tsx's own
+ *  'climbing'/elevated live-recheck handles that, not this function). */
+function hitRaiderLadder(amount: number) {
+  const broke = damageRaiderLadder(amount);
+  const st = useGameStore.getState();
+  if (!broke) {
+    audio.play('brick_collide', 0.5);
+    return;
+  }
+  audio.play('explosion', 0.7);
+  const salvage = { wood: 3, plank: 2 } as Partial<Record<ItemId, number>>;
+  st.addItems(salvage, 'grant');
+  st.addXp('combat', 40);
+  st.notify("The raiders' siege ladder is wrecked! Salvaged 3× Wood Log, 2× Plank.", true);
 }
 
 if (w) w.__kkBolt = fireBolt;

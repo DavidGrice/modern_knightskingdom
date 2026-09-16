@@ -130,9 +130,12 @@ export function partsFor(kind: SocketKind): KeepPart[] {
 // socket the 8m run turned the way the socket faces. The halves below are the
 // EXACT halves, not inset — a corner's edge and its neighbouring run's edge
 // have to meet on the same line or the ring has a hole in it you fall through.
-const WALK_CORNER_HALF = 2;   // 4m corner/turret piece
+// exported (Wave 58 · H4): game/raiderLadder.ts needs the SAME outward
+// half-extents to plant a siege ladder just outside a wall-walk's real
+// footprint, rather than re-deriving its own approximation of this geometry.
+export const WALK_CORNER_HALF = 2;   // 4m corner/turret piece
 const WALK_RUN_HALF = 4;      // 8m wall run, along its own length
-const WALK_DEEP_HALF = 1.2;   // …and 2.4m across it
+export const WALK_DEEP_HALF = 1.2;   // …and 2.4m across it
 
 /** Height of the wall walk at a world point, or 0 where there is none.
  *  Feet-Y, the same convention `walkway` itself and `playerState.y` use.

@@ -38,7 +38,12 @@ export default function HealthBillboard({ data }: { data: EnemyData }) {
     // a corpse mid-collapse should not still be advertising its health
     if (m.state === 'dying') { g.visible = false; return; }
 
-    g.position.set(m.x, LIFT, m.z);
+    // Wave 58 (H4): an elevated raider (game/combat.ts's EnemyMob.elevated/
+    // postY) stands on a real keep wall-walk, ~3.6-4.2m up — LIFT alone
+    // assumes feet-at-ground-0, same as every other enemy here, which would
+    // otherwise float this bar down near the wall's own base instead of
+    // over the raider's actual head.
+    g.position.set(m.x, (m.elevated ? (m.postY ?? 0) : 0) + LIFT, m.z);
     // face the camera — yaw only, so the bar never tips as you look up or
     // down at it and always reads as a flat plate
     g.rotation.set(0, Math.atan2(camera.position.x - m.x, camera.position.z - m.z), 0);
