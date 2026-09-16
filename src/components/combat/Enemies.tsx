@@ -31,6 +31,7 @@ import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
+import { raiderLadderState, resetRaiderLadder, MAX_CLIMBERS, CLIMBER_STAGGER } from '@/game/raiderLadder';
 import { defenderState, DOWNED_RECOVER_MS } from '@/game/defenders';
 import { villagerCombatState } from '@/game/villagerCombat';
 import { companionCombatState } from '@/game/companion';
@@ -159,6 +160,30 @@ const RAID_SIEGE_DMG: Record<string, number> = {
   caster: 6, shieldedElite: 14, siegeCrew: 12,
 };
 
+/** Wave 58 (H4): the siege-ladder-assault raid mechanic's own AI tuning —
+ *  see game/raiderLadder.ts for the ladder object itself, and this file's
+ *  own 'climbing' EnemyMob.state handling below for where these are used. */
+const LADDER_NOTICE_RADIUS = 24; // how far a raid mob will beeline for a planted ladder
+const CLIMB_RANGE = 1.3;         // close enough to the base to start climbing
+/** stage one: up the rungs — x/z hold at the ladder's own base, only y rises */
+const CLIMB_STAGE1_S = 1.4;
+/** stage two: the final haul over the parapet (addendum #5) — x/z moves from
+ *  the base onto the walkway itself while y finishes the last PULL_UP metres */
+const CLIMB_STAGE2_S = 0.5;
+/** mirrors PlayerController's own PULL_UP constant (kept independent rather
+ *  than imported, so this AI file isn't coupled to a component's internal
+ *  constant) — the same real number, so a raider clears the SAME 3.6m/4.2m
+ *  wall-walk heights a single Siege Stair already lets the player clear
+ *  (see that file's own climbTargetFor). */
+const CLIMB_PULL_UP = 1.4;
+/** kinds excluded from ever climbing: named leaders/specialists and anything
+ *  that can't plausibly scale a ladder (a mount, a manned siege engine) —
+ *  "a small number of RAIDERS", not the whole raid roster. */
+function canClimbLadder(data: EnemyData): boolean {
+  return data.raid && data.kind !== 'storm' && data.kind !== 'cedric'
+    && data.kind !== 'siegeCrew' && data.kind !== 'caster' && !data.mountAsset;
+}
+
 /** Wave 37 (A3 remainder) · rolled once per plain-bandit filler slot in the
  *  ordinary dusk raid (see the raid trigger below): an occasional replacement
  *  once the player has climbed the difficulty curve far enough, one roll
@@ -181,6 +206,35 @@ const DEATH_BARK: Partial<Record<string, SoundName>> = {
 
 function distToPlayer(x: number, z: number) {
   return Math.hypot(playerState.x - x, playerState.z - z);
+}
+
+/** Wave 58 (H4): an elevated raider's own version of the ordinary d<range
+ *  attack branch's damage-dealing body (see the big per-mob if/else chain
+ *  below) — kept as a private duplicate rather than a refactor of that
+ *  already-shipped branch, so this wave cannot regress it. The one real
+ *  difference is `feetY`, the shooter's own real standing height (0 for a
+ *  ground raider, matching the original branch exactly; a raider's
+ *  `m.postY` once elevated) — hasLineOfSight needs to reason about a shot
+ *  fired FROM up there, not from the ground the mob's own x/z alone would
+ *  otherwise imply. */
+function fireAtPlayer(data: EnemyData, rangedProfile: { range: number; cd: number } | null, feetY: number) {
+  const m = data.mob;
+  const st = useGameStore.getState();
+  m.attackCd = rangedProfile ? rangedProfile.cd : data.kind === 'storm'
+    ? Math.max(0.55, ATTACK_CD.storm - (st.reputation['storm'] ?? 0) * 0.006
+      - (st.perks.includes('silver_tongue') ? 0.15 : 0))
+    : ATTACK_CD[data.kind];
+  const originY = feetY + GROUND_LOS_Y;
+  if (data.ranged) {
+    if (hasLineOfSight(m.x, originY, m.z, playerState.x, playerState.y, playerState.z, data.world ?? null)) {
+      damagePlayer(RANGED_DMG * data.scale);
+    }
+  } else if (data.kind === 'caster') {
+    if (hasLineOfSight(m.x, originY, m.z, playerState.x, playerState.y, playerState.z, data.world ?? null)) {
+      fireSpellBolt(data, CASTER_SPELL_DMG * data.scale);
+    }
+  } else if (data.kind === 'storm') resolveDuel(false, data.id);
+  else damagePlayer(ATTACK_DMG[data.kind] * data.scale, { melee: true, attacker: data });
 }
 
 function Enemy({ data }: { data: EnemyData }) {
@@ -283,8 +337,91 @@ function Enemy({ data }: { data: EnemyData }) {
       return;
     }
 
+    // Wave 58 (H4) addendum #3: a defender's own `elevated`/`postY` are
+    // recomputed live every frame from the real, current keep (Defenders.tsx
+    // ~109-123) — an elevated RAIDER does the same, not just once at climb
+    // completion. If an UNRELATED siege hit (damageKeepPart) knocks this
+    // exact socket's piece back to bare while this raider is up there, it
+    // falls immediately, generalizing the same "ladder destroyed" handling
+    // this state already needs (see the 'climbing' branch below).
+    if (m.elevated) {
+      const sockId = m.ladderSocketId;
+      const partId = sockId ? st.keep?.parts[sockId] : undefined;
+      const part = partId ? KEEP_PART_BY_ID[partId] : undefined;
+      const stillStanding = !!(sockId && st.keep && (st.keep.built[sockId] ?? 0) >= 1 && part?.walkway);
+      if (!stillStanding) {
+        m.elevated = false;
+        m.state = 'dying';
+        m.dieT = 0;
+        return; // next frame's dying branch above scatters the rig from wherever it last rendered
+      }
+    }
+
     if (!st.buildMode) {
       const d = distToPlayer(m.x, m.z);
+
+      // Wave 58 (H4): a raider already climbing the siege ladder ignores
+      // everything else until it either reaches the top or the ladder/wall
+      // is pulled out from under it — same early-return shape `approaching`
+      // uses just below, and for the same reason (a transient state that
+      // owns its own position/rotation/clip for as long as it lasts).
+      if (m.state === 'climbing') {
+        const rl = raiderLadderState;
+        const sockOk = !!(m.ladderSocketId && st.keep && (st.keep.built[m.ladderSocketId] ?? 0) >= 1
+          && KEEP_PART_BY_ID[st.keep.parts[m.ladderSocketId] ?? '']?.walkway);
+        if (!rl.active || rl.wrecked || !sockOk) {
+          // the ladder broke, or the wall it's leaning on came down under an
+          // unrelated siege hit — either way this raider falls, reusing the
+          // ordinary death pipeline unchanged (base design + addendum #3).
+          rl.climbers = rl.climbers.filter((id) => id !== String(data.id));
+          m.state = 'dying';
+          m.dieT = 0;
+          m.elevated = false;
+          g.position.set(m.x, enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z), m.z);
+          g.rotation.y = m.yaw + Math.PI;
+          return;
+        }
+        m.climbT = (m.climbT ?? 0) + dt;
+        // home-only mechanic, same as raiderRam/raiderLadder themselves
+        const groundY = homeGroundY(rl.baseX, rl.baseZ);
+        const riseTopY = rl.topY - CLIMB_PULL_UP;
+        if (m.climbT < 0) {
+          // addendum #8: staggered queue — standing at the foot, waiting a turn
+          m.x = rl.baseX; m.z = rl.baseZ;
+          g.position.set(m.x, groundY, m.z);
+        } else if (m.climbT < CLIMB_STAGE1_S) {
+          // stage one: up the rungs — x/z hold at the base, only y rises
+          const t = m.climbT / CLIMB_STAGE1_S;
+          m.x = rl.baseX; m.z = rl.baseZ;
+          g.position.set(m.x, THREE.MathUtils.lerp(groundY, riseTopY, t), m.z);
+        } else if (m.climbT < CLIMB_STAGE1_S + CLIMB_STAGE2_S) {
+          // stage two: haul over the parapet — x/z moves onto the walkway
+          // itself while y finishes the last PULL_UP metres (addendum #5)
+          const t = (m.climbT - CLIMB_STAGE1_S) / CLIMB_STAGE2_S;
+          m.x = THREE.MathUtils.lerp(rl.baseX, rl.topX, t);
+          m.z = THREE.MathUtils.lerp(rl.baseZ, rl.topZ, t);
+          g.position.set(m.x, THREE.MathUtils.lerp(riseTopY, rl.topY, t), m.z);
+        } else {
+          // over the top — a real combatant now, on the SAME wall-walk the
+          // ladder climbed (m.ladderSocketId was set the moment this raider
+          // claimed its climb slot, below) — the ordinary FSM (now elevated)
+          // takes over next frame, same "clears itself, FSM takes over"
+          // handoff `approaching` uses just below.
+          rl.climbers = rl.climbers.filter((id) => id !== String(data.id));
+          m.x = rl.topX; m.z = rl.topZ;
+          m.elevated = true;
+          m.postY = rl.topY;
+          m.state = 'chase';
+          g.position.set(m.x, m.postY, m.z);
+        }
+        g.rotation.y = m.yaw + Math.PI;
+        // addendum #5: no dedicated climb clip exists in this extraction —
+        // reuse anim_c_walk throughout, this file's own established
+        // convention for exactly this situation (approaching/fleeing already
+        // reuse ordinary walk/run clips rather than inventing one).
+        if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+        return;
+      }
       // N79 (requested 2026-07-28): a raider spawned at the road's entry
       // point (the raid trigger below) walks in toward the homestead first,
       // routed via the same nav-grid pathing the ordinary chase branch uses
@@ -358,7 +495,14 @@ function Enemy({ data }: { data: EnemyData }) {
       if (
         (data.kind === 'bandit' && data.hp <= 2
           || (data.kind === 'cedric' && !data.finalStand && data.hp <= CEDRIC_FLEE_HP))
-        && !m.fleeing
+        && !m.fleeing && !m.elevated
+        // Wave 58 (H4): an elevated raider never breaks for the treeline —
+        // the fleeing branch just below sets position via
+        // enemyAtHome?homeGroundY:destinationGroundY exactly like the
+        // shared tail did before this wave's own fix to it, which would
+        // snap a fleeing wall-top raider straight back to ground height.
+        // Simplest correct fix: a raider up a ladder fights it out or dies,
+        // it does not flee back down one.
       ) {
         m.fleeing = true;
         st.notify(data.kind === 'cedric' ? 'Cedric the Bull breaks off, sounding the retreat!' : 'A bandit loses heart and flees!');
@@ -476,7 +620,139 @@ function Enemy({ data }: { data: EnemyData }) {
         : data.kind === 'caster' ? { range: CASTER_RANGE, cd: CASTER_ATTACK_CD }
         : null;
 
-      if (keepTarget && keepD < d && keepD < defD) {
+      // Wave 58 (H4) addendum #2: the elevated-raider targeting carve-out —
+      // resolved fresh every frame from the SAME derivation Defenders.tsx
+      // itself uses for a keep-wall station (`stationId === "keep:<id>"`,
+      // confirmed Defenders.tsx ~line 96), matched to the SAME socket this
+      // raider actually climbed (m.ladderSocketId) — never every
+      // `elevated: true` entry in defenderState, which could be a totally
+      // different, unreachable wall. This is a filter at the point an
+      // elevated raider selects its own target, NOT a change to the
+      // ground-raider defTarget exclusion just above, which stays
+      // byte-for-byte unchanged.
+      let wallDefTarget: (typeof defenderState)[string] | null = null;
+      let wallDefId = '';
+      let wallDefD = Infinity;
+      if (m.elevated && m.ladderSocketId) {
+        const wantStation = 'keep:' + m.ladderSocketId;
+        for (const v of st.villagers) {
+          if (v.stationId !== wantStation) continue;
+          const dsd = defenderState[v.id];
+          if (!dsd || dsd.state === 'downed') continue;
+          const dd = Math.hypot(dsd.x - m.x, dsd.z - m.z);
+          if (dd < wallDefD) { wallDefD = dd; wallDefTarget = dsd; wallDefId = v.id; }
+        }
+      }
+
+      // Wave 58 (H4): does this raider have a live reason to make for the
+      // siege ladder right now? Gated the same way keepTarget/defTarget/etc.
+      // are (raid, at home), plus the ladder's own lifecycle (planted, not
+      // wrecked, a free climb slot) and canClimbLadder's own kind exclusions.
+      let ladderEligible = false;
+      let ladderD = Infinity;
+      if (
+        // (m.state === 'climbing' already returned early above, at the top
+        // of this useFrame — this point in the FSM is never reached for it)
+        canClimbLadder(data) && enemyAtHome && !m.elevated
+        && raiderLadderState.active && raiderLadderState.planted && !raiderLadderState.wrecked
+        && raiderLadderState.climbers.length < MAX_CLIMBERS
+      ) {
+        const dd = Math.hypot(raiderLadderState.baseX - m.x, raiderLadderState.baseZ - m.z);
+        if (dd < LADDER_NOTICE_RADIUS) { ladderEligible = true; ladderD = dd; }
+      }
+
+      if (m.elevated) {
+        // a raider up here fights only what's genuinely reachable — the ONE
+        // defender posted to this SAME wall-walk (wallDefTarget above), or
+        // the player, if they're up here too (height-gated: horizontal
+        // distance alone can't tell "on the wall" from "in the courtyard
+        // directly below it", per the base design's own stated payoff).
+        const onWalkway = Math.abs(playerState.y - (m.postY ?? 0)) < 2.2;
+        const meleeOrRangedRange = rangedProfile ? rangedProfile.range : 1.8;
+        const playerReachable = onWalkway ? d : Infinity;
+        if (wallDefTarget && wallDefD <= playerReachable) {
+          if (wallDefD < (data.ranged ? RANGED_RANGE : 1.7)) {
+            m.state = 'attack';
+            m.attackCd -= dt;
+            const ndx = wallDefTarget.x - m.x;
+            const ndz = wallDefTarget.z - m.z;
+            m.yaw = Math.atan2(-ndx, -ndz);
+            if (m.attackCd <= 0) {
+              m.attackCd = data.ranged ? RANGED_ATTACK_CD : ATTACK_CD[data.kind];
+              // addendum #6: both combatants are confirmed already standing
+              // on the SAME real wall-walk (the stationId match above) — a
+              // much smaller, already-adjacent space than open ground.
+              // hasLineOfSight is reused unchanged for consistency with
+              // every other ranged branch in this file; this exact
+              // elevated-vs-elevated pairing has not been live-fire
+              // verified (addendum #6's own open item) — if it's ever found
+              // to behave badly, the addendum's own pre-approved fix is to
+              // skip this check entirely for this one branch instead of
+              // generalizing GROUND_LOS_Y itself.
+              if (!data.ranged || hasLineOfSight(m.x, (m.postY ?? 0) + GROUND_LOS_Y, m.z, wallDefTarget.x, (wallDefTarget.postY ?? 0) + GROUND_LOS_Y, wallDefTarget.z, data.world ?? null)) {
+                wallDefTarget.hp -= (data.ranged ? RANGED_DMG : ATTACK_DMG[data.kind]) * data.scale;
+                reportAgentDamaged(wallDefId, agentManager.now);
+              }
+              if (wallDefTarget.hp <= 0 && wallDefTarget.state === 'ok') {
+                wallDefTarget.state = 'downed';
+                wallDefTarget.downedUntil = Date.now() + DOWNED_RECOVER_MS;
+                const name = st.villagers.find((v) => v.id === wallDefId)?.name ?? 'A defender';
+                st.notify(`${name} is knocked down defending the battlements!`);
+              }
+            }
+          } else {
+            m.state = 'chase';
+            m.attackCd = Math.max(0.4, m.attackCd - dt);
+            const nx = (wallDefTarget.x - m.x) / wallDefD;
+            const nz = (wallDefTarget.z - m.z) / wallDefD;
+            m.x += nx * speed * dt;
+            m.z += nz * speed * dt;
+            m.yaw = Math.atan2(-nx, -nz);
+          }
+        } else if (playerReachable < Infinity) {
+          if (d < meleeOrRangedRange) {
+            m.state = 'attack';
+            m.attackCd -= dt;
+            if (rangedProfile) m.yaw = Math.atan2(-(playerState.x - m.x), -(playerState.z - m.z));
+            if (m.attackCd <= 0) fireAtPlayer(data, rangedProfile, m.postY ?? 0);
+          } else {
+            m.state = 'chase';
+            m.attackCd = Math.max(0.4, m.attackCd - dt);
+            const nx = (playerState.x - m.x) / (d || 1);
+            const nz = (playerState.z - m.z) / (d || 1);
+            m.x += nx * speed * dt;
+            m.z += nz * speed * dt;
+            m.yaw = Math.atan2(-nx, -nz);
+          }
+        } else {
+          // nobody left to fight up here right now — hold the battlement
+          m.state = 'wander';
+          m.attackCd = Math.max(0, m.attackCd - dt);
+        }
+      } else if (ladderEligible && ladderD < CLIMB_RANGE) {
+        // arrived at the ladder's foot — claim a climb slot (capped at
+        // MAX_CLIMBERS, checked above) and hand off to the 'climbing' early
+        // check at the top of this useFrame from next frame on.
+        const myId = String(data.id);
+        if (!raiderLadderState.climbers.includes(myId)) raiderLadderState.climbers.push(myId);
+        const slot = raiderLadderState.climbers.indexOf(myId);
+        m.state = 'climbing';
+        m.ladderSocketId = raiderLadderState.targetSocketId;
+        m.climbT = -CLIMBER_STAGGER * slot; // addendum #8: staggered queue
+        m.x = raiderLadderState.baseX;
+        m.z = raiderLadderState.baseZ;
+        m.yaw = raiderLadderState.baseYaw;
+      } else if (ladderEligible) {
+        // beeline for the ladder's own foot, same chase shape as every other
+        // priority target in this chain
+        m.state = 'chase';
+        m.attackCd = Math.max(0.4, m.attackCd - dt);
+        const nx = (raiderLadderState.baseX - m.x) / ladderD;
+        const nz = (raiderLadderState.baseZ - m.z) / ladderD;
+        m.x += nx * speed * dt;
+        m.z += nz * speed * dt;
+        m.yaw = Math.atan2(-nx, -nz);
+      } else if (keepTarget && keepD < d && keepD < defD) {
         m.state = 'attack';
         m.attackCd -= dt;
         const ndx = keepTarget.x - m.x;
@@ -821,7 +1097,16 @@ function Enemy({ data }: { data: EnemyData }) {
     // Npc.tsx, Defenders.tsx, RaiderRam.tsx, Merchant.tsx, Wildlife.tsx),
     // closing the gap this comment used to describe rather than leaving it
     // — see terrainRegions.ts for the now data-driven region list.
-    g.position.set(m.x, enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z), m.z);
+    //
+    // Wave 58 (H4) addendum #4: this tail runs unconditionally for every mob
+    // that reaches it, INCLUDING a climbing raider once it transitions into
+    // ordinary 'attack'/'chase' combat against its now-eligible elevated
+    // defender target (the elevated branch above sets m.state='chase'/
+    // 'attack' too, exactly like the ground FSM does). Without the ternary
+    // below, elevation would snap back to ground height the instant real
+    // combat starts, since `enemyAtHome`/`destinationGroundY` know nothing
+    // about a wall-walk.
+    g.position.set(m.x, m.elevated ? (m.postY ?? 0) : (enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z)), m.z);
     g.rotation.y = m.yaw + Math.PI;
 
     const want =
@@ -998,6 +1283,17 @@ export default function Enemies() {
     }
     if (st.paused || !st.character) return;
     const { enemies: list } = useEnemyStore.getState();
+
+    // Wave 58 (H4) addendum #8: a raider that dies or is removed frees its
+    // climb slot — pruned here (1Hz is plenty; this only gates queue timing,
+    // never a correctness-critical path) rather than intercepted at every
+    // possible death call site (player melee/bolt, a defender, a villager,
+    // the wall coming down under it — all already just set `state='dying'`
+    // generically with no knowledge of this list).
+    if (raiderLadderState.climbers.length) {
+      raiderLadderState.climbers = raiderLadderState.climbers.filter((id) =>
+        list.some((e) => String(e.id) === id && e.mob.state !== 'dying'));
+    }
 
     // the Sealed Crypt (Phase 17) is its own curated encounter space — spawn
     // each room's enemies once on arrival and watch for a full clear
@@ -1207,6 +1503,7 @@ export default function Enemies() {
     if (raidActive.current && raiders.length === 0) {
       raidActive.current = false;
       raiderRamState.active = false;
+      raiderLadderState.active = false; // Wave 58 (H4) · same singleton cleanup as the ram
       st.notify('The raid is beaten back! The bandits dropped their spoils.', true);
       st.addItems({ plank: 4, stone: 4, iron_ore: 2 }, 'grant');
       st.addXp('combat', 60);
@@ -1303,6 +1600,25 @@ export default function Enemies() {
         // full reset, not just `active = true` — a ram that was broken last
         // raid must not roll back in already wrecked and on 0 HP
         resetRaiderRam(Math.cos(a0) * 34, Math.sin(a0) * 34);
+      }
+      // Wave 58 (H4): a siege ladder sometimes joins too — a singleton, same
+      // as the ram (game/raiderLadder.ts's own header comment) — gated on
+      // the keep actually having a FINISHED wall-walk to put it against; a
+      // bare keep, or one with only ungated pieces (low wall/gatehouse/great
+      // hall, none of which carry a `walkway`), never gets one, since
+      // there's nothing worth climbing yet. Difficulty-scaled, same shape
+      // raidStrength() itself uses (game/difficulty.ts).
+      if (!raiderLadderState.active) {
+        const walkwaySockets = st.keep
+          ? KEEP_SOCKETS.filter((s) => {
+              const partId = st.keep!.parts[s.id];
+              return !!partId && (st.keep!.built[s.id] ?? 0) >= 1 && !!KEEP_PART_BY_ID[partId]?.walkway;
+            })
+          : [];
+        if (walkwaySockets.length && Math.random() < Math.min(0.6, 0.25 + difficultyState.tier * 0.07)) {
+          const targetSocket = walkwaySockets[Math.floor(Math.random() * walkwaySockets.length)];
+          resetRaiderLadder(targetSocket.id);
+        }
       }
     }
 

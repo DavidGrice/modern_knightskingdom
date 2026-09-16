@@ -10132,3 +10132,139 @@ branch; `constructBuilding`'s completion branch gated on `!b.ruin`; the builder 
 `src/components/world/CedricSiege.tsx` / `Defenders.tsx` (import-path update to the new leaf module,
 plus `Defenders.tsx`'s new loadout-scaled separation loop); `src/components/world/BattleDome.tsx` (new
 `DuelSpectator` figure at the honor stand).
+
+## Wave 58: siege-ladder-assault raid content (H4) — SHIPPED 2026-09-12
+
+**H4 was flagged in the plan as needing its own dedicated design pass.** That pass ran this session: a
+Plan-mode agent produced a full design, independently adversarially reviewed by 3 separate agents
+(factual-accuracy / scope-honesty / architectural-risk lenses). All 3 confirmed the design's 18 numbered
+factual claims true and endorsed its central call: **decline** the generic `(i,j,layer)` nav-grid
+rewrite the plan's own H4 blurb described (`navgrid.ts`'s layer param is real but was never populated,
+and confirmed still has zero real consumers anywhere in the codebase — Defenders/Enemies/Agent all reach
+elevation through their own separate, already-shipped, non-nav-grid mechanisms), and instead **build** a
+small, additive combat-content slice: a destroyable siege ladder a raider can climb to reach one specific
+keep wall-walk. All 3 reviews also independently found the same class of concrete implementation gap in
+the design's own architecture section, closed by a written addendum before implementation began.
+`navgrid.ts`, `AgentManager.ts`, `Agent.ts`, `Reasoner.ts` and `Locomotion.ts` are all untouched, exactly
+as scoped.
+
+**What shipped**: `game/raiderLadder.ts` + `components/combat/RaiderLadder.tsx` — a new siege-ladder
+object mirroring `raiderRam.ts`/`RaiderRam.tsx`'s own shape closely (plain module-level state, straight-
+line trundle-in, real HP, melee/bolt-damageable, tips over and burns out when wrecked). Spawned
+optionally alongside an ordinary dusk raid (bandit or, if crown-sworn, royal-knight), gated on the home
+keep having at least one FINISHED wall-walk socket (`corner_turret`/`corner_block`/`wall_crenel`) to
+plant against, at a difficulty-scaled chance (`0.25 + tier*0.07`, capped 0.6). A new `'climbing'`
+`EnemyMob.state` (plus `climbT?`/`elevated?`/`postY?`/`ladderSocketId?` fields, `combat.ts`) lets up to 2
+raiders at a time (`MAX_CLIMBERS`, staggered 0.6s apart) climb it in two visual stages — up the rungs,
+then haul over the parapet — and fight, for the first time ever, a defender posted to that SAME
+wall-walk: elevation was previously unconditional, permanent safety for a keep-stationed defender against
+every raider (`Enemies.tsx`'s own ground `defTarget` loop explicitly skips every `elevated` defender,
+confirmed still byte-for-byte unchanged) with zero exceptions. The matched defender is resolved fresh
+every frame from the SAME `stationId === "keep:<socketId>"` derivation `Defenders.tsx` itself already
+uses — never a blanket "any elevated defender," which could be a different, unreachable wall. An elevated
+raider also fights the player directly if the player is genuinely up on the same wall-walk (height-gated,
+not just horizontal distance).
+
+**Two real, concrete bugs the addendum named and this implementation fixes, not just avoids**:
+1. **The height-snap-back bug** (`Enemies.tsx`'s shared per-mob position tail): fixed with one ternary
+   (`m.elevated ? (m.postY ?? 0) : (enemyAtHome ? homeGroundY(...) : destinationGroundY(...))`) so
+   elevation persists once a climbing raider transitions into ordinary attack/chase combat, instead of
+   snapping back to ground height the instant real fighting starts.
+2. **Live-recompute, not "set once at climb completion."** A raider's own `elevated`/`postY` are
+   rechecked every frame against the real, current keep (`keep.parts[socketId]` still present AND
+   `built>=1` AND the part still carries a `walkway`), the same way `Defenders.tsx` already does for a
+   real defender — so a wall knocked down by an UNRELATED siege hit (`damageKeepPart`, already a real,
+   shipped way this can happen mid-raid) drops the raider standing on it too, not just a defender. The
+   same check runs mid-climb (ladder or wall destroyed while still ascending) as the raider's own
+   'climbing' state handler.
+
+**A real, load-bearing gap found and fixed beyond the two documents' own explicit text**: the player's
+ranged weapons (bow/crossbow) route through `hitTestCharacter`, which needs the target's real standing
+height (`groundY`) to convert a world-space shot into the figure's own local hitbox frame — already
+handled for a mounted raider's saddle offset (`MOUNT_SEAT_Y`), but hardcoded to ground level for every
+other enemy. Without passing `e.mob.postY` through here too, every shot fired at an elevated raider would
+test against a hitbox still sitting at ground level, 3.6-4.2m below where the model actually renders, and
+would never connect — silently making the feature's own stated payoff ("fight a battlement-standing
+defender, or the player") one-sided the moment the player tried to shoot back. Fixed with the same
+one-line pattern the mounted-raider precedent already established. `HealthBillboard.tsx`'s own health-bar
+lift got the identical fix (it has no pre-existing "elevated" precedent to match, unlike the aim-reticle
+nameplate path — see below) for the same reason: a floating bar rendering meters below the raider it
+belongs to is an immediately obvious visual defect a live test would catch instantly.
+
+**Deliberately left alone, and why**: `targeting.ts`'s aim-reticle nameplate positioning has the exact
+same "assumes feet at ground 0" limitation — but an elevated DEFENDER (shipped since Wave 8) already has
+this identical gap today with nobody having flagged it, so extending the same accepted approximation to a
+raider is consistent with existing behavior, not a new regression, and touching the shared `AimTarget`
+interface for pure cosmetic parity was judged disproportionate scope beyond what either document asked
+for. Melee combat's own 2D-only reach check (ignores vertical distance for every enemy, elevated or not)
+is untouched for the same reason — a pre-existing, engine-wide approximation this wave's content merely
+exercises at a larger, more visible vertical gap than a mounted raider's saddle ever did, not something
+this wave broke.
+
+**Scope decisions named explicitly, per the addendum's own instruction** (also stated in code comments at
+their exact source): the ladder is a **singleton** — one plantable breach point per raid, however many
+finished wall-walk sockets the keep has (`raiderLadderState` mirrors `raiderRamState`'s own plain
+module-level shape exactly). It is **enemy-only set dressing** — rendered straight from
+`raiderLadderState`, never registered as a `PlacedBuilding`, so the player's own `climbTargetFor` (which
+only scans `st.buildings`) never recognizes or offers to climb it, even though it's the same
+`isLadder`-flagged `oc6096-5` asset the player can climb elsewhere. And it inherits the **same away-raid
+trade-off** `raiderRamState` already carries: `Defenders.tsx` never targets or damages either singleton,
+so a raid resolving while the player is at a destination cannot be contested by anything but the player —
+bounded, since a defender who loses a fight up there is merely "downed" for `DOWNED_RECOVER_MS`, the same
+as any other defender-downed cause, not permanently lost.
+
+**Addendum #6 (the item flagged above as needing live-fire verification) was resolved by a full,
+independent Verify pass after implementation**: a dedicated Verify session drove real headless Chrome
+(`--headless=new --use-angle=d3d11 --mute-audio`, playwright-core, per this project's own CLAUDE.md)
+against a real `npm run dev` server and live-exercised every one of the addendum's 10 numbered points with
+concrete measured evidence, not just re-reading the diff. The elevated-vs-elevated ranged exchange
+specifically was forced live (the climbed raider's `data.ranged` set true against its matched, pinned
+defender) and observed over 20 real frames: shots landed repeatedly and cleanly, each decrement exactly
+matching `RANGED_DMG` on the expected cadence — `hasLineOfSight` behaves correctly for this pairing, no
+fallback needed, contrary to the addendum's own stated (reasonable, at design time) concern that this
+pairing had never been exercised before. This item is CLOSED, not open.
+
+Verify's other live-measured results, addendum point by point: (1) a real raid trigger spawned a real
+ladder via the real code path, with geometry (targetSocketId/topX/topZ/topY/baseX/baseZ/baseYaw) matching
+the design's own math exactly — independently re-derived by hand during this review and confirmed to
+match the live-measured numbers precisely; melee and bolt damage both connected via the real `combat.ts`
+routing. (2) The single most important check — same-wall-walk matching — was proven directly: with two
+elevated defenders posted at different sockets, the climbing raider damaged ONLY the defender at its own
+socket, the other's HP never moved across the full observation window. (3) Destroying the same wall-walk
+socket via an unrelated attack while a raider was mid-fight up there dropped it to `'dying'` within the
+very next frame, confirmed both from store state and a real in-game toast. (4) The raider's actual
+rendered Y position was sampled across 20 consecutive frames through the chase-to-attack transition and
+stayed locked at the walkway height throughout — the height-snap-back bug is genuinely fixed, not just
+patched in theory. (5) The two-stage climb was confirmed as genuine multi-frame motion (rungs, then a
+distinct final haul) matching the tuned stage durations, never a teleport or single lerp. (9) The enemy
+ladder was confirmed, both structurally and live, to never appear as a `PlacedBuilding` the player's own
+`climbTargetFor` could ever recognize. Two minor, non-blocking "polish" gaps were noted by Verify (the
+ladder's own wrecked-tail notify/salvage/audio lines and the first-person HUD "Climb" prompt's exact
+visibility were each confirmed via direct code read and a synthetic HP=0/wrecked=true state set rather
+than a real hit-to-zero and genuine in-browser mouse-look; both are near-verbatim mirrors of already-
+proven code, judged low-risk) — no blockers, no real bugs.
+
+One additional inconsistency was found and fixed during independent post-Verify review (not by Verify
+itself): the elevated-vs-defender ranged LOS check passed the target's raw `postY` (foot-level) instead of
+`postY + GROUND_LOS_Y`, unlike every other ranged branch in this file, which applies `GROUND_LOS_Y`
+symmetrically to both ends. Live-tested behavior is unaffected either way (this project's own keep-wall
+pieces are not registered as real LOS obstacles today, confirmed during the original design session), but
+the one-line fix restores consistency with the file's own established convention.
+
+**Verification**: `npx tsc --noEmit` clean (exit 0, zero output), re-confirmed independently after the
+above fix. `npm run build` clean (exit 0). Every one of the addendum's 10 numbered points independently
+re-confirmed against the final diff, cited by file/line, AND live-exercised by a real browser session —
+this wave is fully closed out, not pending a follow-up verify pass.
+
+**Files changed**: `src/game/raiderLadder.ts` (new — the ladder's own state + `resetRaiderLadder`/
+`damageRaiderLadder`, mirroring `raiderRam.ts`); `src/components/combat/RaiderLadder.tsx` (new — the
+ladder prop's trundle-in/plant/wreck visual, mirroring `RaiderRam.tsx`); `src/game/data/keep.ts`
+(exported `WALK_CORNER_HALF`/`WALK_DEEP_HALF` for the ladder's own outward-offset geometry);
+`src/game/combat.ts` (`EnemyMob` gains `'climbing'` state + `climbT?`/`elevated?`/`postY?`/
+`ladderSocketId?`; melee and bolt routing to the new `hitRaiderLadder`; `stepBolt`'s `hitTestCharacter`
+call now reads `e.mob.postY` for an elevated shot); `src/components/combat/Enemies.tsx` (the 'climbing'
+early-return + live elevated-wall recheck; the new elevated-vs-defender/player targeting branch; the
+ladder-seeking chase/climb-slot-claim branch; the height-tail ternary fix; the fleeing-trigger's new
+`!m.elevated` guard; the raid trigger's new ladder spawn roll and raid-end cleanup; the 1Hz climb-slot
+pruning); `src/components/world/GameWorld.tsx` (mounts `<RaiderLadder />` beside `<RaiderRam />`);
+`src/components/combat/HealthBillboard.tsx` (health-bar lift accounts for `m.elevated`/`m.postY`).

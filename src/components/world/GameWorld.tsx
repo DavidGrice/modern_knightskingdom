@@ -47,6 +47,7 @@ import BuildController from '../build/BuildController';
 import CombatController from '../combat/CombatController';
 import Enemies from '../combat/Enemies';
 import RaiderRam from '../combat/RaiderRam';
+import RaiderLadder from '../combat/RaiderLadder';
 import Cannonballs from '../combat/Cannonballs';
 import Bolts from '../combat/Bolts';
 import ArenaSpawner from '../combat/ArenaSpawner';
@@ -151,6 +152,13 @@ export default function GameWorld() {
             the render would silently freeze the ram's advance while the
             player is away. */}
         <RaiderRam />
+        {/* Wave 58 (H4) · same always-mounted reasoning as RaiderRam just
+            above — its own useFrame is the only place raiderLadderState
+            advances toward the target wall and Enemies.tsx's own per-mob
+            'climbing' state is the only place raiders actually climb it;
+            gating this on destination would silently freeze both mid-raid
+            while the player is away. */}
+        <RaiderLadder />
       </Suspense>
       <Cannonballs />
       <Bolts />
