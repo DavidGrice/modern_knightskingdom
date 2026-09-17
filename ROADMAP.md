@@ -10268,3 +10268,88 @@ ladder-seeking chase/climb-slot-claim branch; the height-tail ternary fix; the f
 `!m.elevated` guard; the raid trigger's new ladder spawn roll and raid-end cleanup; the 1Hz climb-slot
 pruning); `src/components/world/GameWorld.tsx` (mounts `<RaiderLadder />` beside `<RaiderRam />`);
 `src/components/combat/HealthBillboard.tsx` (health-bar lift accounts for `m.elevated`/`m.postY`).
+
+## Wave 59: real water-hole rendering (H3); home nav-grid height-awareness declined (H2) — SHIPPED 2026-09-16
+
+Twenty-sixth wave of the new 27-wave plan, and the last of 3 items flagged for their own dedicated design
+session. Unlike every prior design-session wave, the design process itself took two full stages: an
+initial Design + 3-lens adversarial review (matching Wave 58's own proven template), followed by a
+dedicated LIVE RENDERING SPIKE once that review found the initial H3 proposal was very likely a rendering
+dead end — an empirical escalation this wave needed and no prior design-session wave had.
+
+- [COMPLETE] ✅ **H2 · AI pathfinding height-awareness at home — DECLINED, unanimously.** All 3 independent
+  adversarial reviews of the initial design session confirmed: zero real consumer exists for AI pathing
+  onto either of the two existing `TERRAIN_REGIONS` (the North Downs, West Fell) or for any destination-
+  side gap (destinations already have working `mode:'window'` height rasterization). Raiders/villagers
+  already correctly, deliberately route around both hills as static `'blocked'` exclusions — Wave 31's own
+  choice, not an oversight — and a repo-wide search found zero quest, resource node, POI, or narrative beat
+  on either hill. **A real correction to the plan's own framing, independently confirmed by all 3
+  reviewers**: the plan's "~34x" rasterization-cost figure describes a different, much larger hypothetical
+  (whole-map mesh/triangle-authoring density) than a narrowly-scoped home rasterization would actually pay
+  (bounded to the two regions' own cells, roughly 5.8% of the home grid, not 34x anything) — but this
+  correction doesn't change the recommendation, since there is still no real consumer to justify building
+  it at all. This is the third time this project's own design-session discipline (Waves 31, 41, and now
+  59, following Wave 58's own "decline the generic version" precedent one wave earlier) has reached the
+  same honest conclusion: find zero real consumer, build nothing, document the minimal future shape for
+  whoever revisits it. `navgrid.ts`, `homeGround.ts`, `navTerrain.ts`, `AgentManager.ts`, `Agent.ts`,
+  `Reasoner.ts`, and `Locomotion.ts` are all confirmed untouched by this wave's diff.
+- [COMPLETE] ✅ **H3 · dug water gets a real, visible hole in the ground instead of a flat overlay plate.**
+  The plan's own framing ("Wave 31's elevation work unblocked this") does not survive contact with the
+  real architecture — every real dug-water rectangle sits on flat ground and structurally always will,
+  since digging is bounded well short of either terrain region — but a real, different fix exists anyway.
+  **The initial design's own proposed mechanism (sink the existing bank/water overlay planes below y=0,
+  leave the ground mesh untouched) was independently predicted dead by 2 of 3 adversarial reviewers**,
+  reasoning from this project's own `DOWNS_SINK` docstring (which states outright that anything below a
+  sunk knoll's own threshold "is simply underneath the meadow and invisible") — the exact same physical
+  mechanism, inverted, meaning a depression would be occluded BY the still-intact, un-carved ground mesh
+  rather than occluding it. **A dedicated live rendering spike then empirically confirmed this exactly**:
+  the sunk overlay was 100% invisible from every camera angle tested, including a shallow near-grazing
+  angle and looking straight down at the dig's own boundary line — real screenshots, not just reasoning. A
+  second idea (`depthTest:false` + high render order, forcing the water to draw over the meadow
+  regardless of depth) was tried and rejected the same way: confirmed live to render the water straight
+  through a solid wall standing between the camera and it, an immediately obvious correctness bug in
+  exactly the case real play hits constantly (a moat explicitly meant to run along a fence). **The
+  mechanism that actually works**: `HomeMeadow`'s own material (and a matching custom shadow-depth
+  material, needed because the meadow casts/receives real shadows) gets a `MeshStandardMaterial
+  .onBeforeCompile` injection — a per-fragment world-space rectangle test that `discard`s wherever a live
+  `waterworks` rectangle sits, driven by a small shared uniform array kept in lockstep with the water list.
+  This is real geometry removal at the source, not a depth-buffer trick, so it correctly respects any other
+  object's own depth from every angle — the wall-occlusion bug that killed the second idea structurally
+  cannot recur. `DugWater`'s own bank plate became a real 4-strip ring (a solid plate here would sit
+  directly above the new hole and hide it all over again, the identical occlusion failure one layer up —
+  found and fixed during the spike itself), plus 4 vertical pit-wall quads down to a new `PIT_DEPTH=0.6m`,
+  plus the existing water plane sunk into the pit. **A real, concrete bug found during independent post-
+  spike review and fixed before shipping**: the spike's own first working patch put the water surface only
+  0.06m above the pit's floor (water pooled near the bottom of a mostly-dry pit), directly contradicting
+  its own doc comment's stated intent ("brim-full... not a dry pit with water only at the bottom") — fixed
+  by keeping the water at its original small offset from grade (`-WATER_Y`) rather than offsetting from the
+  new pit floor, so the water now sits near the rim as intended. The Verify pass independently reproduced
+  the pre-fix bug live (a real before/after screenshot comparison, reverting and re-applying the one-line
+  fix) to confirm the correction genuinely closes it, not just in theory.
+- **Verified live end-to-end for both items, real headless Chrome against a real running dev server**
+  (`--headless=new --use-angle=d3d11 --mute-audio`, zero console/page errors across every run, including
+  zero shader-compile warnings from the `onBeforeCompile` GLSL injection). Real evidence: a genuine visible
+  hole (sand ring → visible drop → water) confirmed from 3+ angles including the required shallow grazing
+  angle; the water confirmed sitting near the rim, brim-full, not pooled at the bottom (the exact addendum
+  fix, reproduced broken-then-fixed for a real before/after comparison); two independent, non-adjacent
+  water features open simultaneously, each a real hole, with removing one leaving the other genuinely
+  unaffected; a real building placed between the camera and a water hole confirmed to occlude it correctly
+  from every angle — the precise case that broke the rejected `depthTest` approach, confirmed NOT
+  reproducible in the shipped mechanism; the natural POND/BROOK confirmed rendering exactly as before,
+  including a pre-existing specular-glint artifact independently confirmed (via a control test against the
+  untouched POND) to be unrelated pre-existing material behavior, not a regression; H2's full file list
+  independently re-confirmed untouched. `npx tsc --noEmit` / `npm run build`: both clean, verified
+  independently (by the workflow's own Verify pass — clean, zero findings, no Fix pass needed — and,
+  separately, by direct review of the complete 3-file diff against the live worktree afterward, including
+  independently re-deriving the bank ring's own 4-strip geometry by hand — confirmed to exactly tile the
+  area between the outer bank and the inner hole with zero gap/overlap — and independently verifying,
+  against the real installed `three` package source, that the GLSL injection points used
+  (`#include <common>`, `#include <begin_vertex>`, `void main() {`) each occur exactly once per shader
+  stage, making the plain single-occurrence string replacement used to inject them safe).
+
+**Files changed**: `src/components/fps/PlayerController.tsx` (exports the pre-existing `PLAYER_RADIUS`
+constant, zero behavior change, so `Terrain.tsx` can dev-assert its hole margin against the real live
+value); `src/game/waterworks.ts` (new `PIT_DEPTH=0.6` constant with its own full reasoning doc comment, no
+existing export changed); `src/components/world/Terrain.tsx` (the real work — `HomeMeadow`'s shader-hole
+injection + shared uniforms + matching custom shadow-depth material; `DugWater`'s bank plate → 4-strip
+ring, new pit-wall quads, water plane sunk to sit near the rim).
