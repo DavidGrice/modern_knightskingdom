@@ -12,6 +12,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RectSection } from '@/game/data/grounds';
 import { distanceToRoad, ROAD_REACH, ROAD_TILE, roadGateFor, routeCells } from '@/game/data/road';
 import { POND, BROOK, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '@/game/data/world';
+import type { TerrainRegion } from '@/game/data/terrainRegions';
+import { DOWNS_MAX_GRADIENT, DOWNS_SINK, regionSurfaceY } from '@/game/data/terrainRegions';
+import { DIG_OUTSKIRT } from '@/game/waterworks';
 
 type Kind = 'tree' | 'rock' | 'herb';
 
@@ -45,6 +48,7 @@ interface Tables {
   grounds: GroundRow[];
   landTiers: LandTierRow[];
   cultivatedPlots: PlotRow[];
+  terrainRegions: TerrainRegion[];
 }
 
 type TableName = keyof Tables;
@@ -52,6 +56,7 @@ const TABLE_LABEL: Record<TableName, string> = {
   grounds: 'Grounds',
   landTiers: 'Land Tiers',
   cultivatedPlots: 'Cultivated Plots',
+  terrainRegions: 'Terrain Regions',
 };
 
 // Mirrors grounds.ts's own HOMESTEAD_CLEARANCE constant exactly. Not
@@ -61,11 +66,27 @@ const TABLE_LABEL: Record<TableName, string> = {
 // checking the edit in progress, before it's written to disk.
 const HOMESTEAD_CLEARANCE = 8;
 
-function sectionsOverlapLive(a: RectSection, b: RectSection): boolean {
+// Wave 60 · the structural shape every one of these live checks actually
+// needs (a box's own centre and half-extents) — narrowed down from
+// `RectSection` so a TerrainRegion (which has `half`, not `halfX`/`halfZ`)
+// can be checked by the SAME functions via a `{ x: r.x, z: r.z, halfX:
+// r.half, halfZ: r.half }` view, instead of forking duplicate copies of this
+// math for regions. Every existing call site already passes a variable that
+// structurally satisfies this — TypeScript's excess-property check only
+// applies to object LITERALS, not variables — so this is a safe, local
+// widening, not a behaviour change.
+interface Box { x: number; z: number; halfX: number; halfZ: number }
+
+function sectionsOverlapLive(a: Box, b: Box): boolean {
   return Math.abs(a.x - b.x) < a.halfX + b.halfX && Math.abs(a.z - b.z) < a.halfZ + b.halfZ;
 }
+// Shared by clearsHomesteadLive and terrainRegionProblems's own fence check —
+// was recomputed separately in each place before Wave 60.
+function maxHalfOf(landTiers: LandTierRow[]): number {
+  return landTiers.reduce((m, t) => Math.max(m, t.half), 0);
+}
 function clearsHomesteadLive(s: RectSection, landTiers: LandTierRow[]): boolean {
-  const maxHalf = landTiers.reduce((m, t) => Math.max(m, t.half), 0);
+  const maxHalf = maxHalfOf(landTiers);
   // Wave 17 #4 · mirrors grounds.ts's own clearsHomestead(): the X bound is
   // still the shared `half` (north/east/west), but the Z bound depends on
   // which side of the homestead the section is actually on — `southHalf`
@@ -75,7 +96,7 @@ function clearsHomesteadLive(s: RectSection, landTiers: LandTierRow[]): boolean 
   const zHalf = (s.z >= 0 ? maxSouthHalf : maxHalf) + HOMESTEAD_CLEARANCE;
   return Math.abs(s.x) - s.halfX >= xHalf || Math.abs(s.z) - s.halfZ >= zHalf;
 }
-function crossesRoad(s: RectSection): boolean {
+function crossesRoad(s: Box): boolean {
   const half = ROAD_TILE / 2;
   return routeCells().some(([cx, cz]) => {
     const rx = cx * ROAD_TILE, rz = cz * ROAD_TILE;
@@ -87,13 +108,113 @@ function crossesRoad(s: RectSection): boolean {
 // misses it — a ground dragged clean away from its own spur passes that check
 // happily, leaving the leg pointing at empty grass. Returns the distance so
 // the warning can say how far, since "move it back a bit" is the fix.
-function offRoad(s: RectSection): number {
+function offRoad(s: Box): number {
   const gate = roadGateFor(s);
   return distanceToRoad(gate.x, gate.z);
 }
 
+// Wave 60 · ports terrainRegions.ts's own five dev-mode assertion checks
+// (region overlap, field gradient/rim-buried, homestead fence, dig reach,
+// road/grounds clash) into a LIVE, unsaved-form-state version — the same
+// "check the edit in progress, not what's on disk" reasoning
+// clearsHomesteadLive/crossesRoad above already apply to grounds/plots.
+// `regionSurfaceY`/DOWNS_MAX_GRADIENT/DOWNS_SINK/DIG_OUTSKIRT are imported,
+// not re-derived, so the surface math and every threshold stay the single
+// copy terrainRegions.ts/waterworks.ts already own. Returns both the
+// human-readable messages (for the warnings list) and the offending ids (for
+// problemIds) from one pass, since the per-region sweep below is the one
+// genuinely non-trivial cost in this file's live checks (see this wave's own
+// report: ~18.7k grid points x 4 regionSurfaceY calls per region today).
+function terrainRegionProblems(
+  regions: TerrainRegion[],
+  landTiers: LandTierRow[],
+  grounds: GroundRow[],
+): { messages: string[]; ids: Set<string> } {
+  const messages: string[] = [];
+  const ids = new Set<string>();
+  const boxes = regions.map((r) => ({ r, box: { x: r.x, z: r.z, halfX: r.half, halfZ: r.half } }));
+
+  // 0. no two regions overlap each other
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      if (sectionsOverlapLive(boxes[i].box, boxes[j].box)) {
+        messages.push(`${boxes[i].r.name} and ${boxes[j].r.name} overlap — two regions can never share ground`);
+        ids.add(boxes[i].r.id);
+        ids.add(boxes[j].r.id);
+      }
+    }
+  }
+
+  const fence = maxHalfOf(landTiers);
+  // Mirrors terrainRegions.ts's own `outside()`: a "keep OUT of the square
+  // ±n" test, not a distance — the SYMMETRIC test that file actually uses,
+  // not clearsHomesteadLive's asymmetric north/south homestead test (a region
+  // is a hillside a build fence must stay clear of on every side, not a
+  // section the homestead's own south/north split applies to).
+  const outside = (box: Box, n: number) =>
+    box.z + box.halfZ < -n || box.z - box.halfZ > n || box.x + box.halfX < -n || box.x - box.halfX > n;
+
+  for (const { r, box } of boxes) {
+    // 1. the field itself: walkable everywhere, and back to fully buried
+    //    before the rim — identical 0.5m sweep/central-difference gradient/
+    //    thresholds to terrainRegions.ts's own dev check, run here against
+    //    live (unsaved) field values instead of the file on disk.
+    let maxGrad = 0;
+    let rimHigh = -Infinity;
+    for (let x = r.x - r.half; x <= r.x + r.half; x += 0.5) {
+      for (let z = r.z - r.half; z <= r.z + r.half; z += 0.5) {
+        const gx = (regionSurfaceY(r, x + 0.05, z) - regionSurfaceY(r, x - 0.05, z)) / 0.1;
+        const gz = (regionSurfaceY(r, x, z + 0.05) - regionSurfaceY(r, x, z - 0.05)) / 0.1;
+        maxGrad = Math.max(maxGrad, Math.hypot(gx, gz));
+        if (Math.abs(Math.abs(x - r.x) - r.half) < 2 || Math.abs(Math.abs(z - r.z) - r.half) < 2) {
+          rimHigh = Math.max(rimHigh, regionSurfaceY(r, x, z));
+        }
+      }
+    }
+    if (maxGrad > DOWNS_MAX_GRADIENT) {
+      messages.push(`${r.name}'s field reaches a gradient of ${maxGrad.toFixed(3)} — over ${DOWNS_MAX_GRADIENT}, `
+        + 'the player falls rather than runs down it');
+      ids.add(r.id);
+    }
+    if (rimHigh > -DOWNS_SINK + 1e-6) {
+      messages.push(`${r.name} has a bump reaching ${rimHigh.toFixed(2)} within 2m of the box edge — it will `
+        + 'end in a cliff instead of sinking away under the meadow');
+      ids.add(r.id);
+    }
+
+    // 2. the two bounds every region's box must be chosen against
+    if (!outside(box, fence)) {
+      messages.push(`${r.name} overlaps the widest fence (±${fence}) — buildings would be placed on it`);
+      ids.add(r.id);
+    }
+    if (!outside(box, fence + DIG_OUTSKIRT)) {
+      messages.push(`${r.name} is within digging reach (±${fence + DIG_OUTSKIRT}) of the homestead`);
+      ids.add(r.id);
+    }
+
+    // 3. …and clear of everything already standing in the world
+    if (crossesRoad(box)) {
+      messages.push(`the road runs over ${r.name} — check the tile actually belongs on this hillside`);
+      ids.add(r.id);
+    }
+    for (const g of grounds) {
+      if (sectionsOverlapLive(box, g)) {
+        messages.push(`${g.name} now lies on ${r.name} — its fence, boundary stone and scattered nodes assume `
+          + 'flat ground');
+        ids.add(r.id);
+        ids.add(g.id);
+      }
+    }
+  }
+
+  return { messages, ids };
+}
+
 const KIND_COLOR: Record<Kind, string> = { tree: '#3f8f5b', rock: '#8b8378', herb: '#8b5fa8' };
 const WARN_COLOR = '#c0392b';
+// Wave 60 · terrain regions' own colour — visually distinct earth tone, not
+// reused from KIND_COLOR (a region is elevation, not a resource ground).
+const REGION_COLOR = '#a67c3d';
 
 function num(v: string): number {
   const n = Number(v);
@@ -153,6 +274,7 @@ export default function WorldEditorClient() {
     const idCount = new Map<string, number>();
     for (const s of sections) idCount.set(s.id, (idCount.get(s.id) ?? 0) + 1);
     for (const [id, n] of idCount) if (n > 1) out.push(`id "${id}" is used by ${n} entries — ids must be unique`);
+    out.push(...terrainRegionProblems(tables.terrainRegions, tables.landTiers, tables.grounds).messages);
     return out;
   }, [tables]);
 
@@ -169,6 +291,7 @@ export default function WorldEditorClient() {
         if (sectionsOverlapLive(sections[i], sections[j])) { set.add(sections[i].id); set.add(sections[j].id); }
       }
     }
+    for (const id of terrainRegionProblems(tables.terrainRegions, tables.landTiers, tables.grounds).ids) set.add(id);
     return set;
   }, [tables]);
 
@@ -246,6 +369,13 @@ export default function WorldEditorClient() {
               onChange={(rows) => setTables({ ...tables, landTiers: rows })}
             />
           )}
+          {tab === 'terrainRegions' && (
+            <TerrainRegionsForm
+              rows={tables.terrainRegions}
+              onChange={(rows) => setTables({ ...tables, terrainRegions: rows })}
+              problemIds={problemIds}
+            />
+          )}
 
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
@@ -307,13 +437,37 @@ function MapPreview({ tables, problemIds }: { tables: Tables; problemIds: Set<st
         {tables.cultivatedPlots.map((p) => (
           <SectionRect key={p.id} s={p} dashed problem={problemIds.has(p.id)} />
         ))}
+        {/* terrain regions — solid earth-tone box (real placed elevation,
+            same "solid = real content" convention as grounds above), one
+            dashed unfilled circle per bump keyed to its own radius (reusing
+            STARTER_VILLAGE_CLEAR's own dashed-circle idiom above for a
+            soft/secondary overlay, not a new convention) */}
+        {tables.terrainRegions.map((r) => {
+          const color = problemIds.has(r.id) ? WARN_COLOR : REGION_COLOR;
+          return (
+            <g key={r.id}>
+              <rect
+                x={r.x - r.half} y={r.z - r.half} width={r.half * 2} height={r.half * 2}
+                fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1.2}
+              />
+              {r.bumps.map((b, bi) => (
+                <circle
+                  key={bi} cx={r.x + b.ox} cy={r.z + b.oz} r={b.r}
+                  fill="none" stroke={color} strokeDasharray="2,2" strokeWidth={0.6}
+                />
+              ))}
+            </g>
+          );
+        })}
         {/* origin marker */}
         <circle cx={0} cy={0} r={1.5} fill="#e8e6df" />
       </svg>
       <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, maxWidth: 560 }}>
         Solid = grounds, dashed = cultivated plots. Tan = road, blue = pond/brook, dotted = starter-village
-        clearance. Red = fails a check below (overlap, homestead clearance, road crossing, or too close to
-        the world edge).
+        clearance, earth-brown = terrain regions (solid box = the region&apos;s own field, dashed circles =
+        its bumps). Red = fails a check below (overlap, homestead clearance, road crossing, too close to the
+        world edge, or — for a region — too steep, not fully buried at its rim, inside the build fence/dig
+        reach, or crossing the road/a ground).
       </div>
     </div>
   );
@@ -469,6 +623,75 @@ function LandTiersForm({ rows, onChange }: { rows: LandTierRow[]; onChange: (r: 
         back toward the real east road (Road.tsx's plates start at z=19.2); raising it for one tier without
         checking the road's own position live here is how that bug comes back.
       </div>
+    </div>
+  );
+}
+
+// Wave 60 · a region's own box (id/name/x/z/half) plus a repeatable
+// sub-editor for its `bumps` array — the same Field/inputStyle/RowCard
+// idiom every other form on this page already uses, no new UI dependency.
+function TerrainRegionsForm({ rows, onChange, problemIds }: { rows: TerrainRegion[]; onChange: (r: TerrainRegion[]) => void; problemIds: Set<string> }) {
+  const update = (i: number, patch: Partial<TerrainRegion>) => {
+    const next = rows.slice();
+    next[i] = { ...next[i], ...patch };
+    onChange(next);
+  };
+  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+  const add = () => onChange([...rows, {
+    id: `region_${rows.length + 1}`, name: 'New Region', x: 0, z: -94, half: 30,
+    bumps: [{ ox: 0, oz: 0, r: 20, h: 3 }],
+  }]);
+
+  const updateBump = (i: number, bi: number, patch: Partial<TerrainRegion['bumps'][number]>) => {
+    const bumps = rows[i].bumps.slice();
+    bumps[bi] = { ...bumps[bi], ...patch };
+    update(i, { bumps });
+  };
+  const removeBump = (i: number, bi: number) => update(i, { bumps: rows[i].bumps.filter((_, idx) => idx !== bi) });
+  const addBump = (i: number) => update(i, { bumps: [...rows[i].bumps, { ox: 0, oz: 0, r: 20, h: 3 }] });
+
+  return (
+    <div>
+      {rows.map((r, i) => (
+        <RowCard key={i} problem={problemIds.has(r.id)}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+            <Field label="id"><input style={inputStyle} value={r.id} onChange={(e) => update(i, { id: e.target.value })} /></Field>
+            <Field label="name"><input style={inputStyle} value={r.name} onChange={(e) => update(i, { name: e.target.value })} /></Field>
+            <Field label="x"><input style={inputStyle} type="number" value={r.x} onChange={(e) => update(i, { x: num(e.target.value) })} /></Field>
+            <Field label="z"><input style={inputStyle} type="number" value={r.z} onChange={(e) => update(i, { z: num(e.target.value) })} /></Field>
+            <Field label="half"><input style={inputStyle} type="number" value={r.half} onChange={(e) => update(i, { half: num(e.target.value) })} /></Field>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+              Bumps — raised-cosine hills, offsets from the region&apos;s own centre
+            </div>
+            {r.bumps.map((b, bi) => (
+              <div key={bi} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) auto', gap: 8, marginBottom: 6, alignItems: 'end' }}>
+                <Field label="ox"><input style={inputStyle} type="number" value={b.ox} onChange={(e) => updateBump(i, bi, { ox: num(e.target.value) })} /></Field>
+                <Field label="oz"><input style={inputStyle} type="number" value={b.oz} onChange={(e) => updateBump(i, bi, { oz: num(e.target.value) })} /></Field>
+                <Field label="r"><input style={inputStyle} type="number" value={b.r} onChange={(e) => updateBump(i, bi, { r: num(e.target.value) })} /></Field>
+                <Field label="h"><input style={inputStyle} type="number" value={b.h} onChange={(e) => updateBump(i, bi, { h: num(e.target.value) })} /></Field>
+                <button
+                  onClick={() => removeBump(i, bi)}
+                  style={{ fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', height: 28 }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => addBump(i)}
+              style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}
+            >
+              + Add bump
+            </button>
+          </div>
+
+          <button onClick={() => remove(i)} style={{ marginTop: 10, fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '3px 8px', cursor: 'pointer' }}>Remove region</button>
+        </RowCard>
+      ))}
+      <button onClick={add} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}>+ Add Region</button>
     </div>
   );
 }

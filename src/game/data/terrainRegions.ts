@@ -83,6 +83,7 @@ import { landHalf, MAX_LAND_TIER } from './buildables';
 import { ROAD_TILE, routeCells } from './road';
 import { GROUNDS } from './grounds';
 import { DIG_OUTSKIRT } from '../waterworks';
+import TERRAIN_REGIONS_DATA from './terrainRegions.generated.json';
 
 /** One raised-terrain patch: a square box (the only place inside it where the
  *  ground is not y=0) plus the raised-cosine hills authored inside it. See
@@ -103,24 +104,19 @@ export interface TerrainRegion {
  * meant to be a one-line append here: `homeGroundY`, Minimap.tsx's height
  * bands and navTerrain.ts's exclusion list all derive from this array, not
  * from either region by name.
+ *
+ * Wave 60 · the entries themselves now live in terrainRegions.generated.json,
+ * editable live at /secret/worldeditor's new Terrain Regions tab, instead of
+ * as the literal array this const used to be — the same "editor writes
+ * generated JSON, game imports it" migration grounds.ts already made in Wave
+ * 6 (see that file's own `GROUNDS_DATA` import). Every per-region siting
+ * rationale quoted in this file's header up to Wave 31 is preserved in git
+ * history rather than carried forward into JSON, which has no comment
+ * syntax. `regionAt`, `regionSurfaceY`, `REGION_PEAK` and the dev-mode
+ * assertion block below all read this const purely by reference/name, so the
+ * migration changes no other line in this file.
  */
-export const TERRAIN_REGIONS: TerrainRegion[] = [
-  {
-    id: 'downs', name: 'The North Downs', x: 0, z: -94, half: 34,
-    bumps: [
-      { ox: 0, oz: 0, r: 30, h: 6.4 },        // the crown
-      { ox: -16.8, oz: 17, r: 13, h: 1.7 },   // a spur running off its south-west flank
-    ],
-  },
-  {
-    id: 'westfell', name: 'West Fell', x: -100, z: -94, half: 34,
-    bumps: [
-      { ox: 0, oz: 0, r: 28, h: 5.6 },         // the crown — a touch lower/gentler than the Downs'
-      { ox: -15, oz: 15, r: 12, h: 1.5 },      // north-west shoulder
-      { ox: 14, oz: -16, r: 10, h: 1.1 },      // south-east shoulder — the two give it a twin silhouette
-    ],
-  },
-];
+export const TERRAIN_REGIONS = TERRAIN_REGIONS_DATA as unknown as TerrainRegion[];
 
 /** How far every knoll mesh is sunk into the meadow.
  *

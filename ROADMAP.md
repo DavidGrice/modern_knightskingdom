@@ -10353,3 +10353,62 @@ value); `src/game/waterworks.ts` (new `PIT_DEPTH=0.6` constant with its own full
 existing export changed); `src/components/world/Terrain.tsx` (the real work — `HomeMeadow`'s shader-hole
 injection + shared uniforms + matching custom shadow-depth material; `DugWater`'s bank plate → 4-strip
 ring, new pit-wall quads, water plane sunk to sit near the rim).
+
+## Wave 60: visual terrain-region authoring tool (H5) — SHIPPED 2026-09-17
+
+Twenty-seventh wave of the new 27-wave plan. Not flagged for a dedicated design session — the standard
+Research→Implement→Verify template applied directly.
+
+- [COMPLETE] ✅ **`/secret/worldeditor` gets a 4th table, Terrain Regions, authoring `TERRAIN_REGIONS`
+  visually.** The one real architectural blocker was confirmed and closed cleanly: unlike `GROUNDS`/
+  `LAND_TIERS`/`CULTIVATED_PLOTS` (each already a `.generated.json` import), `TERRAIN_REGIONS` was still a
+  hand-authored literal array directly in `terrainRegions.ts`. Research grepped every real consumer
+  project-wide (`Terrain.tsx`, `Minimap.tsx`, `navTerrain.ts`, `homeGround.ts`, `PlayerController.tsx`,
+  `keep.ts`, `waterworks.ts`) and confirmed every one reads the exported array purely by reference — the
+  migration to `terrainRegions.generated.json` (mirroring `grounds.ts`'s own Wave 6 precedent exactly)
+  changes zero other lines in the file: `regionAt`, `regionSurfaceY`, `REGION_PEAK`, and the file's own
+  real dev-mode assertion block all keep working unchanged against whatever the JSON now holds. The two
+  already-shipped regions (The North Downs, West Fell) migrated byte-for-byte, independently re-verified
+  by direct numeric comparison against the original literal array. **A real correction to the plan's own
+  wording, found and carried through correctly**: the plan's own text cited "BROOK's own dashed circles"
+  as the visual precedent to reuse for a region's bumps — confirmed wrong on direct read: `BROOK` renders
+  as a solid line, not a dashed circle; the actual dashed-circle idiom in the map preview belongs to
+  `STARTER_VILLAGE_CLEAR`'s own soft-advisory-zone convention. The shipped visual design correctly reuses
+  that real precedent instead (a solid earth-brown box for a region's own field, dashed unfilled circles
+  per bump), not the plan's mistaken attribution.
+- [COMPLETE] ✅ **All five of `terrainRegions.ts`'s own real dev-mode safety checks ported into the
+  editor's live, pre-save warnings** — region-vs-region overlap, field gradient + rim-buried sweep
+  (reusing the real, imported `regionSurfaceY`/`DOWNS_MAX_GRADIENT`/`DOWNS_SINK`, never a re-derived copy),
+  the build-fence and dig-reach bounds, and road/grounds clearance — matching this editor's own
+  established "check the edit in progress, not what's on disk" convention every other table's warnings
+  already use. A small, real DRY cleanup along the way: `sectionsOverlapLive`/`crossesRoad`/`offRoad`
+  were narrowed from the grounds-specific `RectSection` type to the minimal structural `Box` shape they
+  actually need, letting a terrain region (which has one `half`, not separate `halfX`/`halfZ`) reuse the
+  exact same, already-proven overlap/road-crossing functions via a square view rather than forking
+  duplicate math — a safe widening confirmed to change no existing call site's behavior.
+- **Verified live end-to-end, real headless Chrome against a real running dev server**
+  (`--headless=new --use-angle=d3d11 --mute-audio`, zero console/page errors across every run). Real
+  evidence: the new tab loads and renders both real shipped regions with correct nested bump editors and
+  matching map-preview boxes/circles; each of the 5 ported checks was forced live and confirmed to fire
+  with the correct message and red highlighting, then clear once fixed; a real add/edit(with a new bump)/
+  remove/save round-trip was verified by reading the actual on-disk `terrainRegions.generated.json`
+  content directly after saving, then confirmed a fresh reload-from-disk shows the same data back; the
+  real live game was booted afterward and both hills confirmed still rendering correctly at their real
+  positions/scale, with `terrainRegions.ts`'s own dev-mode console assertions staying silent for the
+  unmodified data (and correctly firing only when deliberately-bad test data was written) — confirming
+  the migration itself introduced zero regression to the shipped terrain. `npx tsc --noEmit` / `npm run
+  build`: both clean, verified independently (by the workflow's own Verify pass — clean, zero findings,
+  no Fix pass needed — and, separately, by direct review of the complete 5-file diff against the live
+  worktree afterward, including independently re-deriving that the editor's ported `outside()`/gradient-
+  sweep/rim-buried checks are exact, line-for-line-equivalent ports of `terrainRegions.ts`'s own real
+  dev-assertion math, and confirming the migrated JSON's every numeric field matches the original literal
+  array exactly).
+
+**Files changed**: `src/game/data/terrainRegions.generated.json` (new — the 2 existing regions, migrated
+byte-for-byte); `src/game/data/terrainRegions.ts` (literal array → generated-JSON import, header comment
+updated, no other line changed); `src/app/api/worldeditor/save/route.ts` / `data/route.ts` (new
+`terrainRegions` table entry; a `validateRow` branch for the region+bumps shape, including a `bump.r > 0`
+guard against a real divide-by-zero inside `regionSurfaceY`); `src/app/secret/worldeditor/
+WorldEditorClient.tsx` (new `terrainRegions` table/tab; the narrowed `Box`-typed overlap/road helpers; the
+new `terrainRegionProblems` 5-check port folded into the existing warnings; `MapPreview` extended with
+region boxes + bump circles; the new `TerrainRegionsForm` with its nested bump sub-editor).
