@@ -102,6 +102,39 @@ export const WATER_BANK = 1.4;
 export const BANK_Y = 0.02;
 export const WATER_Y = 0.06;
 
+/** Wave 59 (H3) · how far below grade the water itself actually sits once
+ *  Terrain.tsx cuts a real hole in HomeMeadow for it — vertical walls run
+ *  from grade down to this depth at the water rectangle's own edge (the
+ *  SAME zero-margin rect `waterAt`/`featureRect` already use), and the water
+ *  surface fills the pit right up near the top, like a real dug pond or
+ *  moat brim-full of water — not a dry pit with water only at the bottom.
+ *  BANK_Y's existing sand-ring overlay is UNCHANGED by this: it still sits
+ *  on the still-intact meadow just outside the hole, exactly as it does
+ *  today, because only the inner rectangle is ever discarded.
+ *
+ *  A live rendering spike (see this project's own H3 design notes) first
+ *  tried the original proposal — sinking BANK_Y/WATER_Y alone, with no hole
+ *  — and found it completely invisible from every camera angle tested,
+ *  including a shallow near-grazing one: HomeMeadow is one continuous,
+ *  un-carved GLB mesh present at y≈0 across the entire footprint, and
+ *  standard depth testing means that surface always wins against anything
+ *  placed below it. A `depthTest:false` render-order trick was tried next
+ *  and rejected too — confirmed live to paint the water straight through a
+ *  solid wall standing between the camera and it, which real play will hit
+ *  constantly (a moat is explicitly meant to run along a fence). Only an
+ *  actual hole (Terrain.tsx's `HomeMeadow`, fragment-discarding both its
+ *  visible material AND its shadow depth material over this same rectangle)
+ *  renders correctly from every angle and interacts correctly with any
+ *  other real object's own depth.
+ *
+ *  0.6 is modest by design: the meadow bake is only flat to within ~0.6m
+ *  across its entire 2km field (`normalizeTemplateBake`'s own measurement —
+ *  also `DOWNS_SINK`'s reasoning in terrainRegions.ts), and the LOCAL height
+ *  noise under any one water rectangle's own small footprint is far smaller
+ *  than that global figure — this stays safely below it while still reading
+ *  as a real, visible drop. */
+export const PIT_DEPTH = 0.6;
+
 /** The live list, and a revision that ticks on every change. The revision is
  *  what lets NavGrid.rebuild() notice a fresh cut: its own early-out compares
  *  the `buildings` array by IDENTITY, and digging changes no buildings at all,

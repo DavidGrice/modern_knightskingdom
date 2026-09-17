@@ -5,7 +5,10 @@ import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { useKtx2ExtendLoader } from '@/game/gltfKtx2';
 import { WORLD_HALF, POND, BROOK } from '@/game/data/world';
-import { BANK_Y, WATER_BANK, WATER_Y } from '@/game/waterworks';
+import {
+  BANK_Y, MAX_WATERWORKS, PIT_DEPTH, WATER_BANK, WATER_Y,
+} from '@/game/waterworks';
+import { PLAYER_RADIUS } from '@/components/fps/PlayerController';
 import { landHalf, landSouthHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
@@ -149,6 +152,101 @@ export function GameSky({ variant = 'grass' }: { variant?: string }) {
   );
 }
 
+// Wave 59 (H3) · HomeMeadow needs a REAL hole wherever a dug waterway sits —
+// not just a lower plane. A live rendering spike proved the original H3
+// proposal (sink DugWater's bank/water planes below y=0, leave the meadow
+// alone) is a complete dead end: HomeMeadow is one continuous, un-carved GLB
+// mesh present at y≈0 across the entire footprint of every dug rectangle, so
+// standard depth testing means it always wins against anything placed below
+// it, from every camera angle tested — the sunk planes were 100% invisible,
+// including at a shallow near-grazing angle and looking straight down at the
+// dig's own boundary line. A `depthTest:false`/high-`renderOrder` trick was
+// tried next and rejected too: confirmed live to paint the (sunk) water
+// straight through a solid wall standing between the camera and it — real
+// play hits this constantly, since a moat is explicitly meant to run along a
+// fence (see waterworks.ts's own DIG_SNAP note).
+//
+// The fix that actually works: `MeshStandardMaterial.onBeforeCompile`
+// injects a per-fragment world-space rectangle test into HomeMeadow's own
+// cloned materials — `discard` wherever (x,z) falls inside any live
+// `waterworks` rectangle — AND into a matching custom shadow-depth material
+// (`normalizeTemplateBake` sets `castShadow`/`receiveShadow` on every mesh
+// here; without this second patch the invisible-but-still-shadow-casting
+// meadow surface would leave every pit permanently, incorrectly shadowed
+// regardless of the sun's real position). This is real geometry removal at
+// the source, not a depth-buffer workaround, so it interacts correctly with
+// any other real object's own depth from every angle — confirmed live
+// against exactly the wall case that broke the depthTest trick.
+const MAX_WATER_HOLES = MAX_WATERWORKS;
+/** How far inside the water rectangle's own edge the meadow's real hole
+ *  starts, relative to the SAME zero-margin rect `waterAt`/`pushOutOfWater`
+ *  already treat as "inside the water" — 0, so the hole exactly matches
+ *  that rect with no separate inset. Dev-asserted smaller than the real,
+ *  live `PLAYER_RADIUS` import (not a remembered copy of the number) so a
+ *  future author can't widen it into unsafe territory without the assertion
+ *  firing: the player's own real closest approach to that same rectangle is
+ *  bounded below by `PLAYER_RADIUS` — the smaller, binding one of the two
+ *  push-out margins (mobs/defenders use the more generous 0.6) — so as long
+ *  as the hole never reaches farther out than that, nobody can ever end up
+ *  standing over open air with nothing solid underfoot. */
+const WATER_HOLE_MARGIN = 0;
+if (process.env.NODE_ENV !== 'production' && WATER_HOLE_MARGIN >= PLAYER_RADIUS) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[Terrain] WATER_HOLE_MARGIN (${WATER_HOLE_MARGIN}) is not smaller than the real PLAYER_RADIUS `
+    + `(${PLAYER_RADIUS}) — a player could stand directly over HomeMeadow's real cut hole with `
+    + 'nothing solid underfoot.',
+  );
+}
+
+/** One shared, mutated-in-place uniform pair every patched material reads —
+ *  built once and refreshed whenever `waterworks` changes, so every meadow
+ *  material/mesh (and the shared shadow-depth material) stays in lockstep
+ *  without its own copy or its own shader recompile. */
+function makeWaterHoleUniforms() {
+  return {
+    uWaterRects: { value: Array.from({ length: MAX_WATER_HOLES }, () => new THREE.Vector4()) },
+    uWaterRectCount: { value: 0 },
+  };
+}
+type WaterHoleUniforms = ReturnType<typeof makeWaterHoleUniforms>;
+
+/** Injected into both HomeMeadow's real material and its shadow-depth
+ *  material — identical GLSL, different `shader` objects. Three's own
+ *  `MeshStandardMaterial`/`MeshDepthMaterial` templates both carry exactly
+ *  one `#include <common>` (top-level, before `main`) and one `void main() {`
+ *  in each of their vertex/fragment stages — checked directly against the
+ *  installed three version rather than assumed (`node_modules/three/src/
+ *  renderers/shaders/ShaderLib/{meshphysical,depth}.glsl.js`). */
+function patchMeadowShaderForWaterHoles(
+  shader: { uniforms: Record<string, unknown>; vertexShader: string; fragmentShader: string },
+  uniforms: WaterHoleUniforms,
+) {
+  shader.uniforms.uWaterRects = uniforms.uWaterRects;
+  shader.uniforms.uWaterRectCount = uniforms.uWaterRectCount;
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vWorldPosKk;')
+    .replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\nvWorldPosKk = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      '#include <common>',
+      `#include <common>\nvarying vec3 vWorldPosKk;\nuniform vec4 uWaterRects[${MAX_WATER_HOLES}];\n`
+      + 'uniform int uWaterRectCount;',
+    )
+    .replace(
+      'void main() {',
+      `void main() {\n  for (int kkI = 0; kkI < ${MAX_WATER_HOLES}; kkI++) {\n`
+      + '    if (kkI >= uWaterRectCount) break;\n'
+      + '    vec4 kkR = uWaterRects[kkI];\n'
+      + '    if (vWorldPosKk.x > kkR.x && vWorldPosKk.x < kkR.y && vWorldPosKk.z > kkR.z '
+      + '&& vWorldPosKk.z < kkR.w) discard;\n'
+      + '  }\n',
+    );
+}
+
 // Phase 20 step 1: the home terrain IS template-09 ("The Far Meadow") — the
 // one genuinely empty, flat template bake — mounted at the world origin so
 // every existing coordinate (SPAWN, BUILD_REGION, POND, NPCs, saved
@@ -163,6 +261,29 @@ function HomeMeadow() {
   const extendKtx2 = useKtx2ExtendLoader();
   const { scene } = useGLTF('/assets/worlds/template-09.glb', true, true, extendKtx2);
   const { gl } = useThree();
+  const waterworksList = useGameStore((s) => s.waterworks);
+
+  // Wave 59 (H3) · see this function's own header above.
+  const waterHoleUniforms = useMemo(() => makeWaterHoleUniforms(), []);
+  const meadowDepthMaterial = useMemo(() => {
+    const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    m.onBeforeCompile = (shader) => patchMeadowShaderForWaterHoles(shader, waterHoleUniforms);
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const arr = waterHoleUniforms.uWaterRects.value;
+    const n = Math.min(waterworksList.length, MAX_WATER_HOLES);
+    for (let i = 0; i < n; i++) {
+      const w = waterworksList[i];
+      const hx = w.halfX - WATER_HOLE_MARGIN;
+      const hz = w.halfZ - WATER_HOLE_MARGIN;
+      arr[i].set(w.x - hx, w.x + hx, w.z - hz, w.z + hz);
+    }
+    waterHoleUniforms.uWaterRectCount.value = n;
+  }, [waterworksList, waterHoleUniforms]);
+
   const { group, tintables } = useMemo(() => {
     // 'origin' anchor, not the shared default — see normalizeTemplateBake's
     // own doc comment for why the home meadow specifically needs this
@@ -186,12 +307,18 @@ function HomeMeadow() {
           // ground plane is always seen from — anisotropy keeps it legible
           if (clone.map) clone.map.anisotropy = anisotropy;
           if (clone.color) tintables.push({ mat: clone, orig: clone.color.clone() });
+          // Wave 59 (H3) · cut a real hole wherever a dug waterway sits
+          clone.onBeforeCompile = (shader) => patchMeadowShaderForWaterHoles(shader, waterHoleUniforms);
           return clone;
         });
         mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
+        // same discard, so the meadow's own shadow can't blot out the sun
+        // for a pit that's supposed to be open to the sky
+        mesh.customDepthMaterial = meadowDepthMaterial;
       }
     });
     return { group: g, tintables };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, gl]);
 
   useFrame((_, dt) => {
@@ -345,26 +472,75 @@ function DugWater() {
   if (patches.length === 0) return null;
   return (
     <group>
-      {patches.map(({ w, tex }) => (
-        // Wave 31 · sampled once per cut rather than assumed flat — a single
-        // point per rectangle, the same accepted simplification a claimed
-        // destination plot's own ground level already uses. BANK_Y/WATER_Y
-        // stay relative offsets laid on top of this, unchanged.
-        <group key={w.id} position={[w.x, homeGroundY(w.x, w.z), w.z]}>
-          {/* the dug earth thrown up round the cut, exactly the pond's own sand
-              ring generalised from a circle to a rectangle */}
-          <mesh rotation-x={-Math.PI / 2} position-y={BANK_Y} receiveShadow>
-            <planeGeometry args={[(w.halfX + WATER_BANK) * 2, (w.halfZ + WATER_BANK) * 2]} />
-            <meshStandardMaterial color="#c9b878" roughness={1} />
-          </mesh>
-          <mesh rotation-x={-Math.PI / 2} position-y={WATER_Y}>
-            <planeGeometry args={[w.halfX * 2, w.halfZ * 2]} />
-            <meshStandardMaterial
-              map={tex} color="#7fd0dd" roughness={0.3} metalness={0.1} transparent opacity={0.92}
-            />
-          </mesh>
-        </group>
-      ))}
+      {patches.map(({ w, tex }) => {
+        // Wave 59 (H3) · the SAME zero-margin rectangle HomeMeadow's own
+        // shader hole uses (WATER_HOLE_MARGIN, this file), so the wall/water
+        // never drifts out of step with where the meadow is actually cut.
+        const hx = w.halfX - WATER_HOLE_MARGIN;
+        const hz = w.halfZ - WATER_HOLE_MARGIN;
+        const outerX = w.halfX + WATER_BANK;
+        const outerZ = w.halfZ + WATER_BANK;
+        return (
+          // Wave 31 · sampled once per cut rather than assumed flat — a
+          // single point per rectangle, the same accepted simplification a
+          // claimed destination plot's own ground level already uses.
+          // BANK_Y/WATER_Y stay relative offsets laid on top of this,
+          // unchanged.
+          <group key={w.id} position={[w.x, homeGroundY(w.x, w.z), w.z]}>
+            {/* the dug earth thrown up round the cut, exactly the pond's own
+                sand ring generalised from a circle to a rectangle. Wave 59
+                (H3) · a real RING now (4 strips, picture-frame tiled with no
+                gap/overlap) rather than one solid plate — a solid plate here
+                would sit right above the new hole below and hide it all over
+                again, the exact same occlusion failure one layer up. */}
+            {[
+              // north/south: full outer width, from the hole's own edge out
+              // to the bank's outer edge (covers the corners)
+              { pos: [0, BANK_Y, -(outerZ + hz) / 2] as const, w: outerX * 2, d: outerZ - hz },
+              { pos: [0, BANK_Y, (outerZ + hz) / 2] as const, w: outerX * 2, d: outerZ - hz },
+              // east/west: just the middle band between north/south (no
+              // corner overlap)
+              { pos: [(outerX + hx) / 2, BANK_Y, 0] as const, w: outerX - hx, d: hz * 2 },
+              { pos: [-(outerX + hx) / 2, BANK_Y, 0] as const, w: outerX - hx, d: hz * 2 },
+            ].map((strip, i) => (
+              <mesh key={i} rotation-x={-Math.PI / 2} position={strip.pos} receiveShadow>
+                <planeGeometry args={[strip.w, strip.d]} />
+                <meshStandardMaterial color="#c9b878" roughness={1} />
+              </mesh>
+            ))}
+            {/* the pit itself: four vertical walls from grade down to
+                PIT_DEPTH at the hole's own edge, doubleSided since both the
+                inward (seen from above/across) and — at a real dig's own
+                shallow rim angles — occasionally outward face can be in
+                view */}
+            {[
+              { pos: [0, -PIT_DEPTH / 2, -hz] as const, width: hx * 2, rotY: 0 },
+              { pos: [0, -PIT_DEPTH / 2, hz] as const, width: hx * 2, rotY: 0 },
+              { pos: [hx, -PIT_DEPTH / 2, 0] as const, width: hz * 2, rotY: Math.PI / 2 },
+              { pos: [-hx, -PIT_DEPTH / 2, 0] as const, width: hz * 2, rotY: Math.PI / 2 },
+            ].map((wall, i) => (
+              <mesh key={i} position={wall.pos} rotation-y={wall.rotY} receiveShadow>
+                <planeGeometry args={[wall.width, PIT_DEPTH]} />
+                <meshStandardMaterial color="#7a6142" roughness={1} side={THREE.DoubleSide} />
+              </mesh>
+            ))}
+            {/* Wave 59 (H3) addendum · water sits near the pit's own RIM
+                (grade, y=0), not near its floor — WATER_Y is still "how far
+                the water sits from the true ground plane" (y=0), the same
+                small offset it always was above flat grade; only the visible
+                walls/floor moved to PIT_DEPTH below, not the water's own
+                natural resting level relative to grade. This reads as
+                brim-full, per this const's own doc comment in waterworks.ts,
+                rather than a dry pit with water pooled at the bottom. */}
+            <mesh rotation-x={-Math.PI / 2} position-y={-WATER_Y}>
+              <planeGeometry args={[hx * 2, hz * 2]} />
+              <meshStandardMaterial
+                map={tex} color="#7fd0dd" roughness={0.3} metalness={0.1} transparent opacity={0.92}
+              />
+            </mesh>
+          </group>
+        );
+      })}
     </group>
   );
 }
