@@ -1,23 +1,36 @@
 'use client';
-// Wave 15: gamepad panel navigation. A real, deliberately CLOSED v1 slice —
+// Wave 15: gamepad panel navigation. v1 was a deliberately CLOSED slice —
 // OPENING and CLOSING the same handful of panels the keyboard already
 // toggles (mirrors GameScreen.tsx's keydown switch), NOT in-panel cursor/
 // focus navigation.
 //
-// Why not more: none of the 21 PanelId panels have any DOM-focus/click
-// equivalent for a gamepad today, and none of them have a KEYBOARD one
-// either — check keybinds.ts's "Panels" group: every action there OPENS a
-// panel, nothing navigates inside one. Touch already works here for free
-// because a tap synthesizes a real `click` on the underlying <button> DOM
-// element (TouchControls.tsx even hides itself whenever a panel is open,
-// deliberately leaving the screen free for that). A gamepad button press
-// does not synthesize any DOM event at all, so actually selecting a specific
-// inventory slot or crafting recipe with a controller would need a full
-// virtual-cursor or roving-focus system built across ~18 panel components —
-// a genuinely separate, much bigger project than this wave's v1. A
-// controller player still needs a mouse (or OS-level gamepad-to-mouse
-// emulation, e.g. Steam Input) to act INSIDE a panel, exactly as they do
-// today; this component only gets them there and back.
+// Wave 61 (H1) adds that in-panel navigation, at a real but honestly-scoped
+// shape: re-reading every one of the 19 real, reachable PanelId panels
+// (`commands` is dead code — no `setPanel('commands')` call anywhere and
+// Panels.tsx's switch has no case for it) showed the overwhelming majority of
+// their actionable controls are ALREADY real `<button>` elements — natively
+// Tab/Shift-Tab-focusable and Enter/Space-activatable the instant pointer
+// lock releases (PlayerController's pointer-lock effect calls
+// `document.exitPointerLock()` the moment any panel opens). That already
+// worked today, silently, just invisibly (no focus-visible ring) and
+// unreachable by a gamepad specifically, since a gamepad press synthesizes
+// no DOM event at all. So rather than a bespoke system per panel, this is one
+// generic roving-focus rove scoped to the `.game-panel` DOM subtree every
+// panel already shares (confirmed: every one of the 19 panels' root element
+// carries that exact class) — it covers all that already-`<button>` content
+// for free, plus a short, separately-named pass (Panels.tsx, QuestLogPanel/
+// EmoteWheel/NpcEquipPanel) added `tabIndex`+Enter/Space wiring to the
+// specific onClick-`<div>` spots that weren't buttons. This also makes
+// keyboard Tab+Enter an official, visible, working feature (see
+// `.game-panel :focus-visible` in globals.css), not just gamepad.
+//
+// Explicitly still out of scope, permanently: the two HTML5 drag-and-drop
+// equip gestures (InventoryPanel's weapon row, NpcEquipPanel's Armory/gear
+// tiles) — dragging itself is the one interaction pattern a gamepad genuinely
+// cannot do without a full virtual cursor, so those two stay mouse/touch-only
+// exactly as before (their CLICK half is in the rove; their DROP half isn't).
+// Per-direction d-pad rebinding is also declined — see gamepadInput.ts's
+// header comment.
 //
 // Mounted UNCONDITIONALLY in GameWorld.tsx (like ArenaSpawner/AiRuntime),
 // deliberately NOT gated behind `!buildMode` the way CombatController is —
@@ -34,6 +47,11 @@ import { useRef } from 'react';
 import { useGameStore, type PanelId } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import type { GamepadAction } from '@/game/data/gamepadInput';
+
+/** every element the rove/Tab should stop on inside an open panel — mirrors
+ *  what a keyboard's own Tab order already reaches natively, so the two
+ *  input methods land on exactly the same set. */
+const FOCUSABLE_SELECTOR = 'button:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 /** LB / Back-Select / Left-stick-click — matches KEYBIND_GROUPS' own
  *  "Panels" ordering (Inventory, Crafting, Quests are its first three). Only
@@ -54,6 +72,13 @@ const TOGGLE_PANEL: { action: GamepadAction; panel: PanelId }[] = [
 
 export default function GamepadMenuController() {
   const prev = useRef<Record<number, boolean>>({});
+  // Wave 61 (H1) · which panel the LAST frame saw, so opening one (or
+  // switching MenuTabs' tab, which is also just a `setPanel` call) can be
+  // told apart from every other frame where nothing changed — this component
+  // only polls (see header comment), it doesn't subscribe/re-render on
+  // `panel`, so a ref is the right home for "did it change" rather than
+  // reactive state.
+  const lastPanel = useRef<PanelId>('none');
 
   useFrame(() => {
     const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
@@ -112,6 +137,52 @@ export default function GamepadMenuController() {
     // panel open the player never actually pressed since unpausing.
     for (const { action, panel } of TOGGLE_PANEL) {
       if (edge(gpBtn[action]) && !st.paused) st.setPanel(st.panel === panel ? 'none' : panel);
+    }
+
+    // Wave 61 (H1) · in-panel roving focus. d-pad up/down and `confirm` are
+    // tracked UNCONDITIONALLY every frame (edge() called regardless of
+    // whether a panel is open), same reasoning as pause/cancel/TOGGLE_PANEL
+    // above — only the ACTION below is gated on `st.panel`, so a d-pad press
+    // held from before a panel opened doesn't read as a fresh edge the frame
+    // it does.
+    const roveUp = edge(12);
+    const roveDown = edge(13);
+    const confirmEdge = edge(gpBtn.confirm);
+
+    if (st.panel !== lastPanel.current) {
+      // A panel just opened, closed, or swapped for another (MenuTabs'
+      // Satchel/Crafting/Quests/Abilities/Roster/Lore tabs are all just a
+      // `setPanel` call too) — land focus on its first focusable element so
+      // Tab, the rove below, and `confirm` all have somewhere real to start
+      // instead of the page body. Deferred one frame via requestAnimationFrame:
+      // this runs the instant the store updates, before React has committed
+      // the new panel's own DOM (or torn down the old one), so querying
+      // `.game-panel` synchronously here would often still see last frame's.
+      lastPanel.current = st.panel;
+      if (st.panel !== 'none' && typeof document !== 'undefined') {
+        const nextPanel = st.panel;
+        requestAnimationFrame(() => {
+          if (useGameStore.getState().panel !== nextPanel) return; // already moved on
+          const root = document.querySelector('.game-panel');
+          root?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
+        });
+      }
+    } else if (st.panel !== 'none' && typeof document !== 'undefined' && (roveUp || roveDown || confirmEdge)) {
+      const root = document.querySelector('.game-panel');
+      const items = root ? Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) : [];
+      if (items.length > 0) {
+        if (roveUp || roveDown) {
+          const active = document.activeElement as HTMLElement | null;
+          const at = active ? items.indexOf(active) : -1;
+          const next = at === -1 ? 0 : (at + (roveDown ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }
+        // `confirm` (default A) activates whatever's currently focused — a
+        // real DOM `.click()`, so it fires the exact same onClick a mouse
+        // click or a keyboard Enter/Space (via onKeyActivate, see
+        // components/ui/a11yClick.ts) already would, no separate action table.
+        if (confirmEdge) (document.activeElement as HTMLElement | null)?.click();
+      }
     }
 
     prev.current = now;

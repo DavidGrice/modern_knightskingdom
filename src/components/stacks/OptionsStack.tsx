@@ -364,7 +364,8 @@ export default function OptionsStack() {
               ) : (
                 <div className="kk-keys" style={{ marginTop: 10 }}>
                   <div className="kk-opt-note">
-                    Movement, jump, interact and sprint aren&rsquo;t remappable yet — only the eight actions below.
+                    The left stick and d-pad always move — that one stays fixed. Every button below,
+                    including jump/interact/sprint, is remappable.
                   </div>
                   {GAMEPAD_ACTION_GROUPS.map((group) => (
                     <div key={group.label}>

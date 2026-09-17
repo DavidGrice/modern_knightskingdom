@@ -407,6 +407,15 @@ input:focus { border-color: var(--gold); }
   border-image: linear-gradient(90deg, var(--chrome), var(--gold), var(--chrome-2)) 1;
   padding-bottom: 7px;
 }
+/* Wave 61 (H1) · every focusable descendant (a real <button>, or one of the
+   short list of onClick-<div>s that picked up tabIndex this wave) gets a
+   visible ring — this is what makes GamepadMenuController's new roving focus
+   (and plain keyboard Tab, which reaches the exact same elements) actually
+   visible rather than a cursor moving with nothing to show for it. Mirrors
+   kk-tokens.css's `.kk-interactive:focus-visible` convention, just scoped to
+   this file's own `.game-panel` (a different colour token on purpose — gold
+   matches this panel family's own heading/border accent). */
+.game-panel :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .panel-close { position: absolute; top: 10px; right: 14px; background: none; border: none; color: var(--parchment-dark); font-size: 21px; }
 .panel-close:hover { color: var(--gold); }
 

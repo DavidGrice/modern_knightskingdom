@@ -13,6 +13,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import MenuTabs from './MenuTabs';
 import { QUESTS } from '@/game/data/quests';
 import { NPCS, NPC_BY_ID, CEDRIC_WAR_QUESTS, INTERIOR_RESIDENTS, isNpcRevealed, sideQuestBlocker, sideQuestGiverName, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
+import { onKeyActivate } from '../ui/a11yClick';
 import { HOUSE_COLORS } from '@/game/data/allegiance';
 import AllegianceMeter from './AllegianceMeter';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
@@ -188,7 +189,7 @@ function GiverBlock({ npcId }: { npcId: string }) {
 function RegionBlock({ region, open, onToggle }: { region: QuestRegion; open: boolean; onToggle: () => void }) {
   return (
     <div className="quest-region">
-      <div className="quest-region-header" onClick={onToggle}>
+      <div className="quest-region-header" onClick={onToggle} role="button" tabIndex={0} onKeyDown={onKeyActivate(onToggle)}>
         <span className="quest-region-arrow">{open ? '▾' : '▸'}</span>
         <span className="quest-region-icon"><Ico e={region.icon} /></span>
         <span>{region.label}</span>
@@ -273,7 +274,7 @@ export default function QuestLogPanel() {
         </div>
 
         <div className="quest-region">
-          <div className="quest-region-header" onClick={() => toggleRegion('main')}>
+          <div className="quest-region-header" onClick={() => toggleRegion('main')} role="button" tabIndex={0} onKeyDown={onKeyActivate(() => toggleRegion('main'))}>
             <span className="quest-region-arrow">{openRegions.main ? '▾' : '▸'}</span>
             <span className="quest-region-icon">🏰</span>
             <span>The Main Chronicle</span>
