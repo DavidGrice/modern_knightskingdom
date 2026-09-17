@@ -10,6 +10,7 @@ const FILES = {
   grounds: 'grounds.generated.json',
   landTiers: 'landTiers.generated.json',
   cultivatedPlots: 'cultivatedPlots.generated.json',
+  terrainRegions: 'terrainRegions.generated.json',
 } as const;
 
 // Reads straight off disk rather than importing the .generated.json modules

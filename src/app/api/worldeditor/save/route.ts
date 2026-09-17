@@ -8,6 +8,7 @@ const FILES = {
   grounds: 'grounds.generated.json',
   landTiers: 'landTiers.generated.json',
   cultivatedPlots: 'cultivatedPlots.generated.json',
+  terrainRegions: 'terrainRegions.generated.json',
 } as const;
 type TableName = keyof typeof FILES;
 
@@ -33,6 +34,24 @@ function validateRow(table: TableName, row: unknown): string | null {
     // road is, that's what WorldEditorClient's own live preview is for.
     if (!num('walls') || !num('half') || !num('southHalf') || !num('cost') || !str('name')) {
       return 'a land tier needs numeric walls/half/southHalf/cost and a string name';
+    }
+    return null;
+  }
+
+  if (table === 'terrainRegions') {
+    if (!str('id') || !str('name') || !num('x') || !num('z') || !num('half')) {
+      return 'a terrain region needs a string id/name and numeric x/z/half';
+    }
+    if ((row.half as number) <= 0) return 'half must be positive';
+    if (!Array.isArray(row.bumps)) return 'bumps must be an array';
+    for (const b of row.bumps as unknown[]) {
+      if (!isPlainObject(b)) return 'each bump must be an object';
+      const bnum = (k: string) => typeof b[k] === 'number' && Number.isFinite(b[k] as number);
+      if (!bnum('ox') || !bnum('oz') || !bnum('r') || !bnum('h')) return 'each bump needs numeric ox/oz/r/h';
+      // r > 0 isn't literally asked for, but a zero-radius bump divides by
+      // zero inside regionSurfaceY's own `t = hypot(...)/b.r` — the same
+      // class of "obviously-wrong-number" guard halfX/halfZ get below.
+      if ((b.r as number) <= 0) return 'bump r must be positive';
     }
     return null;
   }
