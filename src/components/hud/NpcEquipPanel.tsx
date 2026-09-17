@@ -19,6 +19,7 @@ import { faceThumbFor } from '@/game/data/minifigs';
 import { swatchIndices } from '@/game/data/dyes';
 import { loadPalette } from '@/lib/minifig';
 import DyeRack from './DyeRack';
+import { onKeyActivate } from '../ui/a11yClick';
 import type { CharacterConfig, ItemId, Villager } from '@/game/types';
 
 // Wave 9 · the helmet is the only remaining plain on/off armor slot (one helm
@@ -299,6 +300,13 @@ export default function NpcEquipPanel() {
     else equipVillagerGear(villager!.id, slot);
   }
 
+  // Wave 61 (H1) · pulled out of the plate tile's onClick so onKeyDown
+  // (Enter/Space) can call the exact same logic rather than a second copy.
+  function toggleChestplate(worn: boolean, stock: number, tier: (typeof CHESTPLATES)[number]) {
+    if (worn) unequipVillagerChestplate(villager!.id);
+    else if (stock > 0) equipVillagerChestplate(villager!.id, tier.id);
+  }
+
   function onDrop(e: React.DragEvent, slot: GearSlot) {
     e.preventDefault();
     const item = e.dataTransfer.getData('text/plain') as ItemId;
@@ -361,6 +369,14 @@ export default function NpcEquipPanel() {
                   onClick={() => (worn || stock > 0) && toggle(slot)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onDrop(e, slot)}
+                  // Wave 61 (H1) · the CLICK half only — onDrop above stays a
+                  // permanent mouse/touch-only drag target (a gamepad has no
+                  // virtual cursor to drag with; see GamepadMenuController's
+                  // header comment). Mirrors the click guard: nothing to do
+                  // with no stock and nothing worn, so it's out of the rove.
+                  role={available ? 'button' : undefined}
+                  tabIndex={available ? 0 : -1}
+                  onKeyDown={available ? onKeyActivate(() => toggle(slot)) : undefined}
                   title={worn ? `Click to return to the Armory` : stock > 0 ? `Equip from the Armory (${stock} spare)` : 'No spare in the Armory'}
                 >
                   <div className="icon">{worn ? SLOT_ICON[slot] : stock > 0 ? '➕' : '🔒'}</div>
@@ -380,12 +396,12 @@ export default function NpcEquipPanel() {
                 <div
                   key={c.id}
                   className={`equip-tile ${worn ? 'owned selected' : available ? 'owned' : 'locked'}`}
-                  onClick={() => {
-                    if (worn) unequipVillagerChestplate(villager.id);
-                    else if (stock > 0) equipVillagerChestplate(villager.id, c.id);
-                  }}
+                  onClick={() => toggleChestplate(worn, stock, c)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onPlateDrop(e, c)}
+                  role={available ? 'button' : undefined}
+                  tabIndex={available ? 0 : -1}
+                  onKeyDown={available ? onKeyActivate(() => toggleChestplate(worn, stock, c)) : undefined}
                   title={worn
                     ? `${c.blurb} Click to return it to the Armory.`
                     : stock > 0 ? `${c.blurb} Equip from the Armory (${stock} spare)` : 'No spare in the Armory'}

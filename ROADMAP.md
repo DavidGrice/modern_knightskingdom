@@ -10412,3 +10412,98 @@ guard against a real divide-by-zero inside `regionSurfaceY`); `src/app/secret/wo
 WorldEditorClient.tsx` (new `terrainRegions` table/tab; the narrowed `Box`-typed overlap/road helpers; the
 new `terrainRegionProblems` 5-check port folded into the existing warnings; `MapPreview` extended with
 region boxes + bump circles; the new `TerrainRegionsForm` with its nested bump sub-editor).
+
+## Wave 61: gamepad movement rebinding + in-panel gamepad/keyboard navigation (H1) — SHIPPED 2026-09-17
+
+Twenty-seventh and final wave of the new 27-wave plan. Not one of the 3 items flagged for its own
+dedicated design session — but this project's own comments, in two separate prior waves
+(`gamepadInput.ts`'s and `GamepadMenuController.tsx`'s headers), had already called part of this exact
+item "a real, separate project" and declined to build it, so this Research pass re-verified every claim
+live against the current code before designing anything, matching the honesty discipline the 3 formally
+flagged waves (31, 41, 58, 59) established.
+
+- [COMPLETE] ✅ **Half A · jump/interact/sprint join the gamepad rebind table.** Re-reading
+  `gamepadInput.ts`'s own two-year-old header (its "make every keybind polymorphic" vs "rewrite
+  GameScreen.tsx's panel switch to frame-polled" framing) against the CURRENT `pollGamepad` found both
+  options were solving the wrong layer: `pad[kb.<action>]` is keyed by keyboard CODE STRING only as an
+  arbitrary, consistently-resolved slot name, and nothing about *which gamepad button* triggers that write
+  was ever coupled to it. A much smaller third option — copying the pattern `CombatController.tsx`'s
+  attack/block/swap/dodge already proved — closed the gap for real: `jump`/`interact`/`sprint` (plus a new
+  `confirm`, for Half B) joined `DEFAULT_GAMEPAD_BUTTONS`/`GamepadAction` at their existing default indices
+  (0/2/5/0), `RESERVED_GAMEPAD_BUTTONS` shrank from `{0,2,5,12-15}` to just the d-pad `{12-15}`, and
+  `PlayerController.tsx`'s `pollGamepad` now reads `gpBtn.jump/interact/sprint` instead of the literals —
+  zero changes to `keybinds.ts`, `isDown`, or the keyboard rebinding system. **D-pad movement (and the left
+  stick) stay hardcoded, on purpose and stated plainly**: rebinding a 4-way spatial control one direction
+  at a time destroys the only reason it exists, and the stick is already the primary, fully-analog
+  movement input. The stale "🎮 Controls" cheat-sheet (Panels.tsx) and the Options > Keybinds > Gamepad
+  tab's "aren't remappable yet" note both got fixed to read live button labels instead of a hardcoded
+  default, so a rebound player is never shown a wrong hint — while touching that cheat-sheet line anyway,
+  every OTHER gamepad label on it (attack/block/swap/pause/cancel/menu\*, already rebindable since Wave 33
+  but never reflected there) was made live too, not just the 3 new actions.
+- [COMPLETE] ✅ **Half B · a real, generic in-panel roving-focus + confirm/cancel system — genuinely
+  smaller and more honest than the plan's "~18 bespoke panels" framing, not a scope reduction from it.**
+  Reading all 19 real, reachable `PanelId` panels directly (not skimming) found two corrections to the
+  plan's own text: `gameStore.ts`'s `PanelId` union has 21 members, not ~18, but one (`commands`) is dead
+  code — no `setPanel('commands')` call anywhere and `Panels.tsx`'s render switch has no case for it — so
+  19 are real; and `GamepadMenuController.tsx`'s own claim "no panel has ANY keyboard-focus equivalent" was
+  too strong — the overwhelming majority of actionable controls in essentially every panel are already real
+  `<button>` elements, natively Tab/Enter-reachable the instant pointer lock releases, just invisible (no
+  focus ring) and gamepad-unreachable (a gamepad press synthesizes no DOM event). So rather than a bespoke
+  system per panel, `GamepadMenuController.tsx` gained one generic rove scoped to the `.game-panel` class
+  every one of the 19 panels' root already shares: focuses the first focusable element when `st.panel`
+  changes (including a MenuTabs tab switch, which is also just a `setPanel` call), d-pad up/down edges
+  cycle `document.activeElement` through `.game-panel`'s `button:not(:disabled), [tabindex]:not(...-1)`,
+  and the new `confirm` action (A) calls a real DOM `.click()` on whatever's focused — which fires the
+  exact same `onClick` a mouse or a keyboard Enter/Space already would, needing no separate action table. A
+  new `.game-panel :focus-visible { outline: 2px solid var(--gold); }` rule (globals.css, where `.game-panel`
+  itself actually lives — the design's suggested `kk-screens.css` location was corrected on read) makes
+  this a real, visible, working **keyboard** Tab+Enter feature too, at no extra cost, not just gamepad. A
+  short, separately-named pass added `tabIndex`+Enter/Space wiring to the real minority of onClick-`<div>`s
+  that weren't buttons: `EquipmentSection`'s weapon-equip tile and `InventoryPanel`'s Satchel grid, the
+  `TalentTree` skill nodes and 2 New-Game+ perk-choice rows, and `QuestLogPanel`'s 2 region-header toggles
+  (all in/near `Panels.tsx`/`QuestLogPanel.tsx`), `EmoteWheel`'s icon grid, and `NpcEquipPanel`'s helmet +
+  chestplate-tier equip tiles — each wired with a shared `onKeyActivate` helper (new
+  `components/ui/a11yClick.ts`) that calls the exact same handler the element's `onClick` already used, so
+  no click-guard logic was duplicated. **Declined, explicitly and permanently, exactly as scoped**: the two
+  HTML5 drag-and-drop equip gestures (`InventoryPanel`'s weapon row, `NpcEquipPanel`'s Armory/gear-tile
+  `onDrop` targets) — dragging is the one interaction a gamepad genuinely cannot do without a full virtual
+  cursor, so those stay mouse/touch-only (their *click* half is in the rove; their *drop* half isn't); and
+  per-direction d-pad rebinding (see Half A). Both halves shipped together — they touch disjoint files and
+  are each independently complete and useful; there was no reason to hold one for the other.
+- **Verified live, end to end, both halves functionally, not just by reading the diff.** `npx tsc --noEmit`
+  and `npm run build`: both clean, exit 0. A separate Verify pass — with real generated game assets
+  junction-linked into its own worktree — went past the implementation's own environment limits and
+  actually entered the live 3D world, driving a simulated `navigator.getGamepads` override (the same
+  technique this project's own Wave 33 verification already established) against real gameplay state.
+  **Half A, proven functional, not cosmetic**: before any rebind, holding the default jump button (A)
+  measurably left the ground (`window.__kkp.grounded` flips false, `.y` rises); Options > Keybinds >
+  Gamepad shows the real "Movement" group and the new "Confirm / Activate (in-panel)" entry; rebinding
+  Jump's capture correctly REFUSES a reserved d-pad button and accepts an allowed one (Y); after rebinding,
+  the OLD button (A) no longer jumps while the NEW button (Y) does — measured twice, confirmed genuinely
+  functional, not just a relabeled UI. **Half B, proven functional on 2 real, differently-shaped panels**:
+  opening Quests or Inventory (via the real gamepad panel-toggle actions) lands real DOM focus inside
+  `.game-panel`; d-pad edges move focus forward/back through real, distinct elements (confirmed different
+  between the two panels); `confirm` (A) produces two independent, real click-equivalence proofs — firing
+  it on a roved-to `<button>` (a MenuTabs tab) flips `gameStore.panel` exactly as a mouse click on that same
+  button would, and firing it on the one onClick-`<div>` exception this wave wired (QuestLogPanel's region-
+  header) flips its arrow glyph for real; plain keyboard Tab was independently confirmed reaching the same
+  elements, and the new focus-visible outline was confirmed both in the served stylesheet and visibly
+  rendered in a real screenshot. Wave 15's original 3-panel open/close and pause/back behavior were
+  re-verified unregressed in the same live session. One unrelated, pre-existing, out-of-scope issue was
+  noted for completeness (not a Wave 61 regression, confirmed by re-reading the diff): the Options screen's
+  "ESC TO CLOSE" hint has never actually been backed by a real Escape handler — only its own "Back" button
+  closes it; this predates Wave 61 by untouched lines and is left as a known, separate gap.
+
+**Files changed**: `src/game/data/gamepadInput.ts` (Half A's table: `jump`/`interact`/`sprint`/`confirm`
+actions, a new "Movement" `GAMEPAD_ACTION_GROUPS` entry, `RESERVED_GAMEPAD_BUTTONS` shrunk to the d-pad
+only, header comment rewritten); `src/components/fps/PlayerController.tsx` (`pollGamepad` takes a `gpBtn`
+table and reads `gpBtn.jump/interact/sprint` instead of literals); `src/components/fps/
+GamepadMenuController.tsx` (Half B's roving-focus rove: focus-on-panel-change, d-pad up/down cycling,
+`confirm` → real `.click()`); `src/app/globals.css` (the new `.game-panel :focus-visible` rule);
+`src/components/ui/a11yClick.ts` (new — the shared `onKeyActivate` Enter/Space helper); `src/components/
+stacks/OptionsStack.tsx` (the Gamepad sub-tab's now-stale "aren't remappable yet" note corrected);
+`src/components/hud/Panels.tsx` (live gamepad-label cheat sheet; `tabIndex`/`onKeyActivate` on the weapon-
+equip tile, Satchel grid, TalentTree nodes, 2 perk-choice rows); `src/components/hud/QuestLogPanel.tsx`
+(the 2 region-header toggles); `src/components/hud/EmoteWheel.tsx` (the emote icon grid);
+`src/components/hud/NpcEquipPanel.tsx` (the helmet + chestplate-tier equip tiles; a `toggleChestplate`
+helper pulled out so `onClick`/`onKeyDown` share one implementation).

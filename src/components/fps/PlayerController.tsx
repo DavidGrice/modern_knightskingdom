@@ -133,9 +133,17 @@ function reachRangeFor(type: string, rot: number): number {
 // into a separate `pad` record (not `keys`) so a stick returning to neutral
 // can't be confused with "the keyboard key was never pressed" — the two
 // sources are OR'd together at read time (see `isDown` in the component).
+//
+// Wave 61 (H1) · jump/interact/sprint's button indices now come from
+// `gpBtn` (the live, possibly-rebound settings.gamepadButtons table —
+// data/gamepadInput.ts) instead of being literal 0/2/5 here, the same
+// pattern CombatController.tsx's attack/block/swap/dodge reads already use.
+// D-pad -> movement stays a literal index on purpose (see that file's header
+// comment for why movement itself isn't part of the rebind table).
 function pollGamepad(
   pad: Record<string, boolean>,
   kb: Record<string, string>,
+  gpBtn: Record<string, number>,
   yaw: { current: number },
   pitch: { current: number },
   invertY: boolean,
@@ -180,9 +188,9 @@ function pollGamepad(
   pad[kb.moveBack] = (ly ?? 0) > STICK_DEADZONE || !!dpadDown;
   pad[kb.moveLeft] = (lx ?? 0) < -STICK_DEADZONE || !!dpadLeft;
   pad[kb.moveRight] = (lx ?? 0) > STICK_DEADZONE || !!dpadRight;
-  pad[kb.jump] = !!gp.buttons[0]?.pressed; // A
-  pad[kb.interact] = !!gp.buttons[2]?.pressed; // X (held, matches "Hold E")
-  pad[kb.sprint] = !!gp.buttons[5]?.pressed; // RB
+  pad[kb.jump] = !!gp.buttons[gpBtn.jump]?.pressed; // default A
+  pad[kb.interact] = !!gp.buttons[gpBtn.interact]?.pressed; // default X (held, matches "Hold E")
+  pad[kb.sprint] = !!gp.buttons[gpBtn.sprint]?.pressed; // default RB
 
   // right stick -> look, analog (unlike the digital arrow-key look)
   const turn = 2.4 * dt;
@@ -1500,7 +1508,7 @@ export default function PlayerController() {
     const kb = useAppStore.getState().settings.keybinds;
     const isDown = (code: string) => keys.current[code] || pad.current[code];
     if (!frozen) {
-      pollGamepad(pad.current, kb, yaw, pitch, useAppStore.getState().settings.invertY, dt);
+      pollGamepad(pad.current, kb, useAppStore.getState().settings.gamepadButtons, yaw, pitch, useAppStore.getState().settings.invertY, dt);
       pollTouch(pad.current, kb, yaw, pitch, useAppStore.getState().settings.invertY);
     } else pad.current = {};
 

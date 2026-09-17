@@ -3,6 +3,7 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { EMOTES } from '@/lib/minifigRig';
 import Ico from '../ui/Ico';
+import { onKeyActivate } from '../ui/a11yClick';
 
 export default function EmoteWheel() {
   const setPanel = useGameStore((s) => s.setPanel);
@@ -18,6 +19,9 @@ export default function EmoteWheel() {
             className="inv-slot"
             style={{ cursor: 'pointer' }}
             onClick={() => playEmote(e.clip)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={onKeyActivate(() => playEmote(e.clip))}
             title={e.label}
           >
             <div className="icon" style={{ fontSize: 30 }}><Ico e={e.icon} /></div>

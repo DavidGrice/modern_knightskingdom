@@ -41,8 +41,10 @@ import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, guildMaxRank, guildRankInde
 import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable, talentRespecCost } from '@/game/data/skillTree';
 import { PLAYER_ATTRS, ATTR_POINT_EVERY, attrPointsEarned, attrPointsSpent, respecCost } from '@/game/data/playerAttributes';
 import { BULK_GOODS, isBulkGood, storageCapacity } from '@/game/storage';
+import { gamepadButtonLabel } from '@/game/data/gamepadInput';
 import type { ItemId, Recipe } from '@/game/types';
 import Ico from '../ui/Ico';
+import { onKeyActivate } from '../ui/a11yClick';
 
 function PanelFrame({ title, children }: { title: string; children: React.ReactNode }) {
   const setPanel = useGameStore((s) => s.setPanel);
@@ -166,6 +168,12 @@ function EquipmentSection() {
               draggable={w.owned}
               onDragStart={(e) => e.dataTransfer.setData('text/plain', w.kind)}
               onClick={() => equip(w.kind, w.owned)}
+              // Wave 61 (H1) · the CLICK half only — the drag-to-equip half
+              // above stays mouse/touch-only, a deliberate, permanent scope
+              // cut (see GamepadMenuController.tsx's header comment).
+              role="button"
+              tabIndex={0}
+              onKeyDown={onKeyActivate(() => equip(w.kind, w.owned))}
               title={w.owned ? `Equip ${w.name} (click or drag)` : `Craft a ${w.name} first`}
             >
               <div className="icon">{w.owned ? w.icon : '🔒'}</div>
@@ -246,6 +254,11 @@ function InventoryPanel() {
   const inputModeSetting = useAppStore((s) => s.settings.inputMode);
   const activeDevice = useGameStore((s) => s.activeInputDevice);
   const controlsDevice = resolveInputDevice(inputModeSetting, activeDevice);
+  // Wave 61 (H1) · jump/interact/sprint (and every other gamepad action) are
+  // all independently rebindable now, so this cheat sheet reads the LIVE
+  // button table instead of a hardcoded default label — a rebound player
+  // sees their own actual buttons, not a stale "A"/"X"/"RB".
+  const gpBtn = useAppStore((s) => s.settings.gamepadButtons);
   // Wave 9 · the storage ceiling has to be VISIBLE somewhere before it bites,
   // or the first refusal toast reads as a bug. This is the one screen that
   // already shows what you're holding, so it shows the room left too.
@@ -355,6 +368,13 @@ function InventoryPanel() {
               draggable={!!weaponSlot}
               onDragStart={weaponSlot ? (e) => e.dataTransfer.setData('text/plain', weaponSlot) : undefined}
               onClick={() => usable && use(id as ItemId)}
+              // Wave 61 (H1) · click-to-eat/drink only — a stored weapon's
+              // drag-to-equip (above) has no click equivalent to wire up here
+              // at all, so it's excluded the same way NOT setting tabIndex
+              // already excludes every other non-actionable tile.
+              role={usable ? 'button' : undefined}
+              tabIndex={usable ? 0 : -1}
+              onKeyDown={usable ? onKeyActivate(() => use(id as ItemId)) : undefined}
             >
               <div className="icon"><Ico e={def?.icon ?? '❔'} /></div>
               <div className="iname">{def?.name ?? id}</div>
@@ -375,10 +395,10 @@ function InventoryPanel() {
       </button>
       {showControls && controlsDevice === 'gamepad' && (
         <div className="controls-ref">
-          <b>L-Stick</b>/D-pad move · <b>RB</b> sprint · <b>A</b> jump · <b>X</b> interact<br />
-          <b>RT</b> attack/draw · <b>LT</b> block/aim · <b>Y</b> swap weapon<br />
-          <b>R-Stick</b> look · <b>LB</b> satchel · <b>Back</b> craft · <b>L-Stick click</b> quests<br />
-          <b>Start</b> pause/back · <b>B</b> cancel
+          <b>L-Stick</b>/D-pad move · <b>{gamepadButtonLabel(gpBtn.sprint)}</b> sprint · <b>{gamepadButtonLabel(gpBtn.jump)}</b> jump · <b>{gamepadButtonLabel(gpBtn.interact)}</b> interact<br />
+          <b>{gamepadButtonLabel(gpBtn.attack)}</b> attack/draw · <b>{gamepadButtonLabel(gpBtn.block)}</b> block/aim · <b>{gamepadButtonLabel(gpBtn.swapWeapon)}</b> swap weapon<br />
+          <b>R-Stick</b> look · <b>{gamepadButtonLabel(gpBtn.menuInventory)}</b> satchel · <b>{gamepadButtonLabel(gpBtn.menuCrafting)}</b> craft · <b>{gamepadButtonLabel(gpBtn.menuQuests)}</b> quests<br />
+          <b>{gamepadButtonLabel(gpBtn.pause)}</b> pause/back · <b>{gamepadButtonLabel(gpBtn.cancel)}</b> cancel · <b>{gamepadButtonLabel(gpBtn.confirm)}</b> confirm (in-panel) · <b>{gamepadButtonLabel(gpBtn.dodge)}</b> dodge
         </div>
       )}
       {showControls && controlsDevice === 'touch' && (
@@ -1020,6 +1040,13 @@ function TalentTree() {
                 <div
                   key={t.id}
                   onClick={() => !owned && buyTalent(t.id)}
+                  // Wave 61 (H1) · mirrors the click guard exactly: an
+                  // already-learned node has nothing left to do, so it's
+                  // excluded from the rove/Tab order (tabIndex -1) same as
+                  // its own click already no-ops.
+                  role={owned ? undefined : 'button'}
+                  tabIndex={owned ? -1 : 0}
+                  onKeyDown={owned ? undefined : onKeyActivate(() => buyTalent(t.id))}
                   title={`${t.name} — ${t.desc}${owned ? ' (learned)' : check.ok ? ` · Learn for ${t.cost} pt` : ` · ${check.why}`}`}
                   style={{
                     textAlign: 'center', padding: '5px 3px', borderRadius: 6,
@@ -1247,6 +1274,9 @@ function SkillsPanel() {
               className="quest-item"
               style={{ cursor: 'pointer' }}
               onClick={() => choosePerk(p.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={onKeyActivate(() => choosePerk(p.id))}
             >
               <div className="q-name"><Ico e={p.icon} /> {p.name}</div>
               <div className="q-desc">{p.desc}</div>
@@ -1263,6 +1293,9 @@ function SkillsPanel() {
                   className="quest-item"
                   style={{ cursor: 'pointer', borderColor: 'var(--danger)' }}
                   onClick={() => choosePerk(p.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={onKeyActivate(() => choosePerk(p.id))}
                 >
                   <div className="q-name"><Ico e={p.icon} /> {p.name}</div>
                   <div className="q-desc">{p.desc}</div>
