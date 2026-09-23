@@ -1,4 +1,5 @@
 import type { ItemId } from '../types';
+import type { MarketEntry } from '../types/world';
 import { activeWindow } from './schedule';
 
 // The traveling merchant's ledger. He buys your surplus at these prices and
@@ -111,12 +112,10 @@ export function merchantPresent(time: number): boolean {
 // back," not "wait through one loading screen." The ±25% cap keeps the price
 // bounded on both ends — never free, never worthless — compounding safely
 // with the 1g floor gameStore.ts's buyOffer already clamps to.
-export interface MarketEntry {
-  /** signed supply/demand pressure, clamped to [-1, 1]; 0 = baseline */
-  level: number;
-  /** epoch ms of the last trade that moved this item's level */
-  lastTradeAt: number;
-}
+// CLN-08: the real definition now lives in game/types/world.ts (see that
+// file's own header for why) — re-exported here so every existing importer
+// of `MarketEntry` FROM THIS FILE (gameStore.ts) keeps working unchanged.
+export type { MarketEntry };
 
 /** price swing per unit bought(+)/sold(-), before MARKET_SENSITIVITY scales
  *  it into an actual percentage — see this section's header for the math. */
