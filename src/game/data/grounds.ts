@@ -11,6 +11,7 @@
 // it. Buying the Freehold hands you the quarry; the Manor, the iron seam.
 import { LAND_TIERS, landHalf, landSouthHalf, MAX_LAND_TIER } from './buildables';
 import GROUNDS_DATA from './grounds.generated.json';
+import type { RectSection } from '../types/world';
 
 /**
  * Empire arc, Wave 5 · the rectangle a resource cluster seeds inside, split
@@ -20,29 +21,13 @@ import GROUNDS_DATA from './grounds.generated.json';
  * rectangle (the scatter in gameStore's scatterNodesInRect, the overlap
  * assertions below, Grounds.tsx's fence run) takes one of these, so grounds
  * and plots can never drift apart on geometry.
+ *
+ * CLN-08: the real definition now lives in game/types/world.ts (see that
+ * file's own header for why) — re-exported here so every existing importer
+ * of `RectSection` FROM THIS FILE (WorldEditorClient.tsx, Grounds.tsx,
+ * gameStore.ts) keeps working unchanged.
  */
-export interface RectSection {
-  /** what seeds here */
-  kind: 'tree' | 'rock' | 'herb';
-  /** rock sections can be plain stone or the iron variant */
-  variant?: 'iron';
-  /** centre, and half-extents — sections are RECTANGULAR pieces on the same
-   *  grid the homestead builds on, not circles. A circle cannot be checked
-   *  against a square build region without leaving slivers, and its edge cuts
-   *  across build tiles so a node could seed on half a square. */
-  x: number;
-  z: number;
-  halfX: number;
-  halfZ: number;
-  /** how many nodes seed inside it */
-  count: number;
-  /** may seed inside the pond's shore ring. Only the Home Grove sets this:
-   *  it is deliberately pond-adjacent (its own flavour text is written around
-   *  that walk) and some of its candidates genuinely fall in the ring the
-   *  scatter otherwise keeps clear. Was a literal `g.id !== 'grove'` test
-   *  inside seedNodes before the scatter became section-driven. */
-  pondShore?: boolean;
-}
+export type { RectSection };
 
 export interface Ground extends RectSection {
   id: string;
