@@ -120,13 +120,11 @@ export function clearsHomestead(s: RectSection): boolean {
 if (process.env.NODE_ENV !== 'production') {
   for (const g of GROUNDS) {
     if (!clearsHomestead(g)) {
-      // eslint-disable-next-line no-console
       console.warn(`[grounds] ${g.id} overlaps the fully-bought homestead`);
     }
     for (const o of GROUNDS) {
       if (o.id === g.id) continue;
       if (sectionsOverlap(g, o)) {
-        // eslint-disable-next-line no-console
         console.warn(`[grounds] ${g.id} overlaps ${o.id}`);
       }
     }

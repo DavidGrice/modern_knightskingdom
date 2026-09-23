@@ -63,7 +63,6 @@ export const terrainExclusions: TerrainExclusion[] = [
 ];
 
 if (process.env.NODE_ENV !== 'production' && terrainExclusions.length === 0) {
-  // eslint-disable-next-line no-console
   console.warn('[navTerrain] terrainExclusions is empty — water (and any other traversal-only feature) will be pathable.');
 }
 
@@ -134,7 +133,6 @@ export function terrainBlocks(x: number, z: number, region: string | null): bool
 if (process.env.NODE_ENV !== 'production') {
   for (const r of TERRAIN_REGIONS) {
     if (!terrainBlocks(r.x, r.z, null)) {
-      // eslint-disable-next-line no-console
       console.warn(`[navTerrain] ${r.id} is not covered by a 'blocked' exclusion — the home nav grid `
         + 'reaches ±200m now (Wave 17 #6) and would let a walker route straight onto a hillside that '
         + 'every home-world walker only samples the height of, not the slope of.');

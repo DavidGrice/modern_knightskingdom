@@ -47,6 +47,7 @@ export async function setSessionCookie(userId: string) {
   (await cookies()).set(COOKIE, makeToken(userId), {
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     maxAge: MAX_AGE,
     path: '/',
   });

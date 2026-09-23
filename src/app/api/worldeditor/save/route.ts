@@ -35,6 +35,10 @@ function validateRow(table: TableName, row: unknown): string | null {
     if (!num('walls') || !num('half') || !num('southHalf') || !num('cost') || !str('name')) {
       return 'a land tier needs numeric walls/half/southHalf/cost and a string name';
     }
+    if ((row.walls as number) <= 0) return 'walls must be positive';
+    if ((row.half as number) <= 0) return 'half must be positive';
+    if ((row.southHalf as number) <= 0) return 'southHalf must be positive';
+    if ((row.cost as number) < 0) return 'cost must not be negative';
     return null;
   }
 

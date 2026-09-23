@@ -35,7 +35,6 @@ function DemolishConfirm() {
   const buildings = useGameStore((s) => s.buildings);
   const { ids, refund } = useMemo(
     () => demolishPreview(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [demolishRect, buildings, demolishPreview],
   );
   if (!demolishRect) return null;
@@ -87,7 +86,6 @@ function DigConfirm() {
   const buildings = useGameStore((s) => s.buildings);
   const view = useMemo(
     () => digPreview(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [digRect, buildings, inventory, digPreview],
   );
   if (!digRect) return null;
@@ -234,7 +232,6 @@ export default function BuildBar() {
     if (sort === 'az') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
     else if (sort === 'affordable') list = [...list].sort((a, b) => Number(affordable(b)) - Number(affordable(a)));
     return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, search, sort, hideUnavailable, unlocks, canAfford]);
 
   return (
@@ -388,7 +385,6 @@ export default function BuildBar() {
                     {costBill(b).map((line) => (
                       <span className="b-cost-part" key={line.key} title={line.label}>
                         {line.thumb
-                          // eslint-disable-next-line @next/next/no-img-element
                           ? <img className="b-cost-thumb" src={line.thumb} alt="" />
                           : <span>{line.icon}</span>}
                         {line.qty}

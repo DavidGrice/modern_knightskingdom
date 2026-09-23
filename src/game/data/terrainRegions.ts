@@ -202,7 +202,6 @@ export const REGION_PEAK: Record<string, number> = Object.fromEntries(
 // ---------------------------------------------------------------------------
 if (process.env.NODE_ENV !== 'production') {
   const warn = (msg: string) => {
-    // eslint-disable-next-line no-console
     console.warn(`[terrainRegions] ${msg}`);
   };
   const overlaps = (

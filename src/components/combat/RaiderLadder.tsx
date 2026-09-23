@@ -20,6 +20,7 @@
 import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useGameStore } from '@/game/store/gameStore';
 import { raiderLadderState } from '@/game/raiderLadder';
 import RiggedProp from '../world/RiggedProp';
 import { homeGroundY } from '../world/TemplateWorld';
@@ -35,6 +36,7 @@ export default function RaiderLadder() {
   const group = useRef<THREE.Group>(null);
 
   useFrame((_, rawDt) => {
+    if (useGameStore.getState().paused) return;
     const g = group.current;
     if (!g) return;
     if (!raiderLadderState.active) {

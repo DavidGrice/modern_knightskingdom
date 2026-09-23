@@ -56,7 +56,6 @@ export default function KeepSocketPanel() {
                   onClick={() => raise(socket.id, part.id)}
                   title={afford ? `Raise a ${part.name}` : 'You are short of pieces'}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="keep-option-thumb" src={part.thumb} alt="" />
                   <div className="keep-option-body">
                     <div className="keep-option-name">{part.name}</div>
@@ -72,7 +71,6 @@ export default function KeepSocketPanel() {
                             title={`${brickLabel(id as ItemId, ITEMS[id as ItemId]?.name ?? id)} — you have ${have}`}
                           >
                             {brick
-                              // eslint-disable-next-line @next/next/no-img-element
                               ? <img className="b-cost-thumb" src={brick.thumb} alt="" />
                               : <span>{ITEMS[id as ItemId]?.icon ?? id}</span>}
                             {n}

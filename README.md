@@ -13,6 +13,9 @@ npm run dev              # http://localhost:3000
 ```
 
 `data/` (created at runtime) holds user accounts, sessions and server-side save games.
+**`npm run dev` deletes it on every restart** (see `predev` in `package.json`) — a deliberate
+clean-slate-per-session choice for local dev, not a bug, but it means local accounts/saves do not
+survive a dev-server restart.
 
 ### This repository is source only
 
@@ -84,9 +87,9 @@ See `.gitignore`.
 - **Crossbow & longbow** — craft either at the workbench once you know Smithing. Q cycles melee → crossbow → longbow. The crossbow (+ bolts) looses instantly on LMB with RMB zoom; the longbow (+ arrows, wood alone — no forge needed) is a hold-and-release draw, weak or rejected if released too early, full power and damage at a ~1.1s full draw. The HUD tracks whichever quiver is loaded and shows a draw meter for the bow.
 - **Minimap** — top-right HUD map with player arrow, resources (iron veins in rust), buildings, enemies in red, King Leo, pond and the build region; M enlarges it.
 - **Iron veins** — dark rust-flecked boulders east of the stone field guarantee iron ore once Mining is learned.
-- **Build menu 2.0** — category tabs (Essentials / Defense / Walls / Bricks / Windows & Decor / Towers & Roofs) with search across 153 pieces, including 133 original workshop pieces (bricks, wall sections, arches, towers, roof slopes, tiles, trim) at true LEGO proportions with their original thumbnails. Pieces stack vertically with support rules and 3D collision; bricks snap to a stud-pitch sub-grid; the placement ghost rotates (R) exactly like the real piece will. Click a placed piece to move it, U to undo.
+- **Build menu 2.0** — category tabs (Essentials / Defense / Walls / Bricks / Windows & Decor / Towers & Roofs) with search across a large, growing catalog of real extracted workshop pieces (bricks, wall sections, arches, towers, roof slopes, tiles, trim) at true LEGO proportions with their original thumbnails — see `BRICK_CATALOG.md` for the audited piece-by-piece ground truth rather than a count here, which drifts as the catalog grows. Pieces stack vertically with support rules and 3D collision; bricks snap to a stud-pitch sub-grid; the placement ghost rotates (R) exactly like the real piece will. Click a placed piece to move it, U to undo.
 - **Skills & ranks** — Woodcutting, Building, Mining, Smithing, Fishing with XP levels; total level drives rank: Peasant → Laborer → Squire → Knight → Paladin. Crossing into Knight or Paladin triggers a short scripted ceremony: movement freezes, you're teleported before King Leo in third person, he draws his sword and congratulates you (`anim_r_gesturepullsword` / `anim_r_congratulate`) while you answer with a regal wave, under a gold ceremony banner — then control returns and the rank sticks for good.
-- **Quest chain** — 8 quests from "First Steps" to "Paladin's Keep"; quests unlock abilities (mining, smithing, fishing) and buildables.
+- **Quest chain** — 11 quests from "First Steps" to "Paladin's Keep"; quests unlock abilities (mining, smithing, fishing) and buildables.
 - **Gathering & crafting** — chop trees / mine boulders / fish the pond (hold **E**); craft by hand or at stations you build (workbench, forge, campfire).
 - **Aerial build mode** (**B**) — top-down orthographic camera, grid-snapped placement with green/red validity ghost (region bounds + AABB collision + material costs), rotate with **R**, right-click to demolish (half refund). Structures use the original castle wall / tower / gate / keep models.
 - **Persistence** — autosave every 20s to the server (or localStorage for guests); continue from the main menu.

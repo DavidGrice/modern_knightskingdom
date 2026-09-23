@@ -40,7 +40,6 @@ if (process.env.NODE_ENV !== 'production') {
       const rx = cx * ROAD_TILE;
       const rz = cz * ROAD_TILE;
       if (Math.abs(g.x - rx) < g.halfX + half && Math.abs(g.z - rz) < g.halfZ + half) {
-        // eslint-disable-next-line no-console
         console.warn(`[grounds] ${g.id} lies across the road at tile ${cx},${cz}`);
       }
     }
@@ -56,7 +55,6 @@ if (process.env.NODE_ENV !== 'production') {
     const gate = roadGateFor(g);
     const d = distanceToRoad(gate.x, gate.z);
     if (d > ROAD_REACH) {
-      // eslint-disable-next-line no-console
       console.warn(
         `[grounds] ${g.id}'s gate (${gate.x.toFixed(1)}, ${gate.z.toFixed(1)}) is ${d.toFixed(1)}m off the `
         + `carriageway — no leg of road.ts's LEGS reaches it`,

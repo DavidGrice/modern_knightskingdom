@@ -54,7 +54,14 @@ function describe(save: SaveGame): SlotInfo {
 }
 
 export default function MainMenu() {
-  const { user, guest, hasSave, push, resetTo, setUser, setGuest, settings } = useAppStore();
+  const user = useAppStore((s) => s.user);
+  const guest = useAppStore((s) => s.guest);
+  const hasSave = useAppStore((s) => s.hasSave);
+  const push = useAppStore((s) => s.push);
+  const resetTo = useAppStore((s) => s.resetTo);
+  const setUser = useAppStore((s) => s.setUser);
+  const setGuest = useAppStore((s) => s.setGuest);
+  const uiTheme = useAppStore((s) => s.settings.uiTheme);
   const loadFromSave = useGameStore((s) => s.loadFromSave);
   const [loading, setLoading] = useState(false);
   const [slot, setSlot] = useState<SlotInfo | null>(null);
@@ -131,7 +138,7 @@ export default function MainMenu() {
   }
 
   return (
-    <div className={`kk-screen kk-screen-scroll kk-screen-${settings.uiTheme}`}>
+    <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
       <div className="kk-menu-body">
         <div className="kk-menu-rail">
           <div className="kk-menu-word">KNIGHTS&apos;<br />KINGDOM</div>

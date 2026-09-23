@@ -191,7 +191,6 @@ const MAX_WATER_HOLES = MAX_WATERWORKS;
  *  standing over open air with nothing solid underfoot. */
 const WATER_HOLE_MARGIN = 0;
 if (process.env.NODE_ENV !== 'production' && WATER_HOLE_MARGIN >= PLAYER_RADIUS) {
-  // eslint-disable-next-line no-console
   console.warn(
     `[Terrain] WATER_HOLE_MARGIN (${WATER_HOLE_MARGIN}) is not smaller than the real PLAYER_RADIUS `
     + `(${PLAYER_RADIUS}) — a player could stand directly over HomeMeadow's real cut hole with `
@@ -269,7 +268,6 @@ function HomeMeadow() {
     const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     m.onBeforeCompile = (shader) => patchMeadowShaderForWaterHoles(shader, waterHoleUniforms);
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -318,7 +316,6 @@ function HomeMeadow() {
       }
     });
     return { group: g, tintables };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, gl]);
 
   useFrame((_, dt) => {
@@ -354,7 +351,6 @@ function Stream() {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = anisotropy;
     return t;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const fallTexture = useMemo(() => {
     const t = new THREE.TextureLoader().load('/assets/textures/water/spr203_64x128.png');
@@ -363,7 +359,6 @@ function Stream() {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = anisotropy;
     return t;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // from the pond's northeast edge out to the spring mound (data/world.ts's
   // BROOK — shared with the pail-filling interact since Wave 5)
@@ -447,7 +442,6 @@ function DugWater() {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = anisotropy;
     return t;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // rebuilt only when the LIST changes (a cut, a fill, a load), which is also
   // where the previous clones are released — a moat dug and filled twenty times
@@ -721,7 +715,6 @@ export default function Terrain() {
     t.anisotropy = anisotropy;
     t.repeat.set(3, 3);
     return t;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useFrame((_, dt) => {

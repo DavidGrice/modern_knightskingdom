@@ -122,7 +122,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     ? (elevated ? keepPart!.walkway! : homeGroundY(postX, postZ))
     : elevated ? (station!.y ?? 0) + heightOf('tower') : homeGroundY(postX, postZ);
 
-  const ds = useMemo(() => registerDefender(villager.id, postX, postY, postZ), [villager.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ds = useMemo(() => registerDefender(villager.id, postX, postY, postZ), [villager.id]);
   ds.postX = postX; ds.postY = postY; ds.postZ = postZ; ds.elevated = elevated;
   // Shieldwall companion trait: +8 max health; worn armor adds its own
   // smaller bonus on top (chestplate guards the body, helmet the head)

@@ -15,7 +15,8 @@ import { loadDragonRig } from '@/components/world/DragonOmen';
 // live spawn code itself calls, not `useGLTF.preload`
 const ENEMY_DONORS = [
   'minifigskeleton00', 'minifigweezil00', 'minifiggilbertbad01',
-  'minifigcedricbull00', 'minifigprincessstorm00', 'minifigrichardstrong01',
+  'minifigcedricbull00', 'minifigprincessstorm00', 'minifigrichardstrong02',
+  'minifiggilbertbad02', 'minifigweezil01', 'minifigcedricbull04', 'minifiggilbertbad03',
 ];
 
 let warmed = false;

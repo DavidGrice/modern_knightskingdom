@@ -2134,7 +2134,7 @@ function createGameStore() {
 
     deleteBlueprint: (id) => {
       const st = get();
-      set({ customBlueprints: st.customBlueprints.filter((b) => b.id !== id) });
+      set({ customBlueprints: st.customBlueprints.filter((b) => b.id !== id), dirty: true });
     },
 
     evalBlueprintPlacement: (blueprintId, x, z, rot) => {
