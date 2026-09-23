@@ -14,7 +14,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
-import { BUILDABLE_BY_ID } from '@/game/data/buildables';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import { MODULE_HEIGHT, SET_PLANS, loadModuleParts, locateStep, type BuildPart } from '@/lib/setBuild';
 
@@ -122,15 +121,7 @@ export default function WorkshopBench() {
         <boxGeometry args={[2.2, 0.12, 1.6]} />
         <meshStandardMaterial color="#6a4a2a" roughness={0.95} />
       </mesh>
-      {/* eslint-disable-next-line react/no-unknown-property */}
       <pointLight position={[0, MODULE_HEIGHT + 0.6, 0.8]} intensity={4} distance={5} color="#ffe6b0" />
     </group>
   );
-}
-
-/** the buildables a completed set unlocks, so finishing one is worth doing */
-export function unlockedBy(setNum: string): string[] {
-  const plan = SET_PLANS[setNum];
-  if (!plan) return [];
-  return plan.modules.map((m) => m.asset).filter((a) => !!BUILDABLE_BY_ID[a]);
 }

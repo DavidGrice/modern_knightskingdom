@@ -97,7 +97,6 @@ export default function BuildingMenuPanel() {
                   onClick={() => mountCharge(b.id, c.id)}
                   title={already ? 'This wall already carries a charge' : undefined}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="keep-option-thumb" src={c.thumb} alt="" />
                   <div className="keep-option-body">
                     <div className="keep-option-name">{c.name}</div>
@@ -115,7 +114,6 @@ export default function BuildingMenuPanel() {
                         return (
                           <span key={line.key} className={`b-cost-part${have >= line.qty ? '' : ' short'}`}>
                             {line.thumb
-                              // eslint-disable-next-line @next/next/no-img-element
                               ? <img className="b-cost-thumb" src={line.thumb} alt="" />
                               : <span>{line.icon}</span>}
                             {line.qty}

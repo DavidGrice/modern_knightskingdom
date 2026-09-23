@@ -117,7 +117,6 @@ export default function RiggedFigure({
       })
       .catch((e) => console.error('rig assembly failed', e));
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.headDonor, config.bodyDonor, config.armColor, config.handColor, config.legColor, config.hipColor, height, keepProps]);
 
   useEffect(() => {

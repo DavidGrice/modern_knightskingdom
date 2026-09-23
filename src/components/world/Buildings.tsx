@@ -1,6 +1,6 @@
 'use client';
 import { Suspense, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PositionalAudio } from '@react-three/drei';
 import { quintainSpins } from '@/game/siege';
@@ -418,7 +418,7 @@ function ConstructionSite({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding
   );
 }
 
-export function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; originOffset?: { x: number; z: number } }) {
+function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; originOffset?: { x: number; z: number } }) {
   const def = BUILDABLE_BY_ID[b.type];
   if (!def) return null;
   // Wave 9 · a freeform piece renders at its TRUE facing; everything else (and
@@ -551,7 +551,7 @@ export default function Buildings() {
       {buildings.map((b) => (
         <group
           key={b.id}
-          onClick={(e: any) => {
+          onClick={(e: ThreeEvent<MouseEvent>) => {
             const st = useGameStore.getState();
             if (!st.buildMode || st.buildSelection || st.movingBuilding) return;
             // Wave 9 · while the wrecking tool is out the left button belongs
@@ -563,10 +563,10 @@ export default function Buildings() {
             // than picking it up unasked — moving is one of the answers
             st.openBuildingMenu(b.id);
           }}
-          onContextMenu={(e: any) => {
+          onContextMenu={(e: ThreeEvent<MouseEvent>) => {
             if (!buildMode) return;
             e.stopPropagation();
-            (e as { nativeEvent?: Event }).nativeEvent?.preventDefault?.();
+            e.nativeEvent.preventDefault();
             removeBuilding(b.id);
           }}
         >
@@ -596,17 +596,17 @@ export function DestinationBuildings({ dest }: { dest: WorldDestination }) {
       {buildings.map((b) => (
         <group
           key={b.id}
-          onClick={(e: any) => {
+          onClick={(e: ThreeEvent<MouseEvent>) => {
             const st = useGameStore.getState();
             if (!st.buildMode || st.buildSelection || st.movingBuilding) return;
             if (st.buildTool === 'demolish') return;
             e.stopPropagation();
             st.openBuildingMenu(b.id);
           }}
-          onContextMenu={(e: any) => {
+          onContextMenu={(e: ThreeEvent<MouseEvent>) => {
             if (!buildMode) return;
             e.stopPropagation();
-            (e as { nativeEvent?: Event }).nativeEvent?.preventDefault?.();
+            e.nativeEvent.preventDefault();
             removeBuilding(b.id);
           }}
         >

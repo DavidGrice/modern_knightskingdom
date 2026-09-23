@@ -65,19 +65,16 @@ export function plotStakeAt(def: CultivatedPlot): { x: number; z: number } {
 if (process.env.NODE_ENV !== 'production') {
   for (const p of CULTIVATED_PLOTS) {
     if (!clearsHomestead(p)) {
-      // eslint-disable-next-line no-console
       console.warn(`[plots] ${p.id} overlaps the fully-bought homestead`);
     }
     for (const g of GROUNDS) {
       if (sectionsOverlap(p, g)) {
-        // eslint-disable-next-line no-console
         console.warn(`[plots] ${p.id} overlaps the ground ${g.id}`);
       }
     }
     for (const o of CULTIVATED_PLOTS) {
       if (o.id === p.id) continue;
       if (sectionsOverlap(p, o)) {
-        // eslint-disable-next-line no-console
         console.warn(`[plots] ${p.id} overlaps ${o.id}`);
       }
     }

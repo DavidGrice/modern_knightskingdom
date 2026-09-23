@@ -216,13 +216,16 @@ function pollTouch(
 ) {
   if (!touchState.active) return;
   const dz = 0.3; // virtual-stick deadzone — thumbs drift more than a real analog stick
-  pad[kb.moveForward] = touchState.moveY < -dz;
-  pad[kb.moveBack] = touchState.moveY > dz;
-  pad[kb.moveLeft] = touchState.moveX < -dz;
-  pad[kb.moveRight] = touchState.moveX > dz;
-  pad[kb.jump] = touchState.jump;
-  pad[kb.interact] = touchState.interact;
-  pad[kb.sprint] = touchState.sprint;
+  // OR-merge, not overwrite: pollGamepad already ran this frame, and on a
+  // hybrid device (touch + a connected gamepad) a `false` touch channel must
+  // not clear a `true` the gamepad just set for the same action.
+  pad[kb.moveForward] = pad[kb.moveForward] || touchState.moveY < -dz;
+  pad[kb.moveBack] = pad[kb.moveBack] || touchState.moveY > dz;
+  pad[kb.moveLeft] = pad[kb.moveLeft] || touchState.moveX < -dz;
+  pad[kb.moveRight] = pad[kb.moveRight] || touchState.moveX > dz;
+  pad[kb.jump] = pad[kb.jump] || touchState.jump;
+  pad[kb.interact] = pad[kb.interact] || touchState.interact;
+  pad[kb.sprint] = pad[kb.sprint] || touchState.sprint;
 
   // look-drag deltas are per-event accumulations since last frame (mirrors
   // mouse movementX/Y) — apply with the same sensitivity formula the mouse

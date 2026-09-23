@@ -34,6 +34,7 @@ export default function RaiderRam() {
   const yaw = useRef(0);
 
   useFrame((_, rawDt) => {
+    if (useGameStore.getState().paused) return;
     const g = group.current;
     if (!g) return;
     if (!raiderRamState.active) {

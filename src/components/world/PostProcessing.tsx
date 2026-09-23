@@ -103,7 +103,6 @@ function useContextLossRecovery(gl: THREE.WebGLRenderer) {
     const el = gl.domElement;
     const onLost = (e: Event) => {
       e.preventDefault();
-      // eslint-disable-next-line no-console
       console.error('[webgl] context lost — reloading to recover');
     };
     const onRestored = () => window.location.reload();
@@ -120,7 +119,9 @@ export default function PostProcessing() {
   const aaMode = useAppStore((s) => s.settings.aaMode);
   const wetEligible = useAppStore((s) => GRAPHICS_PROFILES[s.settings.graphicsQuality].wetPostProcess);
   const { gl, scene, camera, size } = useThree();
-  if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkgl = gl;
+  useEffect(() => {
+    if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkgl = gl;
+  }, [gl]);
   useContextLossRecovery(gl);
   const composerRef = useRef<EffectComposer | null>(null);
   // every pass instance added this mode, tracked for disposal — including
@@ -219,7 +220,6 @@ export default function PostProcessing() {
       fxaaPassRef.current = null;
       wetPassRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, scene, camera, aaMode, wetEligible]);
 
   // Resize/pixel-ratio sync — useLayoutEffect so a mid-resize frame never

@@ -69,7 +69,6 @@ export default function DialoguePanel() {
     } else {
       audio.playVoice(npc.greetSound, 0.9);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // closing the parchment (any path — ✕, Continue, Esc) silences whatever

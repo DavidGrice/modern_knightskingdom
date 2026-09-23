@@ -58,7 +58,6 @@ export function usePortrait(config: CharacterConfig): string | null {
   }, []);
   useEffect(() => {
     requestPortrait(config);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return cache.get(key) ?? null;
 }
@@ -131,7 +130,6 @@ export function PortraitFactory() {
     takeNext();
     listeners.add(takeNext);
     return () => { listeners.delete(takeNext); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDone = () => {

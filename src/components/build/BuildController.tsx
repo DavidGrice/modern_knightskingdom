@@ -500,7 +500,6 @@ export default function BuildController() {
   useEffect(() => {
     if (!activeType || ghost) return;
     setGhost(snapPoint(new THREE.Vector3(center.current.x, 0, center.current.z)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeType]);
 
   /**
@@ -566,7 +565,6 @@ export default function BuildController() {
       if (!ok) stopped = true; else taken.push(c);
       return { x: c.x, z: c.z, y: ev.y, ok };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeType, rowCells, useRot, rowAfford, evalPlacement, buildings]);
 
   // Wave 9 · what the marquee currently covers, live while dragging and again
@@ -587,7 +585,6 @@ export default function BuildController() {
   const waterRect = buildTool === 'dig' ? (dragRect ?? digRect) : digRect;
   const waterEval = useMemo(
     () => digPreview(waterRect),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [waterRect, digPreview, buildings],
   );
 

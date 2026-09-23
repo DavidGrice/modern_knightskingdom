@@ -327,7 +327,6 @@ function InventoryPanel() {
               style={full ? { borderColor: 'var(--gold)' } : undefined}
               title={`${brickLabel(id as ItemId, def?.name ?? id)} — gathered as ${def?.name ?? id}${isBulkGood(id as ItemId) ? ` · ${n}/${cap} stored${full ? ' (FULL)' : ''}` : ''}`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img className="brick-thumb" src={brick.thumb} alt="" />
               <div className="iname">{brickLabel(id as ItemId, def?.name ?? id)}</div>
               {(n ?? 0) > 1 && <div className="count">{n}</div>}

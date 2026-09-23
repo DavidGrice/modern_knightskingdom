@@ -16,7 +16,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { difficultyState } from '@/game/difficulty';
-import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
+import { dragonAir } from '@/game/dragonAir';
 
 const C = '/assets/props/creatures/';
 const FLIGHT_SECONDS = 26;
@@ -40,14 +40,6 @@ export interface DragonRig {
   tail: THREE.Group;
   head: THREE.Group;
 }
-
-// Wave 57 (F5): dragonAir/dragonAirBlack now live in game/dragonAir.ts (a
-// zero-dependency leaf module — see its own header comment for why) and are
-// simply re-exported here so every existing importer of THIS file
-// (DragonSiege.tsx, BlackDragonSiege.tsx before this wave) keeps working
-// unchanged. New code should prefer importing from '@/game/dragonAir'
-// directly — CedricSiege.tsx, Defenders.tsx and ai/actions/flee.ts do.
-export { dragonAir, dragonAirBlack };
 
 export type DragonVariant = 'green' | 'black';
 
