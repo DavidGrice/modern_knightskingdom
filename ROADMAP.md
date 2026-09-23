@@ -12,6 +12,292 @@ assets that actually exist in the extraction (`resources/model_files/extracted/�
 
 ---
 
+## 🔎 Reconciled status — 2026-09-23 [CURRENT]
+
+A full codebase-vs-roadmap reconciliation pass (16 independent readers covering every line of this file, each open item then checked against the real, current code) ran on 2026-09-23. It found that the large majority of items this file's scattered [TODO]/'left open'/'not started' markers point to were actually shipped in a later wave and simply never retagged. **This section is now the single source of truth for what remains open** — the older per-wave sections below are kept for their implementation detail and are NOT reliable status indicators on their own; several are explicitly marked ⚠️ SUPERSEDED where their header tag actively disagreed with their own body.
+
+A companion document, [`CLEANUP_PLAN.md`](./CLEANUP_PLAN.md), covers the *codebase* (not feature) cleanup this pass also produced — 35 concrete refactor initiatives to make the ~65k-line src/ tree easier to extend and scale.
+
+### Shipped, by era (Phases 20 onward — Phases 0–19 recap is unchanged, just below)
+
+**Phase 20 — Homestead becomes one instance among many (2026-07-18/19)**
+- Home moved onto the Template-09 (Far Meadow) bake at the existing origin
+- Court NPCs evicted to their own destinations (King/Queen to King's Approach, Richard to Tourney Grounds, John to River Landing)
+- Storm, Cedric's camp, and jousting relocated to their own dioramas with terrain-following placement
+- CourtDressing set-pieces (throne dais, joust lists, dock crates) grounded per-frame on bake terrain
+- Location-based wayfinding, location-exclusive side quests, and 3 new travel main-quest beats
+
+**Phase 23-25 — Instance discipline, Living Homestead, Prefabs tier (2026-07-19 to 2026-08-06)**
+- Per-instance minimap, positional mob audio, and an exclusive NPC voice channel
+- Living Homestead v1: hash-derived villager attributes, visible labor loops, Command Wheel orders
+- Grok-pipeline capability data consumed for DragonOmen wing-bone rigging
+- New Prefabs buildable tier (Castle Wall/Corner/Tower, Breached/Ruined Wall, Armory, Weapons Rack)
+- Wave 8: oc-series set pieces (Jail Cell/Tower, Jewel Tower, Drawbridge) plus wall-connection latching
+
+**User batches #1-#8 and the GUI overhaul (2026-07-19/20)**
+- Fixed remote-plot buildings bleeding into the homestead render/count
+- Armory system + NPC paperdoll with real HTML5 drag-and-drop
+- Quest Log regional overhaul (per-realm collapsible giver sections)
+- Mobile pass v1: virtual joystick, touch look, responsive ≤720px layout
+- Real wall collision (WALL_CORE) for mc-series walls/towers
+- Beda & Alric village-folk recruitment
+- 4-theme kk-tokens/kk-screens/kk-lanes GUI overhaul and build-menu relocation
+
+**Blocks A-M — Rig/lab pipeline and Assembly Workshop (2026-07-25/26)**
+- capabilities.json + labCapabilities.ts data layer (86 verified assets) driving firing/detonation/destruction
+- Real first-person rig arms pinned to donor wrist/shoulder sockets
+- Per-part hitboxes and voxelized collision.json for every named brick
+- Allegiance axis (-100..+100) with 7 bands feeding quest gating
+- Land-tier ladder (Smallholding to Barony) and a 160-piece buildable catalog
+- Assembly Workshop: 9 sets, 38 modules, 688 steps built from real GLB geometry
+
+**Blocks K-L and the Grand Keep (2026-07-26)**
+- Playtest round fixing road-plate geometry, wall-collision rotation, night watch, and boundary-stone deeds
+- Grand Keep assembled from real sockets with HP, siege damage, refunds, and pick-up/relocate
+- Defenders stationable on keep walls via socket-based stationIds
+- Ribbon-road layout reversed to a proper 4-plate tile network (L71)
+- Mirrored road-bend fix after discovering flat prints render east-for-west
+
+**NPC AI Phases 1-8 (2026-07-27 to 2026-08-11)**
+- Agent/Blackboard/Scheduler skeleton with a debug overlay and think-rate/budget smoke tests
+- Navigation, actuation/animation splicing, and a utility-based reasoner (30-iteration build)
+- AI economy correctness: trip bonuses, seek_deposit, herbalist/fisherman jobs, tend_farmplot
+- Perception (vision/hearing/belief), take_cover/engage_threat, LOD tiers and ambient wander
+- Companion (follow_leader) deliberately scoped down to its own later dedicated wave
+
+**Waves 4-19 — Empire slice 1, dioramas as destinations, mobile UX, travel overhaul (2026-08-03 to 2026-08-19)**
+- First settlement (The Old Ruins) with Fenwick's errand chain and wall-clock yield collection
+- 6 challenge maps and 9 template dioramas wired as full travel destinations (with Y-flip/scale fixes)
+- Wave 15: touch combat, gamepad support, input-mode-aware UI, PWA manifest, responsive layout
+- Wave 14: waypoint/POI/fog-of-war plus an illustrated parchment travel map
+- Quality-tier performance system (Performance/Balanced/Ultra) with per-frame allocation cleanup
+
+**Waves 17-19 — Bug sweep and scene-isolation architecture (2026-08-18 to 2026-08-26)**
+- 12 player-reported bugs fixed (builder night-work gate, land-tier math, court-NPC deduplication)
+- DestinationScope 6-stage rollout scoping 14 destinations into isolated mount/unmount boundaries
+- Terrain-derived walkable-footprint boundaries replacing circular wander clamps
+- Tree-orientation mesh fixes completed across all 4 affected templates
+- Destination-local (bake-space) coordinate storage making prop placement scale-proof
+
+**Waves 20-30 — Combat correctness, defender UX, second settlement (2026-08-28 to 2026-08-31)**
+- Line-of-sight raycast gating all ranged attacks; villagers now fight back (engage_threat_villager)
+- Per-defender standing orders, HUD order chip, deposit floaties, and Wit-priced trading
+- Generalised building interiors plus functional windows/shutters
+- Tam the Squire companion v1 (follow/assist, cross-world travel)
+- The Frozen Pass (2nd settlement) and Trade Caravan system
+- Content-authoring batch: 9 SKU cost bills, gatehouse_arch, per-realm ambience/wildlife audit
+
+**Waves 31-40 — Elevation infra, progression polish, catalog completion, boss/NG+ (2026-09-01 to 2026-09-05)**
+- Home elevation infrastructure (Downs + West Fell) with homeGroundY threaded everywhere
+- Talent respec, calling starter passives, rebindable gamepad buttons, KTX2 runtime loader
+- Axe weapon and full castle-catalog completion (turrets, corner towers, siege vehicles)
+- Black Dragon boss, caster/shielded-elite/siege-crew enemy types
+- Shared boss-encounter framework, difficulty tiers, and New Game+
+- Melee depth: i-frame dodge-roll, parry window, 3-hit combo finisher
+
+**Waves 41-48 — AI depth, arena/challenge depth, 3rd settlement, dungeon objectives (2026-09-05 to 2026-09-08)**
+- Perception-only Agent for sworn defenders; local avoidance, neighbor beliefs, memory stream
+- Arena mini-bosses and 3 new challenge-ground mechanics (Gather, Defend the Plot, Joust)
+- Siege Camp (3rd settlement) with reciprocal delivery quests and new caravan routes
+- Walled merchant camp and settlement road-preference authoring
+- Contested-caravan risk and settlement raids tied to a defend->growth quest link
+- Sealed Crypt escort and survive objectives
+
+**Waves 49-54 — Weapon tiers, legendary loot, endgame progression, full companion (2026-09-09 to 2026-09-10)**
+- Multi-tier weapons (forged/crested) and a dynamic per-item market with decay
+- Legendary boss drops and rune enchanting
+- Satchel drag-and-drop and villager gear-derived HP bonus
+- Marshal 6th rank, 5th perk slot, 7 level-11 mastery talents, guild vendor tiers
+- Wildlife roam action, 8-stage merchant route, day-only court schedules
+- Tam gains an independent save-persisted XP/leveling/gear-slot system
+
+**Waves 55-61 — Quest UX, endgame beats, siege-ladder raids, final platform pass (2026-09-11 to 2026-09-17)**
+- Quest-choice offer menus and 25 new guild-arc quests
+- Storm duel staging (bridge/honor stand) and the Leo->Cedric turncoat branch
+- Bounded dragonfire spread, rebuildable ruins, loadout-varied defender formations, duel spectator
+- Siege-ladder-assault raid content (raiderLadder.ts)
+- Real carved water-hole rendering (H3) while H2 home-pathfinding height-awareness was explicitly declined
+- Visual terrain-region authoring tool (/secret/worldeditor)
+- Final gamepad-rebinding + in-panel roving-focus navigation pass, closing the 27-wave plan
+
+### Open backlog — reconciled against real code (103 items)
+
+Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PARTIALLY_DONE`), waiting on an asset/tool the repo itself cannot produce (`BLOCKED_EXTERNAL`), or waiting on a product call (`NEEDS_DECISION`). Roughly 155 other candidate items this pass checked turned out to already be shipped (just untagged), obsolete, superseded by a later design, or explicitly declined — see the *Closed, verified* note after the table.
+
+<details><summary><strong>AI</strong> (18 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-014 | STILL_OPEN | XL | Full Defenders.tsx FSM -> reasoner 'guard' archetype migration | 6 combat subsystems (loadout rendering, mounted combat, tower elevation, shifts/orders, scouting, dragon-air/water avoidance) still need to move off Defenders.tsx onto the reasoner; explicitly ruled out as a full-session redesign. |
+| OPEN-015 | PARTIALLY_DONE | S | Wire shared applyLocalAvoidance into Enemies.tsx / Defenders.tsx | Both populations still use their own duplicate hand-rolled pack-separation formulas instead of the shared navgrid.ts primitive; low-value dedup now that both already work. |
+| OPEN-016 | STILL_OPEN | M | Raiders don't peel off toward different approach sides | Add per-raider/per-side approach-vector variation instead of one shared HOME_X/HOME_Z target. |
+| OPEN-017 | STILL_OPEN | S | Raider battering ram still spawns on the old 34m ring, not via road entry | Change the ordinary-raid ram spawn to use roadEntry() coordinates like CedricSiege.tsx already does. |
+| OPEN-018 | STILL_OPEN | S | Home raid trigger gated to dusk (0.7-0.78) only | Replace/augment the fixed dusk window so raids can fire at any hour, day or night. |
+| OPEN-019 | STILL_OPEN | S | Downed villager's debug action-label can still read take_cover | Add a downed-state exit/gate to take_cover (mirroring engageThreatVillager.ts) and/or a debug-label override. |
+| OPEN-020 | STILL_OPEN | L | Real watch-post that orients toward raid approaches | Net-new feature: design + build a GuardPost that reads the raid-approach vector and orients/reacts to it — nothing exists to extend. |
+| OPEN-021 | PARTIALLY_DONE | M | Per-world (settlement) autonomous defense doesn't exist | Posted defenders/AI battering ram for settlements still don't exist; only a player-fought raid encounter (settlementRaid.ts) does. |
+| OPEN-024 | STILL_OPEN | S | Seated-rider leg-pose constants need a live screenshot-and-tune pass | SEATED_LEG_X/SEATED_LEG_SPLAY are still starting estimates, never visually tuned against a live mounted defender. |
+| OPEN-028 | STILL_OPEN | M | warm_at_campfire action is spec-only, never implemented | Needs a full new Activity/Action (reserve/travel/align/perform) plus reasoner wiring and archetype intrinsic-list entries. |
+| OPEN-029 | STILL_OPEN | S | Campfire anchor slot spacing needs retuning | Deliberately blocked on OPEN-028 (warm_at_campfire) landing first; low real-sample rate left alone until then. |
+| OPEN-031 | STILL_OPEN | M | Companion Tam has no working bow loadout | Needs a ranged branch + hasLineOfSight() gate in assistLeader.ts, a 'bow' Companion.tsx render case, and removing the type-level bow exclusion. |
+| OPEN-032 | STILL_OPEN | L | Optional LLM dialogue layer (Phase 9 / spec §11) entirely unbuilt | Everything: prompt building from bb.memoryStream, a network/model client, dialogue-only output gating. The memory substrate it would read from is now ready (Wave 42). |
+| OPEN-033 | STILL_OPEN | L | Memory.recall is recency-only; no relevance scoring | Real embedding/LLM-based relevance scoring for recall(query,k) — depends on the still-unbuilt dialogue/LLM layer (OPEN-032). |
+| OPEN-034 | STILL_OPEN | M | Pathfound day/night court-NPC movement still doesn't exist | Only a visibility on/off toggle exists for 2 of 5 court NPCs (King/Queen); real navSteer-routed day/night movement between posts is unbuilt for any of them. |
+| OPEN-037 | PARTIALLY_DONE | L | Villager generic-newcomer arrival / worksite-walk logic still homestead-only | Worksite-walk is genuinely per-world now, but checkVillagerArrival/recruitVillageFolk remain hardcoded to the home roster — no arrival mechanism targets a settlement. |
+| OPEN-054 | STILL_OPEN | L | Unused ambient smart-object anchors and missing props/animation clips | bed/workbench/forge anchors have no consuming action; no well/bench/table/hitching-post props exist; no sit/sleep/eat animation clips. |
+| OPEN-066 | PARTIALLY_DONE | S | AI pathfinding remains flat-only (height-unaware) | Home nav-grid height-awareness was explicitly declined (Wave 59, no consumer); destination-world pathfinding was never even evaluated. |
+
+</details>
+
+<details><summary><strong>World</strong> (11 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-022 | STILL_OPEN | M | Finished keep has no collision volumes / nav-grid obstacles for raider pathing | Stamp finished keep sockets into navgrid.ts's obstacle grid (like fort.ts already does for its enclosure check) so raider pathing can route around it. |
+| OPEN-043 | STILL_OPEN | S | Marketplace square (half of the original Road-models idea) never built | Lay out an open plaza using the existing 4 Road tile models near the settlement/signpost; no new assets needed. |
+| OPEN-048 | PARTIALLY_DONE | M | template-05 still has no resident NPC to ground-truth its walkable classification | template-04 and -07 got residents to verify against; template-05 alone still relies solely on the generic claim-footprint safety net. |
+| OPEN-062 | STILL_OPEN | M | Per-asset target height for template 'set' props still a flat 0.8m default | Source/derive a per-asset target height and wire it in place of DEFAULT_PROP_HEIGHT for every kind:'set' prop. |
+| OPEN-063 | STILL_OPEN | M | Destination-world hillsides still bounce/stutter downhill | Extend the slopeUnderfoot ledge-test fix (homestead-only today) to the 14 non-home destination terrain bakes. |
+| OPEN-064 | STILL_OPEN | S | Follow-lerp eye-height trails climbs by climb-rate/12 | Increase/replace the fixed dt*12 eye-height follow-lerp without reintroducing the descent-stutter bug it was built to fix. |
+| OPEN-065 | PARTIALLY_DONE | M | Home elevation limited to 2 quadrants (Downs + West Fell) | Further quadrant expansion was explicitly declined (Wave 59) for lack of a real gameplay consumer — a permanent decision, not an oversight. |
+| OPEN-067 | STILL_OPEN | S | terrainConflict() has no slope check | Currently confirmed unreachable (no region overlaps the build fence) but the check itself is still missing from the code. |
+| OPEN-070 | STILL_OPEN | S | Specular-glint material artifact on the natural POND | Diagnose and tune the water material's roughness/metalness/envMapIntensity; confirmed pre-existing, not a regression, but never triaged further. |
+| OPEN-076 | STILL_OPEN | M | Sound Walls flood-fill seal test has known resolution limits | 1m grid tolerates sub-1m gaps as sealed, and only the hardcoded homestead-centre cell is tested (an off-centre ring wouldn't count); self-contained rewrite of fort.ts. |
+| OPEN-087 | PARTIALLY_DONE | S | POI coverage still misses Cedric's camp, all 6 challenge grounds, dungeon, and arena | 7 of the 8 non-Cedric destinations now have a resident-NPC POI; challenge grounds/dungeon/arena and template-05 remain uncovered, and TemplatePopulation lab-props were never used as a POI source. |
+
+</details>
+
+<details><summary><strong>Build</strong> (10 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-023 | STILL_OPEN | S | Relocated keep foundation always renders unrotated | Thread a keep.rot field through KeepAssembly's group rotation, socket coordinates, and finishMove; currently hardcoded to 0. |
+| OPEN-025 | STILL_OPEN | S | Cart 'glued' quirk: walking toward a just-grabbed cart yields zero net movement | Exempt the actively-pushed/hitched building's own collider from the player-collision loop, or read cartLivePos instead of stale b.x/b.z. |
+| OPEN-026 | STILL_OPEN | M | No general building-repair mechanism for non-dragon damage | Generalize the dragon-only ruin/rebuild mechanic (or add a new heal action) to raider-ram/cannon/siege-ladder damage instead of deleting the building at 0 HP. |
+| OPEN-027 | STILL_OPEN | M | oc6098b1 chest-launcher payload mechanism unbuilt | hasChestLauncher/canLaunchChest capability data exists but there's no chest_arm/chest_basket rig role or projectile type; fires as an ordinary catapult today. |
+| OPEN-046 | STILL_OPEN | M | Build challenges lack a per-map specific-structure/set objective | Design+implement a per-map objective; still only a generic 'N pieces in 90s' target after the newer Gather/Defend/Joust minigames shipped for the other 5 grounds. |
+| OPEN-057 | PARTIALLY_DONE | S | 2 of 10 'Walls' category generated bricks lack real collision geometry | gen_06_l3013700 and gen_10_l235700 ('Wall Section 1x4'/'2x2') still fall back to a crude single full-footprint box, worse than the deferred WALL_CORE treatment. |
+| OPEN-058 | PARTIALLY_DONE | M | Template-world set-dressing never imported into the buildable catalog | Player-buildable catalog import (Buildable entries with size/cost/collision) is unstarted integration work — not asset-blocked, since the models already load via PropModel elsewhere. |
+| OPEN-060 | STILL_OPEN | M | 4 cart-type buildables have no per-instance scale support | CartMesh would need a scale prop threaded through both the static and live push-physics render paths without them drifting apart. |
+| OPEN-068 | STILL_OPEN | S | Build aerial-camera mouse-raycast catcher plane ignores elevation | Raycast the catcher plane against real elevation instead of a flat y=0 plane; currently unreachable since the build fence never touches a terrain region. |
+| OPEN-077 | STILL_OPEN | L | No player-placeable road piece / per-tile road speed-bonus mechanic | Entire design + implementation unbuilt: a placeable 'road' buildable type plus a per-tile speed bonus reusing the externalCapacityBonus() pattern. |
+
+</details>
+
+<details><summary><strong>Combat</strong> (5 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-030 | STILL_OPEN | S | Combat mastery talent (+1 melee) verified only by source read | Only a live damage-delta measurement remains; the code itself is complete. |
+| OPEN-050 | STILL_OPEN | L | Defender/Armory loadouts don't use the new tiered weapons | defenderStrike() and DEFENDER_LOADOUTS only reference base sword/halberd/crossbow items, never *_forged/*_crested/*_legendary; deliberately scoped out again in Wave 51. |
+| OPEN-051 | STILL_OPEN | S | Per-defender combat-bonus (Shieldwall/Courage/gear HP) balance pass never scheduled | No design blocker found, just never scheduled — a deliberate numeric review of how HP bonuses stack for defenders. |
+| OPEN-052 | STILL_OPEN | M | Spear weapon has no forged/crested tiers | Author spear_forged/spear_crested (optionally legendary) recipes and MELEE_TIERS entries mirroring sword/halberd's Wave 49 treatment. |
+| OPEN-101 | STILL_OPEN | S | Targeting reticle's 'neutral' Standing value declared but never assigned | Pick a case that should read 'neutral' (e.g. wildlife/undecided villagers), assign it in targeting.ts, and add a .kk-reticle.neutral CSS rule. |
+
+</details>
+
+<details><summary><strong>Economy</strong> (8 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-036 | STILL_OPEN | L | True settlement population growth (new residents arriving post-founding) | Only a yield-tier gold bump exists; no mechanism spawns/recruits new residents at non-home settlements over time. |
+| OPEN-039 | PARTIALLY_DONE | L | 5 of 8 travel destinations still lack a settlement chain | River Landing, Tourney Grounds, Rival Castle, Sister Keep, King's Approach have no SETTLEMENT_FOUNDING entry; the 3x-proven pattern is reusable but unextended. |
+| OPEN-042 | PARTIALLY_DONE | M | Empire decision 4 (homestead stays uniquely free-build) never enforced | placeBuilding() has no world-type gate; settlements currently allow identical freeform building to the homestead, contradicting the original design intent (never explicitly reversed either). |
+| OPEN-045 | STILL_OPEN | S | Calling / trade-off perk synergy tie-in doesn't exist | No perk is restricted/boosted by classId; would need new synergy logic (e.g. a calling making a matching perk cheaper/stronger). |
+| OPEN-047 | NEEDS_DECISION | M | Wave-8 catalog pieces' workshop-gating UX never revisited | Product decision on whether long-form workshop-gating (5 pieces behind assembling real LEGO sets) is acceptable, or needs an earlier unlock path/starter kit. |
+| OPEN-049 | PARTIALLY_DONE | L | Ordinary (non-defender) villagers still lack real weapon-loadout access | Investigated and explicitly scoped out twice (job==='defender' gate spans 4 subsystems: store, rendering, AI scoring, leveling); only a gear-derived HP bonus shipped instead. |
+| OPEN-053 | STILL_OPEN | S | ShopPanel omits Wanderer's 'Fair Dealer' +2% haggle in its price display | One-line fix: add the classId==='wanderer' term to ShopPanel.tsx's two price formulas (store logic already applies it); survived a second touch of the file. |
+| OPEN-056 | PARTIALLY_DONE | L | ~37+ buildables still lack hand-authored SKU cost bills | Only 9 of ~46 buildables (incl. not gate/door/cannon/warcart/bladecart) have real pieces-bills; rest stay on the family-total cost fallback. |
+
+</details>
+
+<details><summary><strong>Content</strong> (22 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-002 | BLOCKED_EXTERNAL | XL | Horse/dragon mount seat matrices not wired (file absent from repo) | DEFAULT_MINIFIG_HORSE_MOUNT.json / DRAGON_MOUNT.json must be fetched from the sibling Blender-lab repo before real per-donor seat matrices can replace the current hand-tuned constants. |
+| OPEN-003 | BLOCKED_EXTERNAL | L | New forged/crested donor-print texture art for armor tiers | Procedural fallback already ships; genuinely new donor-print art extraction is a texture-pipeline task outside this repo. |
+| OPEN-004 | BLOCKED_EXTERNAL | L | Bespoke catapult sound sample (snd060) | No matching WAV exists in the 46-file sound bank; a bespoke sample must be sourced externally (current distinct whoosh+thud voice is the best available substitute). |
+| OPEN-005 | BLOCKED_EXTERNAL | S | Grand Keep foundation lacks a green MC00 baseplate mesh | No large green baseplate asset exists anywhere in the extraction; foundation stays a stone/trodden-ground texture until one is supplied. |
+| OPEN-006 | BLOCKED_EXTERNAL | XL | Workshop Option B: instruction-accurate (booklet-faithful) builds | Needs LDraw models per set, a Rebrickable API key/CSVs, and manual PDFs — none exist in-repo; only READMEs sit in the ldraw/manuals_pdf folders. |
+| OPEN-007 | BLOCKED_EXTERNAL | XL | Impulse sets and 4816-4819 have no game models for the Workshop | Only 9 sets have workshop plans; the rest are reachable only once Option B's LDraw pipeline exists. |
+| OPEN-008 | BLOCKED_EXTERNAL | S | LDraw-space <-> engine coordinate transform | Trivial to apply once Option B starts, but Option B itself remains blocked on missing LDraw assets. |
+| OPEN-009 | BLOCKED_EXTERNAL | S | Validate user's forthcoming Grok-built item-catalog JSON | Nothing to do until the user delivers the JSON; then diff against BRICK_CATALOG.md. |
+| OPEN-011 | BLOCKED_EXTERNAL | S | Additional ambient wildlife species (deer, rabbit) | Full 264-entry asset catalog has zero deer/rabbit/second-ground-creature meshes; needs new 3D assets before any code work. |
+| OPEN-012 | BLOCKED_EXTERNAL | XL | Animated flags/shields/halberds for the duel bridge (oc6095b5/b4) | No part_roles.json/rig entry exists for either asset; needs rig-lab work before any animation can be wired. |
+| OPEN-013 | BLOCKED_EXTERNAL | XL | Dragon-specific villager fear animation clip | No dragon-fear pose exists under the ~15-clip ceiling; needs a newly authored/extracted animation clip, not code. |
+| OPEN-038 | PARTIALLY_DONE | M | Dungeon-entrance candidate at Siege Camp/Frozen Pass never pursued | Resident content (NPCs, guilds, quests) fully shipped at all 3 vision-table sites; the 'second dungeon entrance' half was never revisited — Sealed Crypt remains the sole procedural dungeon. |
+| OPEN-040 | PARTIALLY_DONE | S | Interior NPC residents offer quests but no trade/dance interaction | The 4 interior residents (Wave 45) give quests+dialogue only; the original design's trade and dance sub-asks never shipped for them. |
+| OPEN-041 | PARTIALLY_DONE | M | Challenge maps still have no residents, NPC quests, or real unlock gate | Minigame mechanics shipped for all 6 grounds, but zero resident NPCs and claim-gating identical to a plain template (no distinct unlock). |
+| OPEN-044 | STILL_OPEN | M | Calling-exclusive dialogue/quest hooks don't exist | Every classId reference is a mechanical stat hook; zero dialogue branches or quest gates are keyed on calling. |
+| OPEN-055 | PARTIALLY_DONE | S | 5 windows_doors decor molds left as static (only Portcullis + Shutters promoted) | Decide/implement whether the remaining 5 small window/door molds get open/close+LOS-block behavior or are explicitly documented as intentional decoration. |
+| OPEN-059 | PARTIALLY_DONE | M | Drawbridge/jail-cell/springboard buildables have no animated rig | All 3 are now real buildables but render static — no part_roles.json rig entry or ANIMATED_ROLES entry exists for them yet. |
+| OPEN-072 | PARTIALLY_DONE | S | General mirror-vs-rotation orientation-composition math unresolved | 27 live-wired assets checked with zero defects, but the general matrix-level proof is still unresolved; relevant only if a future asset outside the checked family shows a live defect. |
+| OPEN-073 | STILL_OPEN | S | Blender rig_lib.py up-axis convention never traced | Trace the sibling repo's rig_lib.py to confirm/refute the bare-Y-mirror assumption; research debt, no live defect currently observed. |
+| OPEN-074 | STILL_OPEN | S | template-05 tree-row orientation fix never visually confirmed | Find a walkable vantage point that clears the occluding mesh_0_47 to get a clean screenshot; the fix itself is already shipped and mesh-identity-confirmed. |
+| OPEN-102 | STILL_OPEN | L | Mixed head/body donor NPCs still float the head at the neck | No neck-socket re-anchor system exists; villager looks remain restricted to same-donor head/body pairs. |
+| OPEN-103 | NEEDS_DECISION | L | No music soundtrack — ambience-only state never formally ratified | A human product decision: commission/license new music tracks, or formally accept the current de-facto ambience-only state as final. |
+
+</details>
+
+<details><summary><strong>UI/UX</strong> (10 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-061 | STILL_OPEN | S | Fold Stats/Deeds screens into the MenuTabs one-stop menu | Add 'stats' and 'deeds' tab entries; both remain separate pause-menu/embedded-gallery UI today. |
+| OPEN-075 | STILL_OPEN | S | Placement-ghost arrow direction wants a human in-game confirmation | A human playtester needs to eyeball the arrow against a known-asymmetric piece; no further code change identified as needed. |
+| OPEN-078 | STILL_OPEN | S | Options screen 'Esc to close' hint has no real Escape handler | Add an Escape keydown handler in OptionsStack.tsx that calls useAppStore's pop() to actually close the screen. |
+| OPEN-080 | STILL_OPEN | S | StatsStack.tsx still on the old .stack-screen system, skips the UI theme lane | Convert StatsStack.tsx to kk-screen-${uiTheme} + shared card tokens, matching AuthStack/MainMenu/OptionsStack/CharacterCreator. |
+| OPEN-081 | STILL_OPEN | M | Dark-ages re-theme follow-ups: notification glow, minimap tint, blackletter font, loading heraldry | None of the 4 named cosmetic follow-ups from the original re-theme wave has shipped: toast/minimap border tinting, an embedded blackletter/uncial font, and title-screen heraldic tricolor treatment. |
+| OPEN-082 | STILL_OPEN | M | No touch support for the aerial Build View camera | Add pinch-zoom/pan/tap-to-place touch handling to BuildController's aerial camera, mirroring the FPS controller's existing touch bridge. |
+| OPEN-083 | STILL_OPEN | S | Per-panel narrow-viewport polish (Quest Log, NPC paperdoll) deferred | Only one global ≤720px breakpoint exists; bespoke reflow for quest-giver blocks and equip-tile/paperdoll drag interactions at narrow widths is unbuilt. |
+| OPEN-084 | PARTIALLY_DONE | S | Touch-control toggle doesn't actually force rendering on hybrid devices | settings.inputMode only relabels prompts; the on-screen joystick/buttons still render solely based on auto-detected touch support, never the user's setting. |
+| OPEN-085 | STILL_OPEN | S | Input-mode-aware tutorial/hint copy still hardcoded to keyboard+mouse | Thread the existing inputMode.ts label helpers into HelpStack.tsx's tutorial strings and combat.ts's SWAP_HINT — infrastructure exists, just not applied to these ~4 strings. |
+| OPEN-088 | STILL_OPEN | S | VillagersPanel XP bar has no '{cur}/{next} XP' text | Add the XP text line under both VillagersPanel xpbar instances (defender roster row and Tam's card), mirroring the text already shipped in SkillsPanel. |
+
+</details>
+
+<details><summary><strong>Platform</strong> (11 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-001 | BLOCKED_EXTERNAL | XL | Geometry LOD needs D1-D3 low-poly GLB variants exported | No D1/D2/D3 files exist anywhere in the extraction; needs the asset pipeline to export them before any THREE.LOD wiring can happen. |
+| OPEN-010 | BLOCKED_EXTERNAL | S | KTX2/Basis texture compression: real asset conversion never produced | Runtime loader is fully wired but a no-op; the encoder step needs the external `ktx` CLI binary (confirmed absent), which can't be installed by the repo/CI itself. |
+| OPEN-069 | STILL_OPEN | S | Grounds.tsx fence batch still frustumCulled={false} | Flip to real culling (matching rocks/dungeon walls) and verify live that instances don't vanish at boundary edges. |
+| OPEN-071 | STILL_OPEN | S | Destination-bake GLB resources never explicitly .dispose()'d on same-destination revisit | Add explicit geometry/material/texture dispose on repeat-visit without corrupting shared clone(true) references; only a conditional follow-up if memory ever becomes a real bottleneck. |
+| OPEN-086 | STILL_OPEN | L | No PWA service worker / true offline caching | Manifest-only PWA shipped; cache strategy, versioning, and asset-manifest work for 597+ binary assets remains a documented, unattempted follow-up. |
+| OPEN-090 | STILL_OPEN | L | No save-slot management (single save per account) | Add multiple named save slots (schema, list/select/delete UI, server route changes) on top of the current single-save model. |
+| OPEN-093 | STILL_OPEN | S | Recurring worktree gap: gitignored assets missing, no scripted bootstrap | A scripted bootstrap (setup script or hook) to junction-link/copy public/assets, public/help, node_modules into a fresh worktree, replacing 12+ waves of manual one-off fixes. |
+| OPEN-097 | STILL_OPEN | S | Building-placement first-load stutter theory never reproduced | A cold-browser-profile repro attempt racing a Siege Tower-class placement against the async warm-up promise in the first 1-2s of a session. |
+| OPEN-098 | STILL_OPEN | XL | Rapier physics engine integration (long-horizon idea) | Entire physics-engine integration unstarted; correctly still an unmet-trigger-condition idea since ragdolls/siege dynamics don't exist yet. |
+| OPEN-099 | STILL_OPEN | L | Web Workers for pathfinding (conditional idea) | No perf data shows a need; all scenarios hold 60fps at this game's scale. Correctly parked. |
+| OPEN-100 | STILL_OPEN | XL | Multiplayer-ready sim refactor for co-op castle building | Entire feature unbuilt: extract sim from store into a tick-based headless module, build a server, add client sync/prediction, save-authority handoff. |
+
+</details>
+
+<details><summary><strong>Tech-debt</strong> (8 items)</summary>
+
+| ID | Status | Size | Item | What remains |
+|---|---|---|---|---|
+| OPEN-035 | STILL_OPEN | S | Dead CourtNpc.schedule lerp mechanism never removed | Delete the structurally-dead schedule branch, scheduledCourtNpcs(), npcSync.ts, and stale comments — pure cleanup, zero behavior change. |
+| OPEN-079 | STILL_OPEN | S | Dead 'commands' member of the PanelId union never removed | Delete 'commands' from the PanelId union and its stale reference in GamepadMenuController.tsx's comment. |
+| OPEN-089 | STILL_OPEN | S | SaveGame.playerPos declared but never written or read | Either delete the dead field from SaveGame, or wire playerState into save.ts's serialization/deserialization. |
+| OPEN-091 | STILL_OPEN | S | DungeonScene freezes room layout via useMemo(() => ..., []) | Confirmed unreachable through real gameplay (separate UI-driven events), but the fragile pattern remains; swap for a live read or add a guarding comment. |
+| OPEN-092 | PARTIALLY_DONE | M | Latent circular-import hazard around gameStore/difficulty.ts | Only 2 known edges were inverted via leaf-module imports; the root cause (difficulty.ts's undeferred module-scope subscribe) and the general TemplateWorld->...->difficulty.ts chain remain latent. |
+| OPEN-094 | PARTIALLY_DONE | S | Ladder wrecked-tail/Climb-prompt verified only via synthetic state | The feature code itself mirrors an already-proven pattern and looks correct; only a real live-browser hit-to-zero test and mouse-look check remain, judged low-risk. |
+| OPEN-095 | PARTIALLY_DONE | S | Builder animation-side day/night gate only traced by hand, never live-tested | The mechanical construction gate was live-verified; the Villagers.tsx animation-side gate has only ever been reasoned by code trace due to reasoner/position race unreliability. |
+| OPEN-096 | PARTIALLY_DONE | S | Angler calling's fishing bite-window perk confirmed only by source read | A live-capture measurement in an actual pointer-lock fishing session is the only remaining gap; the code path is implemented and unchanged. |
+
+</details>
+
+**Closed, verified** (not reproduced item-by-item here — see the reconciliation's own audit trail if a specific past entry needs re-checking): Roughly 155 of the ~160 code-verified items from the audit resolve to closed states, breaking down approximately as: ~95 DONE_UNTAGGED (real work shipped in a later wave — usually Wave 20-61 — but the earlier [TODO]/follow-up note was never retagged), covering: Phase-24 defender-command UX (per-defender orders, HUD chip, deposit floaties, Wit-priced stall) at 3 separate stale locations; dragonfire-siege follow-ups (fire-spread, ruin/rebuild, villager flee, defender formations) at 2 locations; the GUI overhaul/design-system port; regional quest log; delivery quests; halberd/spear/armor tiers; talent respec + deeper skill tiers; unused-asset audit (Powder Mine/signal_cannon/bat-swarm); arches/Destructor/Cannon audits; gatehouse_arch; per-realm ambience + raid-horn-while-away notify; line-of-sight raycast for ranged attacks; skeleton spawn-inside-walls fix; gamepad button rebinding + in-panel roving-focus nav; road-speed-mult extended to NPCs; tree-orientation fixes across all 4 templates; NPC AI Phases 6-8 and the nav-adopt-vs-extend decision; Beda & Alric recruitment purpose; and several one-off bug/verification items (0-HP arena hook order, ladder-defender walkway posting, Leo->Cedric turncoat). ~7 OBSOLETE entries are stale plan text or scenarios that provably can't occur any more (e.g. TemplateWorldRoot's missing key={destId} is a non-issue given sibling keys already remount; template-08's zero population rows is a documented pre-existing non-regression; a hypothesized interior-save-strand scenario doesn't reproduce because player position is never persisted at all). ~7 SUPERSEDED entries got their underlying goal met via a different shipped mechanism than the literal ask (destruction-phase wiring via a generic lab-driven system instead of the specific mc006/009/010 hardcode; per-destination-scene architecture via a DestinationScope mount/unmount boundary inside one shared Canvas instead of separate Scenes/CMS; the LDraw-vs-OCR research question answered and its practical half shipped as the Assembly Workshop; directional land-growth answered by routing 'expansion' through settlements instead of a compass-direction home-fence system; a real courtier duel-spectator superseded by a generic non-interactive figure). ~28 DECLINED entries are deliberate no-build/no-fix decisions, spanning: engine-wide approximations left alone as disproportionate to fix (2D-only melee reach, elevation-unaware aim-reticle nameplate, H2 home-nav-grid height-awareness, generic (i,j,layer) navgrid rewrite); permanent scope guards (d-pad/stick movement rebinding, HTML5 drag-and-drop for gamepad, NG+ not carrying perks, dragonfire excluded from keep pieces, court-archetype siege-reaction excluded); UX calls preserved on purpose (Sealed-Crypt/Arena "currently there" travel-map badge, quest-id kept for save compatibility despite a stale name); and content/architecture calls made and documented (LEARNED_PART_LEXICON left unconsumed as a downgrade vs. existing data, engage_threat-for-defenders reversal ruled out a 3rd/4th time, ladder kept singleton/enemy-only, per-instance random-stat item rolls not built, villager weapon-assignment path declined).
+
+**Declined** (67 items across the file were explicit design decisions against building something, not oversights — left in place below, untouched).
+
+**Low-confidence** (evidence was weaker than the rest; worth a human double-check before acting): R1-6, R2-13, R13-4, R16-9, R11-3.
+
+---
+
 ## ✅ Shipped (Phases 0–19, compact recap) [COMPLETE]
 
 Everything below is implemented, tested, and in the game today. Details in the archive.
@@ -505,6 +791,9 @@ granting the unlock + materials and seeing all 26 pieces appear.
 ---
 
 ## 📋 Remaining backlog (carried forward, grouped by theme) [TODO]
+
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
 
 **World & locations**
 - [COMPLETE] ✅ **CLOSED Wave 19 — re-verified live.** Shipped as part of Phase 20 step 1 itself (see
@@ -1348,6 +1637,9 @@ just coincidentally matching) and confirmed centering holds again on the default
 ---
 
 ## 💡 New ideas under consideration (raised 2026-07-18 — design sketches, not yet committed) [TODO]
+
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
 
 - [COMPLETE] ✅ **Guilds (Phase 21, v1 shipped)**: five orders headquartered across the Kingdom of Instances — the
   Woodsmen's Lodge (Frozen Pass), Miners' Brotherhood (Old Ruins), Anglers' Circle (River Landing),
@@ -3656,6 +3948,9 @@ confirmed standing at the correct walkway height, not floating or sunk into the 
 
 # BLOCK L — playtest round, 2026-07-26 [TODO]
 
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
+
 Thirteen items off a play session. Several are my own regressions; one (L71)
 is a conclusion I reached wrongly and shipped.
 
@@ -4101,6 +4396,9 @@ Herb Meadow south-west; Deepwood due south (0, −64); the Home Grove east at
 Nothing sits south of the homestead in the road's path.
 
 ### Still open [TODO]
+
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
 - [COMPLETE] ✅ **The road itself vs. southward expansion — already closed elsewhere in this file
   (the "Blocked on a decision or a pointer" section, ~line 4666) but never struck at THIS, its
   original location.** Re-confirmed live myself for Wave 19, not taken on trust from that other
@@ -4695,6 +4993,9 @@ was forgotten.
   only its README. Send one `.mpd` and the seam can be proved against it.
 
 ## Blocked on a decision or a pointer [TODO]
+
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
 [COMPLETE] **The road's route vs. southward expansion.** Closed 2026-08-12 (Wave 12) as already
   resolved, with no code change — re-verified entry by entry against the live files rather than taken
   on trust, because the entry outlived the pass that fixed it: `SPAWN` `(0,0,26)`, `SIGNPOST`
@@ -4720,6 +5021,9 @@ was forgotten.
     in the dig entry above: a cut over the signpost is refused as *road*, never as *signpost*.
 
 ## Unblocked, large, and not started [TODO]
+
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
 These need no external data — they are simply big enough to want their own
 block rather than being started at the end of a session.
 [COMPLETE] ✅ **Per-world villager labour — SHIPPED 2026-08-04 (Wave 3 of the full-ROADMAP wave
@@ -6201,6 +6505,9 @@ layout — were accidentally duplicated verbatim in an earlier edit; the duplica
   only source of the "×4," exactly as intended.
 
 ## Travel & world-map overhaul — requested 2026-08-04, scoped only, not started [TODO]
+
+> ⚠️ **SUPERSEDED by the Reconciled status section near the top of this file (2026-09-23).** Most items below already shipped in a later wave without this section being retagged; treat this heading's own [TODO] as historical, not current. Check the reconciled Open Backlog table before treating anything here as live work.
+
 Three related but separable asks from the same message, logged per the user's own "just add it to
 the roadmap" pattern for major-overhaul-scale work.
 
