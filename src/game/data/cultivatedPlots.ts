@@ -15,7 +15,7 @@ import type { CultivatedPlot } from '../types';
 import { GROUNDS, clearsHomestead, sectionsOverlap } from './grounds';
 import CULTIVATED_PLOTS_DATA from './cultivatedPlots.generated.json';
 
-export interface CultivatedPlotDef extends CultivatedPlot {
+interface CultivatedPlotDef extends CultivatedPlot {
   /** shown on the plot's own stake (Grounds.tsx) and in its interact prompt */
   name: string;
   /** what the stake says before anyone has broken the ground */

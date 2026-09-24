@@ -8,7 +8,7 @@ import type { Villager, VillagerJob } from '../types';
 import { levelFromXp } from './ranks';
 import { tradeLevelOf } from './attributes';
 
-export interface CompanionTraitDef {
+interface CompanionTraitDef {
   id: string;
   job: VillagerJob;
   name: string;
@@ -16,7 +16,7 @@ export interface CompanionTraitDef {
   desc: string;
 }
 
-export const COMPANION_TRAITS: CompanionTraitDef[] = [
+const COMPANION_TRAITS: CompanionTraitDef[] = [
   // defender — the sworn shield
   { id: 'def_shieldwall', job: 'defender', name: 'Shieldwall', icon: '🛡️', desc: '+8 max health' },
   { id: 'def_riposte', job: 'defender', name: 'Riposte', icon: '⚔️', desc: '+1 strike damage' },

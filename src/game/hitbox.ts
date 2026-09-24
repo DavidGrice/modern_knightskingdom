@@ -17,7 +17,7 @@ import type { RigJoint } from '@/lib/minifigRig';
 
 /** an axis-aligned box in the figure's LOCAL frame: origin at the feet,
  *  +Y up, -Z forward (this codebase's yaw=0 convention) */
-export interface PartBox {
+interface PartBox {
   part: RigJoint;
   cx: number; cy: number; cz: number;   // centre
   hx: number; hy: number; hz: number;   // half-extents

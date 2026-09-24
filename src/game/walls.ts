@@ -27,7 +27,7 @@ import { isBuilt, isDoorLike, type PlacedBuilding } from './types';
  *  marked `canConnectAsWall`, reached through the buildable's model id so the
  *  data stays the single source of truth (`stonewall` is mc007, `tower` is
  *  mc003, and so on). */
-export function isWallRun(type: string): boolean {
+function isWallRun(type: string): boolean {
   return labCanConnectAsWall(labAssetId(type));
 }
 
@@ -78,7 +78,7 @@ function attachPoints(b: PlacedBuilding, msx: number, msz: number) {
  *  reaches out from a piece's open ends. */
 const SNAP_REACH = 1.5;
 
-export interface WallSnap {
+interface WallSnap {
   x: number;
   z: number;
   /** the piece this one latched onto — the ghost draws the joint */
@@ -118,7 +118,7 @@ export function wallSnap(
 
 /** two footprints share an edge (within a hand's width) rather than merely
  *  being near each other */
-export function touching(a: PlacedBuilding, b: PlacedBuilding, slack = 0.35): boolean {
+function touching(a: PlacedBuilding, b: PlacedBuilding, slack = 0.35): boolean {
   const [asx, asz] = sizeFor(a.type, a.rot);
   const [bsx, bsz] = sizeFor(b.type, b.rot);
   const gapX = Math.abs(a.x - b.x) - (asx + bsx) / 2;

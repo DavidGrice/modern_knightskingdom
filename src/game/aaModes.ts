@@ -14,7 +14,7 @@
 // ~4x the pixel-shading work every frame).
 export type AaMode = 'off' | 'fxaa' | 'smaa' | 'supersample2x';
 
-export interface AaModeInfo {
+interface AaModeInfo {
   id: AaMode;
   label: string;
   blurb: string;

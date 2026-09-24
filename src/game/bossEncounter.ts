@@ -15,9 +15,9 @@
 import { DRAGON_TIER, BLACK_DRAGON_TIER, CEDRIC_SIEGE_TIER, difficultyState } from './difficulty';
 import type { ItemId } from './types';
 
-export type BossId = 'dragon' | 'blackDragon' | 'cedric';
+type BossId = 'dragon' | 'blackDragon' | 'cedric';
 
-export interface BossEncounter {
+interface BossEncounter {
   unlockTier: number;
   /** seconds in before a reinforcement/escalation phase, if still standing —
    *  undefined = a flat single-phase fight (both dragons today) */
@@ -49,7 +49,7 @@ export function bossTierScale(id: BossId): number {
     * difficultyState.difficultyMult;
 }
 
-export interface BossReward { items: Partial<Record<ItemId, number>>; xp: number }
+interface BossReward { items: Partial<Record<ItemId, number>>; xp: number }
 
 /** A real reward for winning outright — separate from each siege's own
  *  "weathered it" consolation (left inline, unchanged, per fight). */

@@ -20,9 +20,9 @@
 // themselves — mirrors ArenaSpawner.tsx's own split from arena.ts).
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 
-export const GATHER_CHALLENGE_IDS: readonly string[] = ['challenge-2', 'challenge-5'];
-export const DEFEND_CHALLENGE_IDS: readonly string[] = ['challenge-3', 'challenge-6'];
-export const JOUST_CHALLENGE_ID = 'challenge-4';
+const GATHER_CHALLENGE_IDS: readonly string[] = ['challenge-2', 'challenge-5'];
+const DEFEND_CHALLENGE_IDS: readonly string[] = ['challenge-3', 'challenge-6'];
+const JOUST_CHALLENGE_ID = 'challenge-4';
 
 export function isGatherChallenge(destId: string | null): boolean {
   return !!destId && GATHER_CHALLENGE_IDS.includes(destId);
@@ -43,8 +43,8 @@ export const GATHER_TARGET_COUNT = 6;
 export const GATHER_TIME_MS = 75_000;
 export const GATHER_PICKUP_RADIUS = 2.5;
 
-export interface GatherPoint { x: number; z: number; collected: boolean }
-export interface GatherChallengeState {
+interface GatherPoint { x: number; z: number; collected: boolean }
+interface GatherChallengeState {
   active: boolean;
   destId: string | null;
   deadline: number; // performance.now() timestamp
@@ -63,7 +63,7 @@ export const gatherChallengeState: GatherChallengeState = {
  *  DestinationScope.tsx's claimed-building children are, since this is read
  *  by flat, top-level components (ChallengeRunner.tsx), not ones nested
  *  inside that origin-offset <group>. */
-export function gatherTargetOffsets(destId: string): { x: number; z: number }[] {
+function gatherTargetOffsets(destId: string): { x: number; z: number }[] {
   const dest = WORLD_DESTINATION_BY_ID[destId];
   return Array.from({ length: GATHER_TARGET_COUNT }, (_, i) => {
     const a = (i / GATHER_TARGET_COUNT) * Math.PI * 2;
@@ -96,7 +96,7 @@ export const DEFEND_PROXIMITY_RADIUS = 7;
 export const DEFEND_SPAWN_INTERVAL_S = 4;
 export const DEFEND_MAX_LIVE = 4;
 
-export interface DefendChallengeState {
+interface DefendChallengeState {
   active: boolean;
   destId: string | null;
   deadline: number;
@@ -129,7 +129,7 @@ export const JOUST_TIME_MS = 45_000;
 export const JOUST_RING_RADIUS = 2.2;
 export const JOUST_RING_ACTIVE_MS = 1200;
 
-export interface JoustChallengeState {
+interface JoustChallengeState {
   active: boolean;
   destId: string | null;
   deadline: number;

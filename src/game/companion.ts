@@ -58,7 +58,7 @@
 import type { Villager } from './types';
 import { villagerGearHpBonus, VILLAGER_GEAR_HP_MAX } from './villagerCombat';
 
-export interface CompanionCombatState {
+interface CompanionCombatState {
   hp: number;
   maxHp: number;
   state: 'ok' | 'downed';
@@ -67,28 +67,28 @@ export interface CompanionCombatState {
 
 /** Wave 25's own flat number, now the LEVEL-1/no-gear floor rather than a
  *  ceiling — see `companionMaxHp` below for what it grows into. */
-export const COMPANION_BASE_HP = 16;
+const COMPANION_BASE_HP = 16;
 /** Levels above this stop growing HP further (a small, bounded term, not a
  *  mirror of a real defender's own uncapped `+level*6`) — `assistLeader.ts`'s
  *  own `floor(sqrt(xp/50))` curve reaches this at 1250 xp (~83 kills). */
-export const COMPANION_LEVEL_CAP = 5;
+const COMPANION_LEVEL_CAP = 5;
 /** Max HP a fully-leveled (level >= COMPANION_LEVEL_CAP) Tam gains from
  *  LEVEL ALONE, with no gear at all — deliberately less than the full gap
  *  to `COMPANION_HP_CEILING` so gearing up still means something even at
  *  max level. */
-export const COMPANION_LEVEL_HP_MAX = 2;
+const COMPANION_LEVEL_HP_MAX = 2;
 /** Max HP a fully-geared (Castle-Crested Plate + helmet) Tam gains from
  *  GEAR ALONE, at level 0 — deliberately less than the full gap to
  *  `COMPANION_HP_CEILING` so leveling up still means something even in
  *  bare skin. Scaled against `villagerGearHpBonus`'s own real ceiling
  *  (`VILLAGER_GEAR_HP_MAX`), not a second hard-coded copy of it. */
-export const COMPANION_GEAR_HP_MAX = 2;
+const COMPANION_GEAR_HP_MAX = 2;
 /** The real invariant (see this file's own header): no combination of
  *  level + gear may push Tam's max HP past this, regardless of how high
  *  either input climbs. Equals BASE + LEVEL_MAX + GEAR_MAX, so the ceiling
  *  is only ever actually reached by maxing BOTH axes at once — see the
  *  "Post-launch fix" header note above for why that equality matters. */
-export const COMPANION_HP_CEILING = COMPANION_BASE_HP + COMPANION_LEVEL_HP_MAX + COMPANION_GEAR_HP_MAX;
+const COMPANION_HP_CEILING = COMPANION_BASE_HP + COMPANION_LEVEL_HP_MAX + COMPANION_GEAR_HP_MAX;
 
 /** Tam's own share of level HP: linearly interpolated up to
  *  `COMPANION_LEVEL_HP_MAX` at `COMPANION_LEVEL_CAP`, so partial levels

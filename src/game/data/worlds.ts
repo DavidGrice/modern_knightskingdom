@@ -195,7 +195,7 @@ export function resolveDestPoint(dest: WorldDestination, localX: number, localZ:
  *  hand-picked/live-captured spot into the same durable storage every other
  *  entry uses, rather than hand-typing a world x/z that only holds at the
  *  scale it was picked at. */
-export function toDestLocalPoint(dest: WorldDestination, worldX: number, worldZ: number): { x: number; z: number } {
+function toDestLocalPoint(dest: WorldDestination, worldX: number, worldZ: number): { x: number; z: number } {
   const scale = dest.worldScale ?? 0.32;
   return { x: (worldX - dest.origin.x) / scale, z: (worldZ - dest.origin.z) / scale };
 }
@@ -364,7 +364,7 @@ export const TEMPLATE_ARRIVAL_SPAWN: Record<string, { x: number; z: number; yaw:
 // fresh each entry via `enterDungeon()`, not visited via `travelTo()` — so
 // it deliberately has no thumb/model (its own DungeonScene.tsx renders
 // generated geometry instead) and isn't shown in TravelPanel's normal grid.
-export const DUNGEON_DESTINATION: WorldDestination = {
+const DUNGEON_DESTINATION: WorldDestination = {
   id: 'dungeon', name: 'The Sealed Crypt',
   blurb: 'A shifting underground ruin — no two descents are the same.',
   thumb: '', model: '',
@@ -389,7 +389,7 @@ export const DUNGEON_DESTINATION: WorldDestination = {
 export const ARENA_ORIGIN = { x: -4200, z: 4200 };
 export const ARENA_RADIUS = 40;
 
-export const ARENA_DESTINATION: WorldDestination = {
+const ARENA_DESTINATION: WorldDestination = {
   id: 'arena', name: 'The Endless Arena',
   blurb: 'A sealed pit. They keep coming until you leave, or you don’t.',
   thumb: '', model: '',
@@ -422,7 +422,7 @@ export const ARENA_DESTINATION: WorldDestination = {
 // radius: computed per-map from each layout's own space.bbox_size
 // (half-diagonal in the ground plane, ×320, +~15% margin), not guessed —
 // same derivation the live challenge-1 measurement above validated.
-export const CHALLENGE_ORIGIN = { x: -4200, z: -4200 };
+const CHALLENGE_ORIGIN = { x: -4200, z: -4200 };
 const CHALLENGE_SPACING = 650; // clear of every radius below, no wander-circle overlap
 
 export const CHALLENGE_DESTINATIONS: WorldDestination[] = [

@@ -3,7 +3,7 @@
 // Horse positions are mutated in place (no store churn); the Wildlife horses
 // and the PlayerController both read/write these objects.
 
-export interface HorseMob {
+interface HorseMob {
   id: string;
   url: string; // which catalog model/color this instance renders — carried
   // into ridingState on mount so the mounted view matches (see MountedHorse.tsx)

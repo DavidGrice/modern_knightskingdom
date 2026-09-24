@@ -8,7 +8,7 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SAVES_DIR = path.join(DATA_DIR, 'saves');
 
-export interface UserRecord {
+interface UserRecord {
   id: string;
   username: string;
   salt: string;
@@ -34,11 +34,11 @@ function saveUsers(users: UserRecord[]) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-export function hashPassword(password: string, salt: string): string {
+function hashPassword(password: string, salt: string): string {
   return crypto.scryptSync(password, salt, 32).toString('hex');
 }
 
-export function findUser(username: string): UserRecord | undefined {
+function findUser(username: string): UserRecord | undefined {
   return loadUsers().find((u) => u.username.toLowerCase() === username.toLowerCase());
 }
 

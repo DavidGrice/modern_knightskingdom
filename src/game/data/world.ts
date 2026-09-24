@@ -92,7 +92,7 @@ export const RESIDENT_TALK_RANGE = 1.5;
 // enterKeep/exitKeep), not a walk-through door, so the room stays fully
 // sealed and can't be stumbled into from outside.
 export const KEEP_INTERIOR = { x: 85, z: 85, halfX: 6, halfZ: 5 };
-export const KEEP_ENTER_SPAWN = {
+const KEEP_ENTER_SPAWN = {
   x: KEEP_INTERIOR.x, z: KEEP_INTERIOR.z - (KEEP_INTERIOR.halfZ - 2), yaw: Math.PI,
 };
 export const KEEP_CHEST_POS = { x: KEEP_INTERIOR.x + 3.3, z: KEEP_INTERIOR.z + 2.6 };
@@ -173,7 +173,7 @@ export const STORM_WORLD = 'template-06';
  *  Checked once in development — a prop inside the grid silently eats a
  *  build square the player has no way to clear, and the region is due to
  *  grow, so this needs to fail loudly rather than be re-found by eye. */
-export const FIXED_WORLD_PROPS: { name: string; x: number; z: number }[] = [
+const FIXED_WORLD_PROPS: { name: string; x: number; z: number }[] = [
   { name: 'SIGNPOST', x: SIGNPOST.x, z: SIGNPOST.z },
   { name: 'POND', x: POND.x, z: POND.z },
   { name: 'FISHING_DOCK', x: FISHING_DOCK.startX, z: FISHING_DOCK.startZ },

@@ -9,7 +9,7 @@ import { RESPEC_BASE_GOLD, RESPEC_GOLD_PER_POINT } from './playerAttributes';
 // a branch deepens with the craft it belongs to. Node icons are the original
 // game's own assets (chroma-keyed piece thumbnails, the castle-stone sprite,
 // portraits), per the "original assets first" directive.
-export interface TalentDef {
+interface TalentDef {
   id: string;
   skill: SkillId;
   tier: 1 | 2 | 3 | 4;

@@ -10,7 +10,7 @@
 // It can be STOPPED: the ram carries its own HP and takes melee and ranged
 // damage like anything else, so a defended homestead can break the thing
 // before it reaches the gate instead of only watching it arrive.
-export const RAM_MAX_HP = 30;
+const RAM_MAX_HP = 30;
 /** how close a swing or a shaft has to come to count as a hit */
 export const RAM_RADIUS = 1.1;
 

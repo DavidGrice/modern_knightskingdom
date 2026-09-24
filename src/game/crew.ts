@@ -14,7 +14,7 @@
 // tree read it, so routing it through Zustand would churn the store 60×/s.
 import type { PlacedBuilding } from './types';
 
-export type OccupyMode = 'standing' | 'seated';
+type OccupyMode = 'standing' | 'seated';
 
 export const crewState = {
   /** id of the building being crewed, or null when on foot */

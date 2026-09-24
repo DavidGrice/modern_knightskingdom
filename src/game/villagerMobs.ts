@@ -2,7 +2,7 @@
 // Live villager world positions, mutated in place by the Villagers renderer
 // and read by the minimap (mirrors the pattern in riding.ts for horses).
 
-export interface VillagerMob {
+interface VillagerMob {
   x: number;
   z: number;
   /** Newcomers WALK IN. Someone who joins the homestead arrives along the

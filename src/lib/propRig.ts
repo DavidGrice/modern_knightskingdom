@@ -226,7 +226,7 @@ export function loadRiggedProp(id: string, targetHeight: number): Promise<Rigged
 }
 
 /** does this asset have any part the renderer knows how to animate? */
-export const ANIMATED_ROLES = new Set([
+const ANIMATED_ROLES = new Set([
   'catapult_arm', 'catapult_bucket', 'thrower_arms', 'stone_thrower',
   'thrower_mount', 'thrower_side_pivot', 'arm', 'counterweight',
   'flag', 'flag_cloth', 'banner', 'flame',

@@ -1,6 +1,6 @@
 import type { ItemId } from '../types';
 
-export interface ItemDef {
+interface ItemDef {
   id: ItemId;
   name: string;
   icon: string; // emoji icon for UI

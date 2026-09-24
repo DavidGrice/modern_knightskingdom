@@ -23,7 +23,7 @@ import type { Blackboard, MemoryRecord } from './Blackboard';
 import { clockLabel, worldEnv } from '@/game/env';
 
 /** §11.2: "Ring buffer, cap 200 per agent." */
-export const MEMORY_CAP = 200;
+const MEMORY_CAP = 200;
 
 /** Deliberately a plain bounded array + `shift()`, NOT hand-rolled ring-
  *  buffer indexing (a write cursor, a wraparound modulo, a separate "how
@@ -36,7 +36,7 @@ export const MEMORY_CAP = 200;
  *  is genuinely free at this scale and the plain-array version is far less
  *  code to get wrong than a ring buffer would be for a benefit nothing here
  *  needs. */
-export function pushMemory(stream: MemoryRecord[], at: number, summary: string): void {
+function pushMemory(stream: MemoryRecord[], at: number, summary: string): void {
   stream.push({ at, summary });
   if (stream.length > MEMORY_CAP) stream.shift();
 }

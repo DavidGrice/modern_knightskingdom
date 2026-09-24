@@ -44,7 +44,7 @@ export function startFishing(nodeId: string, rainBoosted: boolean) {
   fishingState.nextEventAt = performance.now() + (base + Math.random() * spread) * guildCut;
 }
 
-export function resetFishing() {
+function resetFishing() {
   fishingState.nodeId = null;
   fishingState.phase = 'idle';
 }

@@ -5,7 +5,7 @@
 // data/npcs.ts spot, which used to leave a stale prompt floating at their
 // old daytime post after Phase 15's night schedule moved them elsewhere.
 
-export interface NpcMob {
+interface NpcMob {
   x: number;
   z: number;
   /** Mirrors CourtNpc's own `clip` state, written every frame — debug/test

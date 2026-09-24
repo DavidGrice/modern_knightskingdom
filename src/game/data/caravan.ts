@@ -49,12 +49,12 @@ export const CARAVAN_LOSS_SURVIVE_FRACTION = 0.5; // an uninsured bad roll never
 // The more either house's cause you've thrown in with, the more the OTHER
 // house's raiders have reason to watch your roads — genuinely neutral
 // standing (contestedPressure === 0) leaves the base riskPct untouched.
-export const CARAVAN_ALLEGIANCE_RISK_MAX = 0.15;
+const CARAVAN_ALLEGIANCE_RISK_MAX = 0.15;
 export function effectiveCaravanRisk(baseRiskPct: number, allegiance: number): number {
   return Math.min(0.9, baseRiskPct + contestedPressure(allegiance) * CARAVAN_ALLEGIANCE_RISK_MAX);
 }
 
-export interface CaravanRouteDef {
+interface CaravanRouteDef {
   etaMs: number;
   riskPct: number;
 }

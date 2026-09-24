@@ -38,7 +38,7 @@ export const BUILD_CHALLENGE_ID = CHALLENGE_DESTINATIONS[0].id;
 export const BUILD_CHALLENGE_TARGET = 6;
 export const BUILD_CHALLENGE_TIME_MS = 90_000;
 
-export interface BuildChallengeState {
+interface BuildChallengeState {
   active: boolean;
   deadline: number; // performance.now() timestamp the run fails at
   built: number;

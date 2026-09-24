@@ -22,7 +22,7 @@ import { combatState } from './combat';
 /** how close E can actually resolve the pass — PlayerController's own
  *  long-standing prompt range, moved here so the pose below can be defined
  *  relative to it instead of guessing at it */
-export const JOUST_PROMPT_RANGE = INTERACT_RANGE + 2.5;
+const JOUST_PROMPT_RANGE = INTERACT_RANGE + 2.5;
 
 /** A charge is couched well BEFORE the pass connects — a rider levels the
  *  lance down the run-up, not on top of their opponent. Comfortably wider
@@ -34,7 +34,7 @@ const COUCH_RANGE = 16;
 /** the slice of game state that decides whether Richard is standing in front
  *  of you at all — satisfied structurally by the store's own state, so both
  *  callers just hand over the state object they already have. */
-export interface JoustContext {
+interface JoustContext {
   completedQuests: string[];
   /** template-world id being visited; null = the homestead */
   destination: string | null;

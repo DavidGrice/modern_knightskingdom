@@ -68,7 +68,7 @@ export function isBulkGood(id: ItemId): boolean {
  *  game never touches it (a starting player has nowhere near 80 of anything)
  *  and the first time the ceiling is felt is well after the first Stockpile
  *  could have been raised. */
-export const BASE_STORAGE_PER_GOOD = 80;
+const BASE_STORAGE_PER_GOOD = 80;
 
 /** Per-good capacity each built deposit point adds — every kind the hauling
  *  AI targets (`haul.ts`'s `targetKinds`) counts, at honest relative sizes:
@@ -76,7 +76,7 @@ export const BASE_STORAGE_PER_GOOD = 80;
  *  Wave 9 Storehouse is the dedicated upgrade that also confers the villager
  *  carry bonus (data/attributes.ts). Keep this table and `targetKinds` in
  *  step — a deposit point that holds nothing is a wasted walk. */
-export const STORAGE_PER_BUILDING: Record<string, number> = {
+const STORAGE_PER_BUILDING: Record<string, number> = {
   barrel: 12,
   stockpile: 60,
   storehouse: 160,
@@ -112,7 +112,7 @@ export function storageCapacity(buildings: PlacedBuilding[]): number {
  *  into one that's already the nearest target, but they must never become the
  *  homestead's notional "stores" — a decorative barrel by the fence would
  *  otherwise pull the whole roster's walk-to point across the yard. */
-export const STORE_TYPES: readonly string[] = ['storehouse', 'stockpile'];
+const STORE_TYPES: readonly string[] = ['storehouse', 'stockpile'];
 
 /** The best store standing, or null for "haul to the settlement centre" (the
  *  fallback every caller already had). `extra` filters by instance/ownership

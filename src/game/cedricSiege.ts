@@ -22,7 +22,7 @@ type GameState = ReturnType<typeof useGameStore.getState>;
 /** camp revealed, currently at large (not jailed — see freeCedric below for
  *  how he gets back out), and not his own sworn ally — the shared condition
  *  every Cedric-arc gate below builds on */
-export function cedricArcEligible(st: GameState): boolean {
+function cedricArcEligible(st: GameState): boolean {
   return st.completedQuests.includes(CEDRIC_REVEAL_QUEST) && !st.defeatedCedric && st.alliance !== 'cedric';
 }
 
@@ -34,7 +34,7 @@ export function cedricSiegeAllowed(st: GameState): boolean {
 /** Wave 38 (A1): once jailed, how many in-game days must pass before he can
  *  break free for a rematch — long enough that recapture reads as a real
  *  event, not something rolled for again the very next night. */
-export const CEDRIC_JAILBREAK_COOLDOWN_DAYS = 3;
+const CEDRIC_JAILBREAK_COOLDOWN_DAYS = 3;
 
 /** may tonight's roll spring him from his cell? Requires him currently being
  *  IN custody (`defeatedCedric`, which Wave 38 repurposes from "permanently

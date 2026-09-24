@@ -41,7 +41,7 @@ const scratchV2 = new THREE.Vector3();
 // `CELL` stays exported (unused externally today, but was already a public
 // export before this iteration and nothing requires removing it).
 /** metres per cell — fine enough to find a gate, coarse enough to stay cheap */
-export const CELL = navgridConfig.home.cellSize;
+const CELL = navgridConfig.home.cellSize;
 /** half-width of the home grid, centred on the homestead */
 const HOME_HALF = navgridConfig.home.halfExtent;
 /** how fat the walkers are; obstacles are inflated by this so a path never
@@ -69,7 +69,7 @@ const NEIGHBOURS: [number, number, number][] = [
   [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
 ];
 
-export interface NavGridOptions {
+interface NavGridOptions {
   /** null = home. Matches Agent.region (src/ai/core/Agent.ts) and
    *  PlacedBuilding.world — the same "null means home" convention used
    *  everywhere else in this codebase (isHomeBuilding, TemplateWorld, etc). */
@@ -1036,7 +1036,7 @@ export interface NavAgent {
  *  comment documents, and `game/navgrid.ts` is already deep in that graph
  *  from the other side — see this interface's own populate-once-a-frame
  *  contract below for how the real dependency direction stays safe). */
-export interface AgentSnapshot {
+interface AgentSnapshot {
   id: string;
   position: { x: number; z: number };
   region: string | null;
@@ -1102,7 +1102,7 @@ const _avoid = { nx: 0, nz: 0 };
  * is measured before this runs and passed through untouched — matching
  * §7.5's "perturbs the path rather than replacing it" exactly.
  */
-export function applyLocalAvoidance(agent: NavAgent, nx: number, nz: number): { nx: number; nz: number } {
+function applyLocalAvoidance(agent: NavAgent, nx: number, nz: number): { nx: number; nz: number } {
   _avoid.nx = nx;
   _avoid.nz = nz;
   const n = liveAgents.length;

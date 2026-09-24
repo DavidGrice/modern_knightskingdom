@@ -16,7 +16,7 @@
 // callers fall back to the authored boxes — so collision is never wrong,
 // only coarser for the first moment.
 
-export interface ShapeBox {
+interface ShapeBox {
   cx: number; cy: number; cz: number;
   hx: number; hy: number; hz: number;
 }
@@ -24,7 +24,7 @@ export interface ShapeBox {
 let shapes: Record<string, ShapeBox[]> | null = null;
 let loading: Promise<void> | null = null;
 
-export function loadCollisionShapes(): Promise<void> {
+function loadCollisionShapes(): Promise<void> {
   if (!loading) {
     loading = fetch('/assets/collision.json')
       .then((r) => (r.ok ? r.json() : {}))

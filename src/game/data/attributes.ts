@@ -87,7 +87,7 @@ const CARRY_LEVEL_CAP = 10;
  *  carrier row) — these numbers are unchanged, they were always real. */
 const CARRIER_BONUS: Record<CarrierTier, number> = { basket: 4, cart: 10 };
 
-export function carrierBonus(carrier?: CarrierTier): number {
+function carrierBonus(carrier?: CarrierTier): number {
   return carrier ? CARRIER_BONUS[carrier] : 0;
 }
 
@@ -108,17 +108,17 @@ export function carrierBonus(carrier?: CarrierTier): number {
 // villager's OWN settlement (matching the `world` instance-separation
 // doctrine every other per-world system uses) is stable, legible, and makes
 // the piece an economic upgrade instead of a placement puzzle.
-export const STOREHOUSE_CARRY_BONUS = 3;
+const STOREHOUSE_CARRY_BONUS = 3;
 /** two Storehouses' worth. Capped so this can't be stacked into a homestead
  *  where hauling stops mattering — the point is to soften Phase 5's real
  *  haul-travel cost, not to delete it. */
-export const STOREHOUSE_BONUS_CAP = 6;
+const STOREHOUSE_BONUS_CAP = 6;
 
 /** Passive carry bonus a villager gets from what their settlement has built.
  *  `buildings` omitted (every UI/preview caller that has no store handy)
  *  answers 0 rather than guessing — this module stays pure data, it never
  *  reaches into the store itself. */
-export function externalCapacityBonus(v: Villager, buildings?: PlacedBuilding[]): number {
+function externalCapacityBonus(v: Villager, buildings?: PlacedBuilding[]): number {
   if (!buildings?.length) return 0;
   const world = v.world ?? null;
   let n = 0;

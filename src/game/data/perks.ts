@@ -1,4 +1,4 @@
-export interface PerkDef {
+interface PerkDef {
   id: string;
   name: string;
   desc: string;

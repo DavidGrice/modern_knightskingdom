@@ -31,7 +31,7 @@
 import type { WorldDestination } from './worlds';
 import footprintData from './templateWalkableFootprint.generated.json';
 
-export interface WalkableRect {
+interface WalkableRect {
   minX: number;
   minZ: number;
   maxX: number;

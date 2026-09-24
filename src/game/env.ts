@@ -31,7 +31,7 @@ export const worldEnv = {
 /** Spring/Summer/Autumn/Winter, ~`DAYS_PER_SEASON` in-game days each — a
  *  full "year" is a session-scale arc (with the default 12-minute day, about
  *  2.4 real hours), not tied to any real-world calendar. */
-export const DAYS_PER_SEASON = 3;
+const DAYS_PER_SEASON = 3;
 export function seasonOf(dayCount: number): number {
   return Math.floor(dayCount / DAYS_PER_SEASON) % 4;
 }
@@ -56,7 +56,7 @@ export function clockLabel(time: number): string {
 }
 
 /** lerp between color/intensity stops keyed by time of day */
-export interface EnvStop {
+interface EnvStop {
   t: number;
   sun: [number, number, number];
   sunI: number;
@@ -66,7 +66,7 @@ export interface EnvStop {
   sky: [number, number, number];
 }
 
-export const ENV_STOPS: EnvStop[] = [
+const ENV_STOPS: EnvStop[] = [
   { t: 0.0,  sun: [0.35, 0.45, 0.8], sunI: 0.25, amb: [0.25, 0.3, 0.55], ambI: 0.28, fog: [0.04, 0.05, 0.1],  sky: [0.06, 0.07, 0.16] },
   { t: 0.22, sun: [0.35, 0.45, 0.8], sunI: 0.25, amb: [0.25, 0.3, 0.55], ambI: 0.3,  fog: [0.07, 0.07, 0.13], sky: [0.1, 0.09, 0.2] },
   { t: 0.28, sun: [1.0, 0.62, 0.36], sunI: 1.3,  amb: [0.8, 0.62, 0.5],  ambI: 0.55, fog: [0.75, 0.6, 0.5],   sky: [0.9, 0.65, 0.45] },

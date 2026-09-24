@@ -31,7 +31,7 @@ export const SOUND_LOUDNESS = PERCEPTION.hearing.loudness;
 /** §6.2's `type`. Kept coarse: what a listener actually needs to know is
  *  "was that a fight" (raises threat) vs "was that someone moving about"
  *  (locates a neighbour, threatens nobody). */
-export type SoundType = 'combat' | 'footstep';
+type SoundType = 'combat' | 'footstep';
 
 export interface SoundEvent {
   /** monotonic; agents remember the last seq they consumed rather than a

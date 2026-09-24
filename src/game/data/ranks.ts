@@ -1,6 +1,6 @@
 import type { SkillId } from '../types';
 
-export interface SkillDef {
+interface SkillDef {
   id: SkillId;
   name: string;
   icon: string;

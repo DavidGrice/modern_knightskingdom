@@ -10,14 +10,14 @@
 
 export type Gender = 'male' | 'female';
 
-export interface FaceOption {
+interface FaceOption {
   id: string;        // donor id (also used as the assembled headDonor)
   label: string;      // anonymous style name — no title/rank implied
   gender: Gender;
   thumb: string;       // /assets/creator/faces/{id}.png
 }
 
-export interface CrestOption {
+interface CrestOption {
   id: string;        // donor id (also used as the assembled bodyDonor)
   label: string;
   gender: Gender;

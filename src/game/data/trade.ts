@@ -61,7 +61,7 @@ export const SELL_PRICES: Partial<Record<ItemId, number>> = {
   blossom_tart: 14,
 };
 
-export interface BuyOffer {
+interface BuyOffer {
   item: ItemId;
   qty: number;
   price: number;
@@ -84,8 +84,8 @@ export const BUY_OFFERS: BuyOffer[] = [
  *  replaces. This was a real, independent hand-rolled window before this
  *  wave, sharing no code with isWorkingHours/isWatchHours (data/villagers.ts)
  *  despite asking the same question — see schedule.ts's own header. */
-export const MERCHANT_PRESENT_START = 0.3;
-export const MERCHANT_PRESENT_END = 0.72;
+const MERCHANT_PRESENT_START = 0.3;
+const MERCHANT_PRESENT_END = 0.72;
 export function merchantPresent(time: number): boolean {
   return activeWindow(time, MERCHANT_PRESENT_START, MERCHANT_PRESENT_END, false);
 }
@@ -121,13 +121,13 @@ export type { MarketEntry };
  *  it into an actual percentage — see this section's header for the math. */
 export const MARKET_NUDGE_PER_UNIT = 0.04;
 /** level === ±1 means the price is ±25% off baseline */
-export const MARKET_SENSITIVITY = 0.25;
+const MARKET_SENSITIVITY = 0.25;
 /** real minutes for a full ±1 swing to linearly decay back to 0 */
-export const MARKET_RECOVERY_MS = 20 * 60_000;
+const MARKET_RECOVERY_MS = 20 * 60_000;
 
 /** `entry.level`, decayed linearly toward 0 for the real time elapsed since
  *  `lastTradeAt` — a fresh entry (or none at all) is baseline (0). */
-export function decayedMarketLevel(entry: MarketEntry | undefined, now: number): number {
+function decayedMarketLevel(entry: MarketEntry | undefined, now: number): number {
   if (!entry) return 0;
   const elapsed = now - entry.lastTradeAt;
   const remaining = Math.max(0, 1 - elapsed / MARKET_RECOVERY_MS);

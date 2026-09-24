@@ -281,7 +281,7 @@ export function roadGateFor(s: { x: number; z: number; halfX: number; halfZ: num
  *  metres from anything a deed gates, which is the opposite of what the
  *  grounds are for. Trees line the homestead's own lane; the roads out to the
  *  grounds run through open country, as roads out to somewhere do. */
-export const ROAD_VERGE_RANGE = 68;
+const ROAD_VERGE_RANGE = 68;
 export function vergeCells(): [number, number][] {
   return routeCells().filter(([cx, cz]) => Math.hypot(cx * ROAD_TILE, cz * ROAD_TILE) <= ROAD_VERGE_RANGE);
 }

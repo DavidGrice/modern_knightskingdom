@@ -31,7 +31,7 @@ type GameState = ReturnType<typeof useGameStore.getState>;
  *  this existed (which defaults to 'normal', see types.ts's SaveGame.difficulty
  *  doc) sees exactly zero behavior change. Values are tunable — same honest
  *  "tunable" flag bossEncounter.ts's own BOSS_TIER_STEP carries. */
-export interface DifficultyDef {
+interface DifficultyDef {
   id: DifficultyId;
   label: string;
   blurb: string;
@@ -81,7 +81,7 @@ export const CASTER_TIER = 1;
  *  threat, though still well before the mid/late-game gates above. */
 export const SHIELDED_ELITE_TIER = 2;
 
-export interface TierRule {
+interface TierRule {
   tier: number;
   /** lifetime structures raised */
   structures: number;
@@ -97,7 +97,7 @@ export interface TierRule {
  *  score. A player who only ever builds should not be handed a war, and one
  *  who only ever fights should not be handed a siege of a homestead that
  *  isn't there yet. Tune these; they are the whole difficulty curve. */
-export const TIER_RULES: TierRule[] = [
+const TIER_RULES: TierRule[] = [
   { tier: 0, structures: 0, skill: 0, kills: 0, days: 0 },
   { tier: 1, structures: 2, skill: 4, kills: 3, days: 1 },
   { tier: 2, structures: 5, skill: 10, kills: 12, days: 3 },
@@ -106,7 +106,7 @@ export const TIER_RULES: TierRule[] = [
   { tier: 5, structures: 20, skill: 40, kills: 100, days: 12 },
 ];
 
-export interface ThreatSnapshot {
+interface ThreatSnapshot {
   tier: number;
   /** can the player actually shoot back — a weapon AND ammunition for it */
   rangedReady: boolean;
@@ -139,14 +139,14 @@ export const difficultyState: ThreatSnapshot = {
 /** A weapon on its own is not a defence. The dragon gate specifically exists
  *  because players met it with no way to reach it, so this asks for the
  *  ammunition too. */
-export function rangedReady(st: GameState): boolean {
+function rangedReady(st: GameState): boolean {
   const inv = st.inventory;
   const bow = (inv.longbow ?? 0) > 0 && (inv.arrow ?? 0) > 0;
   const bolt = (inv.crossbow ?? 0) > 0 && (inv.bolt ?? 0) > 0;
   return bow || bolt;
 }
 
-export function computeThreat(st: GameState): ThreatSnapshot {
+function computeThreat(st: GameState): ThreatSnapshot {
   const structures = st.stats.buildingsPlaced ?? 0;
   const skill = totalSkillLevel(st.xp);
   const kills = st.stats.kills ?? 0;

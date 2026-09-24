@@ -29,7 +29,7 @@ import type { RectSection } from '../types/world';
  */
 export type { RectSection };
 
-export interface Ground extends RectSection {
+interface Ground extends RectSection {
   id: string;
   name: string;
   /** land tier (index into LAND_TIERS) the deed must reach to work it */

@@ -29,7 +29,7 @@ export interface Context {
 /** §5.2 — one normalized input passed through a response curve. `input`
  *  MUST return 0..1; `evalCurve` clamps again defensively, but a
  *  consideration author should never rely on that clamp doing real work. */
-export interface Consideration {
+interface Consideration {
   name: string;
   input: (agent: Agent, ctx: Context) => number;
   curve: Curve;
@@ -38,7 +38,7 @@ export interface Consideration {
 /** §5.3's weight table — category is what selects the weight, not a
  *  per-action override, so two `work` actions can't quietly disagree about
  *  how important "work" is. */
-export type Category = 'survival' | 'combat' | 'companion' | 'work' | 'needs' | 'social' | 'ambient';
+type Category = 'survival' | 'combat' | 'companion' | 'work' | 'needs' | 'social' | 'ambient';
 
 /** §5.3/§5.4 — a scoreable candidate. `targetKinds` present means 5.4's
  *  candidate assembly expands this into one candidate per nearby target of
@@ -77,7 +77,7 @@ export interface Action {
  *  (`1 - 1/0 = -Infinity`) in the literal pseudocode; guarded here since an
  *  action with no considerations is a legitimate (if unusual) always-on
  *  candidate, not something that should silently poison its own score. */
-export function scoreAction(action: Action, agent: Agent, ctx: Context): ScoredAction {
+function scoreAction(action: Action, agent: Agent, ctx: Context): ScoredAction {
   const n = action.considerations.length;
   const modFactor = n > 0 ? 1 - 1 / n : 1;
   let score = 1;
@@ -107,10 +107,10 @@ export function scoreAction(action: Action, agent: Agent, ctx: Context): ScoredA
 // §3.4 calls that gap load-bearing; sleep's interruptPriority is 3, not
 // needs' default 1 — §5.6). Exported so a future action-authoring pass
 // (5.6+) has a named constant to start from instead of a magic number.
-export const CATEGORY_WEIGHT: Record<Category, number> = {
+const CATEGORY_WEIGHT: Record<Category, number> = {
   survival: 4.0, combat: 3.0, companion: 2.0, work: 1.2, needs: 1.0, social: 0.8, ambient: 0.3,
 };
-export const CATEGORY_INTERRUPT_PRIORITY: Record<Category, number> = {
+const CATEGORY_INTERRUPT_PRIORITY: Record<Category, number> = {
   survival: 10, combat: 8, companion: 5, work: 1, needs: 1, social: 1, ambient: 0,
 };
 
@@ -124,7 +124,7 @@ const SWITCH_THRESHOLD = 1.15;
  *  id->Action lookup) because `pickAction` needs `interruptPriority`/
  *  `minDuration`/`cooldown`, none of which `ScoredAction` itself carries —
  *  and every caller already has both halves at hand from `scoreAction`. */
-export interface Candidate {
+interface Candidate {
   action: Action;
   scored: ScoredAction;
   /** The exact Context this candidate was scored against — carries the
@@ -158,7 +158,7 @@ export interface Candidate {
  *
  *  With nothing currently running, the highest-scoring eligible candidate
  *  wins outright — no momentum or threshold applies to a cold start. */
-export function pickAction(candidates: Candidate[], agent: Agent, now: number): Candidate | null {
+function pickAction(candidates: Candidate[], agent: Agent, now: number): Candidate | null {
   const bb: Blackboard = agent.bb;
   // Performance pass (2026-07-28): with no cooldowns active at all — the
   // common case, most agents most of the time — this map() was allocating
@@ -268,7 +268,7 @@ function pickRaw(eligible: Candidate[], bb: Blackboard, now: number): Candidate 
  *  `cooldownSeconds` (the common case — most actions don't have one) is a
  *  deliberate no-op rather than writing a cooldown that immediately reads
  *  as expired anyway. */
-export function startCooldown(bb: Blackboard, actionId: string, cooldownSeconds: number, now: number): void {
+function startCooldown(bb: Blackboard, actionId: string, cooldownSeconds: number, now: number): void {
   if (cooldownSeconds <= 0) return;
   bb.cooldowns.set(actionId, now + cooldownSeconds);
 }
@@ -340,7 +340,7 @@ function intrinsicSetFor(archetype: string): Set<string> {
   return s;
 }
 
-export function assembleCandidates(
+function assembleCandidates(
   allActions: Action[], agent: Agent, now: number, queryRadius = 40,
 ): Candidate[] {
   const intrinsicIds = intrinsicSetFor(agent.archetype);
@@ -391,7 +391,7 @@ export function assembleCandidates(
  *  function has no content-authoring opinions of its own. `Agent.think()`
  *  calls this with the real, permanent registry (`src/ai/actions`) and its
  *  own `elapsed` as `dt`. */
-export function runReasoner(agent: Agent, actions: Action[], now: number, dt: number): void {
+function runReasoner(agent: Agent, actions: Action[], now: number, dt: number): void {
   const candidates = assembleCandidates(actions, agent, now);
   agent.bb.lastScores = candidates.map((c) => c.scored);
   const winner = pickAction(candidates, agent, now);

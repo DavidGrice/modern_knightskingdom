@@ -25,9 +25,9 @@
 // house the player has NOT been leaning toward.
 import { contestedPressure, leaningHouse } from './data/allegiance';
 
-export const SETTLEMENT_RAID_BASE_COOLDOWN_MS = 15 * 60_000; // real minutes, no pressure
-export const SETTLEMENT_RAID_MIN_COOLDOWN_MS = 6 * 60_000;   // floor at max contested pressure
-export const SETTLEMENT_RAID_TIME_MS = 100_000;
+const SETTLEMENT_RAID_BASE_COOLDOWN_MS = 15 * 60_000; // real minutes, no pressure
+const SETTLEMENT_RAID_MIN_COOLDOWN_MS = 6 * 60_000;   // floor at max contested pressure
+const SETTLEMENT_RAID_TIME_MS = 100_000;
 export const SETTLEMENT_RAID_START_HP = 120;
 export const SETTLEMENT_RAID_DRAIN_PER_SEC = 6;
 export const SETTLEMENT_RAID_PROXIMITY_RADIUS = 9;
@@ -38,7 +38,7 @@ export const SETTLEMENT_RAID_SPAWN_INTERVAL_S = 5;
  *  TAX_COOLDOWN_MS (gameStore.ts), not a separate invented scale. */
 export const SETTLEMENT_RAID_YIELD_PENALTY_MS = 5 * 60_000;
 
-export interface SettlementRaidState {
+interface SettlementRaidState {
   active: boolean;
   destId: string | null;
   deadline: number; // performance.now() timestamp

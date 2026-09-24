@@ -25,12 +25,12 @@ function sign(payload: string): string {
   return crypto.createHmac('sha256', secret()).update(payload).digest('hex');
 }
 
-export function makeToken(userId: string): string {
+function makeToken(userId: string): string {
   const payload = `${userId}.${Date.now() + MAX_AGE * 1000}`;
   return `${payload}.${sign(payload)}`;
 }
 
-export function parseToken(token: string | undefined): string | null {
+function parseToken(token: string | undefined): string | null {
   if (!token) return null;
   const idx = token.lastIndexOf('.');
   if (idx < 0) return null;

@@ -33,7 +33,7 @@
 // same shape as this wave's carriers, since it is the same problem.
 import type { ChestplateTier, ItemId, Villager } from '../types';
 
-export interface ChestplateDef {
+interface ChestplateDef {
   id: ChestplateTier;
   /** the countable Satchel/Armory item this tier is worn from */
   item: ItemId;

@@ -191,7 +191,7 @@ export const SETTLEMENT_GROWTH_QUEST_DEST: Record<string, string> = {
  *  template-07's three residents are lumberjack/miner/merchant rather than
  *  Fenwick's farmer/merchant/builder — see SETTLEMENT_NODES just below for
  *  why this site actually has ore/timber for the first two to work. */
-export interface SettlementFoundingDef {
+interface SettlementFoundingDef {
   cost: Partial<Record<ItemId, number>>;
   requiredQuestId: string;
   residents: { id: string; name: string; job: VillagerJob }[];
@@ -271,7 +271,7 @@ export const SETTLEMENT_FOUNDING: Record<string, SettlementFoundingDef> = {
  *  lumberjack's equivalent spot happened to land close enough to a tree by
  *  luck; the miner's did not, so this one is placed on purpose instead of
  *  trusting the same luck twice). */
-export interface SettlementNodeDef {
+interface SettlementNodeDef {
   kind: ResourceNodeState['kind'];
   variant?: 'iron';
   x: number;

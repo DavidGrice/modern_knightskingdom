@@ -15,7 +15,7 @@
 import { PALETTE_SWATCHES, type Gender } from './minifigs';
 import type { CharacterConfig, Villager } from '../types';
 
-export interface VillagerLook {
+interface VillagerLook {
   headDonor?: string;
   bodyDonor?: string;
   armColor?: number;
