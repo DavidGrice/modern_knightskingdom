@@ -11,6 +11,7 @@ import { useAppStore } from '@/game/store/appStore';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
 import { playerState } from '@/game/playerState';
 import { FIDGET_CLIPS } from '@/ai/actions/ambient';
+import { pick } from '@/lib/rng';
 
 /** scratch for the LOD distance check below — module-scope like every other
  *  per-frame scratch object in this codebase (see PlayerController.tsx) */
@@ -219,7 +220,7 @@ export function useIdleFidget() {
     if (clip !== REST_CLIP) return; // mid-fidget already — onClipEnd below settles it
     restTimer.current -= dt;
     if (restTimer.current > 0) return;
-    setClip(FIDGET_CLIPS[Math.floor(Math.random() * FIDGET_CLIPS.length)]);
+    setClip(pick(FIDGET_CLIPS));
     setLoop(false);
   });
 

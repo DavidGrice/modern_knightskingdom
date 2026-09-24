@@ -20,6 +20,7 @@
 // line.
 import { sizeFor } from './data/buildables';
 import type { EnemyKind } from './combat';
+import { mulberry32, pickWith } from '@/lib/rng';
 
 /** the real, authored width of one `stonewall` piece — every wall-tiling
  *  computation below derives from this, not a second hand-copied number, so
@@ -211,16 +212,6 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkdungeon = dungeonState;
 }
 
-function mulberry32(seed: number) {
-  let s = seed;
-  return () => {
-    s |= 0; s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** hard-code the dungeon origin far from anything else (see data/worlds.ts's
  *  'dungeon' WorldDestination entry, which reuses this for its own bound) */
 export const DUNGEON_ORIGIN = { x: 4200, z: 4200 };
@@ -382,7 +373,7 @@ export const ESCORT_EXTRACTION_RADIUS = 6;
 
 function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
   const totalRooms = 5 + Math.floor(rnd() * 4); // 5..8
-  const wallStyle: WallStyle = WALL_STYLES[Math.floor(rnd() * WALL_STYLES.length)];
+  const wallStyle: WallStyle = pickWith(rnd, WALL_STYLES);
 
   const rooms: GenRoom[] = [{
     index: 0, cx: DUNGEON_ORIGIN.x, cz: DUNGEON_ORIGIN.z,
@@ -397,7 +388,7 @@ function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
     attempts++;
     // uniform over ALL rooms so far, not just the most recent -> a real
     // random recursive tree, not a disguised chain (see module doc)
-    const parent = rooms[Math.floor(rnd() * rooms.length)];
+    const parent = pickWith(rnd, rooms);
     if (parent.depth >= MAX_TREE_DEPTH) continue;
 
     let side: Side | null = null;
@@ -407,7 +398,7 @@ function tryGenerate(rnd: () => number, seed: number): DungeonLayout | null {
       const used = usedSlots.get(parent.index)!;
       const free: number[] = [];
       for (let k = 0; k < n; k++) if (!used.has(`${s}:${k}`)) free.push(k);
-      if (free.length > 0) { side = s; kP = free[Math.floor(rnd() * free.length)]; break; }
+      if (free.length > 0) { side = s; kP = pickWith(rnd, free); break; }
     }
     if (side === null) continue; // parent has no free side/slot left
 

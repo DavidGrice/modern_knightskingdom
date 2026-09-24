@@ -16,6 +16,7 @@ import { playerState } from '@/game/playerState';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 import type { Curve } from '../core/curves';
+import { pick } from '@/lib/rng';
 
 const NOTICE_RANGE = 5;
 const HOLD = 1.8;
@@ -40,7 +41,7 @@ class NoticePlayerActivity implements Activity {
       // same "no turn-finished signal to wait on" reasoning gather.ts/
       // haul.ts's own align phase already documents
       this.phase = 'react';
-      const clip = REACTION_CLIPS[Math.floor(Math.random() * REACTION_CLIPS.length)];
+      const clip = pick(REACTION_CLIPS);
       agent.intent = { type: 'PLAY_ANIM', clip, loop: false, anchored: true };
       return 'RUNNING';
     }

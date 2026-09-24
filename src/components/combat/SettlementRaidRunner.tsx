@@ -18,6 +18,7 @@ import { useEnemyStore, type EnemyKind } from '@/game/combat';
 import { worldEnv } from '@/game/env';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { HOUSE_NAME, leaningHouse } from '@/game/data/allegiance';
+import { pick } from '@/lib/rng';
 import {
   settlementRaidState, settlementRaidCooldownMs, settlementRaiderKinds, settlementRaidMaxLive,
   startSettlementRaid, SETTLEMENT_RAID_START_HP, SETTLEMENT_RAID_DRAIN_PER_SEC,
@@ -84,7 +85,7 @@ export default function SettlementRaidRunner() {
     if (kinds && spawnTimer.current <= 0 && live < maxLive) {
       spawnTimer.current = SETTLEMENT_RAID_SPAWN_INTERVAL_S;
       const dest = WORLD_DESTINATION_BY_ID[destId];
-      const kind = kinds[Math.floor(Math.random() * kinds.length)] as EnemyKind;
+      const kind = pick(kinds) as EnemyKind;
       const angle = Math.random() * Math.PI * 2;
       const rad = dest.radius * 0.85;
       useEnemyStore.getState().spawn(

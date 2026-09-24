@@ -13,6 +13,7 @@
 // sense", per the ROADMAP entry this implements).
 
 import type { ItemId } from './types';
+import { pick, randInt } from '@/lib/rng';
 
 export type ArenaEnvId = 'earth' | 'water' | 'snow' | 'lava';
 
@@ -95,7 +96,7 @@ export function startArenaObjective() {
  *  same ring by chance. */
 export function rollNextArenaEnv(exclude: ArenaEnvId): ArenaEnvId {
   const choices = ARENA_ENVS.filter((e) => e.id !== exclude);
-  return choices[Math.floor(Math.random() * choices.length)].id;
+  return pick(choices).id;
 }
 
 /** raidStrength() (the game's one already-tuned overall-progress curve)
@@ -129,7 +130,7 @@ export function rollArenaMilestoneLoot(): Partial<Record<ItemId, number>> {
   const out: Partial<Record<ItemId, number>> = {};
   for (const e of ARENA_MILESTONE_LOOT) {
     if (Math.random() >= e.chance) continue;
-    const n = Math.round((e.min + Math.floor(Math.random() * (e.max - e.min + 1))) * mult);
+    const n = Math.round(randInt(e.min, e.max) * mult);
     if (n > 0) out[e.item] = (out[e.item] ?? 0) + n;
   }
   return out;

@@ -10,6 +10,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { loadRiggedProp, type RiggedProp as Rig } from '@/lib/propRig';
 import { crewState } from '@/game/crew';
+import { wrapAngle } from '@/lib/math';
 
 /** per-building fire impulses, written by the siege code, read here. A plain
  *  mutable module (the established leaf-module pattern) because the firing
@@ -108,9 +109,7 @@ export default function RiggedProp({
       const crewed = !!buildingId && crewState.engineId === buildingId;
       const want = crewed ? crewState.yaw + Math.PI : yaw;
       const cur = root.current.rotation.y;
-      let d = want - cur;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
+      const d = wrapAngle(want - cur);
       // eased so a heavy engine traverses rather than snaps
       root.current.rotation.y = cur + d * Math.min(1, dt * 6);
     }

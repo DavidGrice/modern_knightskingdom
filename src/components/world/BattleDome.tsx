@@ -15,6 +15,7 @@ import RiggedFigure from '../character/RiggedFigure';
 import type { CharacterConfig } from '@/game/types';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import PropModel from './PropModel';
+import { wrapAngle } from '@/lib/math';
 
 const CYL = '/assets/props/cylindrical';
 const B = '/assets/props/buildings';
@@ -73,9 +74,7 @@ function DuelSpectator({ x, z }: { x: number; z: number }) {
     const desired = dueling
       ? Math.atan2(-(playerState.x - wx), -(playerState.z - wz))
       : Math.atan2(-(0 - x), -(0 - z));
-    let diff = desired - yaw.current;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    const diff = wrapAngle(desired - yaw.current);
     yaw.current += diff * Math.min(1, dt * 3);
     g.rotation.y = yaw.current + Math.PI;
   });

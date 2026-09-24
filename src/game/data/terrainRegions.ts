@@ -84,6 +84,7 @@ import { ROAD_TILE, routeCells } from './road';
 import { GROUNDS } from './grounds';
 import { DIG_OUTSKIRT } from '../waterworks';
 import TERRAIN_REGIONS_DATA from './terrainRegions.generated.json';
+import { aabbOverlapMinMax } from '@/lib/geometry';
 
 /** One raised-terrain patch: a square box (the only place inside it where the
  *  ground is not y=0) plus the raised-cosine hills authored inside it. See
@@ -204,11 +205,6 @@ if (process.env.NODE_ENV !== 'production') {
   const warn = (msg: string) => {
     console.warn(`[terrainRegions] ${msg}`);
   };
-  const overlaps = (
-    a: { minX: number; maxX: number; minZ: number; maxZ: number },
-    b: { minX: number; maxX: number; minZ: number; maxZ: number },
-  ) => a.maxX > b.minX && a.minX < b.maxX && a.maxZ > b.minZ && a.minZ < b.maxZ;
-
   const boxes = TERRAIN_REGIONS.map((r) => ({
     r,
     box: { minX: r.x - r.half, maxX: r.x + r.half, minZ: r.z - r.half, maxZ: r.z + r.half },
@@ -217,7 +213,7 @@ if (process.env.NODE_ENV !== 'production') {
   // 0. no two regions overlap each other
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) {
-      if (overlaps(boxes[i].box, boxes[j].box)) {
+      if (aabbOverlapMinMax(boxes[i].box, boxes[j].box)) {
         warn(`${boxes[i].r.id} and ${boxes[j].r.id} overlap — two regions can never share ground`);
       }
     }
@@ -275,13 +271,13 @@ if (process.env.NODE_ENV !== 'production') {
     for (const [cx, cz] of routeCells()) {
       const rx = cx * ROAD_TILE;
       const rz = cz * ROAD_TILE;
-      if (overlaps({ minX: rx - half, maxX: rx + half, minZ: rz - half, maxZ: rz + half }, box)) {
+      if (aabbOverlapMinMax({ minX: rx - half, maxX: rx + half, minZ: rz - half, maxZ: rz + half }, box)) {
         warn(`the road runs over ${r.id} at tile ${cx},${cz} — road plates sample homeGroundY now, `
           + 'but check the tile actually belongs on this hillside');
       }
     }
     for (const g of GROUNDS) {
-      if (overlaps({ minX: g.x - g.halfX, maxX: g.x + g.halfX, minZ: g.z - g.halfZ, maxZ: g.z + g.halfZ }, box)) {
+      if (aabbOverlapMinMax({ minX: g.x - g.halfX, maxX: g.x + g.halfX, minZ: g.z - g.halfZ, maxZ: g.z + g.halfZ }, box)) {
         warn(`${g.id} now lies on ${r.id} — its fence, boundary stone and scattered nodes assume flat `
           + 'ground');
       }

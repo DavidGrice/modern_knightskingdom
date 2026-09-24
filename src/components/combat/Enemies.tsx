@@ -44,6 +44,7 @@ import { insideWalls } from '@/game/fort';
 import { dungeonState, SURVIVE_DURATION_MS, SURVIVE_CADENCE_MS, ESCORT_EXTRACTION_RADIUS } from '@/game/dungeon';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
+import { pick } from '@/lib/rng';
 
 const CONFIGS: Record<string, CharacterConfig> = {
   skeleton: {
@@ -1002,7 +1003,7 @@ function Enemy({ data }: { data: EnemyData }) {
               : []),
           ];
           if (targets.length) {
-            const target = targets[Math.floor(Math.random() * targets.length)];
+            const target = pick(targets);
             m.yaw = Math.atan2(-(target.x - m.x), -(target.z - m.z));
             fireProp(`siegeCrew_${data.id}`);
             audio.playAt('explosion', target.x, target.z, 0.7);
@@ -1513,7 +1514,7 @@ export default function Enemies() {
       // defenders' loadouts as well as their helmet/chestplate)
       if (Math.random() < 0.4) {
         const drops: ItemId[] = ['helmet', 'chestplate', 'sword', 'shield', 'crossbow'];
-        const piece = drops[Math.floor(Math.random() * drops.length)];
+        const piece = pick(drops);
         st.grantArmory(piece, 1);
         st.notify(`A fallen raider's ${ITEMS[piece].name.toLowerCase()} is added to the Armory.`, true);
       }
@@ -1616,7 +1617,7 @@ export default function Enemies() {
             })
           : [];
         if (walkwaySockets.length && Math.random() < Math.min(0.6, 0.25 + difficultyState.tier * 0.07)) {
-          const targetSocket = walkwaySockets[Math.floor(Math.random() * walkwaySockets.length)];
+          const targetSocket = pick(walkwaySockets);
           resetRaiderLadder(targetSocket.id);
         }
       }

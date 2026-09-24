@@ -35,6 +35,7 @@ import {
   FISHING_DOCK, KEEP_INTERIOR, POND, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF,
 } from './data/world';
 import type { BuildRect, WaterFeature } from './types';
+import { aabbOverlapMinMax } from '@/lib/geometry';
 
 /** Dug rectangles snap to the same 2m lattice structures are placed on, so a
  *  wall laid along a moat's edge lines up with the water instead of hanging a
@@ -178,16 +179,11 @@ function featureRect(w: WaterFeature): BuildRect {
   return { minX: w.x - w.halfX, maxX: w.x + w.halfX, minZ: w.z - w.halfZ, maxZ: w.z + w.halfZ };
 }
 
-function rectsOverlap(a: BuildRect, b: BuildRect, pad = 0): boolean {
-  return a.maxX + pad > b.minX && a.minX - pad < b.maxX
-    && a.maxZ + pad > b.minZ && a.minZ - pad < b.maxZ;
-}
-
 /** every already-dug waterway the rectangle touches — what "fill this in"
  *  operates on, and what stops two cuts overlapping into one double-priced
  *  patch of water */
 export function waterworksInRect(r: BuildRect): WaterFeature[] {
-  return waterworks.list.filter((w) => rectsOverlap(r, featureRect(w)));
+  return waterworks.list.filter((w) => aabbOverlapMinMax(r, featureRect(w)));
 }
 
 /** the waterway (x, z) stands in, or null. `margin` widens every rectangle —
@@ -303,7 +299,7 @@ export function terrainConflict(r: BuildRect, landTier: number): string | null {
   for (const [cx, cz] of routeCells()) {
     const px = cx * ROAD_TILE;
     const pz = cz * ROAD_TILE;
-    if (rectsOverlap(r, { minX: px - rt, maxX: px + rt, minZ: pz - rt, maxZ: pz + rt })) {
+    if (aabbOverlapMinMax(r, { minX: px - rt, maxX: px + rt, minZ: pz - rt, maxZ: pz + rt })) {
       return 'The road runs through there — you have no bridge to put back over it.';
     }
   }
@@ -316,7 +312,7 @@ export function terrainConflict(r: BuildRect, landTier: number): string | null {
     return 'That is the old pond — it is already water.';
   }
   const dockPad = FISHING_DOCK.halfWidth + 1;
-  if (rectsOverlap(r, {
+  if (aabbOverlapMinMax(r, {
     minX: Math.min(FISHING_DOCK.startX, FISHING_DOCK.endX) - dockPad,
     maxX: Math.max(FISHING_DOCK.startX, FISHING_DOCK.endX) + dockPad,
     minZ: Math.min(FISHING_DOCK.startZ, FISHING_DOCK.endZ) - dockPad,
@@ -325,7 +321,7 @@ export function terrainConflict(r: BuildRect, landTier: number): string | null {
     return 'The fishing dock stands there.';
   }
 
-  if (rectsOverlap(r, {
+  if (aabbOverlapMinMax(r, {
     minX: KEEP_INTERIOR.x - KEEP_INTERIOR.halfX, maxX: KEEP_INTERIOR.x + KEEP_INTERIOR.halfX,
     minZ: KEEP_INTERIOR.z - KEEP_INTERIOR.halfZ, maxZ: KEEP_INTERIOR.z + KEEP_INTERIOR.halfZ,
   }, 2)) {

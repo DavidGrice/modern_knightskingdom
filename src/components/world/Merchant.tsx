@@ -11,6 +11,7 @@ import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { homeGroundY } from './TemplateWorld';
 import type { CharacterConfig } from '@/game/types';
+import { wrapAngle } from '@/lib/math';
 
 const MERCHANT_CONFIG: CharacterConfig = {
   name: 'Merchant', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
@@ -240,9 +241,7 @@ export default function Merchant() {
       s.x += nx * speed * dt;
       s.z += nz * speed * dt;
       const desired = Math.atan2(-nx, -nz);
-      let diff = desired - s.yaw;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = wrapAngle(desired - s.yaw);
       s.yaw += diff * Math.min(1, dt * 3);
       if (clip !== 'anim_c_walk') setClip('anim_c_walk');
       if (gaitSpeed !== speed) setGaitSpeed(speed);

@@ -14,6 +14,7 @@
 // carry no rank or story meaning — see that file's header note.
 import { PALETTE_SWATCHES, type Gender } from './minifigs';
 import type { CharacterConfig, Villager } from '../types';
+import { hashId } from '@/lib/rng';
 
 interface VillagerLook {
   headDonor?: string;
@@ -22,13 +23,6 @@ interface VillagerLook {
   handColor?: number;
   legColor?: number;
   hipColor?: number;
-}
-
-/** stable string hash — the seed every derived villager trait keys off */
-export function hashId(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h;
 }
 
 /** Villager looks, EVERY ONE screenshot-verified (scripts/smoke68.mjs, the

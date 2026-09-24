@@ -19,6 +19,7 @@ import type { ItemId } from '@/game/types';
 import { playerState } from '@/game/playerState';
 import { sampleTemplateGroundY } from '../world/TemplateWorld';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
+import { pick } from '@/lib/rng';
 
 export default function DialoguePanel() {
   const npcId = useGameStore((s) => s.dialogueNpc);
@@ -91,7 +92,7 @@ export default function DialoguePanel() {
   }
 
   const line = useMemo(
-    () => (npc ? npc.lines[Math.floor(Math.random() * npc.lines.length)] : ''),
+    () => (npc ? pick(npc.lines) : ''),
     [npc],
   );
   // Wave 13 · every court NPC's FULL errand pool — baked `sideQuests` plus

@@ -9,7 +9,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import RiggedFigure from '../character/RiggedFigure';
 import { HeldHelmet, Chestplate, ResourceProp, WornCarrier } from '../character/Equipment';
-import { hashId, villagerConfig } from '@/game/data/villagerLooks';
+import { villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
 import { isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, settlementAnchor, villagerHomeSpot } from '@/game/data/villagers';
@@ -27,13 +27,10 @@ import { registerVillagerCombat, VILLAGER_MAX_HP, villagerGearHpBonus } from '@/
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '@/game/types';
+import { wrapAngle } from '@/lib/math';
+import { hashId } from '@/lib/rng';
 
 const WANDER_RADIUS = 14;
-
-// hashId now lives with the appearance data it seeds (data/villagerLooks.ts);
-// re-exported here because Defenders.tsx and the roster panels already import
-// it from this module for their own per-villager jitter
-export { hashId };
 
 function VillagerFigure({ villager }: { villager: Villager }) {
   const group = useRef<THREE.Group>(null);
@@ -248,9 +245,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         s.x += nx * speed * dt;
         s.z += nz * speed * dt;
         const desired = Math.atan2(-nx, -nz);
-        let diff = desired - s.yaw;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
+        const diff = wrapAngle(desired - s.yaw);
         s.yaw += diff * Math.min(1, dt * 3);
         if (clip !== 'anim_c_walk') setClip('anim_c_walk');
       }
@@ -367,9 +362,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         const { nx, nz, dist: d } = navSteer(s, tx, tz, dt);
         if (d < 1.7) {
           const desired = Math.atan2(-nx, -nz);
-          let diff = desired - s.yaw;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = wrapAngle(desired - s.yaw);
           s.yaw += diff * Math.min(1, dt * 3);
           // swing at the worksite, set the load down at the stockpile
           const wanted = hauling ? 'anim_r_restpose' : 'anim_g_swordswish';
@@ -379,9 +372,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           s.x += nx * speed * dt;
           s.z += nz * speed * dt;
           const desired = Math.atan2(-nx, -nz);
-          let diff = desired - s.yaw;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = wrapAngle(desired - s.yaw);
           s.yaw += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         }
@@ -427,9 +418,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         const { nx, nz, dist: d } = navSteer(s, site.x, site.z, dt);
         if (d < 1.8) {
           const desired = Math.atan2(-nx, -nz);
-          let diff = desired - s.yaw;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = wrapAngle(desired - s.yaw);
           s.yaw += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
         } else {
@@ -437,9 +426,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           s.x += nx * speed * dt;
           s.z += nz * speed * dt;
           const desired = Math.atan2(-nx, -nz);
-          let diff = desired - s.yaw;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = wrapAngle(desired - s.yaw);
           s.yaw += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         }
@@ -495,9 +482,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
           if (d < 0.5) {
             // face the gathering point and settle in
             const desired = Math.atan2(-(rx - s.x), -(rz - s.z));
-            let diff = desired - s.yaw;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
+            const diff = wrapAngle(desired - s.yaw);
             s.yaw += diff * Math.min(1, dt * 2);
             if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
           } else {
@@ -505,9 +490,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
             s.x += nx * speed * dt;
             s.z += nz * speed * dt;
             const desired = Math.atan2(-nx, -nz);
-            let diff = desired - s.yaw;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
+            const diff = wrapAngle(desired - s.yaw);
             s.yaw += diff * Math.min(1, dt * 3);
             if (clip !== 'anim_c_walk') setClip('anim_c_walk');
           }
@@ -548,9 +531,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         // direction needs the negated atan2 — the un-negated version had
         // villagers walking backwards the same way Enemies.tsx's mobs did.
         const desired = Math.atan2(-nx, -nz);
-        let diff = desired - s.yaw;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
+        const diff = wrapAngle(desired - s.yaw);
         s.yaw += diff * Math.min(1, dt * 3);
         if (clip !== 'anim_c_walk') setClip('anim_c_walk');
       }

@@ -34,6 +34,7 @@ import { hasLineOfSight, GROUND_LOS_Y } from './navgrid';
 // boundary statement), it just says out loud what it did.
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { enemyBeliefId, noiseBeliefId } from '@/ai/perception/Belief';
+import { randInt } from '@/lib/rng';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -300,7 +301,7 @@ function rollLoot(kind: EnemyKind): Partial<Record<ItemId, number>> {
   const out: Partial<Record<ItemId, number>> = {};
   for (const e of LOOT_TABLES[kind] ?? []) {
     if (Math.random() >= e.chance) continue;
-    const n = e.min + Math.floor(Math.random() * (e.max - e.min + 1));
+    const n = randInt(e.min, e.max);
     if (n > 0) out[e.item] = (out[e.item] ?? 0) + n;
   }
   return out;
