@@ -21,7 +21,7 @@
 // still decided from the mesh's own X position exactly as before — so this
 // module changes WHAT a mesh is, never WHICH SIDE it's on.
 
-export type PartRole = string;
+type PartRole = string;
 
 interface RigDoc { rigClass: string | null; status: string | null; parts: Record<string, PartRole> }
 
@@ -37,19 +37,19 @@ export function loadPartRoles(): Promise<Record<string, RigDoc>> {
 }
 
 /** roles that are a held/carried object rather than part of the body */
-export const PROP_ROLES = new Set([
+const PROP_ROLES = new Set([
   'sword', 'shield', 'halberd', 'spear', 'lance', 'axe',
   'crossbow', 'crossbow_bolt', 'bow', 'arrow', 'quiver', 'goblet',
 ]);
 
 /** roles worn on the head — kept with the head so a helm/crown rides along */
-export const HEADGEAR_ROLES = new Set(['helmet', 'horn', 'crown', 'visor', 'hood']);
+const HEADGEAR_ROLES = new Set(['helmet', 'horn', 'crown', 'visor', 'hood']);
 
 /** a mounted donor bakes a whole horse + rider; those roles are not this
  *  figure's own body and must never be assembled into a standing minifig */
-export const MOUNT_ROLE_PREFIXES = ['horse_', 'rider_'];
+const MOUNT_ROLE_PREFIXES = ['horse_', 'rider_'];
 
-export type BodyKind =
+type BodyKind =
   | 'head' | 'accessory' | 'body' | 'hips'
   | 'arm' | 'hand' | 'leg' | 'foot'
   | 'prop' | 'mount' | 'other';

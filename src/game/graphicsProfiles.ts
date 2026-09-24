@@ -19,7 +19,7 @@
 // light, a higher dpr ceiling) — not just a relabel of what already existed.
 import type { GraphicsQuality } from './store/appStore';
 
-export interface GraphicsProfile {
+interface GraphicsProfile {
   id: GraphicsQuality;
   label: string;
   blurb: string;

@@ -25,10 +25,10 @@ import type { EnemyKind } from './combat';
  *  computation below derives from this, not a second hand-copied number, so
  *  a future re-scale of the model can never silently drift out of sync with
  *  the generator again (see the redesign note above). */
-export const SEGMENT = sizeFor('stonewall', 0)[0]; // 8
+const SEGMENT = sizeFor('stonewall', 0)[0]; // 8
 const HALF_SEGMENT = SEGMENT / 2; // 4
 
-export const CORRIDOR_LENGTH = 8;
+const CORRIDOR_LENGTH = 8;
 
 /** room half-extent choices, always a whole number of segments so every
  *  side tiles flush (see segCount/slotOffset) — weighted toward the smaller
@@ -70,7 +70,7 @@ const MAX_REGENERATIONS = 5;
  *  kill. */
 export const REACH_LIMIT = 96;
 
-export interface DungeonWall {
+interface DungeonWall {
   x: number;
   z: number;
   rot: 0 | 1; // 0 = runs east-west (wide along X), 1 = runs north-south
@@ -162,7 +162,7 @@ export interface DungeonRoom {
   surviveNextSpawn: number;
 }
 
-export interface DungeonCorridor {
+interface DungeonCorridor {
   roomA: number;
   roomB: number;
   x0: number; x1: number;
@@ -198,8 +198,8 @@ export interface DungeonLayout {
  *  mesh is drawn there — a visibly-breached wall that still stops you cold
  *  would be a real, confusing bug, not just a cosmetic swap. `mc006` has no
  *  such trait: solid mesh, solid collision, no mismatch. */
-export const WALL_STYLES = ['stonewall', 'mc006'] as const;
-export type WallStyle = (typeof WALL_STYLES)[number];
+const WALL_STYLES = ['stonewall', 'mc006'] as const;
+type WallStyle = (typeof WALL_STYLES)[number];
 
 export const dungeonState: { layout: DungeonLayout | null } = { layout: null };
 

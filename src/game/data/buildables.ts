@@ -7,7 +7,7 @@ import { ITEMS } from './items';
 
 // Grid pitches in meters: big structures snap to GRID, brick-scale pieces to STUD.
 export const GRID = 2;
-export const STUD = 0.35;
+const STUD = 0.35;
 // ---------------------------------------------------------------------------
 // F19/F20 · The homestead's buildable ground, sized so a castle actually TILES.
 //
@@ -817,7 +817,7 @@ export function buildableForLabAsset(labId: string): string | null {
 }
 
 /** one line of a rendered cost bill — see costBill() below */
-export interface CostBillLine {
+interface CostBillLine {
   key: string;
   thumb: string | null;
   icon?: string;
@@ -922,7 +922,7 @@ export function buildingsInRect(
 // hatch, which already lets you walk under anything whose base clears you —
 // no second box needed up there. Pieces absent from this table keep the
 // original single full-footprint box exactly as before (zero risk elsewhere).
-export interface WallCoreBox {
+interface WallCoreBox {
   coreHeight: number; // world units — collision uses the narrow core up to here
   depthFrac: number;  // fraction of the piece's own declared depth (sz), centered
   widthFrac: number;  // fraction of the piece's own declared width (sx), centered
@@ -982,7 +982,7 @@ export interface CollisionBox {
  */
 const solidOffsetCache: Record<string, [number, number]> = {};
 
-export function solidOffset(type: string): [number, number] {
+function solidOffset(type: string): [number, number] {
   const cached = solidOffsetCache[type];
   if (cached) return cached;
   const shape = shapeForBuildable(type);

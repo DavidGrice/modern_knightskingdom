@@ -7,7 +7,7 @@ import { suggestGraphicsQuality } from '../deviceProfile';
 import type { AaMode } from '../aaModes';
 import type { InputDevice } from '../inputMode';
 
-export interface SessionUser {
+interface SessionUser {
   id: string;
   username: string;
 }
@@ -22,7 +22,7 @@ export type GraphicsQuality = 'performance' | 'balanced' | 'ultra';
  *  reflows a panel. `glass` is the core theme: the world renders BRIGHT
  *  (saturated green terrain, pale sky), and an opaque near-black panel reads
  *  as a hole punched in it, which is exactly what Aero Glass is for. */
-export type UiTheme = 'metal' | 'chrome' | 'glass' | 'leather';
+type UiTheme = 'metal' | 'chrome' | 'glass' | 'leather';
 
 export const UI_THEMES: { id: UiTheme; label: string; blurb: string }[] = [
   { id: 'glass', label: 'Aero Glass Realm', blurb: 'Blurred slab, lit top edge — reads best over the bright world.' },
@@ -31,7 +31,7 @@ export const UI_THEMES: { id: UiTheme; label: string; blurb: string }[] = [
   { id: 'leather', label: 'Guild Leather', blurb: 'Tooled hide, saddle stitch, brass and parchment.' },
 ];
 
-export interface Settings {
+interface Settings {
   masterVolume: number;
   musicVolume: number;
   sfxVolume: number;

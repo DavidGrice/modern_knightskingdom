@@ -16,7 +16,7 @@ import type { ItemId } from './types';
 
 export type ArenaEnvId = 'earth' | 'water' | 'snow' | 'lava';
 
-export interface ArenaEnv {
+interface ArenaEnv {
   id: ArenaEnvId;
   name: string;
   blurb: string;
@@ -65,13 +65,13 @@ export const ARENA_MILESTONES = [50, 100, 200, 500];
  *  not a punishment — same forgiving tone as the endless mode's own open-
  *  ended kill counter: it just quietly stops offering the bonus loot until
  *  the next milestone rolls a fresh one. */
-export interface ArenaObjective {
+interface ArenaObjective {
   startKills: number;
   need: number;
   deadline: number; // performance.now() timestamp
 }
-export const ARENA_OBJECTIVE_KILLS = 10;
-export const ARENA_OBJECTIVE_TIME_MS = 30_000;
+const ARENA_OBJECTIVE_KILLS = 10;
+const ARENA_OBJECTIVE_TIME_MS = 30_000;
 
 export const arenaState: {
   active: boolean;

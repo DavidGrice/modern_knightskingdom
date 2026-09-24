@@ -41,7 +41,7 @@ export interface DragonRig {
   head: THREE.Group;
 }
 
-export type DragonVariant = 'green' | 'black';
+type DragonVariant = 'green' | 'black';
 
 /** Wave 36 (A8) · l7517401 (the black dragon) is verified, byte-for-byte at
  *  the GLB level, to be the SAME digital model as l7517400 — identical wing/

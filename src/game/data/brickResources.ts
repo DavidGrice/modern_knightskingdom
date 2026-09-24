@@ -14,7 +14,7 @@
 import type { ItemId } from '../types';
 import catalogue from './bricks.generated.json';
 
-export interface CatalogueBrick {
+interface CatalogueBrick {
   id: string;
   name: string;
   cat: string;
@@ -23,12 +23,12 @@ export interface CatalogueBrick {
   size: number[];
 }
 
-export const BRICK_CATALOGUE = catalogue as unknown as CatalogueBrick[];
+const BRICK_CATALOGUE = catalogue as unknown as CatalogueBrick[];
 const BY_ID: Record<string, CatalogueBrick> = Object.fromEntries(
   BRICK_CATALOGUE.map((b) => [b.id, b]),
 );
 
-export interface BrickResource {
+interface BrickResource {
   /** the catalogue piece this resource IS */
   brick: string;
   /** what the piece is called in the satchel — the piece, then the stuff */
@@ -42,7 +42,7 @@ export interface BrickResource {
  * material: timber is the long 1×4 brick you frame with, stone the solid
  * 2×2, iron the small dense 1×1, planks the flat tile you floor with.
  */
-export const BRICK_RESOURCES: Partial<Record<ItemId, BrickResource>> = {
+const BRICK_RESOURCES: Partial<Record<ItemId, BrickResource>> = {
   wood: { brick: 'gen_12_l301000', label: 'Timber Brick 1×4', bin: 'timber' },
   plank: { brick: 'gen_18_l300800', label: 'Plank 1×8', bin: 'timber' },
   stone: { brick: 'gen_26_l300300', label: 'Stone Brick 2×2', bin: 'stone' },
@@ -61,15 +61,3 @@ export function brickLabel(id: ItemId, fallback: string): string {
   return BRICK_RESOURCES[id]?.label ?? fallback;
 }
 
-/** which bin of the parts drawer a resource files under */
-export function brickBin(id: ItemId): BrickResource['bin'] | null {
-  return BRICK_RESOURCES[id]?.bin ?? null;
-}
-
-export const BIN_LABEL: Record<BrickResource['bin'], string> = {
-  timber: 'Timber',
-  stone: 'Stone',
-  metal: 'Metal',
-  fittings: 'Fittings',
-  stores: 'Stores',
-};

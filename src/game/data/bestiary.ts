@@ -6,7 +6,7 @@
 // mechanic it describes actually lives.
 import type { EnemyKind } from '../combat';
 
-export interface BestiaryLore {
+interface BestiaryLore {
   /** what actually happens if this fight goes badly for THEM */
   strength: string;
   /** what actually happens if this fight goes badly for YOU */

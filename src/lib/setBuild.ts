@@ -26,12 +26,12 @@ export interface BuildPart {
   vol: number;
 }
 
-export interface ModulePlan {
+interface ModulePlan {
   asset: string;
   steps: { name: string; baseY: number; topY: number; cx: number; cz: number; vol: number }[];
 }
 
-export interface SetPlan {
+interface SetPlan {
   name: string;
   faction: string;
   modules: ModulePlan[];

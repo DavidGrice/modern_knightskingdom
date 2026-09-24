@@ -19,9 +19,9 @@
 // for correctness on frame 1 — worst case a piece reads as non-destructible
 // for a few hundred ms during startup.
 
-export type LabKind = 'minifig' | 'wall' | 'mount' | 'explosive' | 'vehicle' | 'scenery';
+type LabKind = 'minifig' | 'wall' | 'mount' | 'explosive' | 'vehicle' | 'scenery';
 
-export interface LabInteraction {
+interface LabInteraction {
   isMovable?: boolean;
   isRotatable?: boolean;
   isDeletable?: boolean;
@@ -38,7 +38,7 @@ export interface LabInteraction {
   canLaunch?: boolean;
 }
 
-export interface LabWallTraits {
+interface LabWallTraits {
   structureKind?: string;
   wallRole?: 'corner' | 'straight' | 'tower' | 'gate_flank' | string;
   canStandOn?: boolean;
@@ -68,7 +68,7 @@ export interface LabWallTraits {
   rigScope?: string;
 }
 
-export interface LabMinifigTraits {
+interface LabMinifigTraits {
   isMountable?: boolean;
   defaultMountId?: string;
   laterality?: string;
@@ -81,7 +81,7 @@ export interface LabMinifigTraits {
   equipmentSummary?: Record<string, boolean>;
 }
 
-export interface LabVehicleTraits {
+interface LabVehicleTraits {
   canSeat?: boolean;
   canDrive?: boolean;
   canPush?: boolean;
@@ -99,14 +99,14 @@ export interface LabVehicleTraits {
   damagesVehicles?: boolean;
 }
 
-export interface LabExplosiveTraits {
+interface LabExplosiveTraits {
   isExplosive?: boolean;
   damagesWalls?: boolean;
   damagesVehicles?: boolean;
   triggerKind?: 'manual' | 'fuse' | 'impact' | string;
 }
 
-export interface LabMountTraits {
+interface LabMountTraits {
   isMount?: boolean;
   mountFamily?: 'horse' | 'dragon' | 'chest_team' | string;
   faction?: string;
@@ -114,14 +114,14 @@ export interface LabMountTraits {
   color?: string;
 }
 
-export interface LabSceneryTraits {
+interface LabSceneryTraits {
   canStandOn?: boolean;
   isAnimal?: boolean;
   animalKind?: string;
   isDestructible?: boolean;
 }
 
-export interface LabCapability {
+interface LabCapability {
   kind: LabKind | null;
   displayName: string;
   rigClass: string | null;
@@ -258,7 +258,7 @@ function applyLocalOverrides(caps: Record<string, LabCapability>) {
 let warm: Record<string, LabCapability> = {};
 let promise: Promise<Record<string, LabCapability>> | null = null;
 
-export function loadCapabilities(): Promise<Record<string, LabCapability>> {
+function loadCapabilities(): Promise<Record<string, LabCapability>> {
   if (!promise) {
     promise = fetch('/assets/rigs/capabilities.json')
       .then((r) => (r.ok ? r.json() : {}))
@@ -279,27 +279,12 @@ export function capOf(assetId: string | undefined | null): LabCapability | null 
   return warm[assetId] ?? null;
 }
 
-/** every asset the lab verified for a given kind */
-export function capsOfKind(kind: LabKind): [string, LabCapability][] {
-  return Object.entries(warm).filter(([, c]) => c.kind === kind);
-}
-
 // ---- convenience predicates, each with the pre-lab default as fallback ----
 
 export function labCanStandOn(assetId: string | undefined, fallback = true): boolean {
   const c = capOf(assetId);
   if (!c) return fallback;
   return c.interaction.canStandOn ?? c.traits.wall?.canStandOn ?? c.traits.scenery?.canStandOn ?? fallback;
-}
-
-export function labIsDestructible(assetId: string | undefined, fallback = true): boolean {
-  const c = capOf(assetId);
-  if (!c) return fallback;
-  return c.interaction.isDestructible ?? c.traits.wall?.isDestructible ?? fallback;
-}
-
-export function labIsPaintable(assetId: string | undefined, fallback = false): boolean {
-  return capOf(assetId)?.interaction.isPaintable ?? fallback;
 }
 
 /** a prop the rig lab found a real launch mechanism on (oc6096b5's
@@ -311,13 +296,6 @@ export function labCanLaunch(assetId: string | undefined): boolean {
 
 export function labCanConnectAsWall(assetId: string | undefined): boolean {
   return capOf(assetId)?.traits.wall?.canConnectAsWall ?? false;
-}
-
-/** where a piece sits in its own destruction chain, if the lab charted one */
-export function labDestruction(assetId: string | undefined): { phase: number; count: number } | null {
-  const w = capOf(assetId)?.traits.wall;
-  if (!w?.destructionPhase || !w.destructionPhaseCount) return null;
-  return { phase: w.destructionPhase, count: w.destructionPhaseCount };
 }
 
 /**

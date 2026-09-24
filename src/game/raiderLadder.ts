@@ -34,7 +34,7 @@
 import { useGameStore } from './store/gameStore';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID, WALK_CORNER_HALF, WALK_DEEP_HALF } from './data/keep';
 
-export const LADDER_MAX_HP = 22;
+const LADDER_MAX_HP = 22;
 /** how close a swing or a shaft has to come to count as a hit — same shape
  *  as raiderRam's own RAM_RADIUS */
 export const LADDER_RADIUS = 1.1;

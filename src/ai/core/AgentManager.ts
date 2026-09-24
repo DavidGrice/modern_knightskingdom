@@ -73,7 +73,7 @@ function inWindowBounds(p: THREE.Vector3, b: WindowBounds): boolean {
     && p.z > b.originZ - b.halfExtent && p.z < b.originZ + b.halfExtent;
 }
 
-export class AgentManager {
+class AgentManager {
   readonly agents: Agent[] = [];
   private readonly byId = new Map<string, Agent>();
   private readonly scheduler = new Scheduler(LOD.thinkBudgetPerFrame);

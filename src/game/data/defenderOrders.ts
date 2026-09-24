@@ -7,7 +7,7 @@ import { defenderOrders, scoutReported, type DefenderOrder } from '../defenders'
 import { useGameStore } from '../store/gameStore';
 import { audio } from '@/lib/audio';
 
-export interface OrderDef {
+interface OrderDef {
   id: DefenderOrder;
   icon: string;
   label: string;

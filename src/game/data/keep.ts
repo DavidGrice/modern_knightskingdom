@@ -23,9 +23,9 @@ export const KEEP_SIZE = 16;
 /** half, for laying sockets out around the edge */
 const H = KEEP_SIZE / 2;
 
-export type SocketKind = 'corner' | 'wall' | 'centre';
+type SocketKind = 'corner' | 'wall' | 'centre';
 
-export interface KeepSocket {
+interface KeepSocket {
   id: string;
   name: string;
   kind: SocketKind;
@@ -53,7 +53,7 @@ export const SOCKET_BY_ID: Record<string, KeepSocket> = Object.fromEntries(
   KEEP_SOCKETS.map((s) => [s.id, s]),
 );
 
-export interface KeepPart {
+interface KeepPart {
   id: string;
   name: string;
   /** what it does for the castle, shown under the name */
@@ -74,7 +74,7 @@ export interface KeepPart {
  * What can stand where. Every model here is a piece of the mc00 castle set
  * the game already ships, at the family's unified scale.
  */
-export const KEEP_PARTS: KeepPart[] = [
+const KEEP_PARTS: KeepPart[] = [
   {
     id: 'corner_turret', name: 'Corner Turret', blurb: 'A tall watch turret — archers see further from it.',
     fits: ['corner'], model: `${B}/mc003.glb`, thumb: `${B}/mc003.png`,
@@ -190,11 +190,6 @@ export interface KeepState {
 /** the castle is "finished" once every socket carries a completed piece */
 export function keepComplete(k: KeepState): boolean {
   return KEEP_SOCKETS.every((s) => k.parts[s.id] && (k.built[s.id] ?? 0) >= 1);
-}
-
-export function keepProgress(k: KeepState): number {
-  const done = KEEP_SOCKETS.reduce((n, s) => n + Math.min(1, k.built[s.id] ?? 0), 0);
-  return done / KEEP_SOCKETS.length;
 }
 
 /** structural HP, the same cost-derived formula buildables.ts's maxHpFor

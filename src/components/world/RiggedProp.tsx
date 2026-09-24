@@ -14,7 +14,7 @@ import { crewState } from '@/game/crew';
 /** per-building fire impulses, written by the siege code, read here. A plain
  *  mutable module (the established leaf-module pattern) because the firing
  *  path is store/action code and the renderer is inside the R3F tree. */
-export const propFire: Record<string, number> = {};
+const propFire: Record<string, number> = {};
 
 /** kick a prop's throwing arm — id is the placed building's id */
 export function fireProp(buildingId: string) {
@@ -23,7 +23,7 @@ export function fireProp(buildingId: string) {
 
 /** metres travelled per prop, so anything the rig lab labelled `wheel_*`
  *  actually turns as the thing rolls instead of skating along frozen */
-export const propTravel: Record<string, number> = {};
+const propTravel: Record<string, number> = {};
 
 export function setPropTravel(id: string, metres: number) {
   propTravel[id] = metres;

@@ -22,7 +22,7 @@
 import type { Villager } from './types';
 import { chestplateHp, CHESTPLATE_BY_TIER } from './data/armor';
 
-export interface VillagerCombatState {
+interface VillagerCombatState {
   hp: number;
   maxHp: number;
   state: 'ok' | 'downed';

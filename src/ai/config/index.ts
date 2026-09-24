@@ -35,7 +35,6 @@ export type NeedId = (typeof NEED_IDS)[number];
 
 /** §8 — LOD tiers, best to worst. */
 export type Tier = 'A' | 'B' | 'C' | 'D';
-export const TIERS: Tier[] = ['A', 'B', 'C', 'D'];
 
 export interface NeedTuning {
   /** satisfaction lost per GAME second (see needs.json's _doc) */
@@ -56,7 +55,7 @@ export interface ArchetypeDef {
  *  and `Locomotion`'s cadence lookup are all provably the same three strings. */
 export type SteeringMode = 'full' | 'simplified' | 'teleport';
 
-export interface TierDef {
+interface TierDef {
   thinkHz: number;
   perceiveHz: number;
   steering: SteeringMode;
@@ -65,7 +64,7 @@ export interface TierDef {
 /** Phase 8 — what `steering` actually COSTS per mode. Every field is
  *  documented against the real number it was chosen from in lod.json's own
  *  `_doc`; nothing here is a free-floating guess. */
-export interface SteeringConfig {
+interface SteeringConfig {
   /** seconds between tier-C steering passes (0 would mean every frame) */
   simplifiedInterval: number;
   /** seconds between tier-D coarse jumps — deliberately tier D's own think period */
@@ -79,7 +78,7 @@ export interface SteeringConfig {
   reentrySnapCells: number;
 }
 
-export interface LodConfig {
+interface LodConfig {
   thinkBudgetPerFrame: number;
   nearDistance: number;
   /** phase 8 — tier B's missing far bound; beyond this an in-frustum agent
@@ -97,7 +96,7 @@ export interface LodConfig {
  *  is the natural thing to type. No `updateHz` — see perception.json's own
  *  `_doc` for why perception reuses the agent's lod.json `perceiveHz`
  *  instead of carrying a second rate that has to agree with it by hand. */
-export interface VisionConfig {
+interface VisionConfig {
   fov: number;
   range: number;
   peripheralRange: number;
@@ -109,7 +108,7 @@ export interface VisionConfig {
 
 /** §6.2 — event-driven hearing. `radiusPerLoudness` is the spec's `falloff`
  *  (audible radius = `loudness * radiusPerLoudness`). */
-export interface HearingConfig {
+interface HearingConfig {
   radiusPerLoudness: number;
   /** the authored per-event loudness table every real emitter reads
    *  (`SOUND_LOUDNESS`, perception/sounds.ts) — audible radius is
@@ -124,7 +123,7 @@ export interface HearingConfig {
 }
 
 /** §3.3 — belief decay, the prune floor, and the reaction delay. */
-export interface BeliefConfig {
+interface BeliefConfig {
   decayPerSec: number;
   pruneBelow: number;
   noticedAt: number;
@@ -134,7 +133,7 @@ export interface BeliefConfig {
 }
 
 /** §6.3 — how beliefs become `bb.threatLevel`. */
-export interface ThreatConfig {
+interface ThreatConfig {
   smoothingTau: number;
   closeDistance: number;
   falloffDistance: number;
@@ -146,7 +145,7 @@ export interface ThreatConfig {
   neighborWeight: number;
 }
 
-export interface PerceptionConfig {
+interface PerceptionConfig {
   vision: VisionConfig;
   hearing: HearingConfig;
   belief: BeliefConfig;
@@ -157,7 +156,7 @@ export interface PerceptionConfig {
  *  distance is in world metres; `minThreat` is on `bb.threatLevel`'s 0..1
  *  scale and is deliberately coupled to `PERCEPTION.hearing.confidence` (see
  *  combat.json's `_doc` for the loop-freedom argument that coupling buys). */
-export interface CoverConfig {
+interface CoverConfig {
   /** the ENTRY gate — threat must reach this for `take_cover` to start */
   minThreat: number;
   /** the RELEASE gate — once stood down behind the piece, threat only has to
@@ -189,7 +188,7 @@ export interface CoverConfig {
 
 /** Phase 7 — the shout a villager breaking for cover emits into §6.2's
  *  hearing sensor, plus the throttle on its player-facing notice. */
-export interface AlarmConfig {
+interface AlarmConfig {
   loudness: number;
   cooldownSec: number;
 }
@@ -197,7 +196,7 @@ export interface AlarmConfig {
 /** Phase 7 — `engage_threat`'s reach and swing rhythm. Both mirror
  *  `Defenders.tsx`'s own MELEE_RANGE/attackCd on purpose: same swing, same
  *  people, same weapons (see combat.json's `_doc`). */
-export interface EngageConfig {
+interface EngageConfig {
   reach: number;
   approachStop: number;
   swingSeconds: number;
@@ -211,7 +210,7 @@ export interface EngageConfig {
  *  equivalent on the defender-tuned action, and folding them into
  *  `EngageConfig` would make every existing `COMBAT.engage` reference look
  *  like it also carries a villager-only field. */
-export interface EngageVillagerConfig {
+interface EngageVillagerConfig {
   reach: number;
   approachStop: number;
   swingSeconds: number;
@@ -234,7 +233,7 @@ export interface EngageVillagerConfig {
  *  `EngageConfig`) for the same reason `EngageVillagerConfig` is its own type:
  *  a field with no meaning on `engage`/`engageVillager` shouldn't appear to be
  *  part of their shape. */
-export interface EngageCompanionConfig extends EngageConfig {
+interface EngageCompanionConfig extends EngageConfig {
   /** metres from the PLAYER (not from the target) — once Tam's own chase has
    *  pulled him this far from the person he is meant to be companioning,
    *  assist_leader gives up and returns SUCCESS regardless of whether the
@@ -244,7 +243,7 @@ export interface EngageCompanionConfig extends EngageConfig {
   leashDistance: number;
 }
 
-export interface CombatConfig {
+interface CombatConfig {
   cover: CoverConfig;
   alarm: AlarmConfig;
   engage: EngageConfig;
@@ -260,20 +259,20 @@ export interface CombatConfig {
  *  applied to a dedicated file since this tunable belongs to the
  *  `companion` category rather than `combat` — see companion.json's own
  *  `_doc`). */
-export interface FollowConfig {
+interface FollowConfig {
   stopDistance: number;
   runDistance: number;
   repathDistance: number;
 }
 
-export interface CompanionConfig {
+interface CompanionConfig {
   follow: FollowConfig;
 }
 
 /** Phase 8 (§10's build-order item 8, the "ambient" half) — `wander`'s own
  *  geometry. Distances are world metres and are lifted from Villagers.tsx's
  *  shipped cascade rather than re-picked; see ambient.json's `_doc`. */
-export interface WanderConfig {
+interface WanderConfig {
   radius: number;
   minRadius: number;
   stopDistance: number;
@@ -284,7 +283,7 @@ export interface WanderConfig {
   giveUpSec: number;
 }
 
-export interface AmbientConfig {
+interface AmbientConfig {
   wander: WanderConfig;
   /** Wave 53 (E1) — the ambient-archetype songbird population's own roam
    *  geometry (actions/roam.ts). Same `WanderConfig` shape as `wander`
@@ -299,7 +298,7 @@ export interface AmbientConfig {
  *  `slots` count for reservation capacity; turning a rule into an actual
  *  walkable point is iteration 2.9's job (radial sampling + nearestWalkable
  *  fallback, fixed-offset rotation by rot*90°). */
-export interface AnchorRuleRadial {
+interface AnchorRuleRadial {
   mode: 'radial';
   radius: number;
   slots: number;
@@ -313,7 +312,7 @@ export interface AnchorRuleRadial {
    *  own comment. */
   fallbackRadius?: number;
 }
-export interface AnchorRuleFixed {
+interface AnchorRuleFixed {
   mode: 'fixed';
   offset: [number, number];
   facing: number;
@@ -393,12 +392,6 @@ export function needProfile(profile: string): Record<NeedId, NeedTuning> {
  *  produce a dull NPC in the overlay, not a blank screen. */
 export function archetypeDef(id: string): ArchetypeDef {
   return ARCHETYPES[id] ?? ARCHETYPES.villager;
-}
-
-/** `_doc` keys are authoring comments, not archetypes — every config file in
- *  here carries one, so anything enumerating a file's keys must skip them. */
-export function archetypeIds(): string[] {
-  return Object.keys(ARCHETYPES).filter((k) => !k.startsWith('_'));
 }
 
 export function tierDef(tier: Tier): TierDef {

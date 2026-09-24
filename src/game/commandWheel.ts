@@ -24,7 +24,7 @@ export const commandWheel = {
 
 /** how far the pointer must travel from centre before a sector is picked —
  *  a small flick chooses, a twitch does not */
-export const WHEEL_DEADZONE = 46;
+const WHEEL_DEADZONE = 46;
 
 export function openWheel(count: number) {
   commandWheel.open = true;

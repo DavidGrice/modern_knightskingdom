@@ -108,7 +108,7 @@ export function sampleTemplateGroundY(x: number, z: number, fallback = lastGroun
 
 /** reset the held-ground fallback whenever a fresh destination mounts, so a
  *  stale height from the previous template world never leaks into the next */
-export function resetTemplateGroundFallback() {
+function resetTemplateGroundFallback() {
   lastGroundY = null;
 }
 

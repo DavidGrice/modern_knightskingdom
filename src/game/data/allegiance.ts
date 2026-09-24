@@ -20,7 +20,7 @@ export const ALLEGIANCE_MIN = -100;
 export const ALLEGIANCE_MAX = 100;
 
 /** the named bands, from Cedric's end to Leo's */
-export interface AllegianceTier {
+interface AllegianceTier {
   /** inclusive lower bound of the band */
   min: number;
   title: string;
@@ -29,7 +29,7 @@ export interface AllegianceTier {
   blurb: string;
 }
 
-export const ALLEGIANCE_TIERS: AllegianceTier[] = [
+const ALLEGIANCE_TIERS: AllegianceTier[] = [
   { min: -100, house: 'cedric', title: "Cedric's Right Hand", blurb: 'The Bull counts you among his own. The crown counts you an outlaw.' },
   { min: -60, house: 'cedric', title: 'Sworn to the Bull', blurb: "You ride under Cedric's banner and the roads know it." },
   { min: -25, house: 'cedric', title: 'Bull-Leaning', blurb: 'You have done the Bull favours. Word travels.' },

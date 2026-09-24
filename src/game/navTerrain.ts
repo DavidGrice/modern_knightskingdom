@@ -24,7 +24,7 @@ import { POND } from './data/world';
 import { TERRAIN_REGIONS } from './data/terrainRegions';
 import { waterworks } from './waterworks';
 
-export interface TerrainExclusion {
+interface TerrainExclusion {
   id: string;
   /** null = home. No destination/crypt exclusions exist yet — nothing to
    *  add one for until phase 2's later iterations give those regions a grid
@@ -39,7 +39,7 @@ export interface TerrainExclusion {
   costMultiplier?: number;
 }
 
-export const terrainExclusions: TerrainExclusion[] = [
+const terrainExclusions: TerrainExclusion[] = [
   { id: 'pond', region: null, shape: { kind: 'circle', x: POND.x, z: POND.z, r: POND.radius }, traversal: 'blocked' },
   // Wave 17 #6 · the home nav grid widened from ±56m to ±200m (see
   // navgrid.json's own note) so villagers can actually route to the real

@@ -87,7 +87,7 @@ import { FOLLOW_LEADER } from './followLeader';
 import { ASSIST_LEADER } from './assistLeader';
 import { ROAM } from './roam';
 
-export const ACTIONS: Action[] = [
+const ACTIONS: Action[] = [
   FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
   IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
   FOLLOW_LEADER, ASSIST_LEADER, ROAM,

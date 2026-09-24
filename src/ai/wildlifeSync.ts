@@ -23,7 +23,7 @@
 // sweep can actually drive this archetype, unlike wander's tier-D-only gate.
 import { agentManager } from './core/AgentManager';
 
-export interface WildlifeSpawn { id: string; x: number; z: number }
+interface WildlifeSpawn { id: string; x: number; z: number }
 
 export const WILDLIFE_POPULATION: WildlifeSpawn[] = [
   { id: 'songbird0', x: -46, z: 12 },

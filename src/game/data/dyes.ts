@@ -38,7 +38,7 @@
 import type { ItemId } from '../types';
 import { PALETTE_SWATCHES } from './minifigs';
 
-export interface DyeRow {
+interface DyeRow {
   /** stable id, stored in `SaveGame.dyes` — never renumber these */
   id: string;
   label: string;

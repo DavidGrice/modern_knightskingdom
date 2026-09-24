@@ -39,20 +39,20 @@ import type { BuildRect, WaterFeature } from './types';
 /** Dug rectangles snap to the same 2m lattice structures are placed on, so a
  *  wall laid along a moat's edge lines up with the water instead of hanging a
  *  metre over it. */
-export const DIG_SNAP = GRID;
+const DIG_SNAP = GRID;
 
 /** Smallest cut worth calling a waterway — 3 cells a side. Below this a "pond"
  *  is a puddle whose nav-blocked footprint is smaller than the walkers it is
  *  supposed to stop, which reads as a bug rather than as water. */
-export const MIN_DIG_SIDE = DIG_SNAP * 3;   // 6m
+const MIN_DIG_SIDE = DIG_SNAP * 3;   // 6m
 /** Longest single cut — sized so ONE side of a moat round the widest fence
  *  (Barony, 64m across) is one drag rather than a job of work. A moat is
  *  therefore four cuts, one per side, which is also what leaves the causeway:
  *  the corners stay dry unless you deliberately go back and cut them. */
-export const MAX_DIG_SIDE = 72;
+const MAX_DIG_SIDE = 72;
 /** and the most ground one cut may take, so a 72×72 drag can't swallow the
  *  homestead in one gesture (a 72m moat side 6m wide is 432, well inside it) */
-export const MAX_DIG_AREA = 600;
+const MAX_DIG_AREA = 600;
 /** how many separate waterways one homestead may hold. Every consumer below is
  *  a plain linear scan (nav rebuild, per-frame push-back, node scatter), which
  *  is the right shape for a list this short and the wrong shape for an
@@ -87,8 +87,8 @@ export const DIG_OUTSKIRT = 16;
  *  charges land in (`buyLand`) rather than inventing a spoil/soil item. A 20×20
  *  pond is 200g against a 120g Freehold deed; a moat round a mid-size holding
  *  runs to roughly one deed tier. */
-export const DIG_GOLD_PER_M2 = 0.5;
-export const MIN_DIG_GOLD = 20;
+const DIG_GOLD_PER_M2 = 0.5;
+const MIN_DIG_GOLD = 20;
 /** filling one back in returns this share of what was actually paid for it
  *  (`WaterFeature.paid`, not a re-derived price — the same "refund what the
  *  player really spent" rule removeBuilding's half-materials follows) */
@@ -166,7 +166,7 @@ export function snapDigRect(r: BuildRect): BuildRect {
   };
 }
 
-export function digArea(r: BuildRect): number {
+function digArea(r: BuildRect): number {
   return Math.max(0, r.maxX - r.minX) * Math.max(0, r.maxZ - r.minZ);
 }
 
@@ -174,7 +174,7 @@ export function digCost(r: BuildRect): number {
   return Math.max(MIN_DIG_GOLD, Math.round(digArea(r) * DIG_GOLD_PER_M2));
 }
 
-export function featureRect(w: WaterFeature): BuildRect {
+function featureRect(w: WaterFeature): BuildRect {
   return { minX: w.x - w.halfX, maxX: w.x + w.halfX, minZ: w.z - w.halfZ, maxZ: w.z + w.halfZ };
 }
 

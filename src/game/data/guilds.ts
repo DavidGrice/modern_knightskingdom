@@ -16,7 +16,7 @@ import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
  *  BuyOffer) — buyGuildOffer delegates straight to the existing buyOffer
  *  action, so Silver Tongue's discount applies here exactly like it does at
  *  the Merchant's own cart. */
-export interface GuildVendorOffer {
+interface GuildVendorOffer {
   item: ItemId;
   qty: number;
   price: number;
@@ -24,7 +24,7 @@ export interface GuildVendorOffer {
   minRank?: number;
 }
 
-export interface GuildDef {
+interface GuildDef {
   id: string;
   name: string;
   icon: string;

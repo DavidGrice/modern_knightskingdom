@@ -60,7 +60,7 @@ export type MeleeWeaponId = 'sword' | 'halberd' | 'spear';
  *  GameScreen's swapWeapon) walk this, so a future weapon reaches both by
  *  being added here once instead of by editing two hardcoded arrays that
  *  already drifted apart before. */
-export const WEAPON_SLOTS = ['sword', 'halberd', 'spear', 'crossbow', 'longbow'] as const;
+const WEAPON_SLOTS = ['sword', 'halberd', 'spear', 'crossbow', 'longbow'] as const;
 export type WeaponSlot = (typeof WEAPON_SLOTS)[number];
 
 /** which sub-selector a slot writes: `meleeWeapon` or `rangedWeapon` */
@@ -223,7 +223,7 @@ export const ATTACK_CD: Record<EnemyKind, number> = {
 /** One possible item in an enemy's purse. `chance` is rolled independently per
  *  entry, then a quantity is picked in [min, max] — so a kill can turn up
  *  nothing, a scrap, or a genuinely good haul. */
-export interface LootEntry { item: ItemId; min: number; max: number; chance: number }
+interface LootEntry { item: ItemId; min: number; max: number; chance: number }
 
 /** Per-kind loot tables (2026-07-20). Enemies used to drop a fixed payout —
  *  every skeleton exactly 1 stone, forever — so killing things stopped being
@@ -296,7 +296,7 @@ export const LOOT_TABLES: Record<EnemyKind, LootEntry[]> = {
 };
 
 /** roll one enemy's carried inventory from its kind's table */
-export function rollLoot(kind: EnemyKind): Partial<Record<ItemId, number>> {
+function rollLoot(kind: EnemyKind): Partial<Record<ItemId, number>> {
   const out: Partial<Record<ItemId, number>> = {};
   for (const e of LOOT_TABLES[kind] ?? []) {
     if (Math.random() >= e.chance) continue;
@@ -313,7 +313,7 @@ export function lootFor(kindOrData: EnemyKind | EnemyData): Partial<Record<ItemI
   return kindOrData.inventory ?? rollLoot(kindOrData.kind);
 }
 
-export interface EnemyMob {
+interface EnemyMob {
   x: number; z: number; yaw: number;
   state: 'wander' | 'chase' | 'attack' | 'dying' | 'climbing';
   attackCd: number;
@@ -559,7 +559,7 @@ useGameStore.subscribe((s) => {
 /** passive reduction from worn armor (+ the Ironclad perk) — stacks
  *  additively but capped, so a shield block (75% reduction) stays the
  *  primary defense rather than armor alone making the player untouchable. */
-export function armorReduction(inv: Partial<Record<ItemId, number>>, perks: string[] = []): number {
+function armorReduction(inv: Partial<Record<ItemId, number>>, perks: string[] = []): number {
   let r = 0;
   if ((inv.helmet ?? 0) > 0) r += 0.1;
   // Wave 9 · the best plate you own, not just "a plate" (data/armor.ts). The
@@ -706,7 +706,7 @@ export function resolveDuel(won: boolean, mobId: number) {
 
 if (w) w.__kkResolveDuel = resolveDuel;
 
-export interface MeleeStats {
+interface MeleeStats {
   /** damage at full condition, and once fully worn */
   dmg: number;
   wornDmg: number;
@@ -901,7 +901,7 @@ function round2(n: number): number {
  *  damage regardless of what this returns. A permanent enchantment rune (see
  *  ENCHANT_ITEM above), once owned, then multiplies whatever dmg/wornDmg the
  *  tier lookup produced. */
-export function meleeStatsFor(kind: MeleeWeaponId, inv: Partial<Record<ItemId, number>>): MeleeStats {
+function meleeStatsFor(kind: MeleeWeaponId, inv: Partial<Record<ItemId, number>>): MeleeStats {
   const base = MELEE[kind];
   const tier = bestMeleeTierOwned(kind, inv);
   const over = tier ? MELEE_TIERS[kind]?.[tier] : undefined;
@@ -920,15 +920,15 @@ export function meleeStatsFor(kind: MeleeWeaponId, inv: Partial<Record<ItemId, n
 // stand-in this uses instead of a bespoke clip reference.
 
 /** stamina cost of one dodge-roll */
-export const DODGE_STAMINA_COST = 25;
+const DODGE_STAMINA_COST = 25;
 /** cooldown before another roll can start */
-export const DODGE_COOLDOWN_MS = 650;
+const DODGE_COOLDOWN_MS = 650;
 /** how long the burst itself lasts */
-export const DODGE_DURATION_MS = 220;
+const DODGE_DURATION_MS = 220;
 /** the WHOLE burst is invincible — no animation means no separate "recovery
  *  frames" to model honestly, so this equals DODGE_DURATION_MS rather than
  *  some shorter, invented fraction of it */
-export const DODGE_IFRAME_MS = 220;
+const DODGE_IFRAME_MS = 220;
 /** ~3.3m over the burst (DODGE_SPEED * DODGE_DURATION_MS/1000) — a real
  *  repositioning tool given weapon reach tops out at 3.9m (the spear) */
 export const DODGE_SPEED = 15;
@@ -960,17 +960,17 @@ export function tryDodge(dirX: number, dirZ: number): boolean {
 
 /** generous: no windup animation telegraphs an enemy's swing, so a tight
  *  reflex window would be unfair, not skillful */
-export const PARRY_WINDOW_MS = 300;
+const PARRY_WINDOW_MS = 300;
 /** vs. 14 for a normal held block — precision is cheaper than endurance */
-export const PARRY_STAMINA_COST = 4;
+const PARRY_STAMINA_COST = 4;
 /** shorter than the dodge's 220ms — there's no roll happening, just a clash */
-export const PARRY_IFRAME_MS = 150;
+const PARRY_IFRAME_MS = 150;
 /** how long a parried attacker's own next swing is delayed */
-export const PARRY_STAGGER_S = 2.2;
+const PARRY_STAGGER_S = 2.2;
 const PARRY_KNOCKBACK = 1.3;
 
 /** comfortably covers two halberd swings (0.95s cd each) with reaction time */
-export const COMBO_WINDOW_MS = 2000;
+const COMBO_WINDOW_MS = 2000;
 const COMBO_CHAIN_LENGTH = 3;
 const COMBO_FINISHER_MULT = 1.6;
 const FINISHER_STAGGER_S = 1.8;
@@ -992,7 +992,7 @@ export function activeMelee(): MeleeWeaponId {
 /** what Q (keyboard) or Y (gamepad) says when a weapon is readied. Each line
  *  names the thing THIS weapon does DIFFERENTLY from the last one, since
  *  that is the only part a player can't see from the viewmodel itself. */
-export const SWAP_HINT: Record<WeaponSlot, string> = {
+const SWAP_HINT: Record<WeaponSlot, string> = {
   sword: '⚔️ Sword readied',
   halberd: '🔱 Halberd readied (slow, long reach — one swing sweeps the whole line in front of you)',
   spear: '🗡️ Spear readied (longest reach; couch it at a gallop for a charging blow)',

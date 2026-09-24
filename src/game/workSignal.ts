@@ -11,7 +11,7 @@
 // heuristic requires real proximity, not just "assigned"; a workSignal that
 // went active the instant travel began would be a strictly WEAKER presence
 // check than the one it's replacing, not an equivalent one.
-export interface WorkSignal {
+interface WorkSignal {
   active: boolean;
   targetId: string | null;
   kind: string | null;

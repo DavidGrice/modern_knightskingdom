@@ -4,7 +4,7 @@ import { QUESTS } from './quests';
 
 // Deeds: checked against a snapshot of the game state; awarded once, saved.
 
-export interface DeedState {
+interface DeedState {
   inventory: Partial<Record<string, number>>;
   xp: Record<SkillId, number>;
   completedQuests: string[];
@@ -22,7 +22,7 @@ export interface DeedState {
   reputation?: Record<string, number>;
 }
 
-export interface DeedDef {
+interface DeedDef {
   id: string;
   name: string;
   desc: string;

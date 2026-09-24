@@ -47,7 +47,7 @@ export interface ScoredAction {
  *  — corrected here to match it exactly, since an Activity's `abort()` must
  *  call `targetRegistry.release(targetId, slotKind, agent.id)` with real
  *  values, not ones that were never going to match anything. */
-export interface Reservation {
+interface Reservation {
   targetId: TargetId;
   slotKind: string;
 }
@@ -57,7 +57,7 @@ export interface Reservation {
  *  never the reverse. Arrival is this status flag, not something an
  *  Activity polls for by reading the agent's live position: §0.1's
  *  transform-isolation rule cuts both ways. */
-export interface Movement {
+interface Movement {
   status: 'moving' | 'arrived' | 'blocked';
   distRemaining: number;
 }

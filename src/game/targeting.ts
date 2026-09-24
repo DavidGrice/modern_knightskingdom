@@ -45,7 +45,7 @@ export const aimState = {
 };
 
 /** how far the aim ray reaches — beyond this a figure is too far to read */
-export const AIM_RANGE = 70;
+const AIM_RANGE = 70;
 /** friendlies get a simple upright capsule; only foes need per-part boxes */
 const FRIENDLY_RADIUS = 0.55;
 const FRIENDLY_HEIGHT = 1.8;

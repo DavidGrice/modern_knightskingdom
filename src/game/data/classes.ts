@@ -36,7 +36,7 @@
 // better: you start as a page dreaming of the sword, and EARN Squire later.
 import type { ItemId, SkillId } from '../types';
 
-export interface ClassDef {
+interface ClassDef {
   id: string;
   name: string;
   icon: string;

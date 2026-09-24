@@ -20,12 +20,12 @@ export const GOLDEN_FORTUNE_GOLD = [30, 70, 160];
 // "earned" flag needs persisting. Only the *highest tier already notified*
 // (gameStore's `challengeTiers`) needs remembering, so a milestone doesn't
 // re-announce itself every time checkChallenges() runs.
-export interface ChallengeTier {
+interface ChallengeTier {
   threshold: number;
   label: string;
 }
 
-export interface ChallengeDef {
+interface ChallengeDef {
   id: string;
   name: string;
   icon: string;

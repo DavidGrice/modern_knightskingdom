@@ -27,7 +27,7 @@ interface AnimClip { file: string; num_frames: number; tracks: AnimTrack[] }
 
 const clipCache = new Map<string, Promise<AnimClip>>();
 
-export function loadClip(name: string): Promise<AnimClip> {
+function loadClip(name: string): Promise<AnimClip> {
   let p = clipCache.get(name);
   if (!p) {
     p = fetch(`/assets/anims/${name}.json`).then((r) => r.json());
@@ -552,7 +552,7 @@ export async function assembleRiggedMinifig(
 const FPS = 15;
 const FADE = 0.18;
 
-export class MinifigAnimator {
+class MinifigAnimator {
   private clip: AnimClip | null = null;
   private clipName = '';
   private time = 0;

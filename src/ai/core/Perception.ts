@@ -26,7 +26,7 @@ import type { Agent } from './Agent';
 /** `now` is AgentManager's game clock; `dt` is the time since this agent's
  *  own previous think (`Agent.think`'s `elapsed`), not a fixed step — belief
  *  decay depends on real elapsed time the same way needs decay does. */
-export type SensesTick = (agent: Agent, now: number, dt: number) => void;
+type SensesTick = (agent: Agent, now: number, dt: number) => void;
 
 let registered: SensesTick | null = null;
 

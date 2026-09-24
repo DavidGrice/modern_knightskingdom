@@ -1,8 +1,21 @@
 # Codebase Cleanup Plan
 
-**Status: PLAN — not yet executed.** Generated 2026-09-23 from a full-codebase audit (27 independent area readers over every file under `src/`, cross-checked against a mechanical import-graph analysis, then merged and a completeness critic pass run against the merge). Companion to [`ROADMAP.md`](./ROADMAP.md)'s Reconciled status section, which covers *feature* backlog; this file covers *codebase* health — making the ~65k-line `src/` tree clear, clean, concise, and easier to keep scaling.
+**Status: IN PROGRESS — see the Progress log directly below for what has shipped.** Generated 2026-09-23 from a full-codebase audit (27 independent area readers over every file under `src/`, cross-checked against a mechanical import-graph analysis, then merged and a completeness critic pass run against the merge). Companion to [`ROADMAP.md`](./ROADMAP.md)'s Reconciled status section, which covers *feature* backlog; this file covers *codebase* health — making the ~65k-line `src/` tree clear, clean, concise, and easier to keep scaling.
 
 **How to use this file:** each numbered initiative (CLN-01..35) is independently scoped and dependency-ordered (see *Suggested execution order* below). Work through them like the project already works through ROADMAP waves — one (or a tightly related handful) at a time, each gated by `tsc --noEmit` + `next build` + the relevant Playwright smoke script(s) before moving on. Every initiative is written to be behavior-preserving unless it explicitly flags a deliberate behavior change (search for "explicit"/"deliberate"/"behavior change" in its own text) — those are called out for a human decision, not silently bundled in.
+
+---
+
+## Progress log
+
+Kept current per PR so a fresh session never has to reverse-engineer state from `git log`. Newest last.
+
+- **#220 — plan + ROADMAP reconciliation merged** (docs only).
+- **#221 — Quick wins: 15 of 16 done.** Deliberately *not* done: the `StatsStack.tsx` theming item — the screen still uses the entire pre-4-theme legacy CSS system (`.panel`/`.creator-section`/`.menu-btn`), so swapping only the outer wrapper class would nest unthemed markup inside a themed shell (a likely visual regression, not a one-liner); it needs a real page migration (see CLN-31/32). The "delete the orphaned `.claude/worktrees/` tree" item is **obsolete and must not be acted on**: real, live git worktrees are kept there now.
+- **#222 — CLN-08 done** (`game/types.ts` split into `game/types/{core,world,villagers,save}.ts`, re-exported through the original `types.ts` barrel).
+- **CLN-06 done** (two commits, both verified independently of the audit's own lists):
+  - *Part 1* — 20 fully dead exports deleted (192 lines, deletions only). Each was re-grepped across `src/` and the local `scripts/` tree; `registerSenses` (the audit's known false positive) was left alone.
+  - *Part 2* — the needless `export` keyword stripped from 235 declarations in 86 files by a scripted, TypeScript-module-resolution-based codemod (the audit estimated ~245). The diff is purely the removal of a leading `export ` — checked mechanically, 0 exceptions — with `tsc` and `next build` clean and **no** symbol needing to be restored. Left exported on purpose: everything under `src/app/**`, `export default`, list/barrel forms, `ai/core/curves.ts` (imported at runtime by `scripts/test5-1-curves.ts`), and 5 exports in `game/data/npcs.ts` (`COURT_START`, `COURT_END`, `InteriorResident`, `GUILD_QUESTS`, `questLabelById`) held back only because `scripts/_impl_check_live_data.mjs` dynamic-imports that module — that script reads just `NPCS`, so these 5 are safe to strip in a later pass. Three more (`QuestObjective`, `isHome`, `inWorld`, in `types/core.ts`/`types/world.ts`) stay exported because they sit behind the `export *` barrel and the codemod conservatively treats every export of a barrel-re-exported module as used.
 
 ---
 

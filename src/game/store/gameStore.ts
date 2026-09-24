@@ -131,11 +131,11 @@ let lastFullStoreNotifyAt = 0;
 /** real-time cooldown between keep tax collections (Phase 13) */
 export const TAX_COOLDOWN_MS = 5 * 60 * 1000;
 
-export interface Notification { id: number; text: string; gold?: boolean }
+interface Notification { id: number; text: string; gold?: boolean }
 
 export type PanelId = 'none' | 'inventory' | 'crafting' | 'quests' | 'skills' | 'emotes' | 'dialogue' | 'shop' | 'villagers' | 'travel' | 'chronicle' | 'parley' | 'guild' | 'commands' | 'npcEquip' | 'stationMenu' | 'appearance' | 'bestiary' | 'keepSocket' | 'buildingMenu' | 'workshop';
 
-export type CameraMode = 'fps' | 'third';
+type CameraMode = 'fps' | 'third';
 
 interface GameState {
   // persisted
@@ -894,7 +894,7 @@ function sectionSeed(id: string): number {
  * off one shared 20260713 stream, and re-seeding per section would change
  * every existing layout.
  */
-export function scatterNodesInRect(
+function scatterNodesInRect(
   section: RectSection & { id: string },
   world: string | null,
   existingNodes: ResourceNodeState[],

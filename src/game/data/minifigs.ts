@@ -8,36 +8,16 @@
 // Some crests are earned rather than free: see data/crestUnlocks.ts for the
 // account-level (localStorage) unlock rules tied to Deeds and crypt clears.
 
-export interface MinifigDonor {
-  id: string;      // file stem under /assets/minifigs
-  label: string;
-}
-
-/** every donor still usable for in-game NPCs/enemies (Enemies.tsx, Npc.tsx) —
- *  Skeleton stays here for the undead enemy rig; it's just not offered in
- *  the player creator (see FACE_OPTIONS). */
-export const DONORS: MinifigDonor[] = [
-  { id: 'minifigkingleo00', label: 'King Leo' },
-  { id: 'minifigqueenleonora00', label: 'Queen Leonora' },
-  { id: 'minifigrichardstrong00', label: 'Richard the Strong' },
-  { id: 'minifigjohnmayne00', label: 'John of Mayne' },
-  { id: 'minifigprincessstorm00', label: 'Princess Storm' },
-  { id: 'minifigcedricbull00', label: 'Cedric the Bull' },
-  { id: 'minifiggilbertbad00', label: 'Gilbert the Bad' },
-  { id: 'minifigweezil00', label: 'Weezil' },
-  { id: 'minifigskeleton00', label: 'Skeleton' },
-];
-
 export type Gender = 'male' | 'female';
 
-export interface FaceOption {
+interface FaceOption {
   id: string;        // donor id (also used as the assembled headDonor)
   label: string;      // anonymous style name — no title/rank implied
   gender: Gender;
   thumb: string;       // /assets/creator/faces/{id}.png
 }
 
-export interface CrestOption {
+interface CrestOption {
   id: string;        // donor id (also used as the assembled bodyDonor)
   label: string;
   gender: Gender;
@@ -103,17 +83,3 @@ export const PALETTE_SWATCHES: number[] = [
   40, 44, 48, 52, 56, 60, 64, 68,
 ];
 
-export type PartClass = 'head' | 'accessory' | 'body' | 'arm' | 'hand' | 'leg' | 'hip' | 'other';
-
-/** Classify an OBJ object name (e.g. "027_Minifig_2_-_Arm_Rt_BL") into a body part. */
-export function classifyPart(objectName: string): PartClass {
-  const n = objectName.toLowerCase();
-  if (/head/.test(n)) return 'head';
-  if (/hat|crown|helmet|plume|_l_\d/.test(n)) return 'accessory';
-  if (/arm/.test(n)) return 'arm';
-  if (/hand/.test(n)) return 'hand';
-  if (/leg|foot/.test(n)) return 'leg';
-  if (/hip/.test(n)) return 'hip';
-  if (/body|torso/.test(n)) return 'body';
-  return 'other';
-}

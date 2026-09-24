@@ -6,7 +6,7 @@
 // rank/progression (see minifigs.ts header).
 import { CREST_OPTIONS } from './minifigs';
 
-export interface CrestUnlockDef {
+interface CrestUnlockDef {
   crestId: string;
   deedId?: string;        // unlocks when this Deed is earned…
   dungeonClears?: number; // …or when lifetime Sealed Crypt full-clears reach this
@@ -23,7 +23,7 @@ export const CREST_UNLOCKS: CrestUnlockDef[] = [
 
 const KEY = 'kk_crests';
 
-export function unlockedCrests(): string[] {
+function unlockedCrests(): string[] {
   if (typeof window === 'undefined') return [];
   try {
     return JSON.parse(localStorage.getItem(KEY) || '[]');

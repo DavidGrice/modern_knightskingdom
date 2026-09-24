@@ -3,7 +3,7 @@
 // checks into one place a Settings screen can rebind (see OptionsStack.tsx).
 // Escape (pause/back) stays hardcoded — it's universal, not a gameplay bind.
 
-export interface KeybindGroup {
+interface KeybindGroup {
   label: string;
   actions: { id: string; label: string }[];
 }

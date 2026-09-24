@@ -14,7 +14,7 @@
 // ~4x the pixel-shading work every frame).
 export type AaMode = 'off' | 'fxaa' | 'smaa' | 'supersample2x';
 
-export interface AaModeInfo {
+interface AaModeInfo {
   id: AaMode;
   label: string;
   blurb: string;
@@ -26,7 +26,3 @@ export const AA_MODES: AaModeInfo[] = [
   { id: 'smaa', label: 'SMAA', blurb: 'Sharper edge-smoothing than FXAA for a similar cost. A good default upgrade.' },
   { id: 'supersample2x', label: 'Supersample 2x', blurb: 'Renders at double resolution internally for the cleanest edges. Roughly 4x the pixel cost — best on Balanced/Ultra with a strong GPU.' },
 ];
-
-export const AA_MODE_BY_ID: Record<AaMode, AaModeInfo> = Object.fromEntries(
-  AA_MODES.map((m) => [m.id, m]),
-) as Record<AaMode, AaModeInfo>;

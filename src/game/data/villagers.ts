@@ -103,7 +103,7 @@ export function villagerHomeSpot(
 }
 
 
-export interface JobDef {
+interface JobDef {
   id: VillagerJob;
   label: string;
   icon: string;

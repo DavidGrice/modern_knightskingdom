@@ -44,7 +44,7 @@ const WEAPON_ITEMS: { item: ItemId; icon: string; label: string }[] = [
 
 /** kept as a named re-export: several panels already import this name, and it
  *  now just defers to the shared derived-plus-override look */
-export function villagerPreviewConfig(v: Villager): CharacterConfig {
+function villagerPreviewConfig(v: Villager): CharacterConfig {
   return villagerConfig(v);
 }
 
