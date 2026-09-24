@@ -1,5 +1,5 @@
 import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeState, VillagerJob } from '../types';
-import { hashId } from './villagerLooks';
+import { hashId } from '@/lib/rng';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
 import { activeWindow } from './schedule';
 

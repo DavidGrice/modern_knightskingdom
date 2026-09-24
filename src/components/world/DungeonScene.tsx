@@ -19,6 +19,7 @@ import RiggedFigure from '../character/RiggedFigure';
 import { navSteer, type NavAgent } from '@/game/navgrid';
 import { playerState } from '@/game/playerState';
 import type { CharacterConfig } from '@/game/types';
+import { wrapAngle } from '@/lib/math';
 
 const STONEWALL = BUILDABLE_BY_ID.stonewall;
 
@@ -79,9 +80,7 @@ function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: nu
       agent.x += nx * speed * dt;
       agent.z += nz * speed * dt;
       const desired = Math.atan2(-nx, -nz);
-      let diff = desired - yaw.current;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 4);
       const wantClip = dist > CAPTIVE_RUN_DIST ? 'anim_c_run' : 'anim_c_walk';
       if (clip !== wantClip) setClip(wantClip);

@@ -5,6 +5,7 @@
 // outside), one door prompt — so any buildable type can offer an enterable
 // interior by adding one entry here instead of a bespoke component.
 import { KEEP_INTERIOR, KEEP_ENTER_RANGE } from './world';
+import { hashId } from '@/lib/rng';
 
 export interface InteriorDef {
   /** matches PlacedBuilding.type */
@@ -95,14 +96,6 @@ export const INTERIORS: Record<string, InteriorDef> = {
     enterRange: 2.3,
   },
 };
-
-// a tiny deterministic hash — same spirit as Villagers.tsx's own hashId(),
-// kept local rather than importing a component into game data
-function hashId(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h;
-}
 
 const POCKET_BASE_X = 85;
 const POCKET_BASE_Z = 140;

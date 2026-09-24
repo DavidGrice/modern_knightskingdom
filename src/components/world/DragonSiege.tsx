@@ -22,6 +22,7 @@ import { bossTierScale, BOSS_VICTORY_REWARD, rollBossLegendaryDrop } from '@/gam
 import { ITEMS } from '@/game/data/items';
 import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 import { loadDragonRig, type DragonRig } from './DragonOmen';
+import { pick } from '@/lib/rng';
 
 const SIEGE_SECONDS = 55;
 const BREATH_EVERY = 6;   // seconds between fire passes
@@ -121,7 +122,7 @@ function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (rout
       if (burning.current.length === 0) {
         const targets = st.buildings.filter((b) => isBuilt(b) && flammable(b.type));
         if (targets.length) {
-          const b = targets[Math.floor(Math.random() * targets.length)];
+          const b = pick(targets);
           st.damageBuilding(b.id, BREATH_DAMAGE, 'scorched by dragonfire', true);
           audio.playAt('flame', b.x, b.z, 0.9);
           burning.current.push({ id: b.id, x: b.x, z: b.z, fireT: 1.4 });
@@ -147,7 +148,7 @@ function SiegeFlight({ hitsToRout, onDone }: { hitsToRout: number; onDone: (rout
           const candidates = live.filter((o) => !burningIds.has(o.id) && isBuilt(o) && flammable(o.type)
             && Math.hypot(o.x - entry.x, o.z - entry.z) <= SPREAD_RADIUS);
           if (!candidates.length) continue;
-          const next = candidates[Math.floor(Math.random() * candidates.length)];
+          const next = pick(candidates);
           burning.current.push({ id: next.id, x: next.x, z: next.z, fireT: 1.4 });
           burningIds.add(next.id);
           audio.playAt('flame', next.x, next.z, 0.8);
@@ -303,7 +304,7 @@ export default function DragonSiege() {
         // one-time roll branch (mirrors the horn/warcry calls just above),
         // is the achievable distinguishing touch without new movement.
         if (st.villagers.length) {
-          const v = st.villagers[Math.floor(Math.random() * st.villagers.length)];
+          const v = pick(st.villagers);
           st.notify(`${v.name} points to the sky and screams — the homestead scatters!`, true);
         }
         setActive(true);

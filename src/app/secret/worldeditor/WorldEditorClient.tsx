@@ -15,6 +15,7 @@ import { POND, BROOK, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '@/game/data/worl
 import type { TerrainRegion } from '@/game/data/terrainRegions';
 import { DOWNS_MAX_GRADIENT, DOWNS_SINK, regionSurfaceY } from '@/game/data/terrainRegions';
 import { DIG_OUTSKIRT } from '@/game/waterworks';
+import { aabbOverlapCenterHalf } from '@/lib/geometry';
 
 type Kind = 'tree' | 'rock' | 'herb';
 
@@ -77,9 +78,6 @@ const HOMESTEAD_CLEARANCE = 8;
 // widening, not a behaviour change.
 interface Box { x: number; z: number; halfX: number; halfZ: number }
 
-function sectionsOverlapLive(a: Box, b: Box): boolean {
-  return Math.abs(a.x - b.x) < a.halfX + b.halfX && Math.abs(a.z - b.z) < a.halfZ + b.halfZ;
-}
 // Shared by clearsHomesteadLive and terrainRegionProblems's own fence check —
 // was recomputed separately in each place before Wave 60.
 function maxHalfOf(landTiers: LandTierRow[]): number {
@@ -137,7 +135,7 @@ function terrainRegionProblems(
   // 0. no two regions overlap each other
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) {
-      if (sectionsOverlapLive(boxes[i].box, boxes[j].box)) {
+      if (aabbOverlapCenterHalf(boxes[i].box, boxes[j].box)) {
         messages.push(`${boxes[i].r.name} and ${boxes[j].r.name} overlap — two regions can never share ground`);
         ids.add(boxes[i].r.id);
         ids.add(boxes[j].r.id);
@@ -198,7 +196,7 @@ function terrainRegionProblems(
       ids.add(r.id);
     }
     for (const g of grounds) {
-      if (sectionsOverlapLive(box, g)) {
+      if (aabbOverlapCenterHalf(box, g)) {
         messages.push(`${g.name} now lies on ${r.name} — its fence, boundary stone and scattered nodes assume `
           + 'flat ground');
         ids.add(r.id);
@@ -266,7 +264,7 @@ export default function WorldEditorClient() {
     }
     for (let i = 0; i < sections.length; i++) {
       for (let j = i + 1; j < sections.length; j++) {
-        if (sectionsOverlapLive(sections[i], sections[j])) {
+        if (aabbOverlapCenterHalf(sections[i], sections[j])) {
           out.push(`${sections[i].name} overlaps ${sections[j].name}`);
         }
       }
@@ -288,7 +286,7 @@ export default function WorldEditorClient() {
     for (const g of tables.grounds) if (offRoad(g) > ROAD_REACH) set.add(g.id);
     for (let i = 0; i < sections.length; i++) {
       for (let j = i + 1; j < sections.length; j++) {
-        if (sectionsOverlapLive(sections[i], sections[j])) { set.add(sections[i].id); set.add(sections[j].id); }
+        if (aabbOverlapCenterHalf(sections[i], sections[j])) { set.add(sections[i].id); set.add(sections[j].id); }
       }
     }
     for (const id of terrainRegionProblems(tables.terrainRegions, tables.landTiers, tables.grounds).ids) set.add(id);

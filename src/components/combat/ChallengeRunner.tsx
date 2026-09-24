@@ -20,6 +20,7 @@ import { playerState } from '@/game/playerState';
 import { audio } from '@/lib/audio';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { destinationGroundY } from '../world/TemplateWorld';
+import { pick } from '@/lib/rng';
 import {
   gatherChallengeState, GATHER_TARGET_COUNT, GATHER_PICKUP_RADIUS,
   defendChallengeState, DEFEND_START_HP, DEFEND_DRAIN_PER_SEC, DEFEND_PROXIMITY_RADIUS,
@@ -120,7 +121,7 @@ export default function ChallengeRunner() {
         if (defendSpawnTimer.current <= 0 && live < DEFEND_MAX_LIVE) {
           defendSpawnTimer.current = DEFEND_SPAWN_INTERVAL_S;
           const dest = WORLD_DESTINATION_BY_ID[d.destId];
-          const kind = DEFEND_SPAWN_TABLE[Math.floor(Math.random() * DEFEND_SPAWN_TABLE.length)];
+          const kind = pick(DEFEND_SPAWN_TABLE);
           const angle = Math.random() * Math.PI * 2;
           const r = dest.radius * 0.85;
           useEnemyStore.getState().spawn(

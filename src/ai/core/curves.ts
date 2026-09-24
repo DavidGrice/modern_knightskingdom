@@ -6,6 +6,10 @@
 // not — `Math.max`/`Math.min` both propagate it, silently poisoning
 // `scoreAction`'s running product for good (5.2), not just for one tick.
 
+// Relative import (not '@/lib/math'): scripts/test5-1-curves.ts runs this
+// module standalone via `npx tsx`, so it must not depend on path-alias support.
+import { clamp01 } from '../../lib/math';
+
 export type CurveType = 'linear' | 'quadratic' | 'logistic' | 'logit' | 'bool';
 
 /** `m` slope, `k` exponent, `b` vertical shift, `c` horizontal shift —
@@ -19,10 +23,6 @@ export interface Curve {
   k: number;
   b: number;
   c: number;
-}
-
-function clamp01(x: number): number {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
 /** `x` is clamped to [0,1] before the curve runs, and every branch's own

@@ -98,6 +98,7 @@ import {
 import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST } from '../dungeon';
 import { resetArenaRun, endArenaRun, type ArenaEnvId } from '../arena';
 import { buildChallengeState, BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET } from '../buildChallenge';
+import { mulberry32, pick, randInt } from '@/lib/rng';
 
 const ZERO_XP: Record<SkillId, number> = {
   woodcutting: 0, mining: 0, smithing: 0, fishing: 0, building: 0, combat: 0, farming: 0,
@@ -839,16 +840,6 @@ let placeHistory: string[][] = [];
  *  set by pickupKeep, consumed by cancelMove/finishMove, always null
  *  otherwise. Ephemeral like movingBuilding itself: never persisted. */
 let carriedKeepExtra: { parts: Record<string, string>; built: Record<string, number>; hp: Record<string, number> } | null = null;
-
-/** Simple deterministic RNG so the world layout is stable across sessions. */
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const TREE_MODELS = ['/assets/props/scenery/l243500.glb', '/assets/props/scenery/l347100.glb'];
 
@@ -3957,7 +3948,7 @@ function createGameStore() {
     },
 
     greetCompanion: () => {
-      const line = COMPANION_LINES[Math.floor(Math.random() * COMPANION_LINES.length)];
+      const line = pick(COMPANION_LINES);
       audio.play('villager', 0.7, false);
       get().notify(line, true);
     },
@@ -4420,7 +4411,7 @@ function createGameStore() {
       set({
         nodes: st.nodes.map((n) =>
           n.respawnAt && n.respawnAt < now
-            ? { ...n, respawnAt: null, hitsLeft: n.kind === 'tree' ? 3 : n.kind === 'herb' ? 1 + Math.floor(Math.random() * 10) : 4 }
+            ? { ...n, respawnAt: null, hitsLeft: n.kind === 'tree' ? 3 : n.kind === 'herb' ? randInt(1, 10) : 4 }
             : n,
         ),
       });

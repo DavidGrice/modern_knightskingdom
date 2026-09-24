@@ -25,6 +25,7 @@ import type { Agent } from './Agent';
 import { targetRegistry } from './TargetRegistry';
 import { resolveAnchor, type ResolvedAnchor } from './AnchorResolution';
 import { agentManager, despawnHooks, tierChangeHooks } from './AgentManager';
+import { wrapAngle } from '@/lib/math';
 
 const WALK_SPEED = 0.9; // m/s — matches Villagers.tsx's existing wander/work pace
 const RUN_SPEED = 1.6; // m/s — matches Villagers.tsx's existing raid-flee pace
@@ -157,9 +158,7 @@ function faceToward(agent: Agent, tx: number, tz: number, dt: number): void {
   // yaw -> facing is (-sin, -cos) by this codebase's convention
   // (PlayerController.tsx/combat.ts/Villagers.tsx's own wander branch)
   const desired = Math.atan2(-(tx - agent.position.x), -(tz - agent.position.z));
-  let diff = desired - agent.yaw;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
+  const diff = wrapAngle(desired - agent.yaw);
   agent.yaw += diff * Math.min(1, dt * FACE_TURN_RATE);
 }
 
@@ -403,9 +402,7 @@ function stepAgent(agent: Agent, dt: number): void {
   // face the steering direction, not the target itself — the same
   // (-nx, -nz) formula every branch in Villagers.tsx's own cascade already
   // uses, so a mid-detour agent turns to face where it is actually walking
-  let diff = Math.atan2(-nx, -nz) - agent.yaw;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
+  const diff = wrapAngle(Math.atan2(-nx, -nz) - agent.yaw);
   agent.yaw += diff * Math.min(1, step * FACE_TURN_RATE);
   setMovement(agent, 'moving', dist);
 }

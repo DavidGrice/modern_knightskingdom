@@ -15,6 +15,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
+import { wrapAngle } from '@/lib/math';
 
 const C = '/assets/props/creatures';
 const L = '/assets/props/lab';
@@ -114,9 +115,7 @@ function Horse({ id, url, home, world }: { id: string; url: string; home: [numbe
         s.x += (dx / d) * speed * dt;
         s.z += (dz / d) * speed * dt;
         const desired = Math.atan2(dx, dz);
-        let diff = desired - s.yaw;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
+        const diff = wrapAngle(desired - s.yaw);
         s.yaw += diff * Math.min(1, dt * 3);
       }
     }

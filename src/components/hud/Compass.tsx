@@ -10,23 +10,17 @@ import { useEffect, useState } from 'react';
 import { playerState } from '@/game/playerState';
 import { useEnemyStore } from '@/game/combat';
 import { SPAWN } from '@/game/data/world';
+import { wrapAngle } from '@/lib/math';
 
 /** How many radians of heading the strip shows end to end. 270° puts the
  *  two flanking cardinals at ~17%/83% instead of hard against the clipped
  *  edges, which is how the mockup reads (W · N · E across the strip). */
 const SPAN = Math.PI * 1.5;
 
-function wrap(a: number) {
-  let d = a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
-}
-
 /** 0..1 across the strip, or null when the mark is behind you */
 function place(yaw: number, dx: number, dz: number): number | null {
   const bearing = Math.atan2(-dx, -dz);
-  const rel = wrap(bearing - yaw);
+  const rel = wrapAngle(bearing - yaw);
   if (Math.abs(rel) > SPAN / 2) return null;
   return 0.5 + rel / SPAN;
 }
@@ -71,7 +65,7 @@ export default function Compass() {
     <div className="kk-compass kk-glass">
       <div className="kk-compass-ticks">
         {CARDINALS.map(([label, bearing]) => {
-          const rel = wrap(bearing - state.yaw);
+          const rel = wrapAngle(bearing - state.yaw);
           if (Math.abs(rel) > SPAN / 2) return null;
           return (
             <span

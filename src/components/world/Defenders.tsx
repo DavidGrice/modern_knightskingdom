@@ -25,7 +25,7 @@ import RiggedProp from './RiggedProp';
 import { heightOf } from '@/game/data/buildables';
 import { hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
-import { hashId } from './Villagers';
+import { hashId } from '@/lib/rng';
 import { homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import { POND } from '@/game/data/world';
@@ -33,6 +33,7 @@ import { MERCHANT_SPOT, MERCHANT_CAMP_STATION } from '@/game/data/trade';
 import { pushOutOfWater } from '@/game/waterworks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import type { CharacterConfig, Villager } from '@/game/types';
+import { wrapAngle } from '@/lib/math';
 
 /** how far an archer can reach a circling dragon — generous, because the
  *  beast is large and the shot is a volley rather than a marksman's */
@@ -258,9 +259,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           ds.x += (dxR / dR) * step;
           ds.z += (dzR / dR) * step;
           const desired = Math.atan2(-dxR, -dzR);
-          let diff = desired - yaw.current;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = wrapAngle(desired - yaw.current);
           yaw.current += diff * Math.min(1, dt * 3);
           if (clip !== 'anim_c_walk') setClip('anim_c_walk');
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
@@ -281,9 +280,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           ds.x += (dxF / dF) * step;
           ds.z += (dzF / dF) * step;
           const desired = Math.atan2(-dxF, -dzF);
-          let diff = desired - yaw.current;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = wrapAngle(desired - yaw.current);
           yaw.current += diff * Math.min(1, dt * 4);
           if (clip !== 'anim_c_run') setClip('anim_c_run');
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
@@ -316,9 +313,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       ds.x += (dxP / dP) * step;
       ds.z += (dzP / dP) * step;
       const desired = Math.atan2(-dxP, -dzP);
-      let diff = desired - yaw.current;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 3);
       const wantClip = order === 'scout' ? 'anim_c_run' : 'anim_c_walk';
       if (clip !== wantClip) setClip(wantClip);
@@ -338,9 +333,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       const slant = Math.hypot(dxD, dzD, dragonAir.y - ds.postY);
       if (slant <= AIR_RANGE) {
         const desired = Math.atan2(-dxD, -dzD);
-        let diff = desired - yaw.current;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
+        const diff = wrapAngle(desired - yaw.current);
         yaw.current += diff * Math.min(1, dt * 4);
         if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
         if (ds.attackCd <= 0) {
@@ -370,16 +363,12 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       ds.x += (dxT / dT) * speed * dt;
       ds.z += (dzT / dT) * speed * dt;
       const desired = Math.atan2(-dxT, -dzT);
-      let diff = desired - yaw.current;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 3);
       if (clip !== 'anim_c_run') setClip('anim_c_run');
     } else {
       const desired = Math.atan2(-dxT, -dzT);
-      let diff = desired - yaw.current;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 4);
       if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
       if (ds.attackCd <= 0) {

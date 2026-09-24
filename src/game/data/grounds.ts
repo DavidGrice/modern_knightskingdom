@@ -12,6 +12,7 @@
 import { LAND_TIERS, landHalf, landSouthHalf, MAX_LAND_TIER } from './buildables';
 import GROUNDS_DATA from './grounds.generated.json';
 import type { RectSection } from '../types/world';
+import { aabbOverlapCenterHalf } from '@/lib/geometry';
 
 /**
  * Empire arc, Wave 5 · the rectangle a resource cluster seeds inside, split
@@ -80,7 +81,7 @@ const HOMESTEAD_CLEARANCE = 8;
 /** plain AABB test between two sections — exported so Wave 5's cultivated
  *  plots are held to the identical check rather than a second copy of it */
 export function sectionsOverlap(a: RectSection, b: RectSection): boolean {
-  return Math.abs(a.x - b.x) < a.halfX + b.halfX && Math.abs(a.z - b.z) < a.halfZ + b.halfZ;
+  return aabbOverlapCenterHalf(a, b);
 }
 
 /** does a section sit clear of the homestead at its widest bought extent?

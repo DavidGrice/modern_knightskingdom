@@ -23,6 +23,7 @@ import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
 import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
+import { wrapAngle } from '@/lib/math';
 
 const MOVE_CLIPS = new Set(['anim_c_walk', 'anim_r_restpose']);
 
@@ -235,9 +236,7 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     if (MOVE_CLIPS.has(clipRef.current)) {
       if (moving) {
         const desired = Math.atan2(-dx, -dz);
-        let diff = desired - yaw.current;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
+        const diff = wrapAngle(desired - yaw.current);
         yaw.current += diff * Math.min(1, dt * 3);
         g.rotation.y = yaw.current;
         if (clipRef.current !== 'anim_c_walk') setClip('anim_c_walk');

@@ -17,6 +17,7 @@
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 import type { Curve } from '../core/curves';
+import { pick } from '@/lib/rng';
 
 // Deliberately excludes combat-flavored clips (anim_c_angry,
 // anim_c_surprisejump, anim_g_*) and the dialogue-only greet waves
@@ -39,7 +40,7 @@ class IdleFidgetActivity implements Activity {
 
   start(agent: Agent, _ctx: Context): void {
     this.holdTimer = 0;
-    const clip = FIDGET_CLIPS[Math.floor(Math.random() * FIDGET_CLIPS.length)];
+    const clip = pick(FIDGET_CLIPS);
     agent.intent = { type: 'PLAY_ANIM', clip, loop: false, anchored: true };
   }
 

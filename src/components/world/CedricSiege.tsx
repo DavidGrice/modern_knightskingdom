@@ -27,6 +27,7 @@ import { cedricSiegeAllowed, cedricJailbreakAllowed, cedricWarState } from '@/ga
 import { difficultyState, MOUNTED_RAIDER_TIER } from '@/game/difficulty';
 import { BOSS_ENCOUNTERS } from '@/game/bossEncounter';
 import RiggedProp, { fireProp } from './RiggedProp';
+import { pick } from '@/lib/rng';
 
 /** final stand: seconds after the escort arrives before a single wave-2
  *  reinforcement rushes in, if he's still standing — Wave 38 (A1): promoted
@@ -96,7 +97,7 @@ function WarParty({ onDone }: { onDone: (routed: boolean) => void }) {
           : []),
       ];
       if (!targets.length) continue;
-      const target = targets[Math.floor(Math.random() * targets.length)];
+      const target = pick(targets);
       fireProp(eng.id);
       audio.playAt('explosion', target.x, target.z, 0.8);
       if (target.keep) st.damageKeepPart(target.id, ENGINE_DAMAGE, "battered by Cedric's siege engines");
@@ -135,7 +136,7 @@ export default function CedricSiege() {
     if (routed) {
       st.addItems({ gold: 40, plank: 6, stone: 6, iron_ore: 4 }, 'grant');
       st.addXp('combat', 40);
-      st.grantArmory(ARMORY_DROPS[Math.floor(Math.random() * ARMORY_DROPS.length)], 1);
+      st.grantArmory(pick(ARMORY_DROPS), 1);
     }
     st.notify(
       routed

@@ -48,6 +48,7 @@ import { AMBIENT } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 import type { Curve } from '../core/curves';
+import { clamp } from '@/lib/math';
 
 /** Same fail-open contract `AnchorResolution.resolveAnchor`, phase 7's
  *  `takeCover.gridFor` and phase 8's `Locomotion.gridOrNull` all already
@@ -62,10 +63,6 @@ function gridFor(region: string | null): NavGrid | null {
   } catch {
     return null;
   }
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
 }
 
 /** A walkable point on Villagers.tsx's own wander ring, or null if this agent

@@ -2,6 +2,7 @@
 // Tiny audio manager for the extracted Knights' Kingdom WAV bank.
 // The original engine pitch-shifted its 8-bit samples for variety; we do the same.
 import { playerState } from '@/game/playerState';
+import { pick } from '@/lib/rng';
 
 const SOUNDS = [
   'bird1', 'bird2', 'bird3', 'brick_link', 'brick_collide', 'brick_connect',
@@ -138,7 +139,7 @@ class AudioManager {
             : this.nightMode
               ? ['owl', 'wind1', 'wind2', 'owl']
               : ['bird1', 'bird2', 'bird3', 'wind1', 'wind2'];
-        this.play(pool[Math.floor(Math.random() * pool.length)], 0.35);
+        this.play(pick(pool), 0.35);
       }
       this.ambientTimer = setTimeout(loop, 4000 + Math.random() * 7000);
     };
