@@ -858,10 +858,6 @@ export function getNavGrid(region: string | null): NavGrid {
   return grid;
 }
 
-export function navInBounds(x: number, z: number): boolean {
-  return homeGrid.inBounds(x, z);
-}
-
 export function navBlocked(x: number, z: number): boolean {
   if (!homeGrid.inBounds(x, z)) return false;
   return !homeGrid.isWalkable(x, z);

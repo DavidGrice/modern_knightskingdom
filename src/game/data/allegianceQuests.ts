@@ -182,13 +182,6 @@ export const EXTRA_SIDE_QUESTS: Record<string, SideQuestDef[]> = {
   ],
 };
 
-/** Every errand id that exists anywhere, for validating `requires` chains. */
-export function allExtraQuestIds(): Set<string> {
-  const ids = new Set<string>();
-  for (const list of Object.values(EXTRA_SIDE_QUESTS)) for (const q of list) ids.add(q.id);
-  return ids;
-}
-
 /** Allegiance deltas for errands that already existed before this system.
  *  Kept here rather than edited into npcs.ts so the whole "which way does
  *  this pull me?" picture is readable in one place. */

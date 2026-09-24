@@ -152,5 +152,3 @@ export const QUESTS: Quest[] = [
     grantItems: { gold: 60 },
   },
 ];
-
-export const QUEST_BY_ID = Object.fromEntries(QUESTS.map((q) => [q.id, q]));

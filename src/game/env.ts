@@ -31,7 +31,6 @@ export const worldEnv = {
 /** Spring/Summer/Autumn/Winter, ~`DAYS_PER_SEASON` in-game days each — a
  *  full "year" is a session-scale arc (with the default 12-minute day, about
  *  2.4 real hours), not tied to any real-world calendar. */
-export const SEASON_NAMES = ['Spring', 'Summer', 'Autumn', 'Winter'] as const;
 export const DAYS_PER_SEASON = 3;
 export function seasonOf(dayCount: number): number {
   return Math.floor(dayCount / DAYS_PER_SEASON) % 4;

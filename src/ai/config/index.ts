@@ -35,7 +35,6 @@ export type NeedId = (typeof NEED_IDS)[number];
 
 /** §8 — LOD tiers, best to worst. */
 export type Tier = 'A' | 'B' | 'C' | 'D';
-export const TIERS: Tier[] = ['A', 'B', 'C', 'D'];
 
 export interface NeedTuning {
   /** satisfaction lost per GAME second (see needs.json's _doc) */
@@ -393,12 +392,6 @@ export function needProfile(profile: string): Record<NeedId, NeedTuning> {
  *  produce a dull NPC in the overlay, not a blank screen. */
 export function archetypeDef(id: string): ArchetypeDef {
   return ARCHETYPES[id] ?? ARCHETYPES.villager;
-}
-
-/** `_doc` keys are authoring comments, not archetypes — every config file in
- *  here carries one, so anything enumerating a file's keys must skip them. */
-export function archetypeIds(): string[] {
-  return Object.keys(ARCHETYPES).filter((k) => !k.startsWith('_'));
 }
 
 export function tierDef(tier: Tier): TierDef {

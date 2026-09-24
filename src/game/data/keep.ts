@@ -192,11 +192,6 @@ export function keepComplete(k: KeepState): boolean {
   return KEEP_SOCKETS.every((s) => k.parts[s.id] && (k.built[s.id] ?? 0) >= 1);
 }
 
-export function keepProgress(k: KeepState): number {
-  const done = KEEP_SOCKETS.reduce((n, s) => n + Math.min(1, k.built[s.id] ?? 0), 0);
-  return done / KEEP_SOCKETS.length;
-}
-
 /** structural HP, the same cost-derived formula buildables.ts's maxHpFor
  *  uses for every other structure — pricier pieces shrug off more siege
  *  damage before they come down. */

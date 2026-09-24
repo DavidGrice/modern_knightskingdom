@@ -279,27 +279,12 @@ export function capOf(assetId: string | undefined | null): LabCapability | null 
   return warm[assetId] ?? null;
 }
 
-/** every asset the lab verified for a given kind */
-export function capsOfKind(kind: LabKind): [string, LabCapability][] {
-  return Object.entries(warm).filter(([, c]) => c.kind === kind);
-}
-
 // ---- convenience predicates, each with the pre-lab default as fallback ----
 
 export function labCanStandOn(assetId: string | undefined, fallback = true): boolean {
   const c = capOf(assetId);
   if (!c) return fallback;
   return c.interaction.canStandOn ?? c.traits.wall?.canStandOn ?? c.traits.scenery?.canStandOn ?? fallback;
-}
-
-export function labIsDestructible(assetId: string | undefined, fallback = true): boolean {
-  const c = capOf(assetId);
-  if (!c) return fallback;
-  return c.interaction.isDestructible ?? c.traits.wall?.isDestructible ?? fallback;
-}
-
-export function labIsPaintable(assetId: string | undefined, fallback = false): boolean {
-  return capOf(assetId)?.interaction.isPaintable ?? fallback;
 }
 
 /** a prop the rig lab found a real launch mechanism on (oc6096b5's
@@ -311,13 +296,6 @@ export function labCanLaunch(assetId: string | undefined): boolean {
 
 export function labCanConnectAsWall(assetId: string | undefined): boolean {
   return capOf(assetId)?.traits.wall?.canConnectAsWall ?? false;
-}
-
-/** where a piece sits in its own destruction chain, if the lab charted one */
-export function labDestruction(assetId: string | undefined): { phase: number; count: number } | null {
-  const w = capOf(assetId)?.traits.wall;
-  if (!w?.destructionPhase || !w.destructionPhaseCount) return null;
-  return { phase: w.destructionPhase, count: w.destructionPhaseCount };
 }
 
 /**

@@ -61,15 +61,3 @@ export function brickLabel(id: ItemId, fallback: string): string {
   return BRICK_RESOURCES[id]?.label ?? fallback;
 }
 
-/** which bin of the parts drawer a resource files under */
-export function brickBin(id: ItemId): BrickResource['bin'] | null {
-  return BRICK_RESOURCES[id]?.bin ?? null;
-}
-
-export const BIN_LABEL: Record<BrickResource['bin'], string> = {
-  timber: 'Timber',
-  stone: 'Stone',
-  metal: 'Metal',
-  fittings: 'Fittings',
-  stores: 'Stores',
-};
