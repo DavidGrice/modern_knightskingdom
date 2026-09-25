@@ -5,6 +5,7 @@ import type {
   Blueprint, CaravanRun, ClaimedPlot, CultivatedPlot, MarketEntry, PlacedBuilding, Settlement, WaterFeature,
 } from './world';
 import type { Alliance, CompanionState, Villager } from './villagers';
+import type { KeepState } from '../data/keep';
 
 export interface ActiveSideQuest {
   npcId: string;
@@ -28,6 +29,14 @@ export interface LifetimeStats {
   dungeonsCleared: number;
 }
 
+/**
+ * The persisted save shape. CLN-03 · this interface is the DOCUMENTED type home
+ * of every saved field, and store/persistence.ts's PERSISTED_FIELDS table is
+ * the single behavioural one (fresh-game default, load rule, save rule): the
+ * store's `GameState` inherits every field here (minus `version`/`playerPos`)
+ * from it, so adding a persisted field is (1) a line here and (2) a row there.
+ * Everything after `buildings` stays optional so an old save still loads.
+ */
 export interface SaveGame {
   version: 1;
   character: CharacterConfig;
@@ -46,30 +55,35 @@ export interface SaveGame {
   /** full in-game days elapsed (Phase 15 seasons), absent = 0 */
   dayCount?: number;
   sideQuest?: ActiveSideQuest | null;
-  /** which one the HUD tracker prefers to show, absent = 'main' */
+  /** which one the HUD tracker prefers to show (player-set), absent = 'main'.
+   *  The tracker falls back to 'main' whenever no side errand is actually active. */
   trackedQuest?: 'main' | 'side';
   deeds?: string[];
   /** foes scanned into the collection book (not merely killed) */
   bestiary?: string[];
-  /** standing between the houses, -100 (Cedric) .. +100 (Leo) */
+  /** the continuous standing between the houses, -100 (Cedric) .. +100 (Leo).
+   *  The pledge (`alliance`) is a one-off act of will; this is what your DEEDS
+   *  say, and the two are allowed to disagree. See data/allegiance.ts. */
   allegiance?: number;
-  /** ids of every side errand finished, for precursor chains */
+  /** ids of every side errand finished, so `requires` chains have something to
+   *  read and a completed errand is not re-offered as though it were new */
   completedSideQuests?: string[];
-  /** how far the homestead fence has been bought out (LAND_TIERS index) */
+  /** how far the homestead fence has been bought out (LAND_TIERS index — every
+   *  tier is a size a wall run actually closes on). A save that predates land
+   *  tiers is inherited at the LARGEST tier on load, not 0 (see persistence.ts's
+   *  LEGACY_LOAD_OVERRIDES). */
   landTier?: number;
   /** J51 · the composed castle (game/data/keep.ts). Absent on saves from
    *  before the keep could be assembled. */
-  keep?: {
-    x: number; z: number;
-    parts: Record<string, string>;
-    built: Record<string, number>;
-    /** socket id -> siege HP; absent = full (see data/keep's maxHpForPart) */
-    hp?: Record<string, number>;
-  } | null;
+  keep?: KeepState | null;
   /** M · the set on the workshop bench, and the sets already built */
   workshop?: { setNum: string; step: number } | null;
   builtSets?: string[];
-  /** caught-and-stabled horse ids, and villagerId -> horseId assignments */
+  /** G27 · caught-and-stabled horse ids, and villagerId -> horseId assignments.
+   *  On load these are mirrored into riding.ts's leaf module, because the
+   *  mounted patrol AI reads it every frame and must not go through the store;
+   *  toSave therefore saves from THAT module, not from the store's own (dead)
+   *  copy. */
   stabled?: string[];
   mounts?: Record<string, string>;
   /** Wave 13 · the falcon companion has been tamed (see game/falcon.ts and
@@ -111,6 +125,7 @@ export interface SaveGame {
   villagers?: Villager[];
   /** the homestead Armory's spare gear, separate from the player's own inventory */
   armory?: Partial<Record<ItemId, number>>;
+  /** the one-time reward in the keep's chest has already been claimed */
   treasureOpened?: boolean;
   /** the dragon's night flyover has been witnessed (drives its Deed) */
   dragonSeen?: boolean;
@@ -145,8 +160,12 @@ export interface SaveGame {
   loreSeen?: string[];
   /** Cedric the Bull is currently in custody (see CedricCamp.tsx) — Wave 38
    *  (A1) repurposed this from a permanent one-time flag to "at large vs.
-   *  jailed": a jailbreak (gameStore.ts's freeCedric) can flip it back to
-   *  false for a scaling rematch. */
+   *  jailed": true right after his capstone win, and a jailbreak
+   *  (gameStore.ts's freeCedric) can flip it back to false for a scaling
+   *  rematch. Every existing Cedric-arc gate (cedricSiege.ts's
+   *  cedricArcEligible, CedricCamp.tsx, the challenge_cedric interact target,
+   *  Enemies.tsx's camp guards) already reads this reactively, so flipping it
+   *  back re-shows all of them with no further changes. */
   defeatedCedric?: boolean;
   /** Wave 38 (A1) · lifetime times he's been captured — 0 before the first
    *  capstone win, incremented on every recapture thereafter. Distinguishes
@@ -202,7 +221,10 @@ export interface SaveGame {
   /** Wave 12: waterways the player dug themselves (see WaterFeature). Absent
    *  on every save written before digging existed, which reads identically to
    *  an empty list — the static POND is not in here and never will be, it
-   *  stays a hand-authored `terrainExclusions` entry. */
+   *  stays a hand-authored `terrainExclusions` entry. Mirrored into
+   *  game/waterworks.ts's leaf module (exactly as `stabled`/`mounts` are, for
+   *  the same reason): nav rebuilds, per-frame collision and the water mesh all
+   *  read that list without importing the store, so toSave saves from it too. */
   waterworks?: WaterFeature[];
   /** Wave 27: in-flight Trade Caravan runs, keyed by caravanRouteKey(from,to)
    *  (data/caravan.ts) — absent = none in flight. See CaravanRun's own doc

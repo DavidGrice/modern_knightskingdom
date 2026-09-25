@@ -1,8 +1,8 @@
 'use client';
 import { create } from 'zustand';
 import type {
-  ActiveSideQuest, Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, ClaimedPlot, CompanionState, CultivatedPlot, DefenderLoadout, DifficultyId, ItemId,
-  LifetimeStats, PlacedBuilding, Quest, ResourceNodeState, SaveGame, Settlement, SkillId, Villager, VillagerJob,
+  Alliance, Blueprint, BlueprintPiece, BuildRect, BuildTool, CaravanRun, CarrierTier, CharacterConfig, ChestplateTier, CultivatedPlot, DefenderLoadout, DifficultyId, ItemId,
+  PlacedBuilding, Quest, ResourceNodeState, SaveGame, SkillId, Villager, VillagerJob,
   WaterFeature,
 } from '../types';
 import { isBuilt, isHomeBuilding } from '../types';
@@ -56,7 +56,7 @@ import {
 import { SETTLEMENT_RAID_YIELD_PENALTY_MS } from '../settlementRaid';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { resetCompanionCombat } from '../companion';
-import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT, type MarketEntry } from '../data/trade';
+import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT } from '../data/trade';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress, CHALLENGE_TIER_REWARD, GOLDEN_FORTUNE_GOLD } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
@@ -79,6 +79,7 @@ import {
   activeBuildRegion, BUILDABLE_BY_ID, BUILD_REGION, MAX_STACK_HEIGHT, buildableForLabAsset,
   buildingsInRect, heightOf, labAssetId, maxHpFor, sizeFor,
 } from '../data/buildables';
+import { ZERO_XP, applySave, buildSave, freshPersisted, type PersistedState } from './persistence';
 import { STARTER_BLUEPRINT_BY_ID } from '../data/blueprints';
 import { wallSnap } from '../walls';
 import { levelFromXp, perkSlotsEarned, rankFromTotalLevel, RANKS, SKILLS, totalSkillLevel, xpForLevel, type RankDef } from '../data/ranks';
@@ -99,16 +100,6 @@ import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST
 import { resetArenaRun, endArenaRun, type ArenaEnvId } from '../arena';
 import { buildChallengeState, BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET } from '../buildChallenge';
 import { mulberry32, pick, randInt } from '@/lib/rng';
-
-const ZERO_XP: Record<SkillId, number> = {
-  woodcutting: 0, mining: 0, smithing: 0, fishing: 0, building: 0, combat: 0, farming: 0,
-};
-
-const ZERO_STATS: LifetimeStats = {
-  playtimeSec: 0, resourcesGathered: 0, kills: 0, distanceMeters: 0, buildingsPlaced: 0,
-  nodesHarvested: {}, buildingsByType: {}, killsByKind: {}, goldEarnedLifetime: 0,
-  itemsCrafted: 0, dungeonsCleared: 0,
-};
 
 /** Wave 22 · true once the player carries guildId's OWN banner and has
  *  climbed to that guild's top rank — the shared check every guild's
@@ -138,18 +129,11 @@ export type PanelId = 'none' | 'inventory' | 'crafting' | 'quests' | 'skills' | 
 
 type CameraMode = 'fps' | 'third';
 
-interface GameState {
-  // persisted
-  character: CharacterConfig | null;
-  /** Wave 39 (A4): Normal/Hard/Grueling, chosen once at run creation — see
-   *  game/difficulty.ts's DIFFICULTIES and types.ts's SaveGame.difficulty. */
-  difficulty: DifficultyId;
-  inventory: Partial<Record<ItemId, number>>;
-  xp: Record<SkillId, number>;
-  unlocks: string[];
-  completedQuests: string[];
-  questProgress: Record<string, Record<string, number>>;
-  buildings: PlacedBuilding[];
+/** CLN-03 · every field the game SAVES is inherited from `PersistedState`
+ *  (store/persistence.ts — the single table that also drives the initial
+ *  state, newGame/new-game-plus, loadFromSave and toSave). Only the transient,
+ *  runtime-only fields and the actions are declared here. */
+interface GameState extends PersistedState {
   // runtime world
   nodes: ResourceNodeState[];
   // runtime ui
@@ -199,97 +183,13 @@ interface GameState {
   dialogueNpc: string | null;    // NPC shown in the dialogue panel
   equippingVillagerId: string | null; // villager shown in the NPC equip paperdoll (transient, never saved)
   activeStation: 'workbench' | 'forge' | 'campfire' | null; // station shown in the focused station quick-menu (transient, never saved)
-  sideQuest: ActiveSideQuest | null;
-  trackedQuest: 'main' | 'side'; // which one the HUD QuestTracker prefers to show (player-set); falls back to 'main' whenever no side errand is actually active
-  deeds: string[];               // earned achievement ids
-  challengeTiers: Record<string, number>; // highest CHALLENGES tier index notified per challenge id
-  plots: Record<string, number>; // farm plots: remaining growth seconds (-1 = untilled)
-  gateOpen: Record<string, boolean>; // gate buildings: absent/true = open (passable)
-  buildingHp: Record<string, number>; // buildings under siege: absent = full HP (see maxHpFor)
-  reputation: Record<string, number>; // per-NPC standing (see data/npcs repTitles), absent = 0
-  destination: string | null;    // template-world id being visited; null = home
-  visitedWorlds: string[];       // template-world ids visited (one-time loot already granted)
-  /** Wave 14 · POI ids (resident NPC ids, see data/npcs.ts's
-   *  poisForDestination) reached at least once via a waypoint travel —
-   *  display-only, exactly like visitedWorlds; never gates travel itself. */
-  discoveredPois: string[];
-  loreSeen: string[];            // NPC ids whose one-time voiced lore intro has played
-  /** Wave 38 (A1): repurposed from a permanent one-time flag to "currently
-   *  jailed" — true right after his capstone win, flips back false on a
-   *  jailbreak (freeCedric) for a scaling rematch. Every existing Cedric-arc
-   *  gate (cedricSiege.ts's cedricArcEligible, CedricCamp.tsx, the
-   *  challenge_cedric interact target, Enemies.tsx's camp guards) already
-   *  reads this reactively, so flipping it back re-shows all of them with no
-   *  further changes. */
-  defeatedCedric: boolean;
-  /** Wave 38 (A1): lifetime capture count — see types.ts's SaveGame field
-   *  for why this exists alongside the boolean above. */
-  cedricCaptures: number;
-  /** Wave 38 (A1): dayCount at his most recent capture — cedricJailbreakAllowed's own cooldown clock. */
-  cedricCapturedAtDay: number;
-  alliance: Alliance | null;     // Phase 19: who the player pledged to; null = unsworn
-  /** the continuous standing between the houses, -100 (Cedric) .. +100 (Leo).
-   *  The pledge above is a one-off act of will; this is what your DEEDS say,
-   *  and the two are allowed to disagree. See data/allegiance.ts. */
-  allegiance: number;
-  /** every errand ever finished, so `requires` chains have something to read
-   *  and a completed errand is not re-offered as though it were new */
-  completedSideQuests: string[];
-  /** how far the homestead's fence has been pushed out (data/buildables.ts's
-   *  LAND_TIERS). Every tier is a size a wall run actually closes on. */
-  landTier: number;
-  /** J51 · the composed castle: its foundation and what stands in each
-   *  socket. null until the player lays the foundation. */
-  keep: KeepState | null;
   /** which keep socket the player is stood at, for the socket panel */
   keepSocket: string | null;
   /** L72 · which placed building the action menu is open on */
   menuBuilding: string | null;
-  /** M · the set currently on the workshop bench, and how far it has got */
-  workshop: { setNum: string; step: number } | null;
-  /** M · sets built to completion, newest last */
-  builtSets: string[];
-  /** G27 · horses caught and walked home, and which defender rides which.
-   *  Mirrored into riding.ts's leaf module on load, because the mounted
-   *  patrol AI reads it every frame and must not go through the store. */
-  stabled: string[];
-  mounts: Record<string, string>;
-  /** Wave 13 · the falcon companion (game/falcon.ts) has been tamed. See
-   *  SaveGame.falconTamed for why this is one flag, not a roster like the
-   *  horses above. */
-  falconTamed: boolean;
-  /** Wave 25 · Tam, the companion squire, has been recruited — see
-   *  types.ts's own SaveGame.companionRecruited doc for the full reasoning
-   *  (one boolean, not a roster, same shape as falconTamed above). */
-  companionRecruited: boolean;
-  /** Wave 54 (E2) · Tam's own independent progression — see
-   *  `SaveGame.companion`'s doc comment (types.ts) for the full reasoning on
-   *  why this is a separate top-level field rather than literal `villagers`
-   *  membership. Always present in live state (unlike the optional save
-   *  field) — `loadFromSave`/`freshSaveFields` both default it to
-   *  `{ xp: 0, level: 0 }` so every reader can assume it exists. */
-  companion: CompanionState;
-  /** Wave 13 · turned on Cedric's own war council once already sworn to him
-   *  (see betrayCedric). A permanent burnt bridge, not a cooldown: once
-   *  true, `pledgeAlliance('cedric')` refuses forever — the one thing that
-   *  keeps a one-time defection from becoming a free way to ping-pong
-   *  between the two pledges. */
-  betrayedCedric: boolean;
-  /** Wave 56 (F4) · the mirror of betrayedCedric: turned on the crown once
-   *  already sworn to Leo (see betrayLeo). A permanent burnt bridge, not a
-   *  cooldown: once true, `pledgeAlliance('leo')` refuses forever — the same
-   *  anti-ping-pong protection betrayedCedric gives the other direction. */
-  betrayedLeo: boolean;
   buyLand: () => void;
   /** shift the axis and tell the player why it moved */
   shiftAllegiance: (delta: number, reason: string) => void;
-  guild: string | null;          // Phase 21: primary guild id (data/guilds.ts); null = unaffiliated
-  /** Wave 22: standing accrued WITHIN the current (or a past) guild — guild
-   *  id -> accrued rank points, absent = 0. A parallel field to `reputation`
-   *  (per-NPC) and `allegiance` (the continuous house axis), deliberately
-   *  never merged with either — see data/guilds.ts's GuildDef.rankTitles
-   *  doc comment for the reasoning. Read through `guildRankIndex`. */
-  guildRanks: Record<string, number>;
   /** Wave 22: an errand turn-in for a guild id adds here instead of to
    *  `reputation` (see turnInSideQuest's branch); notifies + a small gold
    *  cheer on a genuine rank-up, mirroring addReputation's own tier guard. */
@@ -300,58 +200,12 @@ interface GameState {
    *  convention acceptSideQuest documents), then delegates to buyOffer for
    *  the actual gold math (Silver Tongue discount included for free). */
   buyGuildOffer: (guildId: string, item: ItemId, qty: number, price: number) => void;
-  skillTree: string[];           // Phase 21: purchased talent ids (data/skillTree.ts)
-  attrSpent: Partial<Record<AttrId, number>>; // player attribute points invested (playerAttributes.ts)
-  dyes: string[];                // Wave 9: palette rows opened with a brewed dye (data/dyes.ts)
-  durability: Partial<Record<ItemId, number>>; // 0-100 wear per degradable tool, absent = full
-  /** Wave 49 (C3) · the traveling merchant's live supply/demand pressure per
-   *  item — see data/trade.ts's own header comment for the decay-on-read
-   *  formula this drives. Absent per-item = that item still sits at its flat
-   *  SELL_PRICES/BUY_OFFERS baseline. */
-  marketState: Partial<Record<ItemId, MarketEntry>>;
-  perks: string[];               // skill-perk ids picked at rank-ups (see data/perks.ts)
-  stats: LifetimeStats;          // lifetime counters shown on the Stats page
-  claimedWorlds: Record<string, ClaimedPlot>; // template-world id -> claimed building plot, absent = unclaimed
-  customBlueprints: Blueprint[]; // player-saved structures (see data/blueprints.ts for starter ones)
-  lastTaxAt: number;              // epoch ms of last keep tax collection, 0 = never
-  /** Empire arc, Wave 4: destination id -> founded settlement, absent = not
-   *  yet earned. See `Settlement`'s own doc comment (types.ts) for how this
-   *  differs from claimedWorlds, and for its Wave 47 fields. */
-  settlements: Record<string, Settlement>;
-  /** Wave 27: in-flight Trade Caravan runs, keyed by caravanRouteKey(from,to)
-   *  (data/caravan.ts) — see CaravanRun's own doc comment (types.ts). */
-  caravans: Record<string, CaravanRun>;
-  /** Empire arc, Wave 5: plot id -> the plot you actually broke and planted,
-   *  absent = still wild grass. See SaveGame.cultivatedPlots. */
-  cultivatedPlots: Record<string, CultivatedPlot>;
-  /** Wave 12 · the waterways the player has cut (see WaterFeature). Mirrored
-   *  into game/waterworks.ts's leaf module on every change, exactly as
-   *  `stabled`/`mounts` are mirrored into riding.ts and for the same reason:
-   *  nav rebuilds, per-frame collision and the water mesh all have to read this
-   *  without importing the store. The store copy is what saves and what React
-   *  re-renders on; the leaf module is what the frame loop reads. */
-  waterworks: WaterFeature[];
-  villagers: Villager[];
   villagerProgress: Record<string, number>; // villagerId -> seconds until next delivery
-  /** the homestead Armory: spare gear held for the garrison, separate from
-   *  the player's own Satchel — stocked by raids/dungeon clears (or donated
-   *  from the Satchel) and drawn down when a villager equips a piece. */
-  armory: Partial<Record<ItemId, number>>;
   /** the id of the PlacedBuilding whose interior the player is currently
    *  inside, null while outdoors — generalised 2026-07-30 from a plain
    *  boolean that only ever meant "in the Grand Keep" (see data/interiors.ts) */
   interior: string | null;
   enteredInteriorPos: [number, number] | null; // outdoor position to return to on exit
-  treasureOpened: boolean;        // one-time reward already claimed from the keep's chest
-  dragonSeen: boolean;            // witnessed the dragon's night flyover (drives its Deed)
-  dragonSieges: number;           // dragonfire sieges weathered (Flame and Stone deed)
-  dragonRouted: boolean;          // ever drove the beast off with bolts (Sting the Sky)
-  blackDragonSieges: number;      // Wave 36 (A8): the black dragon's own siege count
-  blackDragonRouted: boolean;     // Wave 36 (A8): ever drove HIM off with bolts
-  cedricSieges: number;           // Cedric's homestead sieges weathered (The Bull at the Gate deed)
-  cedricRouted: boolean;          // ever drove his war party off before the timer (Gore for Gore)
-  timeOfDay: number;             // low-frequency mirror of worldEnv.time (HUD/saves)
-  dayCount: number;               // low-frequency mirror of worldEnv.dayCount (HUD/saves)
   season: number;                 // low-frequency mirror of seasonOf(dayCount) (HUD/saves)
   dirty: boolean; // needs saving
 
@@ -438,9 +292,6 @@ interface GameState {
   abandonSideQuest: () => void;
   setTrackedQuest: (which: 'main' | 'side') => void;
   recordKill: (kind: string) => void;
-  /** foes the player has SCANNED (aimed at and studied) — the collection
-   *  book. Kills alone do not fill it in: you have to look. */
-  bestiary: string[];
   scanTarget: () => void;
   /** external systems (combat.ts's duel resolution) credit errand progress
    *  through this rather than importing the module-private counter */
@@ -1004,37 +855,22 @@ function resetSessionModules() {
  *  newGame() so startNewGamePlus() can build on the EXACT same list rather
  *  than a second, hand-picked one that could drift from it — every prior
  *  wave in this project's plan found real drift from a re-derived field
- *  list, so this file deliberately has only one. A future wave that adds a
- *  field to this literal resets it in NG+ automatically, with nothing else
- *  to remember to update. */
+ *  list.
+ *
+ *  CLN-03 · the PERSISTED half of that list is no longer written out here at
+ *  all: `freshPersisted` (store/persistence.ts) derives it from the same
+ *  table that drives loadFromSave/toSave and the initial store state, so a
+ *  new persisted field resets in newGame AND NG+ automatically. What remains
+ *  hand-written below is the TRANSIENT reset — deliberately still inline (its
+ *  `dirty`/`season` values differ from loadFromSave's, which keeps its own
+ *  copy; consolidating those is the session-reset initiative's job). */
 function freshSaveFields(character: CharacterConfig, difficulty: DifficultyId): Partial<GameState> {
   return {
-    character,
-    difficulty,
-    // bare-handed start (2026-07-20): no starting axe, no calling kit —
-    // harvestNode/useTool never actually gate on OWNING a tool, only on
-    // its condition (durability defaults to 100 whether you own zero or
-    // one), so gathering bare-handed already works mechanically. Every
-    // calling's kit is empty by design now (see data/classes.ts) — the
-    // signature skill's +10% XP is the only thing it actually grants.
-    inventory: {},
-    xp: { ...ZERO_XP },
-    unlocks: [],
-    completedQuests: [],
-    questProgress: {},
-    buildings: [],
+    ...freshPersisted(character, difficulty),
     panel: 'none', paused: false, buildMode: false,
     notifications: [], prompt: null, actionProgress: null, dirty: true,
-    timeOfDay: 0.3, dayCount: 0, season: 0, sideQuest: null, trackedQuest: 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null, deeds: [], bestiary: [], challengeTiers: {}, plots: {},
-    gateOpen: {}, buildingHp: {}, reputation: {},
-    destination: null, visitedWorlds: [], discoveredPois: [], loreSeen: [], defeatedCedric: false, cedricCaptures: 0, cedricCapturedAtDay: -999, alliance: null, allegiance: 0, completedSideQuests: [], landTier: 0, keep: null, workshop: null, builtSets: [], stabled: [], mounts: {}, falconTamed: false, companionRecruited: false, companion: { xp: 0, level: 0 }, betrayedCedric: false, betrayedLeo: false, guild: null, guildRanks: {}, skillTree: [], attrSpent: {}, dyes: [],
-    durability: {}, perks: [], stats: { ...ZERO_STATS },
-    claimedWorlds: {}, settlements: {}, caravans: {}, cultivatedPlots: {}, waterworks: [], customBlueprints: [], lastTaxAt: 0,
-    villagers: [], villagerProgress: {}, armory: {},
-    interior: null, enteredInteriorPos: null, treasureOpened: false, dragonSeen: false, dragonSieges: 0, dragonRouted: false,
-    blackDragonSieges: 0, blackDragonRouted: false,
-    cedricSieges: 0, cedricRouted: false,
-    marketState: {},
+    season: 0, dialogueNpc: null, equippingVillagerId: null, activeStation: null,
+    villagerProgress: {}, interior: null, enteredInteriorPos: null,
   };
 }
 
@@ -1155,14 +991,7 @@ function createGameStore() {
   }
 
   return {
-    character: null,
-    difficulty: 'normal',
-    inventory: {},
-    xp: { ...ZERO_XP },
-    unlocks: [],
-    completedQuests: [],
-    questProgress: {},
-    buildings: [],
+    ...freshPersisted(null, 'normal'),
     nodes: [],
     panel: 'none',
     paused: false,
@@ -1190,69 +1019,11 @@ function createGameStore() {
     dialogueNpc: null,
     equippingVillagerId: null,
     activeStation: null,
-    sideQuest: null,
-    trackedQuest: 'main',
-    deeds: [],
-    bestiary: [],
-    challengeTiers: {},
-    plots: {},
-    gateOpen: {},
-    buildingHp: {},
-    reputation: {},
-    destination: null,
-    visitedWorlds: [],
-    discoveredPois: [],
-    loreSeen: [],
-    defeatedCedric: false,
-    cedricCaptures: 0,
-    cedricCapturedAtDay: -999,
-    alliance: null,
-    allegiance: 0,
-    completedSideQuests: [],
-    landTier: 0,
-    keep: null,
     keepSocket: null,
     menuBuilding: null,
-    workshop: null,
-    builtSets: [],
-    stabled: [],
-    mounts: {},
-    falconTamed: false,
-    companionRecruited: false,
-    companion: { xp: 0, level: 0 },
-    betrayedCedric: false,
-    betrayedLeo: false,
-    guild: null,
-    guildRanks: {},
-    skillTree: [],
-    attrSpent: {},
-    dyes: [],
-    durability: {},
-    marketState: {},
-    perks: [],
-    stats: { ...ZERO_STATS },
-    claimedWorlds: {},
-    settlements: {},
-    caravans: {},
-    cultivatedPlots: {},
-    waterworks: [],
-    customBlueprints: [],
-    lastTaxAt: 0,
-    villagers: [],
     villagerProgress: {},
-    armory: {},
     interior: null,
     enteredInteriorPos: null,
-    treasureOpened: false,
-    dragonSeen: false,
-    dragonSieges: 0,
-    dragonRouted: false,
-    blackDragonSieges: 0,
-    blackDragonRouted: false,
-    cedricSieges: 0,
-    cedricRouted: false,
-    timeOfDay: 0.3,
-    dayCount: 0,
     season: 0,
     dirty: false,
 
@@ -1293,159 +1064,37 @@ function createGameStore() {
       // the mounted-patrol AI reads these every frame from the leaf module
       stabledHorses.ids = [...(s.stabled ?? [])];
       stabledHorses.assigned = { ...(s.mounts ?? {}) };
+      // CLN-03 · every persisted field (its defaults, the legacy-save defaults
+      // and the xp/stats merge) comes from the table in ./persistence.ts
+      const persisted = applySave(s);
       // Wave 12 · same treatment for the player's waterways: nav, collision and
       // the water mesh read the leaf module, so loading a save that has none
       // must CLEAR it rather than leave the previous session's water standing.
-      const loadedWater = s.waterworks ?? [];
-      setWaterworks(loadedWater);
+      // The SAME array becomes the store's `waterworks` too, so the leaf list
+      // and the store copy start out identical.
+      setWaterworks(persisted.waterworks);
       set({
-        character: s.character,
-        // Wave 39 (A4): absent = 'normal' — every save written before
-        // difficulty existed picks up the mult:1.0 tier, zero behavior change.
-        difficulty: s.difficulty ?? 'normal',
-        inventory: s.inventory,
-        xp: { ...ZERO_XP, ...s.xp },
-        unlocks: s.unlocks,
-        completedQuests: s.completedQuests,
-        questProgress: s.questProgress,
-        buildings: s.buildings,
+        ...persisted,
         panel: 'none', paused: false, buildMode: false,
         notifications: [], prompt: null, actionProgress: null, dirty: false,
-        timeOfDay: s.timeOfDay ?? 0.3, dayCount: s.dayCount ?? 0, season: seasonOf(s.dayCount ?? 0),
-        sideQuest: s.sideQuest ?? null, trackedQuest: s.trackedQuest ?? 'main', dialogueNpc: null, equippingVillagerId: null, activeStation: null,
-        deeds: s.deeds ?? [],
-        bestiary: s.bestiary ?? [],
-        challengeTiers: s.challengeTiers ?? {},
-        plots: s.plots ?? {},
-        gateOpen: s.gateOpen ?? {},
-        buildingHp: s.buildingHp ?? {},
-        reputation: s.reputation ?? {},
-        destination: null, visitedWorlds: s.visitedWorlds ?? [], discoveredPois: s.discoveredPois ?? [], loreSeen: s.loreSeen ?? [],
-        defeatedCedric: s.defeatedCedric ?? false,
-        // Wave 38 (A1) migration: a save from before this existed has no
-        // capture count — infer 1 if he was already marked defeated (the old
-        // permanent meaning), else 0. Same reasoning for the day stamp: a
-        // pre-Wave-38 defeated save has no recorded capture day, so seed it
-        // from the save's own dayCount (a jailbreak roll on the very next
-        // check will correctly treat "now" as the moment of capture) rather
-        // than -999, which would let him break out immediately on load.
-        cedricCaptures: s.cedricCaptures ?? (s.defeatedCedric ? 1 : 0),
-        cedricCapturedAtDay: s.cedricCapturedAtDay ?? (s.defeatedCedric ? (s.dayCount ?? 0) : -999),
-        alliance: s.alliance ?? null,
-        allegiance: s.allegiance ?? 0,
-        // a save from before land tiers existed was built on the old flat
-        // 60m region, so it inherits the LARGEST tier — anything else would
-        // strand buildings outside their own fence
-        completedSideQuests: s.completedSideQuests ?? [],
-        landTier: s.landTier ?? MAX_LAND_TIER,
-        keep: s.keep ?? null,
-        workshop: s.workshop ?? null,
-        builtSets: s.builtSets ?? [],
-        stabled: s.stabled ?? [],
-        mounts: s.mounts ?? {},
-        falconTamed: s.falconTamed ?? false,
-        companionRecruited: s.companionRecruited ?? false,
-        companion: s.companion ?? { xp: 0, level: 0 },
-        betrayedCedric: s.betrayedCedric ?? false,
-        betrayedLeo: s.betrayedLeo ?? false,
-        guild: s.guild ?? null,
-        guildRanks: s.guildRanks ?? {},
-        skillTree: s.skillTree ?? [],
-        attrSpent: s.attrSpent ?? {},
-        dyes: s.dyes ?? [],
-        durability: s.durability ?? {}, marketState: s.marketState ?? {}, perks: s.perks ?? [],
-        stats: { ...ZERO_STATS, ...(s.stats ?? {}) },
-        claimedWorlds: s.claimedWorlds ?? {}, settlements: s.settlements ?? {}, caravans: s.caravans ?? {}, cultivatedPlots: s.cultivatedPlots ?? {},
-        waterworks: loadedWater,
-        customBlueprints: s.customBlueprints ?? [],
-        lastTaxAt: s.lastTaxAt ?? 0,
-        villagers: s.villagers ?? [],
-        villagerProgress: {},
-        armory: s.armory ?? {},
-        interior: null, enteredInteriorPos: null, treasureOpened: s.treasureOpened ?? false, dragonSeen: s.dragonSeen ?? false,
-        dragonSieges: s.dragonSieges ?? 0, dragonRouted: s.dragonRouted ?? false,
-        blackDragonSieges: s.blackDragonSieges ?? 0, blackDragonRouted: s.blackDragonRouted ?? false,
-        cedricSieges: s.cedricSieges ?? 0, cedricRouted: s.cedricRouted ?? false,
+        season: seasonOf(persisted.dayCount), dialogueNpc: null, equippingVillagerId: null, activeStation: null,
+        villagerProgress: {}, interior: null, enteredInteriorPos: null,
       });
-      worldEnv.time = s.timeOfDay ?? 0.3;
-      worldEnv.dayCount = s.dayCount ?? 0;
+      worldEnv.time = persisted.timeOfDay;
+      worldEnv.dayCount = persisted.dayCount;
       buildSeq = s.buildings.reduce((m, b) => Math.max(m, parseInt(b.id.slice(1)) + 1 || m), 1);
       villagerSeq = (s.villagers ?? []).reduce((m, v) => Math.max(m, parseInt(v.id.slice(1)) + 1 || m), 1);
       blueprintSeq = (s.customBlueprints ?? []).reduce((m, b) => Math.max(m, parseInt(b.id.slice(2)) + 1 || m), 1);
-      waterSeq = loadedWater.reduce((m, w) => Math.max(m, parseInt(w.id.slice(1)) + 1 || m), 1);
+      waterSeq = persisted.waterworks.reduce((m, w) => Math.max(m, parseInt(w.id.slice(1)) + 1 || m), 1);
       get().seedNodes();
     },
 
-    toSave: () => {
-      const s = get();
-      return {
-        version: 1,
-        character: s.character!,
-        difficulty: s.difficulty,
-        inventory: s.inventory,
-        xp: s.xp,
-        unlocks: s.unlocks,
-        completedQuests: s.completedQuests,
-        questProgress: s.questProgress,
-        buildings: s.buildings,
-        timeOfDay: worldEnv.time,
-        dayCount: worldEnv.dayCount,
-        sideQuest: s.sideQuest,
-        trackedQuest: s.trackedQuest,
-        deeds: s.deeds,
-        bestiary: s.bestiary,
-        challengeTiers: s.challengeTiers,
-        plots: s.plots,
-        gateOpen: s.gateOpen,
-        buildingHp: s.buildingHp,
-        reputation: s.reputation,
-        destination: null, visitedWorlds: s.visitedWorlds, discoveredPois: s.discoveredPois, loreSeen: s.loreSeen,
-        defeatedCedric: s.defeatedCedric,
-        cedricCaptures: s.cedricCaptures,
-        cedricCapturedAtDay: s.cedricCapturedAtDay,
-        alliance: s.alliance,
-        allegiance: s.allegiance,
-        completedSideQuests: s.completedSideQuests,
-        landTier: s.landTier,
-        keep: s.keep,
-        workshop: s.workshop,
-        builtSets: s.builtSets,
-        // the leaf module is the live truth while playing (the patrol AI
-        // writes and reads it every frame), so save from THERE, not from a
-        // store mirror that only updates on load
-        stabled: [...stabledHorses.ids],
-        mounts: { ...stabledHorses.assigned },
-        falconTamed: s.falconTamed,
-        companionRecruited: s.companionRecruited,
-        companion: s.companion,
-        betrayedCedric: s.betrayedCedric,
-        betrayedLeo: s.betrayedLeo,
-        guild: s.guild,
-        guildRanks: s.guildRanks,
-        skillTree: s.skillTree,
-        attrSpent: s.attrSpent,
-        dyes: s.dyes,
-        durability: s.durability, marketState: s.marketState, perks: s.perks,
-        stats: s.stats,
-        claimedWorlds: s.claimedWorlds, settlements: s.settlements, caravans: s.caravans, cultivatedPlots: s.cultivatedPlots,
-        // saved from the leaf module for the same reason `stabled` is: it is
-        // the copy every consumer actually reads, so it is the one that can
-        // never be a stale mirror
-        waterworks: [...waterworks.list],
-        customBlueprints: s.customBlueprints,
-        lastTaxAt: s.lastTaxAt,
-        villagers: s.villagers,
-        armory: s.armory,
-        treasureOpened: s.treasureOpened,
-        dragonSeen: s.dragonSeen,
-        dragonSieges: s.dragonSieges,
-        dragonRouted: s.dragonRouted,
-        blackDragonSieges: s.blackDragonSieges,
-        blackDragonRouted: s.blackDragonRouted,
-        cedricSieges: s.cedricSieges,
-        cedricRouted: s.cedricRouted,
-      };
-    },
+    toSave: () => buildSave(get(), {
+      // worldEnv/riding/waterworks are the live truth for these (see persistence.ts)
+      timeOfDay: worldEnv.time, dayCount: worldEnv.dayCount,
+      stabledIds: stabledHorses.ids, stabledAssigned: stabledHorses.assigned,
+      waterworks: waterworks.list,
+    }),
 
     seedNodes: () => {
       const rnd = mulberry32(20260713);
