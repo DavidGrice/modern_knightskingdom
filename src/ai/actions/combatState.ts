@@ -16,7 +16,7 @@
 // Deliberately NOT on the Blackboard: §3.2's Blackboard is belief/need state
 // the reasoner scores AGAINST, and none of this is scored against anything.
 
-import { despawnHooks } from '../core/AgentManager';
+import { clearHooks, despawnHooks } from '../core/AgentManager';
 
 export interface CombatState {
   /** which combat action last wrote here — `null` once it aborted */
@@ -98,6 +98,8 @@ export function clearCombatState(id: string): void {
 despawnHooks.push((id) => {
   states.delete(id);
 });
+// CLN-04 · agentManager.clear() (a new session) does not run despawnHooks
+clearHooks.push(() => states.clear());
 
 // --- the alarm throttle ------------------------------------------------------
 // Keyed by HOSTILE, not by villager: three farmers spotting the same raider is
@@ -106,6 +108,9 @@ despawnHooks.push((id) => {
 // A plain Map rather than a Set because this one expires — a raider who
 // wandered off and came back an hour later is worth shouting about again.
 const alarmedAt = new Map<string, number>();
+// CLN-04 · dropped with the rest of the AI's session state (claimAlarm's future-stamp
+// rule below stays as a belt-and-braces guard).
+clearHooks.push(() => alarmedAt.clear());
 
 /** True at most once per `cooldownSec` per belief id. `now` is the AI clock,
  *  which `agentManager.clear()` resets to 0 on a new game — an entry stamped

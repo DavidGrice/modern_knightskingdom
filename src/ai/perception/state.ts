@@ -20,7 +20,7 @@
 // save's shape changes, so nothing about backward compatibility can break.
 
 import { PERCEPTION } from '../config';
-import { despawnHooks } from '../core/AgentManager';
+import { clearHooks, despawnHooks } from '../core/AgentManager';
 import { latestSoundSeq } from './sounds';
 
 export interface PerceptionState {
@@ -94,3 +94,7 @@ export function peekPerceptionState(id: string): PerceptionState | undefined {
 despawnHooks.push((id) => {
   states.delete(id);
 });
+// CLN-04 · agentManager.clear() (a new session) does not run despawnHooks. A
+// reused villager id would otherwise resume the last session's lastPerceiveAt
+// against a clock that restarted at 0 (a negative ramp dt on its first tick).
+clearHooks.push(() => states.clear());

@@ -38,15 +38,8 @@ import { stabledHorses } from '../riding';
 // TemplateWorld.tsx remains fine specifically because gameStore.ts never
 // imports navgrid.ts, so that edge never re-enters this module's own loading.
 import { homeGroundY } from '@/game/homeGround';
-import { agentManager } from '@/ai/core/AgentManager';
-import { resetVillagerAgentSync } from '@/ai/rosterSync';
-import { resetNpcAgentSync } from '@/ai/npcSync';
-import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
-import { resetCompanionAgentSync } from '@/ai/companionSync';
-import { resetWildlifeAgentSync } from '@/ai/wildlifeSync';
-import { targetRegistry } from '@/ai/core/TargetRegistry';
-import { resetSounds } from '@/ai/perception/sounds';
-import { workSignals, clearAllWorkSignals } from '../workSignal';
+import { resetSessionModules } from './sessionReset';
+import { workSignals } from '../workSignal';
 import { GUILD_ARC_REP, NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
 import { SETTLEMENT_FOUNDING, SETTLEMENT_GROWTH_QUEST_DEST, SETTLEMENT_NODES } from '../data/settlementQuests';
 import {
@@ -55,7 +48,6 @@ import {
 } from '../data/caravan';
 import { SETTLEMENT_RAID_YIELD_PENALTY_MS } from '../settlementRaid';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
-import { resetCompanionCombat } from '../companion';
 import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT } from '../data/trade';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress, CHALLENGE_TIER_REWARD, GOLDEN_FORTUNE_GOLD } from '../data/challenges';
@@ -85,7 +77,7 @@ import { wallSnap } from '../walls';
 import { levelFromXp, perkSlotsEarned, rankFromTotalLevel, RANKS, SKILLS, totalSkillLevel, xpForLevel, type RankDef } from '../data/ranks';
 import { audio } from '@/lib/audio';
 import { worldEnv, seasonOf } from '../env';
-import { playerState, resetPlayerState } from '../playerState';
+import { playerState } from '../playerState';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
 import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '../data/world';
@@ -212,11 +204,11 @@ interface GameState extends PersistedState {
   // lifecycle
   newGame: (c: CharacterConfig, difficulty?: DifficultyId) => void;
   /** Wave 39 (A4) · a distinct fresh-run path, not a relabeled newGame: it
-   *  resets everything newGame's own freshSaveFields() resets (day count,
+   *  resets everything newGame's own freshPersisted() resets (day count,
    *  the whole build/kingdom side of the save), but overlays `carry`'s skill
    *  XP and talent tree on top rather than zeroing them — see this file's
-   *  own freshSaveFields() doc comment for why reusing that literal (instead
-   *  of a second hand-picked reset list) is the load-bearing decision here. */
+   *  beginSession() for why sharing one prologue (instead of a second
+   *  hand-picked reset list) is the load-bearing decision here. */
   startNewGamePlus: (c: CharacterConfig, carry: NgPlusCarry, difficulty?: DifficultyId) => void;
   loadFromSave: (s: SaveGame) => void;
   toSave: () => SaveGame;
@@ -669,6 +661,11 @@ function villagerAtWork(
   return true;
 }
 
+// CLN-04 · session-scoped module state. beginSession() (in createGameStore) resets
+// `placeHistory` and `carriedKeepExtra` on every session start. The id counters are
+// recomputed from the save on a LOAD only and deliberately keep counting across a new
+// game (see beginSession); `lastJoustAt` is a 3 s performance.now throttle — nothing
+// to reset.
 let notifSeq = 1;
 let buildSeq = 1;
 let villagerSeq = 1;
@@ -823,54 +820,28 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kk = useGameStore;
 }
 
-/** Wave 39 (A4) · the module-state side effects newGame()/loadFromSave()/
- *  startNewGamePlus() all need at the start of a fresh session — pulled out
- *  once a third call site needed the identical list. None of this touches
- *  Zustand state; every reset here is a leaf module (AI registries, the
- *  target registry, the sound ring, work signals) that must forget the last
- *  session before a new one starts reading it. */
-function resetSessionModules() {
-  resetPlayerState();
-  // the AI registry is module state: a new session must not inherit the
-  // last one's agents, clock or half-drained needs
-  agentManager.clear();
-  resetVillagerAgentSync();
-  resetNpcAgentSync();
-  resetCourtAmbientAgentSync();
-  resetCompanionAgentSync();
-  resetWildlifeAgentSync();
-  // Tam's own combat state is keyed by a FIXED id (unlike a roster
-  // villager's fresh 'v<n>' one every game) — without this a new session
-  // would silently inherit whatever HP the last one left him at. See
-  // game/companion.ts's own comment on resetCompanionCombat.
-  resetCompanionCombat(COMPANION_ID);
-  targetRegistry.clear();
-  // §6.2 — the AI's world-sound ring is module state too: a fresh session
-  // must not have two seconds of the last one's combat still audible.
-  resetSounds();
-  clearAllWorkSignals();
-}
-
-/** Wave 39 (A4) · the full "what a fresh run resets" literal, pulled out of
- *  newGame() so startNewGamePlus() can build on the EXACT same list rather
- *  than a second, hand-picked one that could drift from it — every prior
- *  wave in this project's plan found real drift from a re-derived field
- *  list.
+/** CLN-04 · the TRANSIENT half of a session start: every runtime-only field a new
+ *  session (newGame / new-game-plus / loadFromSave) must not inherit. The
+ *  PERSISTED half is `freshPersisted`/`applySave` (store/persistence.ts); the leaf
+ *  modules are `resetSessionModules` (store/sessionReset.ts). A factory, so every
+ *  call hands out fresh containers.
  *
- *  CLN-03 · the PERSISTED half of that list is no longer written out here at
- *  all: `freshPersisted` (store/persistence.ts) derives it from the same
- *  table that drives loadFromSave/toSave and the initial store state, so a
- *  new persisted field resets in newGame AND NG+ automatically. What remains
- *  hand-written below is the TRANSIENT reset — deliberately still inline (its
- *  `dirty`/`season` values differ from loadFromSave's, which keeps its own
- *  copy; consolidating those is the session-reset initiative's job). */
-function freshSaveFields(character: CharacterConfig, difficulty: DifficultyId): Partial<GameState> {
+ *  Deliberately NOT here: `activeInputDevice` (a live fact about the player's
+ *  hands), `cameraMode`, `nearStations`/`targetKind` (rewritten every frame),
+ *  `emote`/`npcGreet*` (one-shot triggers), `keepSocket`/`menuBuilding`
+ *  (read only while their panel is open, and `panel` resets to 'none'),
+ *  `ceremony` (its own timer ends it). */
+function ephemeralState(): Partial<GameState> {
   return {
-    ...freshPersisted(character, difficulty),
     panel: 'none', paused: false, buildMode: false,
-    notifications: [], prompt: null, actionProgress: null, dirty: true,
-    season: 0, dialogueNpc: null, equippingVillagerId: null, activeStation: null,
+    notifications: [], prompt: null, actionProgress: null,
+    dialogueNpc: null, equippingVillagerId: null, activeStation: null,
     villagerProgress: {}, interior: null, enteredInteriorPos: null,
+    // the build view: setBuildMode(false) already clears most of it, but not
+    // blueprintSelection, and nothing at all clears it on a session switch
+    photoMode: false,
+    buildSelection: null, blueprintSelection: null, movingBuilding: null,
+    buildTool: 'build', freeformBuild: false, demolishRect: null, digRect: null,
   };
 }
 
@@ -990,6 +961,47 @@ function createGameStore() {
     }
   }
 
+  /** CLN-04 · the ONE session prologue newGame / startNewGamePlus / loadFromSave
+   *  share. ORDER IS LOAD-BEARING and unchanged from the three inline copies:
+   *  module resets first (nothing reads the store yet); the leaf lists
+   *  (stabledHorses, waterworks) BEFORE set(), because set() notifies
+   *  subscribers/renders that read them; worldEnv AFTER set() (its subscribers
+   *  were always notified against the old clock); nodes are re-seeded last, off
+   *  the state that just landed. `ids` (load only) recomputes the id counters
+   *  from the save — a NEW game deliberately keeps counting past the last one, so
+   *  a fresh character's villagers never reuse an id the previous game left keyed
+   *  in a leaf registry. */
+  function beginSession(o: {
+    state: Partial<GameState>; dirty: boolean;
+    stabled: readonly string[]; mounts: Readonly<Record<string, string>>;
+    waterworks: WaterFeature[]; time: number; dayCount: number;
+    ids?: SaveGame;
+  }) {
+    resetSessionModules({ villagers: o.state.villagers ?? [] });
+    placeHistory = [];
+    carriedKeepExtra = null;
+    stabledHorses.ids = [...o.stabled];
+    stabledHorses.assigned = { ...o.mounts };
+    // Wave 12 · module state, same class of thing as the stable above: nav,
+    // collision and the water mesh read the leaf module, so a session with no
+    // waterways must CLEAR it. Bumping the revision is also what makes the next
+    // nav rebuild forget the old water.
+    setWaterworks(o.waterworks);
+    // season is the low-frequency mirror of seasonOf(dayCount); seasonOf(0) === 0, so a
+    // fresh game's literal `season: 0` and a load's derived value are the same rule
+    set({ ...o.state, ...ephemeralState(), dirty: o.dirty, season: seasonOf(o.dayCount) });
+    worldEnv.time = o.time;
+    worldEnv.dayCount = o.dayCount;
+    if (o.ids) {
+      const s = o.ids;
+      buildSeq = s.buildings.reduce((m, b) => Math.max(m, parseInt(b.id.slice(1)) + 1 || m), 1);
+      villagerSeq = (s.villagers ?? []).reduce((m, v) => Math.max(m, parseInt(v.id.slice(1)) + 1 || m), 1);
+      blueprintSeq = (s.customBlueprints ?? []).reduce((m, b) => Math.max(m, parseInt(b.id.slice(2)) + 1 || m), 1);
+      waterSeq = o.waterworks.reduce((m, w) => Math.max(m, parseInt(w.id.slice(1)) + 1 || m), 1);
+    }
+    get().seedNodes();
+  }
+
   return {
     ...freshPersisted(null, 'normal'),
     nodes: [],
@@ -1028,65 +1040,40 @@ function createGameStore() {
     dirty: false,
 
     newGame: (character, difficulty = 'normal') => {
-      resetSessionModules();
-      stabledHorses.ids = [];
-      stabledHorses.assigned = {};
-      // Wave 12 · module state, same class of thing as the stable above: a new
-      // character must not inherit the last one's moat. Bumping the revision is
-      // also what makes the next nav rebuild forget the old water.
-      setWaterworks([]);
-      set(freshSaveFields(character, difficulty));
-      worldEnv.time = 0.3;
-      worldEnv.dayCount = 0;
-      get().seedNodes();
+      beginSession({
+        state: freshPersisted(character, difficulty), dirty: true,
+        stabled: [], mounts: {}, waterworks: [], time: 0.3, dayCount: 0,
+      });
     },
 
     startNewGamePlus: (character, carry, difficulty = 'normal') => {
-      resetSessionModules();
-      stabledHorses.ids = [];
-      stabledHorses.assigned = {};
-      setWaterworks([]);
-      set({
-        ...freshSaveFields(character, difficulty),
-        // the entire point of NG+: skill XP and the talent tree it gates
-        // survive the reset above — see types.ts's SaveGame doc comment for
-        // why exactly this pair (and not perks/attrSpent) is safe to carry.
-        xp: { ...ZERO_XP, ...carry.xp },
-        skillTree: [...carry.skillTree],
+      beginSession({
+        state: {
+          ...freshPersisted(character, difficulty),
+          // the entire point of NG+: skill XP and the talent tree it gates
+          // survive the reset above — see types.ts's SaveGame doc comment for
+          // why exactly this pair (and not perks/attrSpent) is safe to carry.
+          xp: { ...ZERO_XP, ...carry.xp },
+          skillTree: [...carry.skillTree],
+        },
+        dirty: true,
+        stabled: [], mounts: {}, waterworks: [], time: 0.3, dayCount: 0,
       });
-      worldEnv.time = 0.3;
-      worldEnv.dayCount = 0;
-      get().seedNodes();
     },
 
     loadFromSave: (s) => {
-      resetSessionModules();
-      // the mounted-patrol AI reads these every frame from the leaf module
-      stabledHorses.ids = [...(s.stabled ?? [])];
-      stabledHorses.assigned = { ...(s.mounts ?? {}) };
       // CLN-03 · every persisted field (its defaults, the legacy-save defaults
       // and the xp/stats merge) comes from the table in ./persistence.ts
       const persisted = applySave(s);
-      // Wave 12 · same treatment for the player's waterways: nav, collision and
-      // the water mesh read the leaf module, so loading a save that has none
-      // must CLEAR it rather than leave the previous session's water standing.
-      // The SAME array becomes the store's `waterworks` too, so the leaf list
-      // and the store copy start out identical.
-      setWaterworks(persisted.waterworks);
-      set({
-        ...persisted,
-        panel: 'none', paused: false, buildMode: false,
-        notifications: [], prompt: null, actionProgress: null, dirty: false,
-        season: seasonOf(persisted.dayCount), dialogueNpc: null, equippingVillagerId: null, activeStation: null,
-        villagerProgress: {}, interior: null, enteredInteriorPos: null,
+      // the SAME array becomes the store's `waterworks` too, so the leaf list
+      // and the store copy start out identical
+      beginSession({
+        state: persisted, dirty: false,
+        // the mounted-patrol AI reads these every frame from the leaf module
+        stabled: s.stabled ?? [], mounts: s.mounts ?? {},
+        waterworks: persisted.waterworks, time: persisted.timeOfDay, dayCount: persisted.dayCount,
+        ids: s,
       });
-      worldEnv.time = persisted.timeOfDay;
-      worldEnv.dayCount = persisted.dayCount;
-      buildSeq = s.buildings.reduce((m, b) => Math.max(m, parseInt(b.id.slice(1)) + 1 || m), 1);
-      villagerSeq = (s.villagers ?? []).reduce((m, v) => Math.max(m, parseInt(v.id.slice(1)) + 1 || m), 1);
-      blueprintSeq = (s.customBlueprints ?? []).reduce((m, b) => Math.max(m, parseInt(b.id.slice(2)) + 1 || m), 1);
-      waterSeq = persisted.waterworks.reduce((m, w) => Math.max(m, parseInt(w.id.slice(1)) + 1 || m), 1);
-      get().seedNodes();
     },
 
     toSave: () => buildSave(get(), {

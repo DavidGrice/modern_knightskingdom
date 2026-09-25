@@ -92,6 +92,19 @@ export function registerVillagerCombat(id: string): VillagerCombatState {
   return villagerCombatState[id];
 }
 
+/** CLN-04 · session start: heal every recorded villager IN PLACE. Villagers.tsx
+ *  holds its record from a useMemo and the reasoner's considerations register the
+ *  same entry lazily, so deleting keys here would split the two onto different
+ *  objects. A reused id ('v2' in the next save) must not come back wounded or
+ *  downed; an entry for an id that is gone is inert (Enemies.tsx additionally
+ *  requires the AI's own engage state, dropped by agentManager.clear()). */
+export function resetVillagerCombat(): void {
+  for (const id in villagerCombatState) {
+    const v = villagerCombatState[id];
+    v.hp = v.maxHp; v.state = 'ok'; v.downedUntil = 0;
+  }
+}
+
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkvillagercombat = villagerCombatState;
 }

@@ -41,3 +41,12 @@ export const dragonAirBlack = {
   hit: null as null | ((source: string) => void),
 };
 if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAirBlack = dragonAirBlack;
+
+/** CLN-04 · session start. Both sieges only clear `busy`/`hostile` from their own
+ *  end() callbacks; quitting to the menu mid-siege unmounts the runner without
+ *  calling it, so a loaded game inherited a permanently "hostile" dragon
+ *  (flee_to_safety reads it, so every villager fled forever) and a dragon that
+ *  could never be rolled again. In place — both are plain flags. */
+export function resetDragonAir(): void {
+  for (const d of [dragonAir, dragonAirBlack]) { d.busy = false; d.hostile = false; d.hit = null; }
+}

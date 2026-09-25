@@ -24,7 +24,7 @@ import { LOD, type Tier } from '../config';
 import type { Agent } from './Agent';
 import { targetRegistry } from './TargetRegistry';
 import { resolveAnchor, type ResolvedAnchor } from './AnchorResolution';
-import { agentManager, despawnHooks, tierChangeHooks } from './AgentManager';
+import { agentManager, clearHooks, despawnHooks, tierChangeHooks } from './AgentManager';
 import { wrapAngle } from '@/lib/math';
 
 const WALK_SPEED = 0.9; // m/s — matches Villagers.tsx's existing wander/work pace
@@ -153,6 +153,8 @@ function clearLocomotionState(agentId: string): void {
   anchorCache.delete(agentId);
 }
 despawnHooks.push(clearLocomotionState);
+// CLN-04 · agentManager.clear() (a new session) does not run despawnHooks
+clearHooks.push(() => { steerState.clear(); anchorCache.clear(); });
 
 function faceToward(agent: Agent, tx: number, tz: number, dt: number): void {
   // yaw -> facing is (-sin, -cos) by this codebase's convention
