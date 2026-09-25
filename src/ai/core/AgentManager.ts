@@ -36,6 +36,17 @@ import { Scheduler } from './Scheduler';
 // cannot re-close the same loop.
 export const despawnHooks: ((id: string) => void)[] = [];
 
+/** CLN-04 · fired by `clear()` — the session-wide counterpart of `despawnHooks`.
+ *  `clear()` (newGame / startNewGamePlus / loadFromSave) used to drop every agent
+ *  WITHOUT running `despawnHooks`, so Locomotion's steerState/anchorCache,
+ *  perception/state.ts's per-agent bookkeeping and actions/combatState.ts's maps
+ *  outlived the session while villager ids ('v1'…) were reused by the next save.
+ *  A wipe-everything hook rather than a per-agent despawn loop, so it also drops
+ *  entries no live agent owns (combatState's `alarmedAt` is keyed by belief id).
+ *  Same dependency direction and reason as `despawnHooks` above: registrants
+ *  import this module, never the reverse. */
+export const clearHooks: (() => void)[] = [];
+
 /** Phase 8 (§8) — fired by `Agent.setTier()` whenever an agent's tier actually
  *  CHANGES, never on a refresh that re-confirms the same one.
  *
@@ -128,6 +139,7 @@ class AgentManager {
     this.agents.length = 0;
     this.byId.clear();
     this.now = 0;
+    for (const hook of clearHooks) hook();
   }
 
   /** Called once per frame from AiRuntime. Only the SCHEDULER runs at frame

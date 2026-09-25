@@ -90,6 +90,17 @@ export function dismountHorse(px: number, pz: number, yaw: number) {
   }
 }
 
+/** CLN-04 · session start. The saddle is not part of a save, so a loaded or new
+ *  game must not begin mounted on the last session's horse. In place (no key is
+ *  deleted): Wildlife.tsx holds each horse's `horses[id]` object from a useMemo,
+ *  and MountedHorse/PlayerController only read `ridingState` fields. */
+export function resetRiding(): void {
+  ridingState.active = false;
+  ridingState.horseId = null;
+  ridingState.horseUrl = null;
+  for (const id in horses) horses[id].mounted = false;
+}
+
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__kkr = ridingState;
   (window as unknown as Record<string, unknown>).__kkhorses = horses;

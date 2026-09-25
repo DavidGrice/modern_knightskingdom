@@ -10,6 +10,7 @@ import { playerState } from './playerState';
 import { ridingState } from './riding';
 import { damageRaiderRam, raiderRamState, RAM_RADIUS } from './raiderRam';
 import { damageRaiderLadder, raiderLadderState, LADDER_RADIUS } from './raiderLadder';
+import { onSessionReset } from './store/sessionHooks';
 import { hitTestCharacter, PART_DAMAGE, PART_LABEL, type PartHit } from './hitbox';
 import type { RigJoint } from '@/lib/minifigRig';
 import { EYE_HEIGHT } from './data/world';
@@ -131,6 +132,11 @@ if (w) w.__kkc = combatState;
 // debug handle: a smoke test cannot click through pointer lock
 if (w) w.__kkfireBolt = () => fireBolt();
 
+// CLN-04 · set by the session-reset hook (bottom of this file), consumed by the FIRST
+// store notification after it — the one beginSession's set() fires: the ceilings are
+// re-derived from the state that just landed, then the vitals are filled to them.
+let refillVitals = false;
+
 // the Iron Grip perk raises the stamina ceiling permanently — react to the
 // store rather than gameStore importing combatState (which would create a
 // cycle, since combat.ts already imports useGameStore the other way)
@@ -160,6 +166,11 @@ useGameStore.subscribe((s) => {
   // new vigour arrives FULL — earning capacity and finding it empty reads as
   // a dilution of the health you had, which is the opposite of a reward
   if (combatState.maxHp > hpBefore) combatState.hp += combatState.maxHp - hpBefore;
+  if (refillVitals) {
+    refillVitals = false;
+    combatState.hp = combatState.maxHp;
+    combatState.stamina = combatState.maxStamina;
+  }
 });
 
 // 'royal' = the crown's knights, raiding only players who pledged to Cedric
@@ -521,6 +532,22 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
 }));
 
 if (w) w.__kke = useEnemyStore;
+
+// CLN-04 · session start (newGame / new-game-plus / loadFromSave) — gameStore.ts
+// cannot import this module (see the subscriber comments above), so it registers
+// through the leaf seam instead. Everything here is a live raid/fight the new
+// session must not inherit: the enemy store (a raider from the last game kept
+// hunting the new one), the siege ram/ladder that belong to those raiders (left
+// active with no raiders they were never cleared), and the player's own vitals
+// (HP/stamina are not saved, so a fresh session starts at full — refilled by the
+// subscriber above once the new state's maxHp/maxStamina exist, see refillVitals).
+onSessionReset(() => {
+  useEnemyStore.getState().clear();
+  raiderRamState.active = false;
+  raiderLadderState.active = false;
+  raiderLadderState.climbers = [];
+  refillVitals = true;
+});
 
 // Stage 3 (Wave 18 #5): dungeon-room and arena enemies were only ever
 // dropped from this store on a knockout (damagePlayer's own general clear()

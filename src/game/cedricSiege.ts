@@ -12,6 +12,7 @@
 // there is no cycle.
 import { useGameStore } from './store/gameStore';
 import { useEnemyStore } from './combat';
+import { onSessionReset } from './store/sessionHooks';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST } from './data/world';
 import { CEDRIC_SIEGE_TIER, difficultyState } from './difficulty';
 
@@ -50,6 +51,15 @@ export const cedricWarState = {
   finalStandActive: false, // the final stand is running
   reinforced: false,    // final stand's one-time wave-2 already spawned
 };
+
+// CLN-04 · the runner (CedricSiege.tsx) only clears these from its own end(); quitting
+// to the menu mid-siege left `active` set, which gates BOTH future sieges and the
+// final stand (`!cedricWarState.active`) for the rest of the tab.
+onSessionReset(() => {
+  cedricWarState.active = false;
+  cedricWarState.finalStandActive = false;
+  cedricWarState.reinforced = false;
+});
 
 /** may the camp duel become the real final stand? Requires having survived
  *  at least one homestead siege first — the direct expression of "vanquished
