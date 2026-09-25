@@ -106,7 +106,20 @@ export function resetDefenders(keepIds: ReadonlySet<string>): void {
     if (!keepIds.has(id)) { delete defenderState[id]; continue; }
     const d = defenderState[id];
     d.x = d.postX; d.z = d.postZ;
-    d.hp = d.maxHp; d.state = 'ok'; d.downedUntil = 0;
+    // hp goes back to the FRESH-REGISTRATION value (registerDefender: hp 1), NOT
+    // to `d.maxHp`. That maxHp is derived from the id's level / gear / traits in
+    // the LAST session, and the save being loaded can give the same id different
+    // ones (a level-up, a swapped plate), so it is a stale ceiling: refilling to
+    // it left a reused id above (30/24) or below (24/36) its real maxHp until it
+    // was next hit. DefenderFigure recomputes `ds.maxHp` from the current villager
+    // on every render and does `if (ds.hp <= 1) ds.hp = ds.maxHp` — the same
+    // refill a brand-new entry relies on, so this only holds if the figure renders
+    // after the reset. It does: one mounting later runs its body on mount, and a
+    // mounted one re-renders because a loaded save deserialises to fresh villager
+    // objects and, even for a same-reference load, the enemy store's clear() (this
+    // same reset) swaps in a new `enemies` array that every figure subscribes to.
+    // Keep clear() replacing that array (or compute maxHp here instead).
+    d.hp = 1; d.state = 'ok'; d.downedUntil = 0;
     d.attackCd = 0; d.hurtCd = 0;
   }
   defenderOrders.order = 'patrol';

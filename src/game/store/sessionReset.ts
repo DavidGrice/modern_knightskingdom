@@ -26,6 +26,7 @@ import { resetCompanionCombat } from '../companion';
 import { resetDefenders } from '../defenders';
 import { resetVillagerCombat } from '../villagerCombat';
 import { resetRiding } from '../riding';
+import { resetCarts } from '../carts';
 import { resetDragonAir } from '../dragonAir';
 import { endArenaRun } from '../arena';
 import { runSessionResetHooks } from './sessionHooks';
@@ -53,6 +54,7 @@ export function resetSessionModules(next: { villagers: readonly Villager[] }): v
   resetDefenders(new Set(next.villagers.filter((v) => v.job === 'defender').map((v) => v.id)));
   resetVillagerCombat();
   resetRiding();
+  resetCarts();
   resetDragonAir();
   endArenaRun();
   // combat.ts (enemies + ram/ladder + player vitals), cedricSiege.ts
