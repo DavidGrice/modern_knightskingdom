@@ -31,6 +31,7 @@ import { ITEMS } from '@/game/data/items';
 import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 import { loadDragonRig, type DragonRig } from './DragonOmen';
 import { pick } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const SIEGE_SECONDS = 55;
 const BREATH_EVERY = 5;   // a shade quicker than the green dragon's own 6s
@@ -257,10 +258,10 @@ export default function BlackDragonSiege() {
 
   // test hook, same convention as __kkSiege/__kkCedricSiege
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).__kkBlackSiege = {
+    exposeDebug('__kkBlackSiege', {
       get active() { return active; },
       end: (routed: boolean) => endRef.current(routed),
-    };
+    });
   }, [active]);
 
   useFrame(() => {

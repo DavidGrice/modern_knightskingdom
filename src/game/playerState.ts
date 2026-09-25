@@ -4,6 +4,7 @@
 // combat, wildlife, minimap and riding systems.
 
 import { SPAWN } from './data/world';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export const playerState = {
   x: 0, y: 0, z: 26, yaw: 0, pitch: 0,
@@ -30,6 +31,4 @@ export function resetPlayerState() {
   playerState.pendingTeleport = null;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkp = playerState;
-}
+exposeDebug('__kkp', playerState);

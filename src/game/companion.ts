@@ -57,6 +57,7 @@
 // flat 1.5 needs only +0.5 (33%) to tie it.
 import type { Villager } from './types';
 import { villagerGearHpBonus, VILLAGER_GEAR_HP_MAX } from './villagerCombat';
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface CompanionCombatState {
   hp: number;
@@ -160,6 +161,4 @@ export function resetCompanionCombat(id: string): void {
   delete companionCombatState[id];
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkcompanioncombat = companionCombatState;
-}
+exposeDebug('__kkcompanioncombat', companionCombatState);

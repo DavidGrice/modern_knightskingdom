@@ -1,7 +1,10 @@
 'use client';
+
 // Horse riding state: which wild horse is mounted and shared horse mobs.
 // Horse positions are mutated in place (no store churn); the Wildlife horses
 // and the PlayerController both read/write these objects.
+
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface HorseMob {
   id: string;
@@ -101,10 +104,8 @@ export function resetRiding(): void {
   for (const id in horses) horses[id].mounted = false;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkr = ridingState;
-  (window as unknown as Record<string, unknown>).__kkhorses = horses;
-  (window as unknown as Record<string, unknown>).__kkstable = stabledHorses;
-  // debug handle so a smoke test can get into the saddle without pointer lock
-  (window as unknown as Record<string, unknown>).__kkmount = mountHorse;
-}
+exposeDebug('__kkr', ridingState);
+exposeDebug('__kkhorses', horses);
+exposeDebug('__kkstable', stabledHorses);
+// debug handle so a smoke test can get into the saddle without pointer lock
+exposeDebug('__kkmount', mountHorse);

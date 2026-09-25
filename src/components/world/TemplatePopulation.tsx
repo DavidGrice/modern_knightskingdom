@@ -57,6 +57,7 @@ import PropModel from './PropModel';
 import RiggedFigure, { useIdleFidget } from '../character/RiggedFigure';
 import type { CharacterConfig } from '@/game/types';
 import mapPopulation from '@/game/data/mapPopulation.generated.json';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const DEBUG_MARKERS = false;
 
@@ -290,7 +291,5 @@ export function DestinationPopulation({ dest }: { dest: WorldDestination }) {
   );
 }
 
-if (typeof window !== 'undefined') {
-  // debug/verification access only — see this file's own DEBUG_MARKERS note
-  (window as unknown as Record<string, unknown>).__kkpop = mapPopulation;
-}
+// debug/verification access only — see this file's own DEBUG_MARKERS note
+exposeDebug('__kkpop', mapPopulation);

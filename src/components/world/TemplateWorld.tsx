@@ -49,6 +49,7 @@ import { arenaState } from '@/game/arena';
 import { homeGroundY, registerHomeGroundRoot } from '@/game/homeGround';
 import DungeonScene from './DungeonScene';
 import ArenaScene from './ArenaScene';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export { homeGroundY, registerHomeGroundRoot };
 
@@ -572,17 +573,15 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
   );
 }
 
-if (typeof window !== 'undefined') {
-  // debug/test access only — lets a smoke test cross-check navgrid.ts's
-  // rasterized heightAt() against this module's already-trusted raycast
-  // sampler (iteration 2.5's own verification).
-  (window as unknown as Record<string, unknown>).__kkworld = {
-    // Wave 12 adds homeGroundY, for the same reason: a smoke test can now
-    // cross-check a raised region's real triangles against the field
-    // game/data/terrainRegions.ts authored them from, without a build step.
-    sampleTemplateGroundY, destinationGroundY, getMountedRegion, getBakeOffset, homeGroundY,
-  };
-}
+// debug/test access only — lets a smoke test cross-check navgrid.ts's
+// rasterized heightAt() against this module's already-trusted raycast
+// sampler (iteration 2.5's own verification).
+exposeDebug('__kkworld', {
+  // Wave 12 adds homeGroundY, for the same reason: a smoke test can now
+  // cross-check a raised region's real triangles against the field
+  // game/data/terrainRegions.ts authored them from, without a build step.
+  sampleTemplateGroundY, destinationGroundY, getMountedRegion, getBakeOffset, homeGroundY,
+});
 
 export default function TemplateWorld() {
   const destination = useGameStore((s) => s.destination);

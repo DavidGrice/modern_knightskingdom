@@ -33,6 +33,7 @@
 // of vanishing the instant its HP hits zero.
 import { useGameStore } from './store/gameStore';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID, WALK_CORNER_HALF, WALK_DEEP_HALF } from './data/keep';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const LADDER_MAX_HP = 22;
 /** how close a swing or a shaft has to come to count as a hit — same shape
@@ -132,4 +133,4 @@ export function damageRaiderLadder(amount: number): boolean {
   return true;
 }
 
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkLadder = raiderLadderState;
+exposeDebug('__kkLadder', raiderLadderState);

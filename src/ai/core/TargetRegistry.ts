@@ -14,6 +14,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { isBuilt, isHomeBuilding, type PlacedBuilding } from '@/game/types';
 import type { ResourceNodeState } from '@/game/types';
 import { anchorRuleFor, type AnchorRule } from '../config';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export type TargetId = string; // 'node:17' | 'bldg:42'
 
@@ -230,6 +231,4 @@ class TargetRegistry {
 
 export const targetRegistry = new TargetRegistry();
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kktargets = targetRegistry;
-}
+exposeDebug('__kktargets', targetRegistry);

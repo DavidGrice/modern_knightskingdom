@@ -1,3 +1,5 @@
+import { exposeDebug } from '@/lib/debugHooks';
+
 // PHASE_2_NAVIGATION_AND_GATHERING.md §4 (phase 5, iteration 5.8a) — the AI's
 // real presence, published for tickVillagers to trust instead of its own
 // hand-rolled proximity heuristic. A standalone leaf module (no store
@@ -34,6 +36,4 @@ export function clearAllWorkSignals(): void {
   for (const k of Object.keys(workSignals)) delete workSignals[k];
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkwork = { workSignals, setWorkSignal, clearWorkSignal, clearAllWorkSignals };
-}
+exposeDebug('__kkwork', { workSignals, setWorkSignal, clearWorkSignal, clearAllWorkSignals });

@@ -10,16 +10,15 @@ import { registerSenses } from '../core/Perception';
 import { updateSenses, reportAgentDamaged } from './Senses';
 import { emitSound, resetSounds } from './sounds';
 import { peekPerceptionState } from './state';
+import { exposeDebug } from '@/lib/debugHooks';
 
 registerSenses(updateSenses);
 
 export { updateSenses, reportAgentDamaged, emitSound, resetSounds, peekPerceptionState };
 
-if (typeof window !== 'undefined') {
-  // matches the project's existing AI smoke-test handles (__kkai, __kkreason,
-  // __kkactions) — a live perception read is the only way to check a vision
-  // cone against a real running scene
-  (window as unknown as Record<string, unknown>).__kkperception = {
-    updateSenses, reportAgentDamaged, emitSound, resetSounds, peekPerceptionState,
-  };
-}
+// matches the project's existing AI smoke-test handles (__kkai, __kkreason,
+// __kkactions) — a live perception read is the only way to check a vision
+// cone against a real running scene
+exposeDebug('__kkperception', {
+  updateSenses, reportAgentDamaged, emitSound, resetSounds, peekPerceptionState,
+});

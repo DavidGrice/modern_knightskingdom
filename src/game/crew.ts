@@ -13,6 +13,7 @@
 // R3F frame loop writes it every frame and both the HUD tree and the world
 // tree read it, so routing it through Zustand would churn the store 60×/s.
 import type { PlacedBuilding } from './types';
+import { exposeDebug } from '@/lib/debugHooks';
 
 type OccupyMode = 'standing' | 'seated';
 
@@ -56,6 +57,4 @@ export function leaveEngine() {
   crewState.engineId = null;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkcrew = crewState;
-}
+exposeDebug('__kkcrew', crewState);

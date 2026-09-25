@@ -24,6 +24,7 @@ import { useGameStore } from './store/gameStore';
 import { onRoad } from './data/road';
 import { hasSettlementRoad, onSettlementRoad } from './data/settlementRoads';
 import navgridConfig from '../ai/config/navgrid.json';
+import { exposeDebug } from '@/lib/debugHooks';
 
 // Phase 2, iteration 2.5 — scratch vectors for height rasterization, reused
 // across every triangle of every rasterize call rather than allocated per
@@ -985,19 +986,17 @@ export function hasLineOfSight(
   return true;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kknav = {
-    findPath, navBlocked, rebuildNav, getNavGrid, navSteer, hasLineOfSight,
-    heightAt: (region: string | null, x: number, z: number) => getNavGrid(region).heightAt(x, z),
-    // Wave 42 (A7) — exposed for the same reason every other debug handle in
-    // this project is: `setLiveAgents`/`applyLocalAvoidance` are real,
-    // top-level function declarations (hoisted, so referencing them here
-    // above their own textual definition further down this file is safe),
-    // and a smoke test needs a way to drive avoidance without a full running
-    // AgentManager to check the math in isolation.
-    setLiveAgents, applyLocalAvoidance,
-  };
-}
+exposeDebug('__kknav', {
+  findPath, navBlocked, rebuildNav, getNavGrid, navSteer, hasLineOfSight,
+  heightAt: (region: string | null, x: number, z: number) => getNavGrid(region).heightAt(x, z),
+  // Wave 42 (A7) — exposed for the same reason every other debug handle in
+  // this project is: `setLiveAgents`/`applyLocalAvoidance` are real,
+  // top-level function declarations (hoisted, so referencing them here
+  // above their own textual definition further down this file is safe),
+  // and a smoke test needs a way to drive avoidance without a full running
+  // AgentManager to check the math in isolation.
+  setLiveAgents, applyLocalAvoidance,
+});
 
 /** per-agent routing state, stashed on the agent object itself so callers
  *  don't need a parallel registry */

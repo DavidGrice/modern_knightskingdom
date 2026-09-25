@@ -9,6 +9,7 @@
 
 import { getNavGrid } from '@/game/navgrid';
 import type { Target } from './TargetRegistry';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export interface ResolvedAnchor {
   x: number;
@@ -97,6 +98,4 @@ export function resolveAnchor(target: Target, fromX: number, fromZ: number): Res
   return { x: fb.x, z: fb.z, yaw: faceToward(fb.x, fb.z, target.x, target.z) };
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkanchor = { resolveAnchor };
-}
+exposeDebug('__kkanchor', { resolveAnchor });

@@ -20,6 +20,7 @@
 import { useGameStore } from './store/gameStore';
 import { totalSkillLevel } from './data/ranks';
 import type { DifficultyId } from './types';
+import { exposeDebug } from '@/lib/debugHooks';
 
 // gameStore does not export its state interface, and widening its API just to
 // satisfy this module would be the wrong trade — derive the type instead.
@@ -193,7 +194,7 @@ function refresh(st: GameState) {
 useGameStore.subscribe(refresh);
 if (typeof window !== 'undefined') {
   refresh(useGameStore.getState());
-  (window as unknown as Record<string, unknown>).__kkdiff = difficultyState;
+  exposeDebug('__kkdiff', difficultyState);
 }
 
 /** May the dragon come at all? Tier gate AND a real means of fighting back.

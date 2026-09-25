@@ -31,6 +31,7 @@
 // this — tracked cumulatively on upload/dispose, never reset per-render — so
 // those three fields are always accurate regardless of autoReset.
 import type { WebGLRenderer } from 'three';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export const perfMeter = {
   drawCalls: 0,
@@ -60,6 +61,4 @@ export function samplePerfFrame(gl: WebGLRenderer): void {
   gl.info.reset();
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkperf = perfMeter;
-}
+exposeDebug('__kkperf', perfMeter);

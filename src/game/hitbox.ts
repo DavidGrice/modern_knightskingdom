@@ -14,6 +14,7 @@
 // the R3F tree and consumed by combat code the store also touches, so a
 // zustand store here would create a cycle and churn.
 import type { RigJoint } from '@/lib/minifigRig';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** an axis-aligned box in the figure's LOCAL frame: origin at the feet,
  *  +Y up, -Z forward (this codebase's yaw=0 convention) */
@@ -133,6 +134,4 @@ export function hitTestCharacter(
   return best;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkhitbox = hitboxes;
-}
+exposeDebug('__kkhitbox', hitboxes);

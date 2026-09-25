@@ -6,6 +6,7 @@ import { DEFAULT_GAMEPAD_BUTTONS, type GamepadAction } from '../data/gamepadInpu
 import { suggestGraphicsQuality } from '../deviceProfile';
 import type { AaMode } from '../aaModes';
 import type { InputDevice } from '../inputMode';
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface SessionUser {
   id: string;
@@ -212,6 +213,4 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 export const currentScreen = (s: AppState) => s.screens[s.screens.length - 1];
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkapp = useAppStore;
-}
+exposeDebug('__kkapp', useAppStore);

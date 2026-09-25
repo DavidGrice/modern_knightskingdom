@@ -36,6 +36,7 @@ import { hasLineOfSight, GROUND_LOS_Y } from './navgrid';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { enemyBeliefId, noiseBeliefId } from '@/ai/perception/Belief';
 import { randInt } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** true while standing on a wall/tower top rather than the ground — height
  *  earns a real mechanical edge for ranged combat, not just a viewpoint. */
@@ -127,10 +128,9 @@ export const combatState = {
   comboWindowUntil: 0,
 };
 
-const w = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null;
-if (w) w.__kkc = combatState;
+exposeDebug('__kkc', combatState);
 // debug handle: a smoke test cannot click through pointer lock
-if (w) w.__kkfireBolt = () => fireBolt();
+exposeDebug('__kkfireBolt', () => fireBolt());
 
 // CLN-04 · set by the session-reset hook (bottom of this file), consumed by the FIRST
 // store notification after it — the one beginSession's set() fires: the ceilings are
@@ -531,7 +531,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
   removeByWorld: (world) => set({ enemies: get().enemies.filter((e) => (e.world ?? null) !== world) }),
 }));
 
-if (w) w.__kke = useEnemyStore;
+exposeDebug('__kke', useEnemyStore);
 
 // CLN-04 · session start (newGame / new-game-plus / loadFromSave) — gameStore.ts
 // cannot import this module (see the subscriber comments above), so it registers
@@ -732,7 +732,7 @@ export function resolveDuel(won: boolean, mobId: number) {
   }
 }
 
-if (w) w.__kkResolveDuel = resolveDuel;
+exposeDebug('__kkResolveDuel', resolveDuel);
 
 interface MeleeStats {
   /** damage at full condition, and once fully worn */
@@ -1173,7 +1173,6 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
 export function playerAttack(): boolean {
   const st = useGameStore.getState();
   const kind = activeMelee();
-  // deliberately not named `w` — that is this module's window handle
   // Wave 49 (C1): tier-aware dmg/wornDmg, every other field still MELEE[kind]
   const wp = meleeStatsFor(kind, st.inventory);
   // Wave 32 · Page calling's small Battle-Ready passive: swings cost a touch
@@ -1275,8 +1274,8 @@ export function playerAttack(): boolean {
   return true;
 }
 
-if (w) w.__kkAttack = playerAttack;
-if (w) w.__kkDamagePlayer = damagePlayer;
+exposeDebug('__kkAttack', playerAttack);
+exposeDebug('__kkDamagePlayer', damagePlayer);
 
 // ---- crossbow bolts ----
 
@@ -1680,6 +1679,6 @@ function hitRaiderLadder(amount: number) {
   st.notify("The raiders' siege ladder is wrecked! Salvaged 3× Wood Log, 2× Plank.", true);
 }
 
-if (w) w.__kkBolt = fireBolt;
-if (w) w.__kkArrow = fireArrow;
-if (w) w.__kkBolts = useBoltStore;
+exposeDebug('__kkBolt', fireBolt);
+exposeDebug('__kkArrow', fireArrow);
+exposeDebug('__kkBolts', useBoltStore);

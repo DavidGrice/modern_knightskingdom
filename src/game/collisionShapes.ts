@@ -1,4 +1,5 @@
 'use client';
+
 // Real per-piece collision volumes, derived from each model's OWN geometry.
 //
 // Answering "is there a way to ignore the bbox and simply have the raw OBJ be
@@ -15,6 +16,8 @@
 // Loaded once, asynchronously. Until it lands, `shapeFor` returns null and
 // callers fall back to the authored boxes — so collision is never wrong,
 // only coarser for the first moment.
+
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface ShapeBox {
   cx: number; cy: number; cz: number;
@@ -42,5 +45,5 @@ export function shapeFor(type: string): ShapeBox[] | null {
 
 if (typeof window !== 'undefined') {
   loadCollisionShapes();
-  (window as unknown as Record<string, unknown>).__kkshapes = () => shapes;
+  exposeDebug('__kkshapes', () => shapes);
 }

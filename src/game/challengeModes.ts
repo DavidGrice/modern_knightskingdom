@@ -19,6 +19,7 @@
 // ChallengePanels.tsx, the HUD that polls them, both import useGameStore
 // themselves — mirrors ArenaSpawner.tsx's own split from arena.ts).
 import { WORLD_DESTINATION_BY_ID } from './data/worlds';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const GATHER_CHALLENGE_IDS: readonly string[] = ['challenge-2', 'challenge-5'];
 const DEFEND_CHALLENGE_IDS: readonly string[] = ['challenge-3', 'challenge-6'];
@@ -165,8 +166,6 @@ export function startJoustChallenge(destId: string) {
   joustChallengeState.precisionSum = 0;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkchallenges = {
-    gather: gatherChallengeState, defend: defendChallengeState, joust: joustChallengeState,
-  };
-}
+exposeDebug('__kkchallenges', {
+  gather: gatherChallengeState, defend: defendChallengeState, joust: joustChallengeState,
+});

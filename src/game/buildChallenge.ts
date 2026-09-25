@@ -21,6 +21,7 @@
 // module only adds the timer + the win/lose resolution on top of that
 // already-real build economy.
 import { CHALLENGE_DESTINATIONS } from './data/worlds';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** Which of the six challenge grounds actually has the mechanic. Picked
  *  arbitrarily (the first) — nothing about challenge-1's own diorama shapes
@@ -72,6 +73,4 @@ export function tickBuildChallenge(destination: string | null, notify: (text: st
   }
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkbuildchallenge = buildChallengeState;
-}
+exposeDebug('__kkbuildchallenge', buildChallengeState);

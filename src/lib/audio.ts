@@ -3,6 +3,7 @@
 // The original engine pitch-shifted its 8-bit samples for variety; we do the same.
 import { playerState } from '@/game/playerState';
 import { pick } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const SOUNDS = [
   'bird1', 'bird2', 'bird3', 'brick_link', 'brick_collide', 'brick_connect',
@@ -189,4 +190,4 @@ class AudioManager {
 
 export const audio = new AudioManager();
 // test hook, same convention as window.__kk / __kkp / __kkenv
-if (typeof window !== 'undefined') (window as unknown as { __kkaudio: AudioManager }).__kkaudio = audio;
+exposeDebug('__kkaudio', audio);

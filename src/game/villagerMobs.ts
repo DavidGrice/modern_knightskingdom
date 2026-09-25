@@ -1,6 +1,9 @@
 'use client';
+
 // Live villager world positions, mutated in place by the Villagers renderer
 // and read by the minimap (mirrors the pattern in riding.ts for horses).
+
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface VillagerMob {
   x: number;
@@ -31,6 +34,4 @@ export function arriveByRoad(id: string, x: number, z: number) {
   m.arriving = true;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkvillagers = villagerMobs;
-}
+exposeDebug('__kkvillagers', villagerMobs);

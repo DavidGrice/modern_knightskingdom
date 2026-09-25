@@ -25,6 +25,7 @@ import { KEEP_PART_BY_ID, KEEP_SOCKETS } from './data/keep';
 import { isRampart, wallLinks } from './walls';
 import { isBuilt, isDoorLike } from './types';
 import { playerState } from './playerState';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** metres per cell. A door is 0.8m deep, so cells are stamped by AABB overlap
  *  rather than centre containment — at this pitch a thin piece must still
@@ -260,7 +261,5 @@ export function fortDamageReduction(): number {
   return insideWalls(playerState.x, playerState.z) ? FORT_DAMAGE_REDUCTION : 0;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkfort = fortState;
-  (window as unknown as Record<string, unknown>).__kkfortCheck = () => { refreshFort(true); return fortState; };
-}
+exposeDebug('__kkfort', fortState);
+exposeDebug('__kkfortCheck', () => { refreshFort(true); return fortState; });
