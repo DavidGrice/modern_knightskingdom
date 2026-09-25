@@ -20,6 +20,7 @@
 
 import { playerState } from '@/game/playerState';
 import { PERCEPTION } from '../config';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** §6.2's `loudness` per real event, authored in perception.json rather than
  *  as literals at the call sites — §12's rule, and it keeps the whole "how
@@ -151,8 +152,6 @@ export function resetSounds(): void {
   lastFootstepAt = -Infinity;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kksounds = {
-    emitSound, latestSoundSeq, forEachSoundSince, resetSounds,
-  };
-}
+exposeDebug('__kksounds', {
+  emitSound, latestSoundSeq, forEachSoundSince, resetSounds,
+});

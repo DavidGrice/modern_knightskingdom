@@ -52,6 +52,7 @@ import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine, manEngine } from '@/game/crew';
 import { commandWheel, steerWheel } from '@/game/commandWheel';
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface Target {
   id: string;
@@ -387,9 +388,8 @@ export default function PlayerController() {
   // debug handle, same as the other __kk leaves: lets a smoke test walk the
   // live scene graph (which is how the sky-box offset in K60 was found)
   useEffect(() => {
-    const w = window as unknown as Record<string, unknown>;
-    w.__kkscene = scene;
-    w.__kkcam = camera;
+    exposeDebug('__kkscene', scene);
+    exposeDebug('__kkcam', camera);
   }, [scene, camera]);
   const settings = useAppStore((s) => s.settings);
 

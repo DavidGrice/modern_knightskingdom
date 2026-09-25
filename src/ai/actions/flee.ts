@@ -53,7 +53,7 @@ export const FLEE_TO_SAFETY: Action = {
       // BlackDragonSiege.tsx, neither ever calls useEnemyStore().spawn), so
       // this used to structurally never fire for either dragon: villagers
       // stood in the open through an entire siege. dragonAir/dragonAirBlack
-      // (their own zero-dependency leaf module, game/dragonAir.ts) publish
+      // (their own store-free leaf module, game/dragonAir.ts) publish
       // exactly the "is one hostile right now" bit already used for ground-
       // defender targeting — read here too rather than inventing a second
       // signal.

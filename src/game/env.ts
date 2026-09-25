@@ -1,7 +1,10 @@
 'use client';
+
 // Shared mutable world-environment state, updated by the DayNight/Weather
 // systems each frame and read by lighting, sky, wildlife, audio and gameplay
 // (no store churn — these change every frame).
+
+import { exposeDebug } from '@/lib/debugHooks';
 
 export const worldEnv = {
   /** 0..1 time of day: 0 = midnight, 0.25 = dawn, 0.5 = noon, 0.75 = dusk */
@@ -36,9 +39,7 @@ export function seasonOf(dayCount: number): number {
   return Math.floor(dayCount / DAYS_PER_SEASON) % 4;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkenv = worldEnv;
-}
+exposeDebug('__kkenv', worldEnv);
 
 export function nightFactor(time: number, winterBias = 0): number {
   // sun elevation: sin curve peaking at noon; night when below horizon

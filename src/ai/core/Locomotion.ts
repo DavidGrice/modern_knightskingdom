@@ -26,6 +26,7 @@ import { targetRegistry } from './TargetRegistry';
 import { resolveAnchor, type ResolvedAnchor } from './AnchorResolution';
 import { agentManager, clearHooks, despawnHooks, tierChangeHooks } from './AgentManager';
 import { wrapAngle } from '@/lib/math';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const WALK_SPEED = 0.9; // m/s — matches Villagers.tsx's existing wander/work pace
 const RUN_SPEED = 1.6; // m/s — matches Villagers.tsx's existing raid-flee pace
@@ -493,10 +494,8 @@ function onTierChange(agent: Agent, from: Tier, to: Tier): void {
 }
 tierChangeHooks.push(onTierChange);
 
-if (typeof window !== 'undefined') {
-  // debug/test only — FACE isn't routed through any renderer's splice yet
-  // (iteration 3.3 only diverts MOVE_TO/MOVE_TO_ANCHOR; see Villagers.tsx's
-  // own comment on why), so this is the only way to exercise it directly
-  // against a real Agent right now.
-  (window as unknown as Record<string, unknown>).__kkloco = { stepLocomotion };
-}
+// debug/test only — FACE isn't routed through any renderer's splice yet
+// (iteration 3.3 only diverts MOVE_TO/MOVE_TO_ANCHOR; see Villagers.tsx's
+// own comment on why), so this is the only way to exercise it directly
+// against a real Agent right now.
+exposeDebug('__kkloco', { stepLocomotion });

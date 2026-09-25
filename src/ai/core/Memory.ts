@@ -21,6 +21,7 @@
 
 import type { Blackboard, MemoryRecord } from './Blackboard';
 import { clockLabel, worldEnv } from '@/game/env';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** §11.2: "Ring buffer, cap 200 per agent." */
 const MEMORY_CAP = 200;
@@ -133,8 +134,6 @@ export function recordSighting(bb: Blackboard, beliefId: string, now: number, he
   );
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkmemory = {
-    MEMORY_CAP, pushMemory, recall, recordActivitySuccess, recordSighting,
-  };
-}
+exposeDebug('__kkmemory', {
+  MEMORY_CAP, pushMemory, recall, recordActivitySuccess, recordSighting,
+});

@@ -1,4 +1,7 @@
 'use client';
+
+import { exposeDebug } from '@/lib/debugHooks';
+
 // Shared cart state: a pushable battering ram (the "warcart" buildable) and
 // a hitchable haulage cart (the "bladecart" buildable). A standalone leaf
 // module (no store import) so both gameStore.ts and siege.ts can depend on
@@ -30,7 +33,5 @@ export function resetCarts(): void {
   for (const id of Object.keys(cartLivePos)) delete cartLivePos[id];
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkCart = cartState;
-  (window as unknown as Record<string, unknown>).__kkCartPos = cartLivePos;
-}
+exposeDebug('__kkCart', cartState);
+exposeDebug('__kkCartPos', cartLivePos);

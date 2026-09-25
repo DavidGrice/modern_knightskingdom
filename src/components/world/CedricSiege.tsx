@@ -28,6 +28,7 @@ import { difficultyState, MOUNTED_RAIDER_TIER } from '@/game/difficulty';
 import { BOSS_ENCOUNTERS } from '@/game/bossEncounter';
 import RiggedProp, { fireProp } from './RiggedProp';
 import { pick } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** final stand: seconds after the escort arrives before a single wave-2
  *  reinforcement rushes in, if he's still standing — Wave 38 (A1): promoted
@@ -150,10 +151,10 @@ export default function CedricSiege() {
 
   // test hook, same convention as __kkSiege (DragonSiege)
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).__kkCedricSiege = {
+    exposeDebug('__kkCedricSiege', {
       get active() { return active; },
       end: (routed: boolean) => endRef.current(routed),
-    };
+    });
   }, [active]);
 
   useFrame((_, dt) => {

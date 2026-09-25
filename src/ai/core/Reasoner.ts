@@ -13,6 +13,7 @@ import { targetRegistry, type Target } from './TargetRegistry';
 import type { Blackboard, ScoredAction, ScoredConsideration } from './Blackboard';
 import { archetypeDef } from '../config';
 import { recordActivitySuccess } from './Memory';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** §5.4 (PHASE_3_4_5) / §5.1 (NPC_AI_SPEC) — passed to every Consideration's
  *  `input()` and to `scoreAction` itself. `target` is set for a per-target
@@ -490,9 +491,7 @@ export function tickReasoner(agent: Agent, now: number, dt: number): void {
   runReasoner(agent, registeredActions, now, dt);
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkreason = {
-    scoreAction, pickAction, startCooldown, assembleCandidates, runReasoner,
-    registerActions, tickReasoner, CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
-  };
-}
+exposeDebug('__kkreason', {
+  scoreAction, pickAction, startCooldown, assembleCandidates, runReasoner,
+  registerActions, tickReasoner, CATEGORY_WEIGHT, CATEGORY_INTERRUPT_PRIORITY,
+});

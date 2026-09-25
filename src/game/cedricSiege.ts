@@ -15,6 +15,7 @@ import { useEnemyStore } from './combat';
 import { onSessionReset } from './store/sessionHooks';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST } from './data/world';
 import { CEDRIC_SIEGE_TIER, difficultyState } from './difficulty';
+import { exposeDebug } from '@/lib/debugHooks';
 
 // gameStore does not export its state interface — derive the type instead,
 // the same trade difficulty.ts itself already made for the same reason.
@@ -90,6 +91,4 @@ export function startCedricDuel(st: GameState): boolean {
   return finalStand;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkCedricWar = cedricWarState;
-}
+exposeDebug('__kkCedricWar', cedricWarState);

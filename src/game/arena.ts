@@ -14,6 +14,7 @@
 
 import type { ItemId } from './types';
 import { pick, randInt } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export type ArenaEnvId = 'earth' | 'water' | 'snow' | 'lava';
 
@@ -150,6 +151,4 @@ export function endArenaRun() {
   arenaState.objective = null;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkarena = arenaState;
-}
+exposeDebug('__kkarena', arenaState);

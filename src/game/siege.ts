@@ -11,6 +11,7 @@ import { labAssetId } from './data/buildables';
 import { fireProp } from '@/components/world/RiggedProp';
 import { KEEP_SOCKETS } from './data/keep';
 import { isDoorLike, type PlacedBuilding } from './types';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** J51 · every finished keep piece within `radius` of (x, z) takes the same
  *  hit an ordinary building would — the keep has no PlacedBuilding entries
@@ -115,9 +116,7 @@ export function fireCannon(cannon: PlacedBuilding, aimYaw?: number) {
   fireSound(labAssetId(cannon.type));
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkFire = fireCannon;
-}
+exposeDebug('__kkFire', fireCannon);
 
 /** explode a ball: splash damage to enemies AND any building caught in the
  *  blast (the cannon doesn't discriminate — mind where you aim it). */
@@ -154,9 +153,7 @@ export function explodeBall(ball: Cannonball) {
   useSiegeStore.getState().removeBall(ball.id);
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkExplode = explodeBall;
-}
+exposeDebug('__kkExplode', explodeBall);
 
 /**
  * Set off a placed explosive (2026-07-20, from the rig lab's
@@ -200,9 +197,7 @@ export function detonate(charge: PlacedBuilding) {
   st.notify('💥 The charge goes off!', true);
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkDetonate = detonate;
-}
+exposeDebug('__kkDetonate', detonate);
 
 // ---- the pushable battering ram (see game/carts.ts for the shared
 // push/hitch state both this and PlayerController read/write) ----

@@ -6,6 +6,7 @@
 import { attrsOf } from './data/attributes';
 import { hasTrait } from './data/companionTraits';
 import type { Villager } from './types';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export interface DefenderState {
   x: number; z: number;
@@ -128,7 +129,5 @@ export function resetDefenders(keepIds: ReadonlySet<string>): void {
   scoutReported.clear();
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkdefenders = defenderState;
-  (window as unknown as Record<string, unknown>).__kkorders = defenderOrders;
-}
+exposeDebug('__kkdefenders', defenderState);
+exposeDebug('__kkorders', defenderOrders);

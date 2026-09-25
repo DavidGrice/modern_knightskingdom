@@ -40,6 +40,7 @@ import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { useAppStore } from '@/game/store/appStore';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
 import { worldEnv } from '@/game/env';
+import { exposeDebug } from '@/lib/debugHooks';
 
 // Requested 2026-08-04: a cheap screen-space "wet look" for rain — the
 // scoped-down option (see ROADMAP.md's own note on this) of the three
@@ -120,7 +121,7 @@ export default function PostProcessing() {
   const wetEligible = useAppStore((s) => GRAPHICS_PROFILES[s.settings.graphicsQuality].wetPostProcess);
   const { gl, scene, camera, size } = useThree();
   useEffect(() => {
-    if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkgl = gl;
+    exposeDebug('__kkgl', gl);
   }, [gl]);
   useContextLossRecovery(gl);
   const composerRef = useRef<EffectComposer | null>(null);

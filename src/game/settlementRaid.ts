@@ -24,6 +24,7 @@
 // a settlement raid reads as anonymous "rival pressure" from whichever
 // house the player has NOT been leaning toward.
 import { contestedPressure, leaningHouse } from './data/allegiance';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const SETTLEMENT_RAID_BASE_COOLDOWN_MS = 15 * 60_000; // real minutes, no pressure
 const SETTLEMENT_RAID_MIN_COOLDOWN_MS = 6 * 60_000;   // floor at max contested pressure
@@ -85,14 +86,12 @@ export function startSettlementRaid(destId: string) {
   settlementRaidState.plotHp = SETTLEMENT_RAID_START_HP;
 }
 
-if (typeof window !== 'undefined') {
-  // mirrors challengeModes.ts's __kkchallenges — live verification doesn't
-  // have to wait for real dusk + real allegiance extremity + a real cooldown
-  (window as unknown as Record<string, unknown>).__kksettlementraid = {
-    state: settlementRaidState,
-    cooldownMs: settlementRaidCooldownMs,
-    raiderKinds: settlementRaiderKinds,
-    maxLive: settlementRaidMaxLive,
-    start: startSettlementRaid,
-  };
-}
+// mirrors challengeModes.ts's __kkchallenges — live verification doesn't
+// have to wait for real dusk + real allegiance extremity + a real cooldown
+exposeDebug('__kksettlementraid', {
+  state: settlementRaidState,
+  cooldownMs: settlementRaidCooldownMs,
+  raiderKinds: settlementRaiderKinds,
+  maxLive: settlementRaidMaxLive,
+  start: startSettlementRaid,
+});

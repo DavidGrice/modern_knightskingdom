@@ -86,6 +86,7 @@ import { WANDER } from './wander';
 import { FOLLOW_LEADER } from './followLeader';
 import { ASSIST_LEADER } from './assistLeader';
 import { ROAM } from './roam';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const ACTIONS: Action[] = [
   FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
@@ -94,10 +95,8 @@ const ACTIONS: Action[] = [
 ];
 registerActions(ACTIONS);
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkactions = {
-    FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
-    IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
-    FOLLOW_LEADER, ASSIST_LEADER, ROAM,
-  };
-}
+exposeDebug('__kkactions', {
+  FLEE_TO_SAFETY, SLEEP, GATHER_RESOURCE, HAUL_TO_DEPOSIT, SEEK_DEPOSIT, TEND_FARMPLOT,
+  IDLE_FIDGET, NOTICE_PLAYER, TAKE_COVER, ENGAGE_THREAT, ENGAGE_THREAT_VILLAGER, WANDER,
+  FOLLOW_LEADER, ASSIST_LEADER, ROAM,
+});

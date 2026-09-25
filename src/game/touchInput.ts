@@ -1,4 +1,7 @@
 'use client';
+
+import { exposeDebug } from '@/lib/debugHooks';
+
 // Touch input (mobile-friendly pass, 2026-07-20): a mutable leaf module,
 // same convention as playerState/combatState/worldEnv — TouchControls.tsx
 // (a 2D HUD overlay) writes into this every frame from touch events;
@@ -48,6 +51,4 @@ export function resetTouchState() {
   touchState.block = false;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kktouch = touchState;
-}
+exposeDebug('__kktouch', touchState);

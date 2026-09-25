@@ -11,6 +11,7 @@
 // ground genuinely faster and makes NPCs genuinely prefer it — no new pathing
 // concept was needed for the extension, only new cells.
 import { SIGNPOST } from './world';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** 256mm at the wall family's unified k=0.05 */
 export const ROAD_TILE = 12.8;
@@ -380,7 +381,5 @@ export function roadSpeedMult(x: number, z: number): number {
   return onRoad(x, z) ? ROAD_SPEED_MULT : 1;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkroadEntry = roadEntry;
-  (window as unknown as Record<string, unknown>).__kkonRoad = onRoad;
-}
+exposeDebug('__kkroadEntry', roadEntry);
+exposeDebug('__kkonRoad', onRoad);

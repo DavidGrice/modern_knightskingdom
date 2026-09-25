@@ -7,6 +7,7 @@
 import { audio } from '@/lib/audio';
 import { atGuildMaxRank, useGameStore } from './store/gameStore';
 import { callingSignature } from './data/classes';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const BITE_WINDOW = 900; // base ms to react once a fish bites
 
@@ -74,4 +75,4 @@ export function tickFishing(
   }
 }
 
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkfish = fishingState;
+exposeDebug('__kkfish', fishingState);

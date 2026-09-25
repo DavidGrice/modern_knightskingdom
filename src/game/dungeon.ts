@@ -21,6 +21,7 @@
 import { sizeFor } from './data/buildables';
 import type { EnemyKind } from './combat';
 import { mulberry32, pickWith } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** the real, authored width of one `stonewall` piece — every wall-tiling
  *  computation below derives from this, not a second hand-copied number, so
@@ -208,9 +209,7 @@ export const dungeonState: { layout: DungeonLayout | null } = { layout: null };
  *  fresh Peasant should stumble into (Knight's Arms = Knight rank) */
 export const DUNGEON_UNLOCK_QUEST = 'knights_arms';
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkdungeon = dungeonState;
-}
+exposeDebug('__kkdungeon', dungeonState);
 
 /** hard-code the dungeon origin far from anything else (see data/worlds.ts's
  *  'dungeon' WorldDestination entry, which reuses this for its own bound) */

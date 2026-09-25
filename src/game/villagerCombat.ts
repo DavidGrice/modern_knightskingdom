@@ -21,6 +21,7 @@
 
 import type { Villager } from './types';
 import { chestplateHp, CHESTPLATE_BY_TIER } from './data/armor';
+import { exposeDebug } from '@/lib/debugHooks';
 
 interface VillagerCombatState {
   hp: number;
@@ -105,6 +106,4 @@ export function resetVillagerCombat(): void {
   }
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkvillagercombat = villagerCombatState;
-}
+exposeDebug('__kkvillagercombat', villagerCombatState);

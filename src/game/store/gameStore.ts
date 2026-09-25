@@ -92,6 +92,7 @@ import { dungeonState, generateDungeonLayout, resetDungeon, DUNGEON_UNLOCK_QUEST
 import { resetArenaRun, endArenaRun, type ArenaEnvId } from '../arena';
 import { buildChallengeState, BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET } from '../buildChallenge';
 import { mulberry32, pick, randInt } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** Wave 22 · true once the player carries guildId's OWN banner and has
  *  climbed to that guild's top rank — the shared check every guild's
@@ -816,9 +817,7 @@ export function activeQuestOf(completed: string[]): Quest | null {
 export const useGameStore = createGameStore();
 
 // debug/testing handle
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kk = useGameStore;
-}
+exposeDebug('__kk', useGameStore);
 
 /** CLN-04 · the TRANSIENT half of a session start: every runtime-only field a new
  *  session (newGame / new-game-plus / loadFromSave) must not inherit. The

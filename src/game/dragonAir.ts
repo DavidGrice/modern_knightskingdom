@@ -1,6 +1,7 @@
 'use client';
+
 // Wave 57 (F5) · dragonAir/dragonAirBlack, extracted out of DragonOmen.tsx
-// into their own zero-dependency leaf module — mirrors game/defenders.ts's
+// into their own store-free leaf module — mirrors game/defenders.ts's
 // own `defenderState` pattern (a plain mutable singleton, no store, no
 // component). Needed so a plain reasoner Action (ai/actions/flee.ts) can
 // read the dragon's live hostile/position state without importing a .tsx
@@ -15,6 +16,8 @@
 // DragonOmen.tsx re-exports both from here unchanged, so nothing about its
 // own public surface changes.
 
+import { exposeDebug } from '@/lib/debugHooks';
+
 /** One dragon in the air at a time — the omen and the siege both check this.
  *  G26 · the siege also publishes WHERE it is each frame, so defenders on the
  *  ground can look up and shoot at it instead of ignoring a target simply
@@ -27,7 +30,7 @@ export const dragonAir = {
   /** the siege owns the hit count; this is how anything else lands one */
   hit: null as null | ((source: string) => void),
 };
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAir = dragonAir;
+exposeDebug('__kkdragonAir', dragonAir);
 
 /** Wave 36 (A8) · the black dragon's own mirror of dragonAir — Cedric's own
  *  beast (BlackDragonSiege.tsx) fights entirely independently of the green
@@ -40,7 +43,7 @@ export const dragonAirBlack = {
   x: 0, y: 0, z: 0,
   hit: null as null | ((source: string) => void),
 };
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkdragonAirBlack = dragonAirBlack;
+exposeDebug('__kkdragonAirBlack', dragonAirBlack);
 
 /** CLN-04 · session start. Both sieges only clear `busy`/`hostile` from their own
  *  end() callbacks; quitting to the menu mid-siege unmounts the runner without

@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { LOD, type Tier } from '../config';
 import { Agent } from './Agent';
 import { Scheduler } from './Scheduler';
+import { exposeDebug } from '@/lib/debugHooks';
 
 // Performance pass (2026-07-28): despawn() needs to tell Locomotion.ts to
 // drop its per-agent steering/anchor caches, but AgentManager.ts importing
@@ -240,7 +241,5 @@ class AgentManager {
  *  means nothing. */
 export const agentManager = new AgentManager();
 
-if (typeof window !== 'undefined') {
-  // matches the project's existing smoke-test handles (__kk, __kkp, __kke)
-  (window as unknown as Record<string, unknown>).__kkai = agentManager;
-}
+// matches the project's existing smoke-test handles (__kk, __kkp, __kke)
+exposeDebug('__kkai', agentManager);

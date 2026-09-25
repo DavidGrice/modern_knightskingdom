@@ -4,6 +4,7 @@ import LAND_TIERS_DATA from './landTiers.generated.json';
 import { shapeFor } from '../collisionShapes';
 import { brickFor, brickLabel } from './brickResources';
 import { ITEMS } from './items';
+import { exposeDebug } from '@/lib/debugHooks';
 
 // Grid pitches in meters: big structures snap to GRID, brick-scale pieces to STUD.
 export const GRID = 2;
@@ -1100,7 +1101,5 @@ export function maxHpFor(type: string): number {
 
 // debug handle: lets a smoke test compare the collision volumes against the
 // mesh that is actually drawn (see scripts/smoke123.mjs)
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkcollideFor = (type: string, rot: number) =>
-    collisionBoxesFor(type, rot);
-}
+exposeDebug('__kkcollideFor', (type: string, rot: number) =>
+  collisionBoxesFor(type, rot));

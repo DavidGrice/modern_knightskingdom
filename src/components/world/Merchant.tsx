@@ -12,6 +12,7 @@ import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { homeGroundY } from './TemplateWorld';
 import type { CharacterConfig } from '@/game/types';
 import { wrapAngle } from '@/lib/math';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const MERCHANT_CONFIG: CharacterConfig = {
   name: 'Merchant', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
@@ -164,9 +165,7 @@ export default function Merchant() {
   // how this wave's own multi-stop timing was actually verified (real
   // headless Chrome, worldEnv.time scrubbed via __kkenv, sampled against
   // this handle at each stage transition).
-  if (typeof window !== 'undefined') {
-    (window as unknown as Record<string, unknown>).__kkmerchant = state.current;
-  }
+  exposeDebug('__kkmerchant', state.current);
 
   useFrame((_, dt) => {
     const g = group.current;

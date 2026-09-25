@@ -1,4 +1,7 @@
 'use client';
+
+import { exposeDebug } from '@/lib/debugHooks';
+
 // A raider-pushed battering ram: the AI-driven counterpart to the player's
 // own pushable cart (see game/carts.ts's cartState, siege.ts's ramCheck).
 // Spawned occasionally at the start of a raid, it trundles toward the
@@ -47,4 +50,4 @@ export function damageRaiderRam(amount: number): boolean {
   return true;
 }
 
-if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__kkRam = raiderRamState;
+exposeDebug('__kkRam', raiderRamState);

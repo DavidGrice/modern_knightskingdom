@@ -1,4 +1,7 @@
 'use client';
+
+import { exposeDebug } from '@/lib/debugHooks';
+
 // I41 · Defender orders as a HOLD-TO-OPEN RADIAL.
 //
 // The old command panel was a modal. Every open exited pointer lock and every
@@ -60,6 +63,4 @@ export function steerWheel(dx: number, dy: number) {
   commandWheel.choice = Math.floor((a + seg / 2) % (Math.PI * 2) / seg) % commandWheel.count;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkwheel = commandWheel;
-}
+exposeDebug('__kkwheel', commandWheel);

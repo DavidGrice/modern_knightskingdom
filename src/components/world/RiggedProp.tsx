@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { loadRiggedProp, type RiggedProp as Rig } from '@/lib/propRig';
 import { crewState } from '@/game/crew';
 import { wrapAngle } from '@/lib/math';
+import { exposeDebug } from '@/lib/debugHooks';
 
 /** per-building fire impulses, written by the siege code, read here. A plain
  *  mutable module (the established leaf-module pattern) because the firing
@@ -30,9 +31,7 @@ export function setPropTravel(id: string, metres: number) {
   propTravel[id] = metres;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkpropfire = propFire;
-}
+exposeDebug('__kkpropfire', propFire);
 
 const THROW_ROLES = ['catapult_arm', 'thrower_arms', 'stone_thrower', 'arm'];
 const THROW_FOLLOWERS = ['catapult_bucket', 'stone', 'catapult_stone', 'projectile_stone'];

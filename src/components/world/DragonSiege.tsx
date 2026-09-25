@@ -23,6 +23,7 @@ import { ITEMS } from '@/game/data/items';
 import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 import { loadDragonRig, type DragonRig } from './DragonOmen';
 import { pick } from '@/lib/rng';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const SIEGE_SECONDS = 55;
 const BREATH_EVERY = 6;   // seconds between fire passes
@@ -266,10 +267,10 @@ export default function DragonSiege() {
 
   // test hook, same convention as the rest of window.__kk*
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).__kkSiege = {
+    exposeDebug('__kkSiege', {
       get active() { return active; },
       end: (routed: boolean) => endRef.current(routed),
-    };
+    });
   }, [active]);
 
   useFrame(() => {

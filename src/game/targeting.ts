@@ -12,6 +12,7 @@ import { hitTestCharacter, hitboxes } from './hitbox';
 import { npcMobs } from './npcMobs';
 import { villagerMobs } from './villagerMobs';
 import { defenderState } from './defenders';
+import { exposeDebug } from '@/lib/debugHooks';
 
 export type Standing = 'hostile' | 'friendly' | 'neutral';
 
@@ -158,6 +159,4 @@ export function resolveAim(
   return best;
 }
 
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__kkaim = aimState;
-}
+exposeDebug('__kkaim', aimState);
