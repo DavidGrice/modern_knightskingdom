@@ -31,6 +31,7 @@
 //   game/dungeon: __kkdungeon    game/env: __kkenv    game/fishing: __kkfish    game/hitbox: __kkhitbox
 //   game/fort: __kkfort, __kkfortCheck         game/navgrid: __kknav       game/npcMobs: __kknpcs
 //   game/perfMeter: __kkperf                   game/playerState: __kkp
+//   game/pointerLock: __kkpointerlock
 //   game/raiderLadder: __kkLadder              game/raiderRam: __kkRam
 //   game/riding: __kkr, __kkhorses, __kkstable, __kkmount
 //   game/settlementRaid: __kksettlementraid    game/siege: __kkFire, __kkExplode, __kkDetonate

@@ -11,7 +11,7 @@
 // their actionable controls are ALREADY real `<button>` elements — natively
 // Tab/Shift-Tab-focusable and Enter/Space-activatable the instant pointer
 // lock releases (PlayerController's pointer-lock effect calls
-// `document.exitPointerLock()` the moment any panel opens). That already
+// `releaseGameLock()` the moment any panel opens). That already
 // worked today, silently, just invisibly (no focus-visible ring) and
 // unreachable by a gamepad specifically, since a gamepad press synthesizes
 // no DOM event at all. So rather than a bespoke system per panel, this is one

@@ -11,7 +11,7 @@
 // no native "touch down" event once that's all that's left of the gesture,
 // so the down/up edge is hand-rolled here, once a frame, same as a gamepad
 // button would need to be. Deliberately does NOT gate on
-// document.pointerLockElement the way the mouse path's LMB branch does —
+// the pointer lock (game/pointerLock.ts) the way the mouse path's LMB branch does —
 // touch devices generally never acquire pointer lock (no click-driven lock
 // cycle, iOS Safari doesn't implement it at all), so reusing that gate would
 // silently no-op touch attacks in the default fps camera mode. Touch look
@@ -28,6 +28,7 @@ import { touchState } from '@/game/touchInput';
 import { useAppStore } from '@/game/store/appStore';
 import { noteInputDevice } from '@/game/inputMode';
 import { isRebindListening } from '@/game/data/keybinds';
+import { pointerLockActive } from '@/game/pointerLock';
 
 let attackCd = 0;
 let rangedCd = 0;
@@ -120,7 +121,7 @@ export default function CombatController() {
       if (st.paused || st.buildMode || st.panel !== 'none') return;
       if (e.button === 0) {
         // only swing when the pointer is locked (the first unlocked click locks it)
-        if (document.pointerLockElement !== el && st.cameraMode === 'fps') return;
+        if (!pointerLockActive(el) && st.cameraMode === 'fps') return;
         startAttack(st);
       } else if (e.button === 2) {
         startBlock(st);
@@ -200,7 +201,7 @@ export default function CombatController() {
     // calls too. See game/data/gamepadInput.ts for why these three indices
     // (the defaults; Wave 33 made them rebindable — see the settings read
     // below).
-    // No document.pointerLockElement check here either, for the same reason
+    // No pointerLockActive() check here either, for the same reason
     // the touch block skips it — a controller's right stick already drives
     // the camera with zero pointer-lock dependency (PlayerController's
     // pollGamepad), so gating the fire button on mouse lock would silently

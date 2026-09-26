@@ -26,7 +26,9 @@ treat both as hard requirements, not nice-to-haves.
   the top-left corner of the primary display), and/or Chrome's CDP-driven synthetic
   mouse input can still move the real system cursor even when the window itself is
   off-screen. True headless mode creates no OS-level window at all, which removes the
-  hijack risk structurally rather than just relocating it.
+  window-position and synthetic-mouse-input risks structurally rather than just relocating
+  them. It does NOT stop the game's own pointer lock from warping the real cursor — see the
+  next paragraph, which is the reason the hijack kept coming back.
 - `--mute-audio` unconditionally silences all audio output from the browser regardless
   of what the page does — required on every launch, no exceptions, so the user never
   hears sound effects/music from a background test run.
@@ -40,6 +42,28 @@ treat both as hard requirements, not nice-to-haves.
   distinct material colors (arched red doorways, tan/grey block variation), not the
   flattened single-color look SwiftShader produces. No further verification needed on
   this point for future waves on this machine.
+
+**The real cause of the "possessed mouse", and why the flags alone did not stop it
+(found 2026-09-25 by sampling the OS cursor while a `--headless=new` run was live):** it
+was the *game's own pointer lock*. Chrome implements `requestPointerLock()` by warping the
+real cursor to the window centre and, on `exitPointerLock()`, back again — and on Windows a
+headless or off-screen window still does that. The game asks for the lock on every canvas
+click and every time a panel closes, so any test that clicked the world or opened/closed
+panels made the cursor bounce between two points. That is fixed in the game itself now:
+`src/game/pointerLock.ts` is the only place that calls the real API, and when the browser
+is judged automated it hands out a *virtual* lock instead — same `pointerlockchange`, same
+mouse-look and attack gating, no OS cursor movement. "Automated" is `navigator.webdriver`
+being true (every plain `chromium.launch()` script) or a `HeadlessChrome` user agent, **but
+`webdriver` is false on Playwright's own CLI / `@playwright/mcp` browser (it launches with
+`--disable-blink-features=AutomationControlled`), with stealth plugins, and when attached
+to a manually started Chrome over CDP — those runs MUST load the game as
+`http://localhost:<port>/?pointerlock=virtual`** (remembered for the tab; `?pointerlock=real`
+does the opposite, for a human hand-playing in an automated window). Rules for test
+authors: **never call `requestPointerLock`/`exitPointerLock` yourself, and do not assert on
+`document.pointerLockElement`** (always null under automation) — read
+`window.__kkpointerlock.active` (and `.automated`) instead. Keep using the flags above
+regardless; this is defence in depth. (Note this removes the cursor warp only; a headed
+window can still take focus.)
 
 **If headless truly cannot render what a specific check needs** (last resort only,
 and say so explicitly in your own report rather than silently downgrading): a headed,

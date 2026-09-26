@@ -10814,3 +10814,47 @@ equip tile, Satchel grid, TalentTree nodes, 2 perk-choice rows); `src/components
 (the 2 region-header toggles); `src/components/hud/EmoteWheel.tsx` (the emote icon grid);
 `src/components/hud/NpcEquipPanel.tsx` (the helmet + chestplate-tier equip tiles; a `toggleChestplate`
 helper pulled out so `onClick`/`onKeyDown` share one implementation).
+
+## Bugfix: test browsers hijacked the developer's real mouse pointer (pointer lock) — SHIPPED 2026-09-25
+
+**Report**: "these tests keep moving my mouse around the screen." Despite CLAUDE.md's mandatory
+`--headless=new --use-angle=d3d11 --mute-audio`, automated runs still dragged the real OS cursor.
+
+**Root cause** (measured, not guessed): sampling `GetCursorPos` at 25 Hz during a live `--headless=new`
+run showed the cursor alternating between exactly two points — the developer's resting position and the
+centre of the test window — 20 times in 25 s. That is Chrome's pointer-lock implementation (warp the
+cursor to the window centre on lock, warp it back on release), which still runs against the hidden
+window of a headless/off-screen Chrome on Windows. `PlayerController.tsx` requests the lock on every
+canvas click and re-requests it 120 ms after every panel close, and releases it whenever a panel opens
+or the game pauses, so any script that clicked the world or cycled panels produced the bounce. It also
+explains the older "cursor snaps to the top-left corner" reports from the off-screen-window era: the
+centre of a window parked at -32000,-32000 is far off-screen, so Windows clamped the warped cursor to
+the corner. Of the 337 local `scripts/` that launch Chrome, 278 use `headless: true` (new headless on
+the installed Chrome 153) and 59 are headed; all were exposed, independent of flags.
+
+**Fix**: `src/game/pointerLock.ts` is now the only caller of `requestPointerLock`/`exitPointerLock`.
+When the browser is judged automated — a `?pointerlock=virtual|real` URL flag first (sticky for the tab
+in sessionStorage), else `navigator.webdriver === true` or a `HeadlessChrome` user agent — it keeps a
+*virtual* lock instead: same `pointerlockchange` event, same `locked` ref in `PlayerController`, same fps
+attack gate in `CombatController`, so scripted play behaves as before while the game's pointer lock no
+longer warps the OS cursor. A real player's path is the original code verbatim. The explicit flag exists
+because an independent review found `navigator.webdriver` is false on Playwright's own CLI/MCP browser
+(`--disable-blink-features=AutomationControlled`), under stealth plugins, and over a CDP attach — those
+runs must load the game with `?pointerlock=virtual`. `window.__kkpointerlock` (`{ automated, active }`)
+is the test handle, since `document.pointerLockElement` is always null under automation. `CLAUDE.md`
+documents all of this; `CLEANUP_PLAN.md` CLN-26 now says the extracted `usePointerLock` must keep
+routing through this module.
+
+**Evidence**: scripted scenario (boot, canvas click, 12 panel open/close cycles with clicks) against a
+pristine-main build and the fix, with the lock API stubbed so nothing could reach the real cursor: main
+issues 9 `requestPointerLock` / 8 `exitPointerLock`; the fix issues 0 / 0 under automation with identical
+mouse-look (yaw delta -0.22) and attack-gate results (closed before the first click, open after), and
+9 / 8 with automation detection overridden off — the real-player path is unchanged. Real, unstubbed
+headless and headed off-screen runs of the fix with the OS cursor sampled showed no bounce signature
+(no fixed point revisited; every recorded position distinct) — the developer was moving their own mouse
+during the runs, so the judgement is by pattern, not "zero movement". The old code was deliberately NOT
+re-run with the real lock, to avoid hijacking the developer's mouse again.
+
+**Not done, deliberately**: the 59 headed legacy scripts still open real off-screen windows, which can
+take focus even though the cursor no longer moves; nothing enforces "only `pointerLock.ts` calls the
+real API" (a CI grep guard was considered and left out to avoid touching CI in a bugfix).
