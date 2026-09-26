@@ -52,6 +52,7 @@ import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine, manEngine } from '@/game/crew';
 import { commandWheel, steerWheel } from '@/game/commandWheel';
+import { pointerLockActive, releaseGameLock, requestGameLock } from '@/game/pointerLock';
 import { exposeDebug } from '@/lib/debugHooks';
 
 interface Target {
@@ -471,25 +472,23 @@ export default function PlayerController() {
     };
     const tryLock = () => {
       if (retry) { clearTimeout(retry); retry = null; }
-      if (!wantsLock() || document.pointerLockElement === el) return;
+      if (!wantsLock() || pointerLockActive(el)) return;
       // NEVER take the pointer while the player is somewhere else. The first
       // cut of this retried on a timer, on pointerlockerror and on window
       // focus, which meant clicking into another window — a browser tab, a
       // chat — handed the pointer straight back to the game and trapped it
       // there. Wanting the lock is not the same as being entitled to it.
       if (!document.hasFocus()) return;
+      // (game/pointerLock.ts: a browser under automation gets a virtual lock, never the real one)
       try {
-        const r = el.requestPointerLock() as unknown as Promise<void> | undefined;
-        // a rejection is the browser's post-Esc cooldown; let it go rather
-        // than hammering, the next click will do it
-        if (r && typeof r.catch === 'function') r.catch(() => {});
+        requestGameLock(el);
       } catch { /* the next click will do it */ }
     };
     lockRef.current = tryLock;
 
     const onClick = () => tryLock();
     const onLockChange = () => {
-      locked.current = document.pointerLockElement === el;
+      locked.current = pointerLockActive(el);
       // deliberately nothing here. Losing the pointer is often the player
       // LEAVING — alt-tab, a click into another window — and grabbing it
       // back is the behaviour that made the game feel like it would not let
@@ -517,7 +516,7 @@ export default function PlayerController() {
       document.removeEventListener('pointerlockchange', onLockChange);
       document.removeEventListener('mousemove', onMove);
       lockCleanup.current?.();
-      if (document.pointerLockElement === el) document.exitPointerLock();
+      if (pointerLockActive(el)) releaseGameLock();
     };
   }, [gl]);
 
@@ -528,7 +527,7 @@ export default function PlayerController() {
     let blocked = false;
     const unsub = useGameStore.subscribe((st) => {
       const nowBlocked = st.paused || st.panel !== 'none' || st.buildMode;
-      if (nowBlocked && document.pointerLockElement) document.exitPointerLock();
+      if (nowBlocked) releaseGameLock();
       if (blocked && !nowBlocked) {
         // Closing a panel is the one transition the game itself drives, so it
         // is the one place worth asking unprompted — once, and only if the
