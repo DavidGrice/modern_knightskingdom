@@ -1,11 +1,11 @@
 'use client';
 import { useGameStore } from '@/game/store/gameStore';
 import { ITEMS } from '@/game/data/items';
-import { sideQuestOffers, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
 import { CHALLENGES, challengeProgress } from '@/game/data/challenges';
 import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE } from '@/game/data/guilds';
-import type { ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
+import PopupFrame from './PopupFrame';
+import SideQuestBoard from './shared/SideQuestBoard';
 
 // Guild hall (Phase 21): shown at the hall of whichever guild lives in the
 // current instance. Join gated on the matching Challenge tier; changing an
@@ -50,8 +50,7 @@ export default function GuildPanel() {
   const atMax = rankIdx >= guildMaxRank(g);
   const gold = inventory.gold ?? 0;
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(560px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(560px, 94vw)">
       <h2><Ico e={g.icon} /> {g.name}</h2>
       <div style={{ fontSize: 15, lineHeight: 1.6, marginBottom: 14, fontStyle: 'italic', color: 'var(--parchment-dark)' }}>
         “{g.blurb}”
@@ -136,7 +135,7 @@ export default function GuildPanel() {
       <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
         Leave the hall
       </button>
-    </div>
+    </PopupFrame>
   );
 }
 
@@ -146,81 +145,10 @@ export default function GuildPanel() {
 // abandonSideQuest plumbing (guildId stands in for an NpcDef id throughout,
 // exactly like 'cedric' already does).
 function GuildErrands({ guildId }: { guildId: string }) {
-  const sideQuest = useGameStore((s) => s.sideQuest);
-  const completedQuests = useGameStore((s) => s.completedQuests);
-  const completedSideQuests = useGameStore((s) => s.completedSideQuests);
-  const allegiance = useGameStore((s) => s.allegiance);
-  const alliance = useGameStore((s) => s.alliance);
-  const acceptSideQuest = useGameStore((s) => s.acceptSideQuest);
-  const turnInSideQuest = useGameStore((s) => s.turnInSideQuest);
-  const abandonSideQuest = useGameStore((s) => s.abandonSideQuest);
-
-  const pool = sideQuestsOf(guildId);
-  // Wave 55 (F1) · same fix as ParleyPanel's Cedric branch just above — this
-  // rotation never got Wave 26's "skip already-completed" fix either, so
-  // every one of the 5 guild boards could silently re-offer (and no-op
-  // Accept on) an already-finished errand. `sideQuestOffers` also surfaces
-  // every guild's real choice menu, though today each guild's 3 original
-  // quests plus F2's new 5-quest arc are all `requires`-chained, so exactly
-  // one is ever unblocked at once — the capability is real, the content
-  // just isn't parallel here yet.
-  const offers = sideQuestOffers(guildId, completedSideQuests, completedQuests, allegiance, alliance);
-  const mine = sideQuest?.npcId === guildId ? sideQuest : null;
-  const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
-  const rewardText = (def: SideQuestDef) =>
-    [
-      `${def.xp} ${def.xpSkill} XP`,
-      ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
-    ].join(' · ');
-
   return (
     <>
       <div className="creator-section" style={{ marginTop: 16 }}>Guild Work</div>
-      {mine && mineDef && (
-        <div className="quest-item">
-          <div className="q-name">{mineDef.label}</div>
-          <div className="q-desc">Progress: {mine.have}/{mineDef.need} · Reward: {rewardText(mineDef)}</div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button
-              className="menu-btn small"
-              style={{ margin: 0 }}
-              disabled={mine.have < mineDef.need}
-              onClick={turnInSideQuest}
-            >
-              {mine.have >= mineDef.need ? 'Turn In' : 'Not finished yet'}
-            </button>
-            <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
-              Abandon
-            </button>
-          </div>
-        </div>
-      )}
-      {!sideQuest && offers.length > 0 && (
-        <>
-          {offers.length > 1 && (
-            <div style={{ fontSize: 12, color: 'var(--parchment-dark)', fontStyle: 'italic', marginBottom: 4 }}>
-              {offers.length} errands available — choose one:
-            </div>
-          )}
-          {offers.map((offer) => (
-            <div className="quest-item" key={offer.id}>
-              <div className="q-name">{offer.label}</div>
-              <div className="q-desc">Reward: {rewardText(offer)}</div>
-              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest(guildId, offer.id)}>
-                Take the Job
-              </button>
-            </div>
-          ))}
-        </>
-      )}
-      {sideQuest && sideQuest.npcId !== guildId && (
-        <div style={{ fontSize: 13, color: 'var(--parchment-dark)' }}>
-          You already carry an errand for someone else. Finish it first.
-        </div>
-      )}
-      {offers.length === 0 && !mine && (
-        <div className="loading-note">Nothing to ask of you right now.</div>
-      )}
+      <SideQuestBoard giverId={guildId} offersLine="errands available — choose one:" emptyNote="Nothing to ask of you right now." />
     </>
   );
 }

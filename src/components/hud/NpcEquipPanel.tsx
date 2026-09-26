@@ -9,7 +9,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
-import MenuTabs from './MenuTabs';
 import RotatablePreview from '../character/RotatablePreview';
 import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate, WornCarrier } from '../character/Equipment';
 import { CHESTPLATES, chestplateTierOf } from '@/game/data/armor';
@@ -22,6 +21,7 @@ import { onKeyActivate } from '../ui/a11yClick';
 import type { CharacterConfig, ItemId, Villager } from '@/game/types';
 import { ArmorySection } from './shared/ArmorySection';
 import { SLOT_ITEM, SLOT_ICON, SLOT_LABEL, type GearSlot } from './shared/gearSlots';
+import PanelFrame from './PanelFrame';
 
 /** kept as a named re-export: several panels already import this name, and it
  *  now just defers to the shared derived-plus-override look */
@@ -125,7 +125,6 @@ function AppearanceSection({ villager }: { villager: Villager }) {
 }
 
 export default function NpcEquipPanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const villagerId = useGameStore((s) => s.equippingVillagerId);
   const villagers = useGameStore((s) => s.villagers);
   const armory = useGameStore((s) => s.armory);
@@ -139,14 +138,9 @@ export default function NpcEquipPanel() {
 
   if (!villager) {
     return (
-      <div className="game-panel clickable menu-family">
-        <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-        <MenuTabs />
-        <h2>Equip Villager</h2>
-        <div className="panel-scroll">
-          <div className="loading-note">That villager is no longer with the homestead.</div>
-        </div>
-      </div>
+      <PanelFrame title="Equip Villager">
+        <div className="loading-note">That villager is no longer with the homestead.</div>
+      </PanelFrame>
     );
   }
 
@@ -195,11 +189,7 @@ export default function NpcEquipPanel() {
   }
 
   return (
-    <div className="game-panel clickable menu-family">
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <MenuTabs />
-      <h2>Equip {villager.name}</h2>
-      <div className="panel-scroll">
+    <PanelFrame title={<>Equip {villager.name}</>}>
       <div className="equip-layout">
         <RotatablePreview
           config={config}
@@ -292,7 +282,6 @@ export default function NpcEquipPanel() {
       </div>
       <AppearanceSection villager={villager} />
       <ArmorySection />
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

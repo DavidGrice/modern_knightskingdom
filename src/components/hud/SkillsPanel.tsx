@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { SKILLS, levelFromXp, perkSlotsEarned, xpForLevel } from '@/game/data/ranks';
 import { DEEDS } from '@/game/data/achievements';
@@ -8,6 +7,7 @@ import { TALENTS, talentPointsEarned, talentPointsSpent, talentBuyable, talentRe
 import { PLAYER_ATTRS, ATTR_POINT_EVERY, attrPointsEarned, attrPointsSpent, respecCost } from '@/game/data/playerAttributes';
 import Ico from '../ui/Ico';
 import { onKeyActivate } from '../ui/a11yClick';
+import RespecButton from './shared/RespecButton';
 import PanelFrame from './PanelFrame';
 
 // The Talent Tree (Phase 21): seven skill branches, four tiers each as of
@@ -20,14 +20,10 @@ function TalentTree() {
   const buyTalent = useGameStore((s) => s.buyTalent);
   const respecTalents = useGameStore((s) => s.respecTalents);
   const gold = useGameStore((s) => s.inventory.gold ?? 0);
-  // Wave 32 · same two-click arm/confirm pattern as AttributesSection's respec
-  // button — local state on purpose, it resets the moment the panel closes.
-  const [arming, setArming] = useState(false);
   const earned = talentPointsEarned(xp);
   const spent = talentPointsSpent(skillTree);
   const unspent = earned - spent;
   const respecGold = talentRespecCost(spent);
-  const canRespec = spent > 0 && gold >= respecGold;
   return (
     <>
       <div className="creator-section" style={{ marginTop: 16 }}>
@@ -78,35 +74,7 @@ function TalentTree() {
           </div>
         ))}
       </div>
-      {spent > 0 && (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            className="menu-btn small"
-            style={{
-              margin: 0, width: 'auto', padding: '5px 12px',
-              opacity: canRespec ? 1 : 0.45,
-              borderColor: arming ? 'var(--gold)' : undefined,
-              color: arming ? 'var(--gold)' : undefined,
-            }}
-            disabled={!canRespec}
-            title={`Hands all ${spent} learned talent point${spent > 1 ? 's' : ''} back so you can spend them differently. Costs ${respecGold} gold (you have ${gold}).`}
-            onClick={() => {
-              if (!arming) { setArming(true); return; }
-              setArming(false);
-              respecTalents();
-            }}
-          >
-            {arming ? `✓ Confirm — ${respecGold} gold` : `↺ Rethink your training — ${respecGold} gold`}
-          </button>
-          <span style={{ fontSize: 11.5, color: 'var(--parchment-dark)' }}>
-            {arming
-              ? 'Click again to take all your talent points back.'
-              : gold >= respecGold
-                ? `Returns all ${spent} learned point${spent > 1 ? 's' : ''} to the pool.`
-                : `You need ${respecGold - gold} more gold.`}
-          </span>
-        </div>
-      )}
+      <RespecButton spent={spent} cost={respecGold} gold={gold} onRespec={respecTalents} label="training" titleNoun="learned talent point" poolNoun="learned point" armedNoun="talent points" />
     </>
   );
 }
@@ -119,18 +87,11 @@ function AttributesSection() {
   const spendAttrPoint = useGameStore((s) => s.spendAttrPoint);
   const respecAttributes = useGameStore((s) => s.respecAttributes);
   const gold = useGameStore((s) => s.inventory.gold ?? 0);
-  // Wave 9 · a respec is irreversible spending, and this codebase has exactly
-  // one confirmation precedent (a bare window.confirm in MainMenu) — rather
-  // than reach for a browser dialog inside the game HUD, the button arms
-  // itself on the first click and commits on the second, then disarms. Local
-  // state on purpose: it must reset the moment the panel closes.
-  const [arming, setArming] = useState(false);
   const totalLevel = SKILLS.reduce((t, s) => t + levelFromXp(xp[s.id]), 0);
   const earned = attrPointsEarned(totalLevel);
   const spent = attrPointsSpent(attrSpent);
   const free = earned - spent;
   const cost = respecCost(spent);
-  const canRespec = spent > 0 && gold >= cost;
   return (
     <>
       <div className="creator-section" style={{ marginTop: 16 }}>
@@ -165,35 +126,7 @@ function AttributesSection() {
           );
         })}
       </div>
-      {spent > 0 && (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            className="menu-btn small"
-            style={{
-              margin: 0, width: 'auto', padding: '5px 12px',
-              opacity: canRespec ? 1 : 0.45,
-              borderColor: arming ? 'var(--gold)' : undefined,
-              color: arming ? 'var(--gold)' : undefined,
-            }}
-            disabled={!canRespec}
-            title={`Hands all ${spent} invested point${spent > 1 ? 's' : ''} back so you can spend them differently. Costs ${cost} gold (you have ${gold}).`}
-            onClick={() => {
-              if (!arming) { setArming(true); return; }
-              setArming(false);
-              respecAttributes();
-            }}
-          >
-            {arming ? `✓ Confirm — ${cost} gold` : `↺ Rethink your nature — ${cost} gold`}
-          </button>
-          <span style={{ fontSize: 11.5, color: 'var(--parchment-dark)' }}>
-            {arming
-              ? 'Click again to take all your points back.'
-              : gold >= cost
-                ? `Returns all ${spent} invested point${spent > 1 ? 's' : ''} to the pool.`
-                : `You need ${cost - gold} more gold.`}
-          </span>
-        </div>
-      )}
+      <RespecButton spent={spent} cost={cost} gold={gold} onRespec={respecAttributes} label="nature" titleNoun="invested point" poolNoun="invested point" armedNoun="points" />
     </>
   );
 }

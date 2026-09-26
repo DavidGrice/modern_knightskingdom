@@ -5,7 +5,7 @@
 // side-quest offer / progress / turn-in, and the main quest hint from Leo.
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
-import { NPC_BY_ID, sideQuestOffers, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
+import { NPC_BY_ID, sideQuestOffers, sideQuestsOf } from '@/game/data/npcs';
 import { SETTLEMENT_FOUNDING } from '@/game/data/settlementQuests';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_MARKUP, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
@@ -20,6 +20,8 @@ import { playerState } from '@/game/playerState';
 import { sampleTemplateGroundY } from '../world/TemplateWorld';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { pick } from '@/lib/rng';
+import PopupFrame from './PopupFrame';
+import { rewardText } from './shared/SideQuestBoard';
 
 export default function DialoguePanel() {
   const npcId = useGameStore((s) => s.dialogueNpc);
@@ -141,11 +143,6 @@ export default function DialoguePanel() {
     || (activeDef?.kind === 'deliver' && activeDef.deliverTo === npc.world)
   ) ? sideQuest : null;
   const mySideDef = mySideQuest ? activeDef : null;
-  const rewardText = (def: SideQuestDef) =>
-    [
-      `${def.xp} ${def.xpSkill} XP`,
-      ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
-    ].join(' · ');
 
   const challengeStorm = () => {
     if (useEnemyStore.getState().enemies.some((e) => e.kind === 'storm')) {
@@ -163,8 +160,7 @@ export default function DialoguePanel() {
   };
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(520px, 94vw)">
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 12 }}>
         <img
           src={npc.portrait}
@@ -579,6 +575,6 @@ export default function DialoguePanel() {
           </button>
         </>
       )}
-    </div>
+    </PopupFrame>
   );
 }

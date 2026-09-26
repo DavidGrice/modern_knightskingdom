@@ -8,9 +8,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { mountOf, stabledHorses } from '@/game/riding';
 import { defenderOrders, orderFor } from '@/game/defenders';
 import { DEFENDER_ORDERS, setDefenderOrder } from '@/game/data/defenderOrders';
-import MenuTabs from './MenuTabs';
-import { CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, JOBS, LOADOUT_REQUIRES, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
-import { ITEMS } from '@/game/data/items';
+import { CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, JOBS, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
 import { ATTRS, attrsOf, carryCapacityOf, tradeLevelOf } from '@/game/data/attributes';
 import { CHESTPLATES, CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
 import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/data/companionTraits';
@@ -18,12 +16,15 @@ import { TAM_TITLE } from '@/game/data/companion';
 import { ArmorySection } from './shared/ArmorySection';
 import { levelFromXp, xpForLevel } from '@/game/data/ranks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
-import type { DefenderLoadout, ItemId, Villager, VillagerJob } from '@/game/types';
+import type { DefenderLoadout, Villager, VillagerJob } from '@/game/types';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { MERCHANT_CAMP_STATION } from '@/game/data/trade';
 import { villagerConfig } from '@/game/data/villagerLooks';
 import { PortraitFactory, usePortrait } from '../character/VillagerPortrait';
 import Ico from '../ui/Ico';
+import PanelFrame from './PanelFrame';
+import ChoiceChip from './shared/ChoiceChip';
+import LoadoutRow from './shared/LoadoutRow';
 
 /** the roster's own real-face portrait (2026-07-30), falling back to the old
  *  job emoji for the brief window before a look's thumbnail finishes baking */
@@ -50,7 +51,6 @@ export default function VillagersPanel() {
   // same manual repaint nudge.
   const [, setOrderTick] = useState(0);
   const bumpOrders = () => setOrderTick((n) => n + 1);
-  const setPanel = useGameStore((s) => s.setPanel);
   const villagers = useGameStore((s) => s.villagers);
   const villagerProgress = useGameStore((s) => s.villagerProgress);
   const assignJob = useGameStore((s) => s.assignJob);
@@ -95,12 +95,7 @@ export default function VillagersPanel() {
     : [];
 
   return (
-    <div className="game-panel clickable menu-family">
-      <PortraitFactory />
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <MenuTabs />
-      <h2>Homestead Roster</h2>
-      <div className="panel-scroll">
+    <PanelFrame title="Homestead Roster" lead={<PortraitFactory />}>
       {villagers.length > 0 && (
         <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginBottom: 10, fontStyle: 'italic' }}>
           Folk keep workaday hours — labor and building pause overnight (8 PM – 5 AM) and pick back up at dawn.
@@ -195,20 +190,16 @@ export default function VillagersPanel() {
                         const has = hasTrait(v, t.id);
                         const pickable = !has && owned < slots;
                         return (
-                          <button
+                          <ChoiceChip
                             key={t.id}
-                            className="menu-btn small"
                             title={`${t.name} — ${t.desc}`}
-                            style={{
-                              margin: 0, width: 'auto', padding: '5px 10px',
-                              opacity: has ? 1 : pickable ? 0.85 : 0.4,
-                              borderColor: has ? 'var(--gold)' : undefined,
-                              color: has ? 'var(--gold)' : undefined,
-                            }}
+                            opacity={has ? 1 : pickable ? 0.85 : 0.4}
+                            selected={has}
+                            color={has ? 'var(--gold)' : undefined}
                             onClick={() => { if (pickable) chooseTrait(v.id, t.id); }}
                           >
                             <Ico e={t.icon} /> {t.name}
-                          </button>
+                          </ChoiceChip>
                         );
                       })}
                     </div>
@@ -231,54 +222,42 @@ export default function VillagersPanel() {
                 Carrier — carries <b style={{ color: 'var(--gold)' }}>{carryCapacityOf(v, v.job, allBuildings)}</b> per trip
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                <button
-                  className="menu-btn small"
-                  style={{
-                    margin: 0, width: 'auto', padding: '5px 10px',
-                    opacity: !v.gear?.carrier ? 1 : 0.65,
-                    borderColor: !v.gear?.carrier ? 'var(--gold)' : undefined,
-                  }}
+                <ChoiceChip
+                  opacity={!v.gear?.carrier ? 1 : 0.65}
+                  selected={!v.gear?.carrier}
                   onClick={() => unequipVillagerCarrier(v.id)}
                   title="Bare-handed — returns any carrier to the Armory"
                 >
                   🤲 Bare Arms
-                </button>
+                </ChoiceChip>
                 {CARRIERS.map((c) => {
                   const item = CARRIER_ITEM[c.id];
                   const worn = v.gear?.carrier === c.id;
                   const stock = armory[item] ?? 0;
                   return (
-                    <button
+                    <ChoiceChip
                       key={c.id}
-                      className="menu-btn small"
                       disabled={!worn && stock <= 0}
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: worn ? 1 : stock > 0 ? 0.85 : 0.4,
-                        borderColor: worn ? 'var(--gold)' : undefined,
-                      }}
+                      opacity={worn ? 1 : stock > 0 ? 0.85 : 0.4}
+                      selected={worn}
                       onClick={() => equipVillagerCarrier(v.id, c.id)}
                       title={worn ? `Worn — ${c.blurb} (return it with Bare Arms)` : `${c.blurb} · ${stock} in the Armory`}
                     >
                       {worn || stock > 0 ? c.icon : '🔒'} {c.label}
-                    </button>
+                    </ChoiceChip>
                   );
                 })}
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                 {JOBS.map((j) => (
-                  <button
+                  <ChoiceChip
                     key={j.id}
-                    className="menu-btn small"
-                    style={{
-                      margin: 0, width: 'auto', padding: '5px 10px',
-                      opacity: v.job === j.id ? 1 : 0.65,
-                      borderColor: v.job === j.id ? 'var(--gold)' : undefined,
-                    }}
+                    opacity={v.job === j.id ? 1 : 0.65}
+                    selected={v.job === j.id}
                     onClick={() => assignJob(v.id, j.id as VillagerJob)}
                   >
                     <Ico e={j.icon} /> {j.label}
-                  </button>
+                  </ChoiceChip>
                 ))}
               </div>
               {v.job === 'defender' && (
@@ -298,97 +277,55 @@ export default function VillagersPanel() {
                     {DEFENDER_ORDERS.map((o) => {
                       const active = orderFor(v.id) === o.id;
                       return (
-                        <button
+                        <ChoiceChip
                           key={o.id}
-                          className="menu-btn small"
-                          style={{
-                            margin: 0, width: 'auto', padding: '5px 10px',
-                            opacity: active ? 1 : 0.65,
-                            borderColor: active ? 'var(--gold)' : undefined,
-                          }}
+                          opacity={active ? 1 : 0.65}
+                          selected={active}
                           onClick={() => { setDefenderOrder(v.id, o.id); bumpOrders(); }}
                           title={o.desc}
                         >
                           <Ico e={o.icon} /> {o.label}
-                        </button>
+                        </ChoiceChip>
                       );
                     })}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
                     Loadout — weapons spend Armory stock; unarmed hits noticeably softer
                   </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                    <button
-                      className="menu-btn small"
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: !v.loadout ? 1 : 0.65,
-                        borderColor: !v.loadout ? 'var(--gold)' : undefined,
-                      }}
-                      onClick={() => unequipDefenderLoadout(v.id)}
-                      title="Bare-handed — returns any equipped weapon to the Armory"
-                    >
-                      ✋ Bare-handed
-                    </button>
-                    {DEFENDER_LOADOUTS.map((lo) => {
-                      const owned = v.loadout === lo.id;
-                      const need = LOADOUT_REQUIRES[lo.id];
-                      const afford = Object.entries(need).every(([id, n]) => (armory[id as ItemId] ?? 0) >= (n as number));
-                      const costLine = Object.entries(need).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`).join(' + ');
-                      const stockLine = Object.entries(need).map(([id]) => `${armory[id as ItemId] ?? 0} in Armory`).join(', ');
-                      return (
-                        <button
-                          key={lo.id}
-                          className="menu-btn small"
-                          disabled={!owned && !afford}
-                          style={{
-                            margin: 0, width: 'auto', padding: '5px 10px',
-                            opacity: owned ? 1 : afford ? 0.85 : 0.4,
-                            borderColor: owned ? 'var(--gold)' : undefined,
-                          }}
-                          onClick={() => setDefenderLoadout(v.id, lo.id as DefenderLoadout)}
-                          title={owned ? `Equipped — costs ${costLine} (return to Armory via Bare-handed)` : `Costs ${costLine} (${stockLine})`}
-                        >
-                          {afford || owned ? lo.icon : '🔒'} {lo.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <LoadoutRow
+                    current={v.loadout}
+                    loadouts={DEFENDER_LOADOUTS}
+                    armory={armory}
+                    onBare={() => unequipDefenderLoadout(v.id)}
+                    onPick={(id) => setDefenderLoadout(v.id, id)}
+                  />
                   {/* G27 · a stabled horse turns a defender into a mounted
                       patrol — nearly twice the ground covered */}
                   <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
                     Mount {stabledHorses.ids.length === 0 ? '— catch a horse and walk it to a Stable first' : ''}
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                    <button
-                      className="menu-btn small"
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: mountOf(v.id) ? 0.65 : 1,
-                        borderColor: mountOf(v.id) ? undefined : 'var(--gold)',
-                      }}
+                    <ChoiceChip
+                      opacity={mountOf(v.id) ? 0.65 : 1}
+                      selected={!mountOf(v.id)}
                       onClick={() => { delete stabledHorses.assigned[v.id]; bumpMounts(); }}
                     >
                       On Foot
-                    </button>
+                    </ChoiceChip>
                     {stabledHorses.ids.map((hid, i) => {
                       const takenBy = Object.entries(stabledHorses.assigned)
                         .find(([who, h]) => h === hid && who !== v.id);
                       return (
-                        <button
+                        <ChoiceChip
                           key={hid}
-                          className="menu-btn small"
                           disabled={!!takenBy}
                           title={takenBy ? 'Already ridden by another defender' : 'Assign this horse'}
-                          style={{
-                            margin: 0, width: 'auto', padding: '5px 10px',
-                            opacity: mountOf(v.id) === hid ? 1 : takenBy ? 0.4 : 0.65,
-                            borderColor: mountOf(v.id) === hid ? 'var(--gold)' : undefined,
-                          }}
+                          opacity={mountOf(v.id) === hid ? 1 : takenBy ? 0.4 : 0.65}
+                          selected={mountOf(v.id) === hid}
                           onClick={() => { stabledHorses.assigned[v.id] = hid; bumpMounts(); }}
                         >
                           Horse {i + 1}
-                        </button>
+                        </ChoiceChip>
                       );
                     })}
                   </div>
@@ -396,57 +333,41 @@ export default function VillagersPanel() {
                     Station {v.loadout === 'bow' ? '(a tower gives archers real cover)' : ''}
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                    <button
-                      className="menu-btn small"
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: !v.stationId ? 1 : 0.65,
-                        borderColor: !v.stationId ? 'var(--gold)' : undefined,
-                      }}
+                    <ChoiceChip
+                      opacity={!v.stationId ? 1 : 0.65}
+                      selected={!v.stationId}
                       onClick={() => stationDefender(v.id, null)}
                     >
                       🏠 Patrol Home
-                    </button>
-                    <button
-                      className="menu-btn small"
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: v.stationId === MERCHANT_CAMP_STATION ? 1 : 0.65,
-                        borderColor: v.stationId === MERCHANT_CAMP_STATION ? 'var(--gold)' : undefined,
-                      }}
+                    </ChoiceChip>
+                    <ChoiceChip
+                      opacity={v.stationId === MERCHANT_CAMP_STATION ? 1 : 0.65}
+                      selected={v.stationId === MERCHANT_CAMP_STATION}
                       onClick={() => stationDefender(v.id, MERCHANT_CAMP_STATION)}
                     >
                       🏪 Merchant Camp
-                    </button>
+                    </ChoiceChip>
                     {towers.map((t, i) => (
-                      <button
+                      <ChoiceChip
                         key={t.id}
-                        className="menu-btn small"
-                        style={{
-                          margin: 0, width: 'auto', padding: '5px 10px',
-                          opacity: v.stationId === t.id ? 1 : 0.65,
-                          borderColor: v.stationId === t.id ? 'var(--gold)' : undefined,
-                        }}
+                        opacity={v.stationId === t.id ? 1 : 0.65}
+                        selected={v.stationId === t.id}
                         onClick={() => stationDefender(v.id, t.id)}
                       >
                         🗼 Tower {i + 1}
-                      </button>
+                      </ChoiceChip>
                     ))}
                     {keepWalls.map((s) => {
                       const stationId = `keep:${s.id}`;
                       return (
-                        <button
+                        <ChoiceChip
                           key={stationId}
-                          className="menu-btn small"
-                          style={{
-                            margin: 0, width: 'auto', padding: '5px 10px',
-                            opacity: v.stationId === stationId ? 1 : 0.65,
-                            borderColor: v.stationId === stationId ? 'var(--gold)' : undefined,
-                          }}
+                          opacity={v.stationId === stationId ? 1 : 0.65}
+                          selected={v.stationId === stationId}
                           onClick={() => stationDefender(v.id, stationId)}
                         >
                           🏰 {s.name}
-                        </button>
+                        </ChoiceChip>
                       );
                     })}
                     {towers.length === 0 && keepWalls.length === 0 && (
@@ -461,30 +382,22 @@ export default function VillagersPanel() {
                     Shift
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                    <button
-                      className="menu-btn small"
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: (v.shift ?? 'night') === 'night' ? 1 : 0.65,
-                        borderColor: (v.shift ?? 'night') === 'night' ? 'var(--gold)' : undefined,
-                      }}
+                    <ChoiceChip
+                      opacity={(v.shift ?? 'night') === 'night' ? 1 : 0.65}
+                      selected={(v.shift ?? 'night') === 'night'}
                       onClick={() => setDefenderShift(v.id, 'night')}
                       title="Stands watch after dusk, rests by day — when raiders and skeletons come"
                     >
                       🌙 Night Watch
-                    </button>
-                    <button
-                      className="menu-btn small"
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: v.shift === 'day' ? 1 : 0.65,
-                        borderColor: v.shift === 'day' ? 'var(--gold)' : undefined,
-                      }}
+                    </ChoiceChip>
+                    <ChoiceChip
+                      opacity={v.shift === 'day' ? 1 : 0.65}
+                      selected={v.shift === 'day'}
                       onClick={() => setDefenderShift(v.id, 'day')}
                       title="Stands watch by day, rests after dusk"
                     >
                       ☀️ Day Watch
-                    </button>
+                    </ChoiceChip>
                   </div>
                 </>
               )}
@@ -541,35 +454,27 @@ export default function VillagersPanel() {
                 Helmet — same shared Armory pool as the Roster
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                <button
-                  className="menu-btn small"
-                  style={{
-                    margin: 0, width: 'auto', padding: '5px 10px',
-                    opacity: !companion.gear?.helmet ? 1 : 0.65,
-                    borderColor: !companion.gear?.helmet ? 'var(--gold)' : undefined,
-                  }}
+                <ChoiceChip
+                  opacity={!companion.gear?.helmet ? 1 : 0.65}
+                  selected={!companion.gear?.helmet}
                   onClick={unequipCompanionHelmet}
                   title="Bare-headed — returns any helmet to the Armory"
                 >
                   🤲 Bare-headed
-                </button>
+                </ChoiceChip>
                 {(() => {
                   const stock = armory.helmet ?? 0;
                   const worn = !!companion.gear?.helmet;
                   return (
-                    <button
-                      className="menu-btn small"
+                    <ChoiceChip
                       disabled={!worn && stock <= 0}
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: worn ? 1 : stock > 0 ? 0.85 : 0.4,
-                        borderColor: worn ? 'var(--gold)' : undefined,
-                      }}
+                      opacity={worn ? 1 : stock > 0 ? 0.85 : 0.4}
+                      selected={worn}
                       onClick={equipCompanionHelmet}
                       title={worn ? 'Worn — return it with Bare-headed' : `${stock} in the Armory`}
                     >
                       {worn || stock > 0 ? '🪖' : '🔒'} Helmet
-                    </button>
+                    </ChoiceChip>
                   );
                 })()}
               </div>
@@ -577,85 +482,46 @@ export default function VillagersPanel() {
                 Chestplate
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                <button
-                  className="menu-btn small"
-                  style={{
-                    margin: 0, width: 'auto', padding: '5px 10px',
-                    opacity: !chestTier ? 1 : 0.65,
-                    borderColor: !chestTier ? 'var(--gold)' : undefined,
-                  }}
+                <ChoiceChip
+                  opacity={!chestTier ? 1 : 0.65}
+                  selected={!chestTier}
                   onClick={unequipCompanionChestplate}
                   title="Bare-chested — returns any plate to the Armory"
                 >
                   🤲 Bare-chested
-                </button>
+                </ChoiceChip>
                 {CHESTPLATES.map((c) => {
                   const worn = chestTier === c.id;
                   const stock = armory[c.item] ?? 0;
                   return (
-                    <button
+                    <ChoiceChip
                       key={c.id}
-                      className="menu-btn small"
                       disabled={!worn && stock <= 0}
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: worn ? 1 : stock > 0 ? 0.85 : 0.4,
-                        borderColor: worn ? 'var(--gold)' : undefined,
-                      }}
+                      opacity={worn ? 1 : stock > 0 ? 0.85 : 0.4}
+                      selected={worn}
                       onClick={() => equipCompanionChestplate(c.id)}
                       title={worn ? `Worn — ${c.blurb} (return it with Bare-chested)` : `${c.blurb} · ${stock} in the Armory`}
                     >
                       {worn || stock > 0 ? c.icon : '🔒'} {c.label}
-                    </button>
+                    </ChoiceChip>
                   );
                 })}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>
                 Loadout — weapons spend Armory stock; no bow (Tam fights melee-only)
               </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                <button
-                  className="menu-btn small"
-                  style={{
-                    margin: 0, width: 'auto', padding: '5px 10px',
-                    opacity: !companion.loadout ? 1 : 0.65,
-                    borderColor: !companion.loadout ? 'var(--gold)' : undefined,
-                  }}
-                  onClick={unequipCompanionLoadout}
-                  title="Bare-handed — returns any equipped weapon to the Armory"
-                >
-                  ✋ Bare-handed
-                </button>
-                {meleeLoadouts.map((lo) => {
-                  const owned = companion.loadout === lo.id;
-                  const need = LOADOUT_REQUIRES[lo.id];
-                  const afford = Object.entries(need).every(([id, n]) => (armory[id as ItemId] ?? 0) >= (n as number));
-                  const costLine = Object.entries(need).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`).join(' + ');
-                  const stockLine = Object.entries(need).map(([id]) => `${armory[id as ItemId] ?? 0} in Armory`).join(', ');
-                  return (
-                    <button
-                      key={lo.id}
-                      className="menu-btn small"
-                      disabled={!owned && !afford}
-                      style={{
-                        margin: 0, width: 'auto', padding: '5px 10px',
-                        opacity: owned ? 1 : afford ? 0.85 : 0.4,
-                        borderColor: owned ? 'var(--gold)' : undefined,
-                      }}
-                      onClick={() => setCompanionLoadout(lo.id as Exclude<DefenderLoadout, 'bow'>)}
-                      title={owned ? `Equipped — costs ${costLine} (return to Armory via Bare-handed)` : `Costs ${costLine} (${stockLine})`}
-                    >
-                      {afford || owned ? lo.icon : '🔒'} {lo.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <LoadoutRow
+                current={companion.loadout}
+                loadouts={meleeLoadouts}
+                armory={armory}
+                onBare={unequipCompanionLoadout}
+                onPick={(id) => setCompanionLoadout(id as Exclude<DefenderLoadout, 'bow'>)}
+              />
             </div>
           </div>
         );
       })()}
       <ArmorySection />
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

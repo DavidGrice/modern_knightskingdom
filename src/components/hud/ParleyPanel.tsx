@@ -1,10 +1,9 @@
 'use client';
 import { useGameStore } from '@/game/store/gameStore';
-import { ITEMS } from '@/game/data/items';
 import { cedricFinalStandReady, startCedricDuel } from '@/game/cedricSiege';
 import { audio } from '@/lib/audio';
-import { sideQuestOffers, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
-import type { ItemId } from '@/game/types';
+import PopupFrame from './PopupFrame';
+import SideQuestBoard from './shared/SideQuestBoard';
 
 // Phase 19 alliance branch: parley at Cedric's camp for an unsworn knight —
 // the one place the "bad" pledge is offered. Cedric isn't an NpcDef (he's an
@@ -30,83 +29,17 @@ export default function ParleyPanel() {
   // instead of the recruitment pitch — the same sideQuest machinery every
   // court NPC uses, with Cedric's own quest pool (sideQuestsOf('cedric'))
   const alliance = useGameStore((s) => s.alliance);
-  const sideQuest = useGameStore((s) => s.sideQuest);
-  const completedQuests = useGameStore((s) => s.completedQuests);
-  const completedSideQuests = useGameStore((s) => s.completedSideQuests);
-  const allegiance = useGameStore((s) => s.allegiance);
-  const acceptSideQuest = useGameStore((s) => s.acceptSideQuest);
-  const turnInSideQuest = useGameStore((s) => s.turnInSideQuest);
-  const abandonSideQuest = useGameStore((s) => s.abandonSideQuest);
   const betrayCedric = useGameStore((s) => s.betrayCedric);
   const betrayLeo = useGameStore((s) => s.betrayLeo);
   if (alliance === 'cedric') {
-    const pool = sideQuestsOf('cedric');
-    // Wave 55 (F1) · used to rotate a single candidate the same way
-    // DialoguePanel's old `offer` did, and — unlike DialoguePanel — never
-    // got Wave 26's "skip already-completed" fix, so the rotation could
-    // land back on a finished quest and Take the Job would silently no-op
-    // against acceptSideQuest's own completedSideQuests guard.
-    // `sideQuestOffers` (npcs.ts) fixes that by construction and surfaces
-    // every simultaneously-unblocked quest (Cedric's own 3 are independent,
-    // not chained) as a real choice menu instead of one at a time.
-    const offers = sideQuestOffers('cedric', completedSideQuests, completedQuests, allegiance, 'cedric');
-    const mine = sideQuest?.npcId === 'cedric' ? sideQuest : null;
-    const mineDef = mine ? pool.find((q) => q.id === mine.questId) : null;
-    const rewardText = (def: SideQuestDef) =>
-      [
-        `${def.xp} ${def.xpSkill} XP`,
-        ...Object.entries(def.rewardItems ?? {}).map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`),
-      ].join(' · ');
     return (
-      <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
-        <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+      <PopupFrame minWidth="min(520px, 94vw)">
         <h2>War Council</h2>
         <div style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 14 }}>
           “Ah, my favorite turncoat. The crown bleeds a little more every day — and you&apos;re
           going to open the vein. What do you have for me?”
         </div>
-        {mine && mineDef && (
-          <div className="quest-item">
-            <div className="q-name">🐂 {mineDef.label}</div>
-            <div className="q-desc">Progress: {mine.have}/{mineDef.need} · Reward: {rewardText(mineDef)}</div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button
-                className="menu-btn small"
-                style={{ margin: 0 }}
-                disabled={mine.have < mineDef.need}
-                onClick={turnInSideQuest}
-              >
-                {mine.have >= mineDef.need ? 'Turn In' : 'Not finished yet'}
-              </button>
-              <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
-                Abandon
-              </button>
-            </div>
-          </div>
-        )}
-        {!sideQuest && offers.length > 0 && (
-          <>
-            {offers.length > 1 && (
-              <div style={{ fontSize: 12, color: 'var(--parchment-dark)', fontStyle: 'italic', marginBottom: 4 }}>
-                {offers.length} jobs on offer — choose one:
-              </div>
-            )}
-            {offers.map((offer) => (
-              <div className="quest-item" key={offer.id}>
-                <div className="q-name">⚔ {offer.label}</div>
-                <div className="q-desc">Reward: {rewardText(offer)}</div>
-                <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest('cedric', offer.id)}>
-                  Take the Job
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-        {sideQuest && sideQuest.npcId !== 'cedric' && (
-          <div style={{ fontSize: 13, color: 'var(--parchment-dark)' }}>
-            You already carry an errand for someone else. Finish it first.
-          </div>
-        )}
+        <SideQuestBoard giverId="cedric" mineIcon="🐂 " offerIcon="⚔ " offersLine="jobs on offer — choose one:" />
         {/* Wave 13 turncoat bones: the one deliberate exception to the
             one-way pledge — see gameStore's betrayCedric for why this is
             permanent and one-directional. */}
@@ -127,7 +60,7 @@ export default function ParleyPanel() {
         <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
           Leave the council
         </button>
-      </div>
+      </PopupFrame>
     );
   }
   // Wave 56 (F4): a Leo-sworn knight gets a distinct parley of his own — not
@@ -138,8 +71,7 @@ export default function ParleyPanel() {
   // `if (st.alliance) return;` guard).
   if (alliance === 'leo') {
     return (
-      <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
-        <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+      <PopupFrame minWidth="min(520px, 94vw)">
         <h2>Cedric the Bull</h2>
         <div style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 14 }}>
           “Still wearing that gilded fool&apos;s colors? I&apos;ve seen knights choke on their own
@@ -179,12 +111,11 @@ export default function ParleyPanel() {
         <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
           Walk away
         </button>
-      </div>
+      </PopupFrame>
     );
   }
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(520px, 94vw)">
       <h2>Cedric the Bull</h2>
       <div style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 14 }}>
         “Well, well — Leo&apos;s newest little knight, alone in my woods. You&apos;ve got iron in you,
@@ -223,6 +154,6 @@ export default function ParleyPanel() {
       <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
         Walk away
       </button>
-    </div>
+    </PopupFrame>
   );
 }
