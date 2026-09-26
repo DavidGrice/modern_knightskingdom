@@ -15,7 +15,7 @@ import { ATTRS, attrsOf, carryCapacityOf, tradeLevelOf } from '@/game/data/attri
 import { CHESTPLATES, CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
 import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/data/companionTraits';
 import { TAM_TITLE } from '@/game/data/companion';
-import { ArmorySection } from './NpcEquipPanel';
+import { ArmorySection } from './shared/ArmorySection';
 import { levelFromXp, xpForLevel } from '@/game/data/ranks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { DefenderLoadout, ItemId, Villager, VillagerJob } from '@/game/types';
