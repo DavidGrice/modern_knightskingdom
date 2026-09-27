@@ -25,6 +25,7 @@ import { loadPalette } from '@/lib/minifig';
 import RotatablePreview from '../character/RotatablePreview';
 import KkIcon from '../ui/KkIcon';
 import type { CharacterConfig, DifficultyId } from '@/game/types';
+import { ScreenHead, ScreenActions } from './ScreenShell';
 
 const CALLING_ICON: Record<string, string> = {
   wanderer: 'k-boot', woodsman: 'k-axe', quarryman: 'k-pick', angler: 'k-fish',
@@ -159,15 +160,12 @@ export default function CharacterCreator() {
   return (
     <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
-        <div className="kk-screen-head">
-          <h2>{ngPlus ? 'A NEW LEGEND' : 'FORGE YOUR HERO'}</h2>
-          <span className="rule" />
-          <span className="hint">
-            {ngPlus
-              ? 'Your skill and talents carry forward — the realm itself begins anew'
-              : 'Appearance never affects rank — that is earned in the world'}
-          </span>
-        </div>
+        <ScreenHead
+          title={ngPlus ? 'A NEW LEGEND' : 'FORGE YOUR HERO'}
+          hint={ngPlus
+            ? 'Your skill and talents carry forward — the realm itself begins anew'
+            : 'Appearance never affects rank — that is earned in the world'}
+        />
 
         <div className="kk-forge-body">
           <div className="kk-forge-doll">
@@ -284,12 +282,12 @@ export default function CharacterCreator() {
           </div>
         </div>
 
-        <div className="kk-screen-actions">
+        <ScreenActions>
           <button className="kk-btn-wide" onClick={begin}>
             <KkIcon name="k-swords" size={17} /> Take up the road
           </button>
           <button className="kk-btn-quiet" onClick={pop}>Back</button>
-        </div>
+        </ScreenActions>
       </div>
     </div>
   );

@@ -64,6 +64,7 @@ function BarChart({ bars }: { bars: { label: string; icon: string; value: number
 
 export default function StatsStack() {
   const pop = useAppStore((s) => s.pop);
+  const uiTheme = useAppStore((s) => s.settings.uiTheme);
   const stats = useGameStore((s) => s.stats);
   const character = useGameStore((s) => s.character);
 
@@ -77,54 +78,69 @@ export default function StatsStack() {
     label, icon: '⚔️', value: stats.killsByKind[kind] ?? 0,
   }));
 
+  // CLN-31 · migrated onto the same kk-screen/kk-screen-pad shell every
+  // sibling stack screen already uses, so this picks up uiTheme lane
+  // theming (background/vignette) for the first time -- a deliberate,
+  // visible fix, not a bug (see CLEANUP_PLAN.md's CLN-31 entry). The inner
+  // width:460 wrapper replaces `.panel`'s own inline `style={{width:460}}`
+  // one level in -- kk-screen-pad alone is `flex:0 1 min(1120px,100%)`, and
+  // dropping the width cap entirely would stretch every StatRow's
+  // label/value apart across ~1120px, a bigger change than asked for.
+  // kk-screen-scroll replaces `.panel`'s own `overflow:auto;max-height:90vh`
+  // (the same modifier CreditsStack/CharacterCreator already use for the
+  // same reason) so the long content (2 bar charts + N challenge rows)
+  // still scrolls. `.opt-row`/`.skill-row`/`.game-title` are unscoped
+  // selectors, so they render identically under the new parent.
   return (
-    <div className="stack-screen">
-      <div className="panel" style={{ width: 460 }}>
-        <h1 className="game-title" style={{ fontSize: 30 }}>Chronicle of Deeds</h1>
-        <p style={{ textAlign: 'center', opacity: 0.7, marginTop: -8 }}>
-          {character?.name ?? 'Your'}&apos;s lifetime record
-        </p>
+    <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
+      <div className="kk-screen-pad">
+        <div style={{ width: 460, margin: '0 auto' }}>
+          <h1 className="game-title" style={{ fontSize: 30 }}>Chronicle of Deeds</h1>
+          <p style={{ textAlign: 'center', opacity: 0.7, marginTop: -8 }}>
+            {character?.name ?? 'Your'}&apos;s lifetime record
+          </p>
 
-        <div className="creator-section">Life on the Homestead</div>
-        <StatRow icon="⏱" label="Time Played" value={formatPlaytime(stats.playtimeSec)} />
-        <StatRow icon="🥾" label="Distance Traveled" value={formatDistance(stats.distanceMeters)} />
-        <StatRow icon="🧱" label="Buildings Placed" value={String(stats.buildingsPlaced)} />
-        <StatRow icon="🪵" label="Resources Gathered" value={String(stats.resourcesGathered)} />
-        <StatRow icon="⚔️" label="Enemies Defeated" value={String(stats.kills)} />
-        <StatRow icon="🗝️" label="Crypts Cleared" value={String(stats.dungeonsCleared)} />
-        <StatRow icon="🔨" label="Items Crafted" value={String(stats.itemsCrafted)} />
-        <StatRow icon="💰" label="Gold Earned (lifetime)" value={String(stats.goldEarnedLifetime)} />
+          <div className="creator-section">Life on the Homestead</div>
+          <StatRow icon="⏱" label="Time Played" value={formatPlaytime(stats.playtimeSec)} />
+          <StatRow icon="🥾" label="Distance Traveled" value={formatDistance(stats.distanceMeters)} />
+          <StatRow icon="🧱" label="Buildings Placed" value={String(stats.buildingsPlaced)} />
+          <StatRow icon="🪵" label="Resources Gathered" value={String(stats.resourcesGathered)} />
+          <StatRow icon="⚔️" label="Enemies Defeated" value={String(stats.kills)} />
+          <StatRow icon="🗝️" label="Crypts Cleared" value={String(stats.dungeonsCleared)} />
+          <StatRow icon="🔨" label="Items Crafted" value={String(stats.itemsCrafted)} />
+          <StatRow icon="💰" label="Gold Earned (lifetime)" value={String(stats.goldEarnedLifetime)} />
 
-        <div className="creator-section" style={{ marginTop: 16 }}>Resources Harvested</div>
-        <BarChart bars={harvestBars} />
+          <div className="creator-section" style={{ marginTop: 16 }}>Resources Harvested</div>
+          <BarChart bars={harvestBars} />
 
-        <div className="creator-section" style={{ marginTop: 16 }}>Foes Defeated</div>
-        <BarChart bars={killBars} />
+          <div className="creator-section" style={{ marginTop: 16 }}>Foes Defeated</div>
+          <BarChart bars={killBars} />
 
-        <div className="creator-section" style={{ marginTop: 16 }}>Challenges</div>
-        {CHALLENGES.map((c) => {
-          const { value, tierIndex, next, prevThreshold } = challengeProgress(c, stats);
-          const current = tierIndex >= 0 ? c.tiers[tierIndex].label : null;
-          const span = next ? next.threshold - prevThreshold : 1;
-          const pct = next ? Math.min(100, Math.round(((value - prevThreshold) / span) * 100)) : 100;
-          return (
-            <div className="skill-row" key={c.id}>
-              <div className="s-ico"><Ico e={c.icon} /></div>
-              <div className="s-body">
-                <div className="s-name">
-                  {current ?? c.name} <span>{value} {c.unit}</span>
+          <div className="creator-section" style={{ marginTop: 16 }}>Challenges</div>
+          {CHALLENGES.map((c) => {
+            const { value, tierIndex, next, prevThreshold } = challengeProgress(c, stats);
+            const current = tierIndex >= 0 ? c.tiers[tierIndex].label : null;
+            const span = next ? next.threshold - prevThreshold : 1;
+            const pct = next ? Math.min(100, Math.round(((value - prevThreshold) / span) * 100)) : 100;
+            return (
+              <div className="skill-row" key={c.id}>
+                <div className="s-ico"><Ico e={c.icon} /></div>
+                <div className="s-body">
+                  <div className="s-name">
+                    {current ?? c.name} <span>{value} {c.unit}</span>
+                  </div>
+                  {next ? (
+                    <div className="xpbar"><div style={{ width: `${pct}%` }} /></div>
+                  ) : (
+                    <div className="s-locked">All tiers complete!</div>
+                  )}
                 </div>
-                {next ? (
-                  <div className="xpbar"><div style={{ width: `${pct}%` }} /></div>
-                ) : (
-                  <div className="s-locked">All tiers complete!</div>
-                )}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        <button className="menu-btn" onClick={pop} style={{ marginTop: 22 }}>Back</button>
+          <button className="menu-btn" onClick={pop} style={{ marginTop: 22 }}>Back</button>
+        </div>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import { KEYBIND_GROUPS, codeLabel, rebindState } from '@/game/data/keybinds';
 import { GAMEPAD_ACTION_GROUPS, RESERVED_GAMEPAD_BUTTONS, gamepadButtonLabel, type GamepadAction } from '@/game/data/gamepadInput';
 import { GRAPHICS_PROFILES, GRAPHICS_QUALITY_LIST } from '@/game/graphicsProfiles';
 import { AA_MODES } from '@/game/aaModes';
+import { ScreenHead, ScreenActions } from './ScreenShell';
 
 const ANISOTROPY_LEVELS: { value: number; label: string }[] = [
   { value: 1, label: 'Off' },
@@ -197,11 +198,7 @@ export default function OptionsStack() {
   return (
     <div className={`kk-screen kk-screen-${settings.uiTheme}`}>
       <div className="kk-screen-pad">
-        <div className="kk-screen-head">
-          <h2>OPTIONS</h2>
-          <span className="rule" />
-          <span className="hint">Esc to close</span>
-        </div>
+        <ScreenHead title="OPTIONS" hint="Esc to close" />
 
         <div className="kk-opt-tabs">
           {TABS.map((t) => (
@@ -383,9 +380,9 @@ export default function OptionsStack() {
           )}
         </div>
 
-        <div className="kk-screen-actions">
+        <ScreenActions>
           <button className="kk-btn-quiet" onClick={pop} style={{ marginLeft: 'auto' }}>Back</button>
-        </div>
+        </ScreenActions>
       </div>
     </div>
   );
