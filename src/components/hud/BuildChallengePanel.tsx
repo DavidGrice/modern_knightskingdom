@@ -5,12 +5,13 @@
 // already gates its own button (only shown at the right destination, hidden
 // while paused/building/a panel is open) since this is the same kind of
 // "standalone HUD prompt, not the hold-E interaction system" affordance.
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import {
   buildChallengeState, startBuildChallenge,
   BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET, BUILD_CHALLENGE_TIME_MS,
 } from '@/game/buildChallenge';
+import { useRafPoll } from './useRafPoll';
 
 export default function BuildChallengePanel() {
   const destination = useGameStore((s) => s.destination);
@@ -23,18 +24,7 @@ export default function BuildChallengePanel() {
   // pattern as dungeonState/fishingState) — poll it on a rAF throttle the
   // same way DungeonStatus.tsx already does for its own non-reactive read.
   const [, setTick] = useState(0);
-  const last = useRef(0);
-  useEffect(() => {
-    let raf = 0;
-    const loop = (now: number) => {
-      raf = requestAnimationFrame(loop);
-      if (now - last.current < 100) return;
-      last.current = now;
-      setTick((n) => n + 1);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  useRafPoll(100, () => setTick((n) => n + 1));
 
   if (destination !== BUILD_CHALLENGE_ID || paused || buildMode || panel !== 'none') return null;
   // ClaimBanner.tsx already owns "claim this ground" at this exact screen

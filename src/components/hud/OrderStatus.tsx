@@ -5,29 +5,18 @@
 // (a `kk-clock kk-glass` chip in the top-right cluster, polled at a 500ms
 // throttle against a mutable leaf module, hidden via early-return when it
 // has nothing worth saying).
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { defenderOrders, orderFor } from '@/game/defenders';
 import { DEFENDER_ORDERS } from '@/game/data/defenderOrders';
 import Ico from '../ui/Ico';
+import { useRafPoll } from './useRafPoll';
 
 export default function OrderStatus() {
   const destination = useGameStore((s) => s.destination);
   const villagers = useGameStore((s) => s.villagers);
   const [, setTick] = useState(0);
-  const last = useRef(0);
-
-  useEffect(() => {
-    let raf = 0;
-    const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
-      if (now - last.current < 500) return;
-      last.current = now;
-      setTick((n) => n + 1);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  useRafPoll(500, () => setTick((n) => n + 1));
 
   const defenders = villagers.filter((v) => v.job === 'defender');
   // away from the homestead, or nobody sworn to defend it — nothing to report
