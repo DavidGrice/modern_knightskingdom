@@ -826,6 +826,18 @@ interface CostBillLine {
   qty: number;
 }
 
+/** CLN-31 · costBill()'s param, widened structurally so KeepSocketPanel's
+ *  KeepPart (game/data/keep.ts — same `cost: Partial<Record<ItemId,number>>`
+ *  shape, no `pieces` field at all) can call it too instead of re-deriving
+ *  its own copy of the fallback branch below. A KeepPart can never take the
+ *  `.pieces` branch — it has no such field — so it is structurally, not just
+ *  today, always the fallback-bricks branch. `Buildable` and `KeepPart` both
+ *  satisfy this interface as-is; no change needed at either. */
+interface CostBillSource {
+  cost: Partial<Record<ItemId, number>>;
+  pieces?: { id: string; qty: number }[];
+}
+
 /**
  * Wave 29 · the cost as an actual bill of distinct catalogue pieces when a
  * buildable hand-authors one (`Buildable.pieces` — see that field's own doc
@@ -837,7 +849,7 @@ interface CostBillLine {
  * family totals, unchanged — this never changes what a piece costs, only how
  * the cost READS.
  */
-export function costBill(def: Buildable): CostBillLine[] {
+export function costBill(def: CostBillSource): CostBillLine[] {
   if (def.pieces && def.pieces.length) {
     return def.pieces.map((p) => {
       const piece = BUILDABLE_BY_ID[p.id];
