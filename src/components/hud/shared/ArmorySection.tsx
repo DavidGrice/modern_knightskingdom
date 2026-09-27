@@ -18,13 +18,13 @@ const WEAPON_ITEMS: { item: ItemId; icon: string; label: string }[] = [
 ];
 
 /** The Armory: shared homestead gear stock, drag source for the paperdoll
- *  below and a one-click way to move spare gear over from the Satchel. */
+ *  (InventoryPanel.tsx's EquipmentSection) and a one-click way to move spare gear over from the Satchel. */
 export function ArmorySection() {
   const armory = useGameStore((s) => s.armory);
   const inventory = useGameStore((s) => s.inventory);
   const donateToArmory = useGameStore((s) => s.donateToArmory);
   // Wave 9 · the helm, then the three plate tiers. All four stay draggable
-  // onto the paperdoll below; a plate tile carries its OWN item id, so
+  // onto the paperdoll (InventoryPanel.tsx's EquipmentSection); a plate tile carries its OWN item id, so
   // dragging the Forged Plate over puts the forged one on and hands whatever
   // they were wearing back to the Armory.
   const armorTiles: { item: ItemId; icon: string; label: string }[] = [

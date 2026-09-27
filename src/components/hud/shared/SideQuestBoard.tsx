@@ -1,7 +1,10 @@
 'use client';
 // The "active errand / offers / blocked" board: Cedric's war council (ParleyPanel) and every guild hall's Guild Work
 // (GuildPanel) render the same three states off the same sideQuest machinery — `giverId` stands in for an NpcDef id
-// (a guild id, or 'cedric'). The icon/label props only carry each call site's own wording.
+// (a guild id, or 'cedric'). The icon/label props only carry each call site's own wording — the two callers'
+// quest pools differ in shape, not in this board's logic: Cedric's 3 quests are independent (any can offer at
+// once), while a guild's are `requires`-chained (`sideQuestOffers` only ever unblocks one at a time today) — the
+// choice-menu capability here is real for both, the guild content just isn't parallel yet.
 import { useGameStore } from '@/game/store/gameStore';
 import { ITEMS } from '@/game/data/items';
 import { sideQuestOffers, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
