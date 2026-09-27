@@ -11,6 +11,7 @@ import { RECIPES, repairCostFor, STATION_LABELS, UNLOCK_HINTS } from '@/game/dat
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
+import PopupFrame from './PopupFrame';
 
 const STATION_ICON: Record<'workbench' | 'forge' | 'campfire', string> = {
   workbench: '🔨', forge: '🏭', campfire: '🔥',
@@ -32,11 +33,10 @@ export default function StationMenuPanel() {
 
   if (!activeStation) {
     return (
-      <div className="game-panel clickable" style={{ minWidth: 'min(420px, 94vw)' }}>
-        <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+      <PopupFrame minWidth="min(420px, 94vw)">
         <h2>Station</h2>
         <div className="loading-note">You've stepped away from it.</div>
-      </div>
+      </PopupFrame>
     );
   }
 
@@ -47,8 +47,7 @@ export default function StationMenuPanel() {
     : [];
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(460px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(460px, 94vw)">
       <h2><Ico e={STATION_ICON[activeStation]} size={22} /> {STATION_LABELS[activeStation]}</h2>
       {!atStation && <div className="loading-note">You've stepped away — browsing only for now.</div>}
       {wornTools.length > 0 && (
@@ -104,6 +103,6 @@ export default function StationMenuPanel() {
       >
         <Ico e="🔨" /> Open full Crafting book
       </button>
-    </div>
+    </PopupFrame>
   );
 }

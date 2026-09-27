@@ -21,11 +21,10 @@ import { swatchIndices } from '@/game/data/dyes';
 import { loadPalette } from '@/lib/minifig';
 import RotatablePreview from '../character/RotatablePreview';
 import KkIcon from '../ui/KkIcon';
-import MenuTabs from './MenuTabs';
+import PanelFrame from './PanelFrame';
 import DyeRack from './DyeRack';
 
 export default function AppearancePanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const character = useGameStore((s) => s.character);
   const setCharacter = useGameStore((s) => s.setCharacter);
   // Wave 9 · the free swatches PLUS whatever dye rows this save has opened
@@ -76,11 +75,7 @@ export default function AppearancePanel() {
   );
 
   return (
-    <div className="game-panel clickable menu-family">
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <MenuTabs />
-      <h2>Appearance</h2>
-      <div className="panel-scroll">
+    <PanelFrame title="Appearance">
         <div className="equip-layout" style={{ marginBottom: 18 }}>
           <RotatablePreview
             config={character}
@@ -139,7 +134,6 @@ export default function AppearancePanel() {
           Your crest badge, first-person sleeves and the portrait up in the corner all
           follow these straight away. Rank is earned in the world — nothing here touches it.
         </div>
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

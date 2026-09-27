@@ -11,6 +11,7 @@ import { KEEP_PART_BY_ID, SOCKET_BY_ID, partsFor } from '@/game/data/keep';
 import { brickFor, brickLabel } from '@/game/data/brickResources';
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
+import PopupFrame from './PopupFrame';
 
 export default function KeepSocketPanel() {
   const keep = useGameStore((s) => s.keep);
@@ -19,14 +20,12 @@ export default function KeepSocketPanel() {
   const raise = useGameStore((s) => s.raiseKeepPart);
   const socket = socketId ? SOCKET_BY_ID[socketId] : null;
 
-  const setPanel = useGameStore((s) => s.setPanel);
   if (!keep || !socket) return null;
   const standing = keep.parts[socket.id];
   const built = keep.built[socket.id] ?? 0;
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(460px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(460px, 94vw)">
       <h2>{socket.name}</h2>
       {standing ? (
         <div className="keep-standing">
@@ -85,6 +84,6 @@ export default function KeepSocketPanel() {
           </div>
         </>
       )}
-    </div>
+    </PopupFrame>
   );
 }

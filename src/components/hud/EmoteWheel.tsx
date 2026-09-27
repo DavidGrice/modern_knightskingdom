@@ -4,13 +4,12 @@ import { useGameStore } from '@/game/store/gameStore';
 import { EMOTES } from '@/lib/minifigRig';
 import Ico from '../ui/Ico';
 import { onKeyActivate } from '../ui/a11yClick';
+import PopupFrame from './PopupFrame';
 
 export default function EmoteWheel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const playEmote = useGameStore((s) => s.playEmote);
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(380px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(380px, 94vw)">
       <h2>Emotes</h2>
       <div className="inv-grid emote-grid">
         {EMOTES.map((e) => (
@@ -32,6 +31,6 @@ export default function EmoteWheel() {
       <div style={{ fontSize: 12.5, color: '#a89468', marginTop: 10 }}>
         Emotes play in third-person view (V toggles it any time).
       </div>
-    </div>
+    </PopupFrame>
   );
 }
