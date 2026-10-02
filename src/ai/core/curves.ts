@@ -35,8 +35,15 @@ export function evalCurve(c: Curve, x: number): number {
   switch (c.type) {
     case 'linear':
       return clamp01(c.m * (xc - c.c) + c.b);
-    case 'quadratic':
-      return clamp01(c.m * Math.pow(xc - c.c, c.k) + c.b);
+    case 'quadratic': {
+      // NaN guard, same reasoning as logit's below: Math.pow of a negative
+      // base with a non-integer exponent is NaN (so is 0 * Infinity), and
+      // NaN passes straight through clamp01. Unreachable by today's content
+      // (every authored quadratic has c: 0, so the base is never negative) —
+      // found by CLN-02's curves.test.ts property test.
+      const v = c.m * Math.pow(xc - c.c, c.k) + c.b;
+      return Number.isNaN(v) ? 0 : clamp01(v);
+    }
     case 'logistic':
       return clamp01(c.m / (1 + Math.exp(-10 * c.k * (xc - 0.5 - c.c))) + c.b);
     case 'logit': {
