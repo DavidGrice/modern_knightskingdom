@@ -47,7 +47,7 @@ interface Settings {
    *  preset — see aaModes.ts and PostProcessing.tsx. */
   aaMode: AaMode;
   /** 1/2/4/8/16 — capped against the real device's own max at the point it's
-   *  applied (Terrain.tsx/KeepAssembly.tsx), so a value beyond hardware
+   *  applied (HomeMeadowWater.tsx/KeepAssembly.tsx), so a value beyond hardware
    *  support harmlessly clamps rather than erroring. */
   anisotropy: number;
   /** fog/shadow-reach multiplier read by DayNight.tsx, 1 = today's exact
@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS: Settings = {
   // 'off' — a genuinely optional upgrade. Must not change any existing
   // player's rendering or frame rate the moment this ships.
   aaMode: 'off',
-  // matches the most common hardcoded value already in use (Terrain.tsx) —
+  // matches the most common hardcoded value already in use (the home meadow) —
   // no visible change for anyone until they actually open this setting
   anisotropy: 8,
   viewDistance: 1,

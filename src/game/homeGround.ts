@@ -29,7 +29,7 @@ import * as THREE from 'three';
 import { regionAt } from './data/terrainRegions';
 import { raycastGroundY } from './templateGround';
 
-// Terrain.tsx hands its raised-terrain surface group over here on mount, and
+// TerrainRegions.tsx hands its raised-terrain surface group over here on mount, and
 // takes it back on unmount — same "register the geometry, then everyone
 // raycasts it" contract TemplateWorld.tsx's own mountedRoot has always had.
 const homeGroundRoot: { current: THREE.Object3D | null } = { current: null };

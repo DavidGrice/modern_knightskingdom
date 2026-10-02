@@ -1,7 +1,7 @@
 'use client';
 // Wave 33: KTX2/Basis Universal texture support, shared by every useGLTF()
 // call site (InstancedProps.tsx, PropModel.tsx, TemplateWorld.tsx,
-// Terrain.tsx). Registers a KTX2Loader on the GLTFLoader drei's useGLTF()
+// HomeMeadowWater.tsx). Registers a KTX2Loader on the GLTFLoader drei's useGLTF()
 // constructs, using this GPU's actual detected compressed-texture support
 // (KTX2Loader.detectSupport(gl) — a KTX2 texture transcodes to whichever of
 // S3TC/ETC/PVRTC/ASTC the real device supports, decided at runtime, so this

@@ -2,7 +2,8 @@
 import { Suspense } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
-import Terrain, { GameSky } from './Terrain';
+import Terrain from './Terrain';
+import { GameSky } from './Sky';
 import DayNight from './DayNight';
 import PostProcessing from './PostProcessing';
 import FpsMeter from './FpsMeter';
@@ -60,7 +61,7 @@ export default function GameWorld() {
   const buildMode = useGameStore((s) => s.buildMode);
   // requested 2026-08-04: the skybox used to be one hardcoded 'grass' bake
   // rendered behind every destination, including the "icy mountain pass"
-  // template — see Terrain.tsx's SKY_VARIANTS for the fix itself.
+  // template — see Sky.tsx's SKY_VARIANTS for the fix itself.
   const destination = useGameStore((s) => s.destination);
   const skyVariant = (destination && WORLD_DESTINATION_BY_ID[destination]?.sky) || 'grass';
 

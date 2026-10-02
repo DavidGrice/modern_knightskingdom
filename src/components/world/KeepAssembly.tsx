@@ -24,7 +24,7 @@ function Foundation() {
   const tex = useTexture(PLATE_TEX);
   const { gl } = useThree();
   // Requested 2026-07-31: a real Options setting (Settings.anisotropy,
-  // default 8) instead of a bare literal — see Terrain.tsx for the same
+  // default 8) instead of a bare literal — see HomeMeadowWater.tsx for the same
   // change against its own hardcoded sites.
   const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
   useMemo(() => {

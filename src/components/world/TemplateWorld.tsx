@@ -27,7 +27,7 @@
 // (TemplatePopulation.tsx's `Grounded` reads height from a LIVE raycast
 // against whatever bake actually rendered, never the stored population Y) —
 // only X/Z placement matters there, and a pure Y-mirror never touches those.
-// template-09 (HomeMeadow, Terrain.tsx) is NOT flipped: it's a separate,
+// template-09 (HomeMeadow, HomeMeadowWater.tsx) is NOT flipped: it's a separate,
 // already-verified call site, and its own bbox is near-flat (~±1 raw unit)
 // where a flip would be visually meaningless anyway — left alone rather
 // than risk its already-tuned 'origin' groundAnchor logic for zero benefit.
@@ -43,7 +43,7 @@ import { arenaState } from '@/game/arena';
 // Wave 31 hotfix · homeGroundY/registerHomeGroundRoot moved to their own leaf
 // module (src/game/homeGround.ts) — see that file's header for why. Imported
 // AND re-exported below (the `export { ... }` further down) so every existing
-// `from './TemplateWorld'` call site (Defenders.tsx, Villagers.tsx, Terrain.tsx,
+// `from './TemplateWorld'` call site (Defenders.tsx, Villagers.tsx, Weather.tsx,
 // etc.) keeps working unchanged — only gameStore.ts's own import needed to move.
 import { homeGroundY, registerHomeGroundRoot } from '@/game/homeGround';
 import DungeonScene from './DungeonScene';
