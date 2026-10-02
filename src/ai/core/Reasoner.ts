@@ -1,5 +1,6 @@
 // NPC_AI_SPEC.md §5.1/§5.2/§5.4/§5.6/§5.7 / PHASE_3_4_5_ACTUATION_AND_REASONER.md
-// §5.2/§5.3/§5.4 — the utility reasoner's scoring core. 5.2 shipped the
+// §5.2/§5.3/§5.4 — the utility reasoner (history below; since CLN-16 most of
+// what it describes lives in scoring.ts/commitment.ts — see the note after it). 5.2 shipped the
 // types and `scoreAction`; 5.3 added category reference tables and
 // commitment (momentum, minDuration interrupt override, switch threshold,
 // cooldowns); this iteration (5.4) adds candidate assembly and the
