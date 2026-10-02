@@ -8,7 +8,7 @@ import { Suspense, useMemo, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
-import { useEnemyStore, lootFor, KIND_LABEL, type EnemyData } from '@/game/combat';
+import { useEnemyStore, resolveEnemyKill, KIND_LABEL, type EnemyData } from '@/game/combat';
 import { registerDefender, orderFor, defenderStrike, scoutReported, defenderState, type DefenderState } from '@/game/defenders';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
@@ -74,9 +74,6 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
   const buildings = useGameStore((s) => s.buildings);
   const keep = useGameStore((s) => s.keep);
   const enemies = useEnemyStore((s) => s.enemies);
-  const gainDefenderXp = useGameStore((s) => s.gainDefenderXp);
-  const recordKill = useGameStore((s) => s.recordKill);
-  const addItems = useGameStore((s) => s.addItems);
   const notify = useGameStore((s) => s.notify);
 
   const h = hashId(villager.id);
@@ -389,14 +386,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           // from it — see that function's comment.
           const dmg = defenderStrike(villager);
           target.hp -= dmg;
-          if (target.hp <= 0 && target.mob.state !== 'dying') {
-            target.mob.state = 'dying';
-            target.mob.dieT = 0;
-            recordKill(target.kind);
-            gainDefenderXp(villager.id, 15);
-            addItems(lootFor(target), 'grant');
-            notify(`${villager.name} defeats a raider!`, true);
-          }
+          if (target.hp <= 0 && target.mob.state !== 'dying') resolveEnemyKill(target, { by: 'defender', villager });
         }
       }
     }

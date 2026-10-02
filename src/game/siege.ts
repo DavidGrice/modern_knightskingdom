@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { audio } from '@/lib/audio';
 import { useGameStore } from './store/gameStore';
-import { useEnemyStore, damagePlayer } from './combat';
+import { useEnemyStore, damagePlayer, resolveEnemyKill } from './combat';
 import { playerState } from './playerState';
 import { labExplosive, labSiegeRole } from './data/labCapabilities';
 import { labAssetId } from './data/buildables';
@@ -131,13 +131,7 @@ export function explodeBall(ball: Cannonball) {
     if (d > 4.5) continue;
     e.hp -= 6;
     hits++;
-    if (e.hp <= 0) {
-      e.mob.state = 'dying';
-      e.mob.dieT = 0;
-      st.recordKill(e.kind);
-      st.addXp('combat', e.kind === 'skeleton' ? 20 : 30);
-      st.notify(`${e.kind === 'skeleton' ? 'Skeleton' : 'Bandit'} blasted!`, true);
-    }
+    if (e.hp <= 0) resolveEnemyKill(e, { by: 'cannonball' });
   }
   if (hits > 0) st.addXp('combat', 5);
   for (const b of st.buildings) {
@@ -174,12 +168,7 @@ export function detonate(charge: PlacedBuilding) {
     if (e.mob.state === 'dying') continue;
     if (Math.hypot(e.mob.x - x, e.mob.z - z) > 6.5) continue;
     e.hp -= 14;
-    if (e.hp <= 0) {
-      e.mob.state = 'dying';
-      e.mob.dieT = 0;
-      st.recordKill(e.kind);
-      st.addXp('combat', 30);
-    }
+    if (e.hp <= 0) resolveEnemyKill(e, { by: 'charge' });
   }
   // the charge itself always goes; everything else only if the lab says this
   // charge damages structures

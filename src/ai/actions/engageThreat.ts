@@ -66,7 +66,7 @@
 // own §6.3 threat term. `engage_threat` itself, immediately above, remains
 // exactly as inert as this whole header describes.
 
-import { lootFor, useEnemyStore, type EnemyData } from '@/game/combat';
+import { resolveEnemyKill, useEnemyStore, type EnemyData } from '@/game/combat';
 import { defenderStrike } from '@/game/defenders';
 import { useGameStore } from '@/game/store/gameStore';
 import { COMBAT } from '../config';
@@ -220,9 +220,10 @@ class EngageThreatActivity implements Activity {
   }
 
   /** One blow. Everything after the range check is `Defenders.tsx`'s own kill
-   *  bookkeeping, reached through the same store actions rather than
-   *  reimplemented: the kill is recorded, the defender earns their XP, the loot
-   *  the raider was carrying drops, and the player is told. */
+   *  bookkeeping, reached through the same call rather than reimplemented
+   *  (resolveEnemyKill's 'defender' cause): the kill is recorded, the defender
+   *  earns their XP, the loot the raider was carrying drops, and the player is
+   *  told. */
   private strike(agent: Agent, t: Belief): void {
     const gs = useGameStore.getState();
     const villager = gs.villagers.find((v) => v.id === agent.id);
@@ -237,12 +238,7 @@ class EngageThreatActivity implements Activity {
     target.hp -= defenderStrike(villager);
     combatStateFor(agent.id).hits++;
     if (target.hp > 0 || target.mob.state === 'dying') return;
-    target.mob.state = 'dying';
-    target.mob.dieT = 0;
-    gs.recordKill(target.kind);
-    gs.gainDefenderXp(villager.id, 15);
-    gs.addItems(lootFor(target), 'grant');
-    gs.notify(`${villager.name} defeats a raider!`, true);
+    resolveEnemyKill(target, { by: 'defender', villager });
   }
 }
 

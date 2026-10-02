@@ -16,9 +16,10 @@
 //     courage/proximity/tier gates (see below for why those don't apply).
 //   - Damage is a new `companionStrike()` (game/companion.ts) — a flat
 //     constant of Tam's own, not `defenderStrike()`/`villagerStrike()`.
-//   - Wave 54 (E2) update: `strike()` below now calls `gs.gainCompanionXp(15)`
-//     right after `gs.recordKill(...)` — the exact hook this comment used to
-//     say didn't exist yet. Still deliberately NOT `gainDefenderXp()`: Tam's
+//   - Wave 54 (E2) update: a kill now grants `gainCompanionXp(15)` — the
+//     exact hook this comment used to say didn't exist yet (since CLN-12 it
+//     is the 'companion' cause of combat/kill.ts's resolveEnemyKill, which
+//     `strike()` below calls). Still deliberately NOT `gainDefenderXp()`: Tam's
 //     leveling record is `st.companion` (types.ts's `CompanionState`), not a
 //     `Villager`, so it needs its own store action rather than reusing that
 //     one's `st.villagers.map(...)` targeting.
@@ -38,10 +39,9 @@
 //     ever (falcon.ts's own "one always-on companion, not a fleet"
 //     precedent) — that risk cannot occur for a single dedicated entity, so
 //     omitting these is a reasoned call, not an oversight.
-import { lootFor } from '@/game/combat';
+import { resolveEnemyKill } from '@/game/combat';
 import { companionStrike, registerCompanionCombat } from '@/game/companion';
 import { playerState } from '@/game/playerState';
-import { useGameStore } from '@/game/store/gameStore';
 import { COMBAT } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Belief } from '../core/Blackboard';
@@ -179,12 +179,12 @@ class AssistLeaderActivity implements Activity {
     cs.coverLabel = 'engaging';
   }
 
-  /** One blow, at Tam's own dedicated tier. Kill bookkeeping mirrors
-   *  engage_threat's (kill recorded, loot dropped, player told) plus, as of
-   *  Wave 54 (E2), `gainCompanionXp` — his own leveling record, not
-   *  `gainDefenderXp` — see this file's own header. */
+  /** One blow, at Tam's own dedicated tier. Kill bookkeeping is
+   *  resolveEnemyKill's 'companion' cause, which mirrors engage_threat's
+   *  (kill recorded, loot dropped, player told) plus, as of Wave 54 (E2),
+   *  `gainCompanionXp` — his own leveling record, not `gainDefenderXp` — see
+   *  this file's own header. */
   private strike(agent: Agent, t: Belief): void {
-    const gs = useGameStore.getState();
     const target = liveTargetFor(t.entityId);
     if (!target) return;
     // live adjudication, exactly as engage_threat's/engage_threat_villager's
@@ -195,16 +195,11 @@ class AssistLeaderActivity implements Activity {
     target.hp -= companionStrike();
     combatStateFor(agent.id).hits++;
     if (target.hp > 0 || target.mob.state === 'dying') return;
-    target.mob.state = 'dying';
-    target.mob.dieT = 0;
-    gs.recordKill(target.kind);
-    gs.addItems(lootFor(target), 'grant');
-    gs.notify('Tam defeats a raider!', true);
     // Wave 54 (E2) — the hook this file's own header already reserved:
     // Tam now has a real leveling record (`st.companion`) to grant XP into,
     // so this is no longer a silent gap. Same 15/kill `gainDefenderXp`
     // already uses — no new tuning needed.
-    gs.gainCompanionXp(15);
+    resolveEnemyKill(target, { by: 'companion' });
   }
 }
 

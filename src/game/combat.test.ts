@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audio } from '@/lib/audio';
 import {
-  KIND_LABEL, canChallengeStorm, combatState, cycleWeapon, damagePlayer, fireBolt, lootFor, maxHpOf, playerAttack,
+  KIND_LABEL, canChallengeStorm, combatState, cycleWeapon, damagePlayer, fireBolt, maxHpOf, playerAttack,
   stepBolt, tryDodge, useBoltStore, useEnemyStore, type EnemyData, type EnemyKind,
 } from './combat';
+import { lootFor } from './combat/loot';
 import { arenaState } from './arena';
 import { worldEnv } from './env';
 import { registerHitbox, unregisterHitbox } from './hitbox';
