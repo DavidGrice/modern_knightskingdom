@@ -126,20 +126,29 @@ All bindings above are rebindable in Options → Keybinds.
 
 ```
 src/
-├── app/               Next.js app router + API routes (auth, save)
+├── app/               Next.js app router + API routes (auth, save; a dev-only /secret/worldeditor)
 │   └── api/           Node backend: scrypt auth, HMAC sessions, JSON saves
+├── ai/                NPC utility AI — core/ (AgentManager, Reasoner + scoring/commitment, Locomotion,
+│                      TargetRegistry, Memory), actions/, perception/, config/ (JSON tuning + types),
+│                      *Sync.ts adapters from game state to agents; see src/ai/README.md
 ├── components/
-│   ├── stacks/        screen stacks: Auth, MainMenu, Options, Credits, CharacterCreator, GameScreen
-│   ├── world/         GameWorld, Terrain/Sky, ResourceNodes, Buildings, Npc, PropModel
-│   ├── fps/           PlayerController (pointer lock, movement, collision, interactions)
+│   ├── stacks/        screen stacks: Auth, MainMenu, Options, Help, Credits, Stats, CharacterCreator,
+│   │                  GameScreen (+ ScreenShell, the shared screen head/actions)
+│   ├── world/         GameWorld, Terrain/Sky, ResourceNodes, Buildings, Npc, Villagers, Defenders, sieges
+│   ├── fps/           PlayerController (movement, collision, interactions), Viewmodel (+ viewmodelParts/)
 │   ├── build/         BuildController (aerial camera, grid ghost placement)
-│   └── hud/           HUD, Panels (inventory/crafting/quests/skills), BuildBar
+│   ├── combat/        CombatController, Enemies, bolts/cannonballs, raider siege props, challenge runners
+│   ├── character/     rigged figures, real weapon/shield/helmet molds, gear/ (held, armor, carried)
+│   ├── hud/           HUD, the panel dispatcher + one file per panel, shared/ panel primitives, BuildBar
+│   └── ui/            icons, theme wrapper, a11y helpers
 ├── game/
 │   ├── data/          items, recipes, quests, buildables, ranks, minifigs, world layout
-│   ├── store/         zustand stores (app/navigation/settings + game state & systems)
-│   └── types.ts
-└── lib/               minifig assembly (OBJ part classification + palette recolor),
-                       audio manager, save persistence, server db/session helpers
+│   ├── store/         zustand stores (app/navigation/settings + game state), persistence table, session reset
+│   ├── types/         game types split by area, re-exported through game/types.ts
+│   └── *.ts           systems and mutable per-frame leaf modules (playerState, combat, riding, env, …)
+├── lib/               minifig/rig assembly, audio, save transport, math/rng/geometry helpers,
+│                      debugHooks (window.__kk* test handles), server db/session helpers
+└── styles/            kk-tokens / kk-lanes / kk-screens: the design tokens, lane themes and screen styles
 ```
 
 Content is data-driven: new items, recipes, quests and buildables are added in `src/game/data/` without touching systems code. All extracted models are normalized at load (the exporter keeps model-up along −Y; props are flipped upright, scaled to a target height and grounded).

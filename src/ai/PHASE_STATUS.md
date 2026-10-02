@@ -929,7 +929,38 @@ loop-freedom margin (combat.json's `cover._doc`) is untouched.
 
 ---
 
+## After Wave 11 — later waves that changed `src/ai`
+
+Taken from `git log -- src/ai` (2026-08-12 onward, cleanup PRs excluded). Each wave's own entry in `ROADMAP.md`
+(or `ROADMAP_ARCHIVE.md`) carries the detail and its verification evidence.
+
+- Wave 17 #6 — AI-driven hauling to distant grounds uses the real road network (#158)
+- Decorative Lego figures get real ambient idle animation (#172)
+- Wave 18 #5 Stages 5+6 — home-only rendering gated while at a destination; a raid-freeze bug fixed (#174)
+- Wave 21 — ordinary villagers can fight back, with real balance design (#178)
+- Wave 23 — per-defender orders, HUD order chip, deposit floaties, Wit-priced trading (#180)
+- Wave 25 — a real companion, Tam the Squire (#182)
+- Wave 26 — a second ownable settlement, plus two foundational AI bugs found and fixed (#183)
+- Wave 31 — home elevation, systemic fix (#188)
+- Wave 34 — real axe weapon mold, castle-catalog & correctness batch (#191)
+- Wave 39 — player-selectable difficulty + New Game+ (#196)
+- Wave 41 — a real, perception-only Agent for sworn defenders (#198)
+- Wave 42 — local avoidance, fellow-agent beliefs, a memory-stream foundation (#199)
+- Wave 53 — wildlife ambient spawner, traveling-merchant route, NPC daily schedules (#211)
+- Wave 54 — a full companion system beyond Tam (#212)
+- Wave 57 — Dragonfire Siege follow-ups, defender formations, duel spectator (#215)
+
+Later cleanup PRs restructured `src/ai` without changing behaviour: CLN-04 (`AgentManager.clearHooks`, #226),
+CLN-05 (`exposeDebug`, #227) and CLN-16 (Reasoner → `scoring.ts`/`commitment.ts`, config → `config/types.ts`, #231).
+
+---
+
 ## Not yet touched, and the honest reason
+
+> **Dated note (CLN-34, 2026-10-01):** this section was written at Wave 11 and describes that moment. Several of
+> the later waves listed above changed the picture (e.g. Wave 21 gave ordinary villagers combat through the reasoner,
+> Wave 41 gave sworn defenders a perception-only Agent) — read those entries before relying on what follows.
+
 
 Nothing has migrated off the existing per-frame `if/else` cascades in
 `Villagers.tsx`, `Npc.tsx`, `Defenders.tsx` or `Enemies.tsx`, and nothing
