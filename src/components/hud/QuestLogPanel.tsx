@@ -10,7 +10,7 @@
 // parchment page inside the usual stone-and-chrome panel frame, on request.
 import { useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
-import MenuTabs from './MenuTabs';
+import PanelFrame from './PanelFrame';
 import { QUESTS } from '@/game/data/quests';
 import { NPCS, NPC_BY_ID, CEDRIC_WAR_QUESTS, INTERIOR_RESIDENTS, isNpcRevealed, sideQuestBlocker, sideQuestGiverName, sideQuestsOf, type SideQuestDef } from '@/game/data/npcs';
 import { onKeyActivate } from '../ui/a11yClick';
@@ -204,7 +204,6 @@ function RegionBlock({ region, open, onToggle }: { region: QuestRegion; open: bo
 }
 
 export default function QuestLogPanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const completedQuests = useGameStore((s) => s.completedQuests);
   const questProgress = useGameStore((s) => s.questProgress);
   const sideQuest = useGameStore((s) => s.sideQuest);
@@ -253,11 +252,7 @@ export default function QuestLogPanel() {
   const regions = [...withGuild, ...INTERIOR_REGIONS];
 
   return (
-    <div className="game-panel clickable menu-family">
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <MenuTabs />
-      <h2>Quest Log</h2>
-      <div className="quest-journal panel-scroll">
+    <PanelFrame title="Quest Log" scrollClass="quest-journal">
         <div className="quest-journal-toolbar">
           <button className={`journal-filter ${!showCompleted ? 'selected' : ''}`} onClick={() => setShowCompleted(false)}>
             Active
@@ -329,7 +324,6 @@ export default function QuestLogPanel() {
             onToggle={() => toggleRegion(region.id)}
           />
         ))}
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

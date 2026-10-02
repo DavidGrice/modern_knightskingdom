@@ -6,6 +6,7 @@ import { SELL_PRICES, BUY_OFFERS, marketPriceMultiplier } from '@/game/data/trad
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
+import PopupFrame from './PopupFrame';
 
 /** Wave 49 (C3) · how a live market swing reads to the player — a colored
  *  ▲/▼ tag next to the gold number rather than a new dashboard, matching
@@ -25,7 +26,6 @@ function MarketTag({ mul }: { mul: number }) {
 }
 
 export default function ShopPanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const inventory = useGameStore((s) => s.inventory);
   const sellItem = useGameStore((s) => s.sellItem);
   const buyOffer = useGameStore((s) => s.buyOffer);
@@ -56,8 +56,7 @@ export default function ShopPanel() {
   const sellables = (Object.keys(SELL_PRICES) as ItemId[]).filter((id) => (inventory[id] ?? 0) > 0);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(640px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(640px, 94vw)">
       <h2>Merchant</h2>
       <div style={{ fontSize: 15, color: 'var(--gold)', marginBottom: 12 }}>🪙 Your purse: {gold} gold</div>
       <div className="shop-columns" style={{ display: 'flex', gap: 22 }}>
@@ -105,6 +104,6 @@ export default function ShopPanel() {
           })}
         </div>
       </div>
-    </div>
+    </PopupFrame>
   );
 }

@@ -8,6 +8,7 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { BUILDABLE_BY_ID } from '@/game/data/buildables';
+import PopupFrame from './PopupFrame';
 
 const FACTION_LABEL: Record<string, string> = {
   lion: "King Leo's",
@@ -16,7 +17,6 @@ const FACTION_LABEL: Record<string, string> = {
 };
 
 export default function WorkshopPanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const workshop = useGameStore((s) => s.workshop);
   const builtSets = useGameStore((s) => s.builtSets);
   const startSet = useGameStore((s) => s.startSet);
@@ -25,8 +25,7 @@ export default function WorkshopPanel() {
   const entries = Object.entries(SET_PLANS);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(520px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(520px, 94vw)">
       <h2>The Workshop</h2>
       <div className="loading-note" style={{ marginBottom: 12 }}>
         Lay a set out on the bench and build it piece by piece. Each piece costs
@@ -85,6 +84,6 @@ export default function WorkshopPanel() {
           );
         })}
       </div>
-    </div>
+    </PopupFrame>
   );
 }

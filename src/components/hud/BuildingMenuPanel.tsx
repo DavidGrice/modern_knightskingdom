@@ -11,6 +11,7 @@ import { BUILDABLE_BY_ID, costBill, labAssetId } from '@/game/data/buildables';
 import { labIsExplosive } from '@/game/data/labCapabilities';
 import type { ItemId } from '@/game/types';
 import { isBuilt } from '@/game/types';
+import PopupFrame from './PopupFrame';
 
 /** the charges the lab marks as explosive, in the order they read as a
  *  ladder — Wave 29 adds `l4105278` ("Powder Mine"), the catalog's 4th real
@@ -41,8 +42,7 @@ export default function BuildingMenuPanel() {
   const charges = CHARGES.map((c) => BUILDABLE_BY_ID[c]).filter(Boolean);
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(420px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(420px, 94vw)">
       <h2>{isKeep ? 'The Grand Keep' : (def?.name ?? b.type)}</h2>
       {!isBuilt(b) && (
         <div className="loading-note" style={{ marginBottom: 10 }}>
@@ -128,6 +128,6 @@ export default function BuildingMenuPanel() {
           </div>
         </>
       )}
-    </div>
+    </PopupFrame>
   );
 }

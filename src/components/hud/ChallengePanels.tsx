@@ -6,7 +6,7 @@
 // exact shape (gated on destination + claimed + not paused/buildMode/panel-
 // open, a leaf-module run-state polled on a rAF throttle, Start button,
 // live countdown) for each branch.
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import {
   isGatherChallenge, isDefendChallenge, isJoustChallenge,
@@ -14,6 +14,7 @@ import {
   defendChallengeState, startDefendChallenge, DEFEND_TIME_MS, DEFEND_START_HP,
   joustChallengeState, startJoustChallenge, JOUST_RING_COUNT, JOUST_TIME_MS,
 } from '@/game/challengeModes';
+import { useRafPoll } from './useRafPoll';
 
 const BADGE: CSSProperties = { position: 'absolute', top: '16%', left: '50%', transform: 'translate(-50%,0)', textAlign: 'center', zIndex: 11 };
 const BAR_WRAP: CSSProperties = { width: 200, height: 8, margin: '6px auto 0', borderRadius: 4, background: 'rgba(0,0,0,0.55)', border: '1px solid var(--chrome-2)', overflow: 'hidden' };
@@ -38,18 +39,7 @@ export default function ChallengePanels() {
   // not store/React state — poll on a rAF throttle, same convention
   // BuildChallengePanel/ArenaHud already use for their own non-reactive reads.
   const [, setTick] = useState(0);
-  const last = useRef(0);
-  useEffect(() => {
-    let raf = 0;
-    const loop = (now: number) => {
-      raf = requestAnimationFrame(loop);
-      if (now - last.current < 100) return;
-      last.current = now;
-      setTick((n) => n + 1);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  useRafPoll(100, () => setTick((n) => n + 1));
 
   if (!destination || paused || buildMode || panel !== 'none') return null;
 

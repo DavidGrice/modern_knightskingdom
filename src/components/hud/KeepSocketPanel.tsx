@@ -8,9 +8,9 @@
 // costs in bricks before you commit a corner to it.
 import { useGameStore } from '@/game/store/gameStore';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID, partsFor } from '@/game/data/keep';
-import { brickFor, brickLabel } from '@/game/data/brickResources';
-import { ITEMS } from '@/game/data/items';
+import { costBill } from '@/game/data/buildables';
 import type { ItemId } from '@/game/types';
+import PopupFrame from './PopupFrame';
 
 export default function KeepSocketPanel() {
   const keep = useGameStore((s) => s.keep);
@@ -19,14 +19,12 @@ export default function KeepSocketPanel() {
   const raise = useGameStore((s) => s.raiseKeepPart);
   const socket = socketId ? SOCKET_BY_ID[socketId] : null;
 
-  const setPanel = useGameStore((s) => s.setPanel);
   if (!keep || !socket) return null;
   const standing = keep.parts[socket.id];
   const built = keep.built[socket.id] ?? 0;
 
   return (
-    <div className="game-panel clickable" style={{ minWidth: 'min(460px, 94vw)' }}>
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
+    <PopupFrame minWidth="min(460px, 94vw)">
       <h2>{socket.name}</h2>
       {standing ? (
         <div className="keep-standing">
@@ -61,19 +59,24 @@ export default function KeepSocketPanel() {
                     <div className="keep-option-name">{part.name}</div>
                     <div className="keep-option-blurb">{part.blurb}</div>
                     <div className="keep-option-cost">
-                      {Object.entries(part.cost).map(([id, n]) => {
-                        const brick = brickFor(id as ItemId);
-                        const have = inventory[id as ItemId] ?? 0;
+                      {/* CLN-31 · KeepPart has no `pieces` field, so costBill()
+                          always takes its fallback-bricks branch here --
+                          exactly what this loop computed by hand before
+                          (brickFor for the thumb, ITEMS[id]?.icon for the
+                          icon, brickLabel(...) for the title text). The
+                          title is rebuilt with the "— you have N" suffix
+                          this file always showed (unlike BuildBar.tsx's bare
+                          title={line.label}). */}
+                      {costBill(part).map((line) => {
+                        const have = inventory[line.key as ItemId] ?? 0;
                         return (
                           <span
-                            key={id}
-                            className={`b-cost-part${have >= (n ?? 0) ? '' : ' short'}`}
-                            title={`${brickLabel(id as ItemId, ITEMS[id as ItemId]?.name ?? id)} — you have ${have}`}
+                            key={line.key}
+                            className={`b-cost-part${have >= line.qty ? '' : ' short'}`}
+                            title={`${line.label} — you have ${have}`}
                           >
-                            {brick
-                              ? <img className="b-cost-thumb" src={brick.thumb} alt="" />
-                              : <span>{ITEMS[id as ItemId]?.icon ?? id}</span>}
-                            {n}
+                            {line.thumb ? <img className="b-cost-thumb" src={line.thumb} alt="" /> : <span>{line.icon}</span>}
+                            {line.qty}
                           </span>
                         );
                       })}
@@ -85,6 +88,6 @@ export default function KeepSocketPanel() {
           </div>
         </>
       )}
-    </div>
+    </PopupFrame>
   );
 }

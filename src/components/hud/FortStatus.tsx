@@ -10,32 +10,24 @@
 // layout — and it is the thing that drives the recomputation while build mode
 // is open (PlayerController, the other caller, is unmounted for the whole time
 // you are actually laying walls).
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { FORT_DAMAGE_REDUCTION, fortState, refreshFort } from '@/game/fort';
 import { useGameStore } from '@/game/store/gameStore';
 import KkIcon from '../ui/KkIcon';
+import { useRafPoll } from './useRafPoll';
 
 export default function FortStatus() {
   const destination = useGameStore((s) => s.destination);
   const [state, setState] = useState({ on: false, ring: 0, doors: 0, area: 0 });
-  const last = useRef(0);
 
-  useEffect(() => {
-    let raf = 0;
-    const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
-      if (now - last.current < 500) return;
-      last.current = now;
-      refreshFort(); // a no-op unless something was actually built or opened
-      setState((prev) =>
-        prev.on === fortState.enclosed && prev.ring === fortState.ring
-          && prev.doors === fortState.doors && prev.area === fortState.area
-          ? prev
-          : { on: fortState.enclosed, ring: fortState.ring, doors: fortState.doors, area: fortState.area });
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  useRafPoll(500, () => {
+    refreshFort(); // a no-op unless something was actually built or opened
+    setState((prev) =>
+      prev.on === fortState.enclosed && prev.ring === fortState.ring
+        && prev.doors === fortState.doors && prev.area === fortState.area
+        ? prev
+        : { on: fortState.enclosed, ring: fortState.ring, doors: fortState.doors, area: fortState.area });
+  });
 
   // the ring is the homestead's; while you are away it protects nothing you
   // are standing in, so claiming it would be a lie

@@ -1,5 +1,6 @@
 'use client';
 import { useAppStore } from '@/game/store/appStore';
+import { ScreenHead, ScreenActions } from './ScreenShell';
 
 export default function CreditsStack() {
   const pop = useAppStore((s) => s.pop);
@@ -7,11 +8,7 @@ export default function CreditsStack() {
   return (
     <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
-        <div className="kk-screen-head">
-          <h2>CREDITS</h2>
-          <span className="rule" />
-          <span className="hint">a non-commercial fan preservation</span>
-        </div>
+        <ScreenHead title="CREDITS" hint="a non-commercial fan preservation" />
         {/* every attribution below is kept verbatim — the preservation
             credit and the owned-original note are not optional */}
         <div className="kk-doc">
@@ -46,9 +43,9 @@ export default function CreditsStack() {
           <h3>Technology</h3>
           <p>Next.js · React · Three.js · React Three Fiber · Zustand · Node.js</p>
         </div>
-        <div className="kk-screen-actions">
+        <ScreenActions>
           <button className="kk-btn-quiet" onClick={pop} style={{ marginLeft: 'auto' }}>Back</button>
-        </div>
+        </ScreenActions>
       </div>
     </div>
   );

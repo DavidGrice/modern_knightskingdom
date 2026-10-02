@@ -1,5 +1,6 @@
 'use client';
 import { useAppStore } from '@/game/store/appStore';
+import { ScreenHead, ScreenActions } from './ScreenShell';
 
 interface Step {
   title: string;
@@ -52,11 +53,7 @@ export default function HelpStack() {
   return (
     <div className={`kk-screen kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
-        <div className="kk-screen-head">
-          <h2>HOW TO PLAY</h2>
-          <span className="rule" />
-          <span className="hint">H reopens this in-game</span>
-        </div>
+        <ScreenHead title="HOW TO PLAY" hint="H reopens this in-game" />
         <div className="kk-doc">
           <div className="kk-doc-lead">
             A quick tour of the essentials — press <b>H</b> any time in-game to come back here.
@@ -79,9 +76,9 @@ export default function HelpStack() {
             );
           })}
         </div>
-        <div className="kk-screen-actions">
+        <ScreenActions>
           <button className="kk-btn-quiet" onClick={pop} style={{ marginLeft: 'auto' }}>Back</button>
-        </div>
+        </ScreenActions>
       </div>
     </div>
   );

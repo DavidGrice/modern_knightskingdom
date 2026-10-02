@@ -13,7 +13,7 @@ import { KIND_LABEL, LOOT_TABLES, maxHpOf, ATTACK_DMG, ATTACK_CD, type EnemyKind
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import { BESTIARY_LORE } from '@/game/data/bestiary';
-import MenuTabs from './MenuTabs';
+import PanelFrame from './PanelFrame';
 import KkIcon from '../ui/KkIcon';
 
 /** every foe worth a page. Storm is a duel, not a bestiary entry. */
@@ -33,7 +33,6 @@ const BLURB: Record<EnemyKind, string> = {
 };
 
 export default function BestiaryPanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const bestiary = useGameStore((s) => s.bestiary);
   // lifetime kills already live in the stats block, keyed by the same kind
   const kills = useGameStore((s) => s.stats.killsByKind);
@@ -41,11 +40,7 @@ export default function BestiaryPanel() {
   const recorded = KINDS.filter((k) => bestiary.includes(k)).length;
 
   return (
-    <div className="game-panel clickable menu-family">
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <MenuTabs />
-      <h2>Collection Book</h2>
-      <div className="panel-scroll">
+    <PanelFrame title="Collection Book">
         <div style={{ fontSize: 12, color: 'var(--parchment-dark)', marginBottom: 12 }}>
           Recorded <b style={{ color: 'var(--gold)' }}>{recorded}</b> of {KINDS.length}.
           Aim at a foe out in the field and press the record key to write them up —
@@ -83,7 +78,6 @@ export default function BestiaryPanel() {
             );
           })}
         </div>
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

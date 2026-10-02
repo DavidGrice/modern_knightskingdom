@@ -5,12 +5,11 @@
 // gameStore's loreSeen). Not paraphrased — every line here is transcribed
 // verbatim from the real .wav it plays.
 import { useGameStore } from '@/game/store/gameStore';
-import MenuTabs from './MenuTabs';
+import PanelFrame from './PanelFrame';
 import { NPCS } from '@/game/data/npcs';
 import { audio } from '@/lib/audio';
 
 export default function ChroniclePanel() {
-  const setPanel = useGameStore((s) => s.setPanel);
   const loreSeen = useGameStore((s) => s.loreSeen);
 
   const chroniclers = NPCS.filter((n) => n.loreLines?.length);
@@ -20,11 +19,7 @@ export default function ChroniclePanel() {
     .reduce((t, n) => t + (n.loreLines?.length ?? 0), 0);
 
   return (
-    <div className="game-panel clickable menu-family">
-      <button className="panel-close" onClick={() => setPanel('none')}>✕</button>
-      <MenuTabs />
-      <h2>The Chronicle</h2>
-      <div className="panel-scroll">
+    <PanelFrame title="The Chronicle">
       <div style={{ fontSize: 13, color: 'var(--parchment-dark)', fontStyle: 'italic', marginBottom: 14 }}>
         Genuine words spoken by those you've met, drawn from Knights' Kingdom's own telling — not
         a paraphrase, the record verbatim. Recorded: {recordedLines} / {totalLines} lines.
@@ -73,7 +68,6 @@ export default function ChroniclePanel() {
           </div>
         );
       })}
-      </div>
-    </div>
+    </PanelFrame>
   );
 }
