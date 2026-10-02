@@ -149,7 +149,8 @@ src/
 │   └── *.ts           systems and mutable per-frame leaf modules (playerState, combat, riding, env, …)
 ├── lib/               minifig/rig assembly, audio, save transport, math/rng/geometry helpers,
 │                      debugHooks (window.__kk* test handles), server db/session helpers
-└── styles/            kk-tokens / kk-lanes / kk-screens: the design tokens, lane themes and screen styles
+└── styles/            every stylesheet; app/globals.css imports them in cascade order (tokens, lane themes,
+                       front-door screens, field HUD, then the older panel/HUD system)
 ```
 
 Content is data-driven: new items, recipes, quests and buildables are added in `src/game/data/` without touching systems code. All extracted models are normalized at load (the exporter keeps model-up along −Y; props are flipped upright, scaled to a target height and grounded).

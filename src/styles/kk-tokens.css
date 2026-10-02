@@ -63,113 +63,17 @@
   --kk-sh-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0,0,0,.55);
   --kk-sh-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0,0,0,.65);
   --kk-sh-panel: 0 26px 60px rgba(0,0,0,.55);
-}
 
-/* ============================================================
-   LANE RECIPES — four surface treatments over the SAME metrics.
-   Pick one per surface family; never mix two on one panel.
-   ============================================================ */
+  /* ---------- Aero Glass's own accent: a lush green, distinct from the blurple system accent ---------- */
+  --kk-aero: #a8f5cd; --kk-aero-deep: #6ee7a8;
 
-/* --- A · METALHEART: clipped steel plate, zero radii, accent hairline --- */
-.kk-a-panel {
-  position: relative;
-  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
-  background: linear-gradient(104deg,
-    rgba(30,33,43,.95), rgba(15,17,23,.96) 40%,
-    rgba(38,42,56,.94) 62%, rgba(13,15,20,.96));
-  color: var(--kk-text);
+  /* ---------- lane surfaces: the one background each lane paints a panel with. kk-lanes.css applies them;
+       nothing else should spell these gradients out again ---------- */
+  --kk-lane-glass-bg:   linear-gradient(rgba(16, 24, 20, .70), rgba(8, 14, 11, .82));
+  --kk-lane-metal-bg:   linear-gradient(104deg, rgba(30, 33, 43, .95), rgba(15, 17, 23, .96) 40%, rgba(38, 42, 56, .94) 62%, rgba(13, 15, 20, .96));
+  --kk-lane-chrome-bg:  linear-gradient(rgba(238, 247, 255, .94), rgba(186, 212, 232, .92));
+  --kk-lane-leather-bg: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
 }
-.kk-a-panel::before {            /* brushed-metal grain */
-  content:""; position:absolute; inset:0; pointer-events:none;
-  background: repeating-linear-gradient(104deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
-}
-.kk-a-panel::after {             /* the accent hairline + glow */
-  content:""; position:absolute; left:0; right:0; top:0; height:1px;
-  background: linear-gradient(90deg, transparent, var(--kk-a-400), transparent);
-  box-shadow: 0 0 10px var(--kk-a-500);
-}
-.kk-a-chip {                     /* sheared tab / resource chip */
-  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
-  background: linear-gradient(104deg,#252833,#15171e);
-  font: 700 11px/1 var(--kk-font); letter-spacing:.08em; color: var(--kk-n-500);
-}
-.kk-a-chip[aria-selected="true"] {
-  background: linear-gradient(104deg,#2a2440,#171426);
-  box-shadow: inset 0 0 0 1px var(--kk-a-400); color: var(--kk-a-400);
-}
-.kk-a-bar { position:relative; height:12px; transform:skewX(-14deg);
-  background:#0c0d13; box-shadow: inset 0 0 0 1px #43485a; }
-.kk-a-bar > i { position:absolute; inset:1px; display:block; }
-
-/* --- B · MILLENNIUM CHROME: translucent plastic, hard bevel, gloss cap --- */
-.kk-b-panel {
-  border-radius: 18px;
-  background: linear-gradient(rgba(238,247,255,.94), rgba(186,212,232,.92));
-  border: 1px solid #4f7191; color: #12293d;
-  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2c4256, 0 18px 44px rgba(0,0,0,.55);
-}
-.kk-b-gloss {                    /* absolutely-positioned specular sweep */
-  position:absolute; left:5px; right:5px; top:3px; height:36%;
-  border-radius: var(--kk-r-pill);
-  background: linear-gradient(rgba(255,255,255,.85), rgba(255,255,255,0));
-  pointer-events:none;
-}
-.kk-b-primary { background: linear-gradient(#e2fb72,#8fb81c); border:1px solid #566f00;
-  box-shadow: inset 0 2px 0 rgba(255,255,255,.8), 0 3px 0 #435800; color:#243100; }
-/* lime = confirm, orange (#ff8a00) = active/selected. Both are Y2K, used sparingly. */
-
-/* --- C · AERO GLASS: blurred slab, one lit top edge, bloom (DEFAULT for
-       in-world panels — your world renders BRIGHT, so glass beats opaque) --- */
-.kk-c-panel {
-  position: relative; border-radius: 18px; overflow: hidden;
-  background: linear-gradient(rgba(16,24,20,.70), rgba(8,14,11,.82));
-  backdrop-filter: blur(20px) saturate(1.25);
-  border: 1px solid rgba(255,255,255,.18);
-  border-top-color: rgba(255,255,255,.46);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), var(--kk-sh-panel);
-  color: #fff;
-}
-.kk-c-panel::before {            /* top gloss — keep it a child, not a filter */
-  content:""; position:absolute; left:1px; right:1px; top:1px; height:120px;
-  background: linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,0));
-  pointer-events:none;
-}
-.kk-c-tab { border-radius: var(--kk-r-md); background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.11); color: rgba(255,255,255,.70); }
-.kk-c-tab[aria-selected="true"] {
-  background: linear-gradient(rgba(168,245,205,.30), rgba(110,231,168,.10));
-  border-color: #a8f5cd; color: #eafaf0; box-shadow: 0 0 14px rgba(110,231,168,.30);
-}
-/* Aero's own accent is a lush green, distinct from the blurple system accent: */
-:root { --kk-aero: #a8f5cd; --kk-aero-deep: #6ee7a8; }
-
-/* --- D · GUILD LEATHER: tooled hide, saddle stitch, brass, parchment --- */
-.kk-d-panel {
-  position:relative; border-radius: var(--kk-r-lg);
-  background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
-  border: 1px solid #150d06; color: #f0dcb0;
-  box-shadow: inset 0 1px 0 rgba(224,196,138,.16), var(--kk-sh-panel);
-}
-.kk-d-panel::before {            /* leather grain */
-  content:""; position:absolute; inset:0; border-radius: inherit; pointer-events:none;
-  background: repeating-linear-gradient(37deg, rgba(0,0,0,.14) 0 2px, transparent 2px 5px),
-              repeating-linear-gradient(-51deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);
-}
-.kk-d-stitch { position:absolute; inset:7px; border:1.5px dashed rgba(224,196,138,.28);
-  border-radius:11px; pointer-events:none; }
-.kk-d-well {                     /* recessed slot — inventory, armory */
-  background: linear-gradient(#2a1c11,#180f07);
-  box-shadow: inset 0 3px 6px rgba(0,0,0,.85), 0 0 0 1px #4a3520;
-  border-radius: 8px;
-}
-.kk-d-well[data-rarity]  { box-shadow: inset 0 3px 6px rgba(0,0,0,.85), 0 0 0 2px #e0c48a; }
-.kk-d-parchment {                /* every long text block goes on parchment */
-  background: linear-gradient(#efe3c4, #ded0a8 55%, #cfbf95); color:#2e2007;
-  box-shadow: inset 0 0 40px rgba(150,120,70,.30), inset 0 2px 6px rgba(90,70,40,.32);
-  border-radius: 12px;
-}
-.kk-d-brass { background: linear-gradient(#e6cf9c,#b18f4e); color:#2a1c11;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 2px 0 #6f5526; border-radius:8px; }
 
 /* ============================================================
    STATES — themed, never browser defaults
@@ -178,6 +82,6 @@
 ::selection { background: color-mix(in srgb, var(--kk-accent) 30%, transparent); }
 [disabled], [aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 
-/* Reduced-motion + perf escape hatch: kill the blur on low quality preset */
-[data-kk-quality="low"] .kk-c-panel { backdrop-filter: none; background: rgba(10,16,12,.92); }
+/* Reduced motion. (The low-quality blur hatch this sat beside targeted a recipe class nothing wore; the live one is
+   in kk-lanes.css and kk-hud-field.css.) */
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.001s !important; } }

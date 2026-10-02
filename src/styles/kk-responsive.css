@@ -1,0 +1,48 @@
+/* CLN-32 · split out of globals.css unchanged: the phone-width class hooks and the one breakpoint that reflows the
+   older panels and HUD. Imported LAST — its rules override ones from every other file at equal specificity. */
+/* ---------- mobile-only class hooks (audit 2026-08-03, in-game HUD panels) ----------
+   A dozen game-panel call-sites set `style={{ minWidth: N }}` inline, which
+   always outranks the `.game-panel { min-width: 0 }` rule in the breakpoint
+   below — inline style beats a class selector regardless of the media
+   query, so the breakpoint never reached them. Those call sites now clamp
+   their own inline minWidth (`min(Npx, 94vw)`) instead, which needs no CSS
+   here. But a few also had a genuinely fixed-column inline grid that a
+   plain minWidth clamp can't reflow on its own — those get a real
+   className instead, so the breakpoint below can reach them the same way
+   it already reaches .inv-grid/.build-grid. Base rules here reproduce
+   exactly what used to be inline, so desktop is unchanged. */
+.talent-grid { grid-template-columns: repeat(7, 1fr); }
+.inv-grid.emote-grid { grid-template-columns: repeat(3, 110px); }
+
+/* ---------- responsive layout (mobile-friendly pass, 2026-07-20) ----------
+   Below this breakpoint, every panel/HUD element sized in fixed px would
+   overflow a phone-width viewport — switch to viewport-relative sizing and
+   loosen the pixel-perfect corner layout instead of hand-tuning every panel
+   individually. Desktop sizing (all the rules above) is untouched. */
+@media (max-width: 720px) {
+  .game-panel, .panel {
+    min-width: 0; width: 94vw; max-width: 94vw; padding: 16px 14px;
+  }
+  .equip-layout { flex-direction: column; align-items: center; }
+  .equip-preview { width: 200px; height: 260px; }
+  .inv-grid { grid-template-columns: repeat(4, 1fr); }
+  .build-menu {
+    top: auto; bottom: 8px; right: 8px; left: 8px; width: auto;
+    max-height: 46vh; padding: 8px;
+  }
+  .build-tabs button { font-size: 11px; padding: 5px 6px; }
+  .build-grid { grid-template-columns: repeat(4, 1fr); }
+  .hud-topleft, .hud-topright { transform: scale(0.85); transform-origin: top left; }
+  .hud-topright { transform-origin: top right; }
+  .controls-ref, .controls-toggle { display: none; } /* keyboard reference is meaningless on touch */
+  .quest-journal { padding: 12px 10px; }
+  /* audit 2026-08-03: the Talent Tree's 7-column grid had no mobile reflow
+     at all; the Emote wheel's inline grid bypassed the .inv-grid reflow
+     above outright. ShopPanel's Sell/Buy pair had no wrap, so both columns
+     would squeeze to near-zero. (TravelPanel's own three inline grids, also
+     fixed by this same audit, were superseded by Wave 14's parchment map —
+     see that section's own dedicated media query below.) */
+  .talent-grid { grid-template-columns: repeat(4, 1fr); }
+  .inv-grid.emote-grid { grid-template-columns: repeat(3, 1fr); }
+  .shop-columns { flex-direction: column; }
+}

@@ -27,15 +27,14 @@ export default function ClaimBanner() {
 
   return (
     // Bugfix (2026-08-14, found by Wave 13's verify pass): this div sits
-    // directly under HUD's outer `.hud`, and globals.css sets
+    // directly under HUD's outer `.hud`, and kk-legacy-hud.css sets
     // `.hud > * { pointer-events: none }`, only lifted back by the
     // `.clickable` class (see DialoguePanel/Panels.tsx's `game-panel
     // clickable` for the same pattern) — without it the button rendered but
     // could never be clicked, hit-testing straight through to the canvas.
     <div className="clickable" style={{ position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)', zIndex: 11 }}>
       <button
-        className="menu-btn"
-        style={{ width: 'auto', padding: '10px 22px', whiteSpace: 'nowrap' }}
+        className="menu-btn banner"
         onClick={() => {
           const groundY = sampleTemplateGroundY(playerState.x, playerState.z);
           claimWorld(destination, playerState.x, playerState.z, groundY);

@@ -1,0 +1,69 @@
+/* CLN-32 · split out of globals.css unchanged. */
+/* ---------- touch controls (mobile-friendly pass, 2026-07-20) ---------- */
+.touch-look-surface {
+  position: absolute; inset: 0; touch-action: none;
+}
+/* Audit 2026-08-03: the joystick/buttons used to sit at the same bottom
+   corners as the Ledger/Hotbar/Minimap row (kk-bottom, kk-hud-field.css) and
+   painted over it — same z-index, mounted later in GameScreen.tsx. That
+   collision reproduces at any viewport width (it's two corner-anchored
+   fixed-px layouts, not an overflow), so the fix is a fixed offset rather
+   than a breakpoint: raised clear of the minimap, the tallest thing in that
+   row (148px + the 22px inset it sits at, kk-tokens.css --kk-hud-inset).
+   Positions (left/right/bottom) stay fixed px, unrelated to this section —
+   only the SIZES below are viewport-relative. */
+/* Wave 15 responsive residual (2026-08-17): these used to be flat px, the
+   same regardless of a 320px phone or a 1200px tablet — fine for the
+   original three buttons, but the Wave 15 combat pair (Attack/Block, added
+   just below) pushed the row to five circles wide enough to crowd the
+   joystick under ~400px. `clamp(min, Nvmin, desktop-max)` keeps every old
+   viewport's rendered size EXACTLY the same (the max is the old fixed
+   value, and vmin only undercuts it once the screen is small enough to
+   need it) while giving small phones real headroom — vmin rather than vw
+   so portrait/landscape both shrink off the same, smaller dimension. Mins
+   are kept at or above the ~44px touch-target floor (Apple HIG / WCAG
+   2.5.5) even on the narrowest real phones. TouchControls.tsx's JS no
+   longer hardcodes a matching JOYSTICK_RADIUS px figure to keep in sync
+   with these — it measures the joystick base's own live rendered size at
+   touch-start instead, so CSS and JS can never drift apart again. */
+.touch-joystick-base {
+  position: absolute; left: 26px; bottom: 196px;
+  --kk-joy-base: clamp(84px, 22vmin, 120px);
+  width: var(--kk-joy-base); height: var(--kk-joy-base);
+  border-radius: 50%; background: rgba(0,0,0,0.35); border: 2px solid var(--chrome-2);
+  touch-action: none;
+}
+.touch-joystick-knob {
+  position: absolute; left: 50%; top: 50%;
+  --kk-joy-knob: clamp(40px, 10.3vmin, 56px);
+  width: var(--kk-joy-knob); height: var(--kk-joy-knob);
+  margin: calc(var(--kk-joy-knob) / -2) 0 0 calc(var(--kk-joy-knob) / -2);
+  border-radius: 50%; background: rgba(216,183,74,0.35); border: 2px solid var(--gold);
+  pointer-events: none; will-change: transform;
+}
+.touch-buttons {
+  position: absolute; right: 22px; bottom: 192px; display: flex; align-items: flex-end;
+  gap: clamp(8px, 3vmin, 14px);
+}
+.touch-btn {
+  border-radius: 50%; background: rgba(0,0,0,0.4); border: 2px solid var(--gold-dim);
+  color: var(--parchment); font-size: clamp(16px, 4.2vmin, 20px);
+  touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.touch-btn:active { background: rgba(232,193,65,0.25); border-color: var(--gold); }
+.touch-btn-interact { width: clamp(56px, 14vmin, 76px); height: clamp(56px, 14vmin, 76px); font-size: clamp(18px, 4.8vmin, 24px); color: var(--gold); }
+.touch-btn-jump { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }
+.touch-btn-sprint { width: clamp(44px, 10.5vmin, 56px); height: clamp(44px, 10.5vmin, 56px); margin-bottom: 20px; }
+/* Wave 15 touch combat (2026-08-17): same row, same arc convention as the
+   three buttons above — Attack is sized/placed like Interact (the
+   "primary" size, no bottom margin) since it's now equally reached-for in a
+   fight; Block matches Jump's size. The crowding this used to risk on
+   narrow portrait viewports (five circles at full desktop px) is what the
+   clamp()s above fix — at the narrowest real phone widths this row now
+   floors around 270px instead of ~384px. */
+.touch-btn-attack { width: clamp(56px, 14vmin, 76px); height: clamp(56px, 14vmin, 76px); font-size: clamp(19px, 5vmin, 26px); color: var(--danger); border-color: var(--danger); }
+.touch-btn-attack:active { background: rgba(176,58,46,0.28); border-color: var(--danger); }
+.touch-btn-block { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }
+/* Wave 40 (A6): dodge-roll — same size/margin tier as Jump/Block, sitting
+   between Block and Interact in the row so it reads as a combat option. */
+.touch-btn-dodge { width: clamp(46px, 11.5vmin, 60px); height: clamp(46px, 11.5vmin, 60px); margin-bottom: 8px; }

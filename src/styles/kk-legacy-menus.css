@@ -1,0 +1,219 @@
+/* CLN-32 · split out of globals.css unchanged: the older full-screen menu system — stack screens, the shared
+   .panel/.menu-btn/.form-row vocabulary, character creator, equipment paperdoll and the one-stop menu tabs. */
+/* ---------- full-screen menu stacks ---------- */
+.stack-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* a torch-lit castle wall: the original game's own stone sprite under a
+     cold night vignette — the first thing a player sees is the dark ages */
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(48, 42, 26, 0.5), rgba(4, 5, 9, 0.94) 78%),
+    var(--stone) repeat;
+  background-size: auto, 256px 256px;
+  z-index: 20;
+}
+
+.panel {
+  /* cut stone: the real wall sprite under a dark glaze, chiseled bevel */
+  background:
+    linear-gradient(180deg, rgba(11, 13, 18, 0.87), rgba(7, 9, 13, 0.93)),
+    var(--stone) repeat;
+  background-size: auto, 256px 256px;
+  border: 2px solid var(--chrome);
+  border-radius: 10px;
+  box-shadow:
+    0 0 60px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -3px 12px rgba(0, 0, 0, 0.65);
+  padding: 32px 40px;
+  /* Wave 15 responsive residual (2026-08-17): a bare 380px floor fights
+     max-width(92vw) the instant a viewport drops under ~413px — CSS gives
+     min-width priority over max-width when the two conflict, so without
+     this the panel would be forced wider than 92vw and overflow. The
+     720px breakpoint below already re-zeroes min-width for every viewport
+     that size or smaller, which happens to mask this in practice today —
+     but that makes the base rule correct only BECAUSE of that one
+     threshold, not on its own. min(380px, 92vw) is the same fluid pattern
+     .game-panel.menu-family and the audited inline call-sites already use
+     a few hundred lines down — same fix, same shape, applied here too so
+     the base rule holds regardless of what the breakpoint value is. */
+  min-width: min(380px, 92vw);
+  max-width: 92vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.game-title {
+  font-size: 44px;
+  letter-spacing: 3px;
+  font-variant: small-caps;
+  color: var(--gold);
+  text-shadow: 0 2px 0 #4a3a12, 0 6px 18px rgba(0, 0, 0, 0.9);
+  margin-bottom: 6px;
+  text-align: center;
+}
+.game-subtitle {
+  text-align: center;
+  color: var(--parchment-dark);
+  font-style: italic;
+  margin-bottom: 28px;
+  font-size: 15px;
+}
+
+.menu-btn {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 13px 18px;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: var(--parchment);
+  background: linear-gradient(180deg, var(--wood-light), var(--wood));
+  border: 1px solid var(--gold-dim);
+  border-radius: 6px;
+  transition: all 0.12s ease;
+}
+.menu-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #454c5a, #2b303b);
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 12px var(--chrome-glow);
+  transform: translateY(-1px);
+}
+.menu-btn:disabled { opacity: 0.45; cursor: default; }
+.menu-btn.small { font-size: 14px; padding: 8px 12px; }
+.menu-btn.danger { border-color: var(--danger); }
+/* CLN-32 · spacing and sizing variants, in place of the inline style objects 38 buttons repeated. They sit AFTER
+   .small on purpose: same specificity, so position is what lets .compact's padding win over .small's. */
+.menu-btn.flush { margin: 0; }                /* in a row of buttons, or under its own heading: no stack margin */
+.menu-btn.follow { margin: 8px 0 0; }         /* the action under a paragraph of dialogue */
+.menu-btn.closing { margin-top: 14px; }       /* a panel's own closing button, set off from its content */
+.menu-btn.compact { margin: 0; width: auto; padding: 2px 10px; }  /* chip-sized: steppers, confirm/cancel chips */
+.menu-btn.inline { display: inline; }         /* ...and sitting inside a sentence (the build bar's hints) */
+.menu-btn.banner { width: auto; padding: 10px 22px; white-space: nowrap; }  /* the one call-to-action over the world */
+
+.form-row { margin: 12px 0; }
+.form-label { display: block; font-size: 13px; color: var(--parchment-dark); margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }
+.form-error { color: #ff8a7a; font-size: 14px; margin-top: 10px; min-height: 18px; }
+.tab-row { display: flex; gap: 6px; margin-bottom: 18px; }
+.tab-row button {
+  flex: 1; padding: 9px; font-size: 15px; border-radius: 5px;
+  background: rgba(0,0,0,0.3); color: var(--parchment-dark); border: 1px solid var(--chrome-2);
+}
+.tab-row button.active { background: var(--wood-light); color: var(--gold); border-color: var(--gold); }
+
+/* ---------- options ---------- */
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 14px 0; }
+.opt-row label { font-size: 15px; }
+.opt-row input[type='range'] { width: 190px; }
+.opt-value { width: 46px; text-align: right; color: var(--gold); font-size: 14px; }
+
+/* ---------- credits ---------- */
+.credits-scroll { max-height: 55vh; overflow-y: auto; line-height: 1.75; font-size: 15px; padding-right: 10px; }
+.credits-scroll h3 { color: var(--gold); margin: 18px 0 4px; letter-spacing: 1px; }
+.credits-scroll p { color: var(--parchment-dark); }
+
+/* ---------- character creator ---------- */
+.creator-layout { display: flex; gap: 26px; align-items: stretch; }
+.creator-preview { width: 380px; height: 480px; border: 2px solid var(--gold-dim); border-radius: 8px; background: radial-gradient(ellipse at 50% 40%, #252932, #0e1015); position: relative; }
+.creator-controls { width: 420px; display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding-right: 8px; }
+.creator-section { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); border-bottom: 1px solid var(--gold-dim); padding-bottom: 3px; margin-top: 8px; }
+.part-row { display: flex; align-items: center; gap: 10px; }
+.part-row .part-name { flex: 1; text-align: center; font-size: 16px; }
+.arrow-btn {
+  width: 38px; height: 38px; font-size: 20px; border-radius: 5px;
+  background: var(--wood-light); color: var(--gold); border: 1px solid var(--gold-dim);
+}
+.arrow-btn:hover { border-color: var(--gold); }
+.pose-toggle { display: flex; gap: 8px; }
+.pose-toggle button { flex: 1; padding: 6px 0; font-size: 13px; border-radius: 5px; background: var(--wood-light); color: var(--parchment-dark); border: 1px solid var(--gold-dim); }
+.pose-toggle button.selected { color: var(--gold); border-color: var(--gold); background: linear-gradient(180deg, #454c5a, #2b303b); }
+.swatch-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- equipment paperdoll ---------- */
+.equip-layout { display: flex; gap: 22px; align-items: flex-start; }
+.equip-preview { width: 230px; height: 310px; flex-shrink: 0; border: 2px solid var(--gold-dim); border-radius: 8px; background: radial-gradient(ellipse at 50% 40%, #252932, #0e1015); position: relative; }
+.equip-slots { flex: 1; min-width: 240px; }
+.equip-tile-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.equip-tile {
+  flex: 1; padding: 10px 6px; text-align: center; border-radius: 6px; cursor: pointer;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2); opacity: 0.55;
+}
+.equip-tile .icon { font-size: 22px; }
+.equip-tile .name { font-size: 11.5px; color: var(--parchment-dark); margin-top: 3px; }
+.equip-tile.owned { opacity: 1; cursor: pointer; }
+.equip-tile.locked { cursor: default; }
+.equip-tile.selected { border-color: var(--gold); box-shadow: 0 0 8px rgba(212,175,55,0.4); background: rgba(212,175,55,0.12); }
+.equip-tile.selected .name { color: var(--gold); }
+.equip-tile[draggable="true"] { cursor: grab; }
+.equip-tile[draggable="true"]:active { cursor: grabbing; }
+/* Armory tiles (NpcEquipPanel): draggable spare gear, dragged onto a slot */
+.inv-slot.armory-draggable { cursor: grab; border-color: var(--gold-dim); }
+.inv-slot.armory-draggable:active { cursor: grabbing; }
+.swatch { width: 26px; height: 26px; border-radius: 4px; border: 2px solid rgba(255,255,255,0.15); cursor: pointer; }
+.swatch.selected { border-color: var(--gold); box-shadow: 0 0 8px var(--gold); }
+
+.gender-toggle { display: flex; gap: 8px; }
+.gender-toggle button {
+  flex: 1; padding: 8px 0; background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2);
+  color: var(--parchment-dark); border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.gender-toggle button.selected { border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12); }
+
+.face-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.face-tile {
+  width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; padding: 4px; border: 2px solid transparent; border-radius: 8px;
+}
+.face-tile img { width: 52px; height: 52px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,0.3); }
+.face-tile .face-label { font-size: 10px; color: var(--parchment-dark); text-align: center; line-height: 1.15; }
+.face-tile.selected { border-color: var(--gold); box-shadow: 0 0 8px rgba(232,193,65,0.5); }
+.face-tile.selected .face-label { color: var(--gold); }
+/* villager nature & mastery chips (Phase 24A) */
+.attr-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.attr-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+  color: var(--parchment-dark); background: rgba(0,0,0,0.3);
+  border: 1px solid var(--chrome-2); border-radius: 5px; padding: 2px 6px;
+}
+.attr-chip.gifted { border-color: var(--gold); color: var(--gold); }
+.attr-bar { width: 34px; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; }
+.attr-bar span { display: block; height: 100%; background: var(--chrome); border-radius: 3px; }
+.attr-chip.gifted .attr-bar span { background: var(--gold); }
+
+.calling-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.calling-tile {
+  padding: 6px 10px; background: rgba(0,0,0,0.35); border: 2px solid var(--chrome-2);
+  color: var(--parchment-dark); border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.calling-tile:hover { border-color: var(--chrome); color: var(--parchment); }
+.calling-tile.selected { border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12); }
+.calling-desc { font-size: 12px; color: var(--parchment-dark); font-style: italic; margin-top: 6px; line-height: 1.5; }
+
+.face-tile.locked { cursor: default; position: relative; opacity: 0.55; }
+.face-tile.locked img { filter: grayscale(0.9) brightness(0.7); }
+.face-tile .face-lock {
+  position: absolute; top: 20px; left: 0; right: 0; text-align: center;
+  font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,0.9); pointer-events: none;
+}
+
+/* ---------- one-stop menu tabs (Phase 22) ---------- */
+.menu-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 26px 12px 0; }
+.menu-tabs button {
+  padding: 5px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--chrome-2);
+  color: var(--parchment-dark); border-radius: 6px; cursor: pointer; font-size: 12.5px;
+  display: flex; align-items: center; gap: 5px;
+}
+.menu-tabs button:hover { border-color: var(--chrome); color: var(--parchment); }
+.menu-tabs button.active {
+  border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12);
+}
+.menu-tabs .mt-key {
+  font-size: 10px; color: var(--parchment-dark); border: 1px solid var(--chrome-2);
+  border-radius: 3px; padding: 0 4px; line-height: 1.5;
+}
+.menu-tabs button.active .mt-key { color: var(--gold); border-color: var(--gold); }

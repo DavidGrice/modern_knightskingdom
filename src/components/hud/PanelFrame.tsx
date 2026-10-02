@@ -12,7 +12,7 @@ export default function PanelFrame({ title, lead, scrollClass, children }: {
   // <>Equip {name}</>), and `lead` renders ahead of the close button (the Roster's PortraitFactory).
   // CLN-31 · `scrollClass` is an optional extra class on the scroll wrapper,
   // for QuestLogPanel's load-bearing `.quest-journal` (its own vellum
-  // background/border/grain, plus kk-screens.css's AllegianceMeter color
+  // background/border/grain, plus kk-hud-widgets.css's AllegianceMeter color
   // re-point) -- every other caller omits it and gets the plain wrapper.
   return (
     <div className="game-panel clickable menu-family">

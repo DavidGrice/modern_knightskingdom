@@ -41,7 +41,7 @@ export default function BuildChallengePanel() {
     // the world while a challenge is in progress)
     return (
       <div style={{ position: 'absolute', top: '16%', left: '50%', transform: 'translate(-50%,0)', textAlign: 'center', zIndex: 11 }}>
-        <div className="rank-badge" style={{ minWidth: 0, padding: '7px 14px', display: 'inline-block' }}>
+        <div className="rank-badge compact">
           <span style={{ fontSize: 14 }}>
             🔔 {Math.ceil(remainingMs / 1000)}s — {buildChallengeState.built}/{BUILD_CHALLENGE_TARGET} raised
           </span>
@@ -56,13 +56,12 @@ export default function BuildChallengePanel() {
   return (
     // Bugfix (2026-08-14, found by Wave 13's verify pass): same fix as
     // ClaimBanner.tsx, whose pattern this panel copied bug and all — a plain
-    // child of `.hud` never receives clicks (globals.css's
+    // child of `.hud` never receives clicks (kk-legacy-hud.css's
     // `.hud > * { pointer-events: none }`) without the `.clickable` escape
     // hatch DialoguePanel/Panels.tsx already rely on.
     <div className="clickable" style={{ position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)', zIndex: 11, textAlign: 'center' }}>
       <button
-        className="menu-btn"
-        style={{ width: 'auto', padding: '10px 22px', whiteSpace: 'nowrap' }}
+        className="menu-btn banner"
         onClick={() => {
           startBuildChallenge();
           notify(`The bell rings — raise ${BUILD_CHALLENGE_TARGET} pieces in ${BUILD_CHALLENGE_TIME_MS / 1000}s!`, true);

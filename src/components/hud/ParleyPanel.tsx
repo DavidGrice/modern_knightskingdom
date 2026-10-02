@@ -50,14 +50,13 @@ export default function ParleyPanel() {
             crown will still have you. Cedric will never trust you again.
           </div>
           <button
-            className="menu-btn small danger"
-            style={{ margin: '8px 0 0' }}
+            className="menu-btn small danger follow"
             onClick={betrayCedric}
           >
             Turn on the Bull
           </button>
         </div>
-        <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
+        <button className="menu-btn closing" onClick={() => setPanel('none')}>
           Leave the council
         </button>
       </PopupFrame>
@@ -91,7 +90,7 @@ export default function ParleyPanel() {
                 traitor and never forgive it — but Cedric&apos;s raiders will never again touch your
                 homestead.
               </div>
-              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={betrayLeo}>
+              <button className="menu-btn small follow" onClick={betrayLeo}>
                 Clasp arms with Cedric
               </button>
             </>
@@ -104,11 +103,11 @@ export default function ParleyPanel() {
               ? 'His Final Stand — answer his offer with steel, and finish this for good.'
               : 'Answer his offer with steel — he fights for real, but has not yet earned his final defeat.'}
           </div>
-          <button className="menu-btn small danger" style={{ margin: '8px 0 0' }} onClick={challenge}>
+          <button className="menu-btn small danger follow" onClick={challenge}>
             {finalStandReady ? 'Draw your sword — His Final Stand' : 'Draw your sword'}
           </button>
         </div>
-        <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
+        <button className="menu-btn closing" onClick={() => setPanel('none')}>
           Walk away
         </button>
       </PopupFrame>
@@ -134,7 +133,7 @@ export default function ParleyPanel() {
               Pledge to the Bull. His raiders will never again touch your homestead — but the
               crown&apos;s knights will come for you instead, and the King will not forget.
             </div>
-            <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => pledgeAlliance('cedric')}>
+            <button className="menu-btn small follow" onClick={() => pledgeAlliance('cedric')}>
               Clasp arms with Cedric
             </button>
           </>
@@ -147,11 +146,11 @@ export default function ParleyPanel() {
             ? 'His Final Stand — answer his offer with steel, and finish this for good.'
             : 'Answer his offer with steel — he fights for real, but has not yet earned his final defeat.'}
         </div>
-        <button className="menu-btn small danger" style={{ margin: '8px 0 0' }} onClick={challenge}>
+        <button className="menu-btn small danger follow" onClick={challenge}>
           {finalStandReady ? 'Draw your sword — His Final Stand' : 'Draw your sword'}
         </button>
       </div>
-      <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
+      <button className="menu-btn closing" onClick={() => setPanel('none')}>
         Walk away
       </button>
     </PopupFrame>

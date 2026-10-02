@@ -1,0 +1,63 @@
+/* CLN-32 · split out of globals.css unchanged: the game's own colour tokens (with their per-faction overrides),
+   the reset, and the bare element rules. Imported after the kk-* sheets, before everything that reads these
+   tokens. */
+/* Dark-ages chrome (Phase 20 styling v2): cold castle stone and forged
+   iron replace the old warm parchment-brown. The stone itself is the
+   original game's own rough-hewn wall sprite (spr187), tiled darkly behind
+   every panel. Gold stays the one warm note — both factions genuinely wear
+   it (Leo's crown, Cedric's horns). The chrome triad (--chrome/--chrome-2)
+   swears allegiance via [data-faction] set by FactionTheme.tsx:
+   unsworn aged gold-iron, the crown blue/gold/white, the Bull red/grey/black. */
+:root {
+  --parchment: #d9d4c5;      /* cold aged linen, not warm cream */
+  --parchment-dark: #a09a89;
+  --wood: #232730;           /* token kept for its ~30 call sites, re-forged as iron */
+  --wood-light: #363c48;
+  --gold: #d8b74a;
+  --chrome: #6f5a26;         /* structural borders/frames — the allegiance layer */
+  --chrome-2: #3c4049;       /* secondary structure: dividers, quiet borders */
+  --chrome-glow: rgba(216, 183, 74, 0.3);
+  --gold-dim: var(--chrome); /* legacy alias: every old border site follows the chrome */
+  --ink: #10131a;
+  --danger: #b03a2e;
+  --ok: #3f8f4a;
+  --stone: url('/assets/textures/ui/spr187_256x256.png');
+}
+:root[data-faction='leo'] {
+  --chrome: #3b52c9;
+  --chrome-2: #dfe4f0;
+  --chrome-glow: rgba(80, 110, 235, 0.38);
+}
+:root[data-faction='cedric'] {
+  --chrome: #a02318;
+  --chrome-2: #8d939c;
+  --chrome-glow: rgba(190, 40, 25, 0.38);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0d12;
+  color: var(--parchment);
+  font-family: Georgia, 'Times New Roman', serif;
+  user-select: none;
+}
+
+#__next, main { width: 100%; height: 100%; }
+
+button { font-family: inherit; cursor: pointer; }
+input {
+  font-family: inherit;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--gold-dim);
+  color: var(--parchment);
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 15px;
+  outline: none;
+  width: 100%;
+}
+input:focus { border-color: var(--gold); }

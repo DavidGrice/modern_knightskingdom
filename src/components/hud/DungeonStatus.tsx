@@ -33,7 +33,7 @@ export default function DungeonStatus() {
 
   if (!text) return null;
   return (
-    <div className="rank-badge" style={{ minWidth: 0, padding: '7px 14px', display: 'inline-block' }}>
+    <div className="rank-badge compact">
       <span style={{ fontSize: 14 }}>🗝️ {text}</span>
     </div>
   );

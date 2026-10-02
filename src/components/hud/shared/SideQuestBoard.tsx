@@ -53,14 +53,13 @@ export default function SideQuestBoard({ giverId, mineIcon = '', offerIcon = '',
           <div className="q-desc">Progress: {mine.have}/{mineDef.need} · Reward: {rewardText(mineDef)}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button
-              className="menu-btn small"
-              style={{ margin: 0 }}
+              className="menu-btn small flush"
               disabled={mine.have < mineDef.need}
               onClick={turnInSideQuest}
             >
               {mine.have >= mineDef.need ? 'Turn In' : 'Not finished yet'}
             </button>
-            <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
+            <button className="menu-btn small danger flush" onClick={abandonSideQuest}>
               Abandon
             </button>
           </div>
@@ -77,7 +76,7 @@ export default function SideQuestBoard({ giverId, mineIcon = '', offerIcon = '',
             <div className="quest-item" key={offer.id}>
               <div className="q-name">{offerIcon}{offer.label}</div>
               <div className="q-desc">Reward: {rewardText(offer)}</div>
-              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest(giverId, offer.id)}>
+              <button className="menu-btn small follow" onClick={() => acceptSideQuest(giverId, offer.id)}>
                 Take the Job
               </button>
             </div>
