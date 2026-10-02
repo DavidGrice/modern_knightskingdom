@@ -236,4 +236,50 @@ describe('the sites that call it', () => {
     expect(e.hp).toBeLessThan(45);
     expect([e.mob.state, game().stats.kills, notes.length]).toEqual(['wander', 0, 0]);
   });
+
+  // A duel with Storm is first blood between her and the player. Tam used to charge her and end it as "Tam defeats a
+  // raider!" — nobody won, and the princess died a monster's death.
+  describe("Storm's duel", () => {
+    const storm = () => enemies().find((e) => e.kind === 'storm');
+
+    it("is won by the player's blade, and she is removed rather than killed", () => {
+      resolveEnemyKill(spawn('storm'), { by: 'melee' });
+      expect(storm()).toBeUndefined();
+      expect([game().reputation.storm, game().stats.kills]).toEqual([10, 0]);
+      expect(held('gold')).toBeGreaterThanOrEqual(20); // the duel's purse (her regard brings a little more)
+      expect(lines()).toContain('You land the first blow — Storm grins: "Not bad. Care to go again sometime?"');
+    });
+
+    it('is ended by nothing else, whatever brings her to zero', () => {
+      const others: Cause[] = [
+        { by: 'ranged' }, { by: 'cannonball' }, { by: 'charge' }, { by: 'companion' },
+        { by: 'defender', villager: OSRIC }, { by: 'villager', villager: HOB },
+      ];
+      const e = spawn('storm', { gold: 5 });
+      e.hp = -1;
+      for (const cause of others) resolveEnemyKill(e, cause);
+      expect([storm()?.mob.state, game().stats.kills, game().xp.combat, held('gold'), notes.length, game().companion.xp])
+        .toEqual(['wander', 0, 0, 0, 0, 0]);
+      expect(game().reputation.storm ?? 0).toBe(0);
+    });
+
+    it('a cannonball and a charge pass her by', () => {
+      const e = spawn('storm');
+      explodeBall({ id: 1, pos: { x: 30, y: 0.2, z: 30 }, vel: { x: 0, y: 0, z: 0 } });
+      const charge = { id: 'c1', type: 'gate', x: 30, z: 30, rot: 0, built: 1 } as PlacedBuilding;
+      useGameStore.setState({ buildings: [charge] } as never);
+      Object.assign(playerState, { x: 60, z: 60 });
+      detonate(charge);
+      // untouched, and a shot that found only her did not count as a hit
+      expect([e.hp, e.mob.state, game().xp.combat]).toEqual([1, 'wander', 0]);
+    });
+
+    it("an ally's blow cannot end it, even one thrown at her", () => {
+      const e = spawn('storm');
+      for (const [action, id, archetype] of [[ASSIST_LEADER, 'tam', 'companion'], [ENGAGE_THREAT, OSRIC.id, 'guard'], [ENGAGE_THREAT_VILLAGER, HOB.id, 'villager']] as [Action, string, string][]) {
+        strike(action, id, archetype, e);
+      }
+      expect([storm()?.mob.state, game().stats.kills, notes.length]).toEqual(['wander', 0, 0]);
+    });
+  });
 });

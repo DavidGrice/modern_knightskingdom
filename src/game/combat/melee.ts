@@ -17,7 +17,6 @@ import {
 } from '../data/melee';
 import { combatState } from './state';
 import { useEnemyStore, type EnemyData } from './enemyStore';
-import { resolveDuel } from './duel';
 import { resolveEnemyKill } from './kill';
 import { SHIELD_REDUCTION, isFrontalHit } from './shield';
 import { hitRaiderLadder, hitRaiderRam } from './structures';
@@ -147,13 +146,7 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
   // Wave 40 (A6) · a finisher staggers its target, same "force attackCd up"
   // trick the parry branch (damagePlayer) uses — no new AI-state machine.
   if (finisher) e.mob.attackCd = Math.max(e.mob.attackCd, FINISHER_STAGGER_S);
-  if (e.hp <= 0 && e.mob.state !== 'dying') {
-    if (e.kind === 'storm') {
-      resolveDuel(true, e.id);
-      return;
-    }
-    resolveEnemyKill(e, { by: 'melee' });
-  }
+  if (e.hp <= 0 && e.mob.state !== 'dying') resolveEnemyKill(e, { by: 'melee' }); // or, for Storm, the duel won
 }
 
 /** player melee swing: the readied weapon's own reach/arc, resolved against
