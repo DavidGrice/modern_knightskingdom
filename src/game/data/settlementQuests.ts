@@ -17,7 +17,7 @@
 // the settlement-earning story reads in one place — while still being
 // spread into the real `sideQuests` array so it actually works.
 import type { ItemId, ResourceNodeState, VillagerJob } from '../types';
-import type { SideQuestDef } from './npcs';
+import type { SideQuestDef } from './cast/types';
 
 export const SETTLEMENT_QUESTS: Record<string, SideQuestDef[]> = {
   fenwick: [

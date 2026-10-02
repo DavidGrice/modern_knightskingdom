@@ -40,6 +40,7 @@
 //   game/workSignal: __kkwork
 //   game/combat: __kkc, __kkfireBolt, __kke, __kkResolveDuel, __kkAttack, __kkDamagePlayer, __kkBolt, __kkArrow, __kkBolts
 //   game/data/buildables: __kkcollideFor       game/data/road: __kkroadEntry, __kkonRoad
+//   game/data/validate: __kkdata
 //   game/store/appStore: __kkapp               game/store/gameStore: __kk
 //   lib/audio: __kkaudio
 
