@@ -7010,3 +7010,25 @@ negative. It was a trap for the first curve authored with a positive shift and a
 
 **Fix:** the quadratic branch now returns 0 for a NaN result, the same convention as `logit`; every non-NaN value is
 clamped exactly as before, so no current score changes. The property test is the regression guard.
+
+## Bugfix: Beda's plank delivery errand could never be advanced — FOUND AND FIXED 2026-10-02 (during CLN-21)
+
+**Found by** CLN-21's new `validateGameData()` (`src/game/data/validate.ts`), on its first run against the shipped data.
+
+**The bug:** Miller Beda's errand `bd_haul_timber` — "The Old Ruins could use good timber — cart 8 planks out to
+Fenwick" — is a `deliver` errand whose goods are **planks**. A delivery's counter was only ever advanced by a
+*harvest* (`bumpSideQuest` treated a `gather` bump as loading a delivery, nothing else), and planks are never harvested:
+no node, villager job or side-good yields one, they are only crafted. Crafting bumps the `craft` kind, which a
+`deliver` errand ignored. So the counter stayed at 0/8 forever, and `turnInSideQuest` refuses below 8 — the errand was
+unfinishable since it shipped (Wave 13). It is the same class as the five errands Wave 34 fixed
+(`gather` aimed at a crafted item); that pass missed this one because its kind is `deliver`, not `gather`.
+
+**Fix** (`gameStore.ts`, `bumpSideQuest`): a `craft` bump now also loads a delivery when the crafted recipe's *output*
+is the errand's goods (the bump carries the recipe id, so it is matched on what the recipe makes). Nothing else
+changes: a harvested-goods delivery still loads by harvesting, and crafting does not advance a delivery of anything
+else or a plain `gather` errand.
+
+**Verified:** `src/game/store/sideQuests.test.ts` drives the real store — it failed before the fix (0 after crafting 8
+planks) and passes after, including the hand-over at The Old Ruins taking the 8 planks; live in a production build,
+through the real actions: accept → craft 4× (2 planks each) → 8/8 → travel to template-08 → turn in → errand
+complete, planks 8 → 0, 0 console errors.
