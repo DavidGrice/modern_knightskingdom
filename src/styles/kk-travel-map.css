@@ -1,9 +1,10 @@
 /* CLN-32 · split out of globals.css unchanged. */
 /* ---------- Wave 14 · Travel Map (parchment) ----------
    Redesigned from a flat dark-HUD card grid into an illustrated parchment
-   surface. The gradient/ink-color pairing below is lifted from
-   kk-tokens.css's authored-but-unused `.kk-d-parchment` recipe (a genuine
-   light worn-paper look already on-brand for this project) rather than
+   surface. The gradient/ink-color pairing below is lifted from the handoff
+   pack's `.kk-d-parchment` recipe (authored in kk-tokens.css, never used, and
+   deleted from it by CLN-32 — a genuine light worn-paper look already
+   on-brand for this project) rather than
    invented from scratch — but applied directly here, NOT by adding that
    class, since the Travel Map deliberately does not route through the
    player's chosen kk-lanes.css HUD skin (glass/metal/chrome/leather): a map
