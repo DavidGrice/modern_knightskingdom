@@ -8,7 +8,7 @@
 // drei <Instance> sharing that geometry/material — same visual result as
 // PropModel, one real InstancedMesh draw call per sub-mesh instead of one
 // draw call per node.
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Instances, Instance } from '@react-three/drei';
@@ -24,10 +24,31 @@ export interface SubMesh {
   material: THREE.Material;
 }
 
+/**
+ * CLN-24 · release a sub-mesh list's geometries and materials when the list is replaced or its owner unmounts.
+ *
+ * They reach drei's <Instances> as `geometry`/`material` props, and react-three-fiber only disposes what it created
+ * from JSX — so before this, every remount pinned another set of vertex buffers for good (three keeps an undisposed
+ * geometry's attributes reachable through its vertex-array cache). A trip away and back re-creates every tree, herb,
+ * fence and rock group at home, and every descent re-creates the crypt's walls.
+ *
+ * Textures are deliberately left alone: a sub-mesh material is a clone, but its maps still belong to the shared GLTF
+ * cache, and `material.dispose()` does not touch them. Both objects stay usable after dispose() — three uploads them
+ * again if they are drawn — so React re-running this effect without a rebuild is harmless.
+ */
+export function useDisposeSubMeshes(subMeshes: SubMesh[]): void {
+  useEffect(() => () => {
+    for (const sm of subMeshes) {
+      sm.geometry.dispose();
+      sm.material.dispose();
+    }
+  }, [subMeshes]);
+}
+
 function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boolean): SubMesh[] {
   const extendKtx2 = useKtx2ExtendLoader();
   const { scene } = useGLTF(url, true, true, extendKtx2);
-  return useMemo(() => {
+  const subMeshes = useMemo(() => {
     const inner = scene.clone(true);
     inner.rotation.x = Math.PI; // stand upright (see PropModel.tsx)
     const holder = new THREE.Group();
@@ -73,6 +94,8 @@ function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boole
     });
     return subMeshes;
   }, [scene, targetHeight, selfLit]);
+  useDisposeSubMeshes(subMeshes);
+  return subMeshes;
 }
 
 /** Smallest buffer any instanced prop reserves. Every real group in the game

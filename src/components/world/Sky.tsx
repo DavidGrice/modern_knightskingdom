@@ -1,7 +1,7 @@
 'use client';
-// CLN-24 · the skybox and its star dome, moved out of Terrain.tsx unchanged. Unlike the rest of that file this is
-// not home-only: GameWorld mounts it everywhere and picks the variant from the destination.
-import { useMemo, useRef } from 'react';
+// CLN-24 · the skybox and its star dome, moved out of Terrain.tsx. Unlike the rest of that file this is not
+// home-only: GameWorld mounts it everywhere and picks the variant from the destination.
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WORLD_HALF } from '@/game/data/world';
@@ -91,6 +91,10 @@ export function GameSky({ variant = 'grass' }: { variant?: string }) {
       pz: load('front'), nz: load('back'),
     };
   }, [variant]);
+  // CLN-24 · loaded by hand, so released by hand: the faces reach the materials as `map` props, which
+  // react-three-fiber never disposes. Every flip between a grass and a mountain destination used to leave the previous
+  // five on the GPU until the garbage collector happened to find them.
+  useEffect(() => () => { for (const t of Object.values(textures)) t.dispose(); }, [textures]);
   const size = WORLD_HALF * 2.6;
 
   useFrame(() => {

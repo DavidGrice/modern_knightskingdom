@@ -18,6 +18,7 @@ import { worldEnv, seasonOf } from '@/game/env';
 import { homeGroundY } from '@/game/homeGround';
 import { normalizeTemplateBake, TEMPLATE_WORLD_SCALE } from '@/game/templateBake';
 import { SEASON_GRASS } from './seasonGrass';
+import { useRippleTexture } from './useRippleTexture';
 
 // Wave 59 (H3) · HomeMeadow needs a REAL hole wherever a dug waterway sits —
 // not just a lower plane. A live rendering spike proved the original H3
@@ -211,24 +212,8 @@ export function HomeMeadow() {
 // (140, 68), clear of the Keep's footprint, the fishing dock (southwest
 // bank) and the build region.
 export function Stream() {
-  const { gl } = useThree();
-  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
-  const brookTexture = useMemo(() => {
-    const t = new THREE.TextureLoader().load('/assets/textures/water/spr199_256x256.png');
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = anisotropy;
-    return t;
-  }, []);
-  const fallTexture = useMemo(() => {
-    const t = new THREE.TextureLoader().load('/assets/textures/water/spr203_64x128.png');
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = anisotropy;
-    return t;
-  }, []);
+  const brookTexture = useRippleTexture();
+  const fallTexture = useRippleTexture('/assets/textures/water/spr203_64x128.png');
   // from the pond's northeast edge out to the spring mound (data/world.ts's
   // BROOK — shared with the pail-filling interact since Wave 5)
   const ax = BROOK.startX, az = BROOK.startZ;
@@ -302,16 +287,7 @@ const WATER_TILE = 4; // metres of surface per ripple tile — matches the brook
 
 export function DugWater() {
   const waterworks = useGameStore((s) => s.waterworks);
-  const { gl } = useThree();
-  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
-  const base = useMemo(() => {
-    const t = new THREE.TextureLoader().load('/assets/textures/water/spr199_256x256.png');
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = anisotropy;
-    return t;
-  }, []);
+  const base = useRippleTexture();
   // rebuilt only when the LIST changes (a cut, a fill, a load), which is also
   // where the previous clones are released — a moat dug and filled twenty times
   // over a long session would otherwise leave every one of its textures on the

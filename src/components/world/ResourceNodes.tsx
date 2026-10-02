@@ -2,7 +2,7 @@
 import { Suspense, useMemo } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
-import { InstancedProp, InstancedSubMeshes, type InstancedNode, type SubMesh } from './InstancedProps';
+import { InstancedProp, InstancedSubMeshes, useDisposeSubMeshes, type InstancedNode, type SubMesh } from './InstancedProps';
 import { FISHING_DOCK } from '@/game/data/world';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import type { ResourceNodeState } from '@/game/types';
@@ -122,6 +122,7 @@ function buildRockSubMeshes(iron: boolean): SubMesh[] {
 // one InstancedProp per model url.
 function RockGroup({ nodes, iron }: { nodes: ResourceNodeState[]; iron: boolean }) {
   const subMeshes = useMemo(() => buildRockSubMeshes(iron), [iron]);
+  useDisposeSubMeshes(subMeshes);
   const instances: InstancedNode[] = useMemo(
     () => nodes.map((n) => ({
       key: n.id, x: n.x, z: n.z, y: nodeGroundY(n), yaw: n.yaw, scale: n.scale * (0.7 + 0.3 * (n.hitsLeft / 4)),

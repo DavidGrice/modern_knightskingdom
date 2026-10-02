@@ -1,22 +1,20 @@
 'use client';
-import { Suspense, useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { Suspense, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WORLD_HALF, POND } from '@/game/data/world';
 import { landHalf, landSouthHalf } from '@/game/data/buildables';
 import { useGameStore } from '@/game/store/gameStore';
-import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, seasonOf } from '@/game/env';
 import { SEASON_GRASS } from './seasonGrass';
 import { DugWater, HomeMeadow, Stream } from './HomeMeadowWater';
 import { TerrainRegions } from './TerrainRegions';
+import { useRippleTexture } from './useRippleTexture';
 
 export default function Terrain() {
   const buildMode = useGameStore((s) => s.buildMode);
   const landTier = useGameStore((s) => s.landTier);
   const grassMat = useRef<THREE.MeshStandardMaterial>(null);
-  const { gl } = useThree();
-  const anisotropy = Math.min(useAppStore((s) => s.settings.anisotropy), gl.capabilities.getMaxAnisotropy());
 
   // the fence you have actually bought, not the maximum it could ever reach
   // (F19/F20) — and every tier is an 8N+8 size, so the grid always closes on
@@ -42,15 +40,8 @@ export default function Terrain() {
   // project's MapLoader.jsx, which this mirrors (tint 0x7fd0dd, RepeatWrapping,
   // anisotropy 8 so the ripple stays legible instead of mip-blurring to a
   // flat color at a shallow viewing angle)
-  const waterTexture = useMemo(() => {
-    const t = new THREE.TextureLoader().load('/assets/textures/water/spr199_256x256.png');
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = anisotropy;
-    t.repeat.set(3, 3);
-    return t;
-  }, []);
+  const waterTexture = useRippleTexture();
+  waterTexture.repeat.set(3, 3);
 
   useFrame((_, dt) => {
     const m = grassMat.current;
