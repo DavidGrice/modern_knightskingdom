@@ -10,6 +10,7 @@ You start as a humble peasant and work your way up to Knight and Paladin: chop w
 npm install
 npm run prepare-assets   # copies models/sounds/palette from the extraction (path in scripts/prepare-assets.mjs)
 npm run dev              # http://localhost:3000
+npm run test:unit        # optional unit tests for pure logic (vitest; not a CI gate)
 ```
 
 `data/` (created at runtime) holds user accounts, sessions and server-side save games.

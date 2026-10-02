@@ -6997,3 +6997,16 @@ re-run with the real lock, to avoid hijacking the developer's mouse again.
 **Not done, deliberately**: the 59 headed legacy scripts still open real off-screen windows, which can
 take focus even though the cursor no longer moves; nothing enforces "only `pointerLock.ts` calls the
 real API" (a CI grep guard was considered and left out to avoid touching CI in a bugfix).
+
+## Bugfix: evalCurve quadratic could return NaN — FOUND AND FIXED 2026-10-02 (during CLN-02)
+
+**Found by** CLN-02's new `src/ai/core/curves.test.ts` property test (20,000 random curve parameters must all give a
+finite score in [0, 1]). The `quadratic` branch computed `m * Math.pow(x - c, k) + b` and clamped it — but `Math.pow` of a
+negative base with a non-integer exponent is NaN, and NaN passes straight through `clamp01`. A NaN consideration would
+poison `scoreAction`'s whole product (the `logit` branch already had a NaN guard for exactly this reason).
+
+**Reachable today? No.** Every authored quadratic curve (12, across `src/ai/actions`) has `c: 0`, so the base is never
+negative. It was a trap for the first curve authored with a positive shift and a fractional exponent.
+
+**Fix:** the quadratic branch now returns 0 for a NaN result, the same convention as `logit`; every non-NaN value is
+clamped exactly as before, so no current score changes. The property test is the regression guard.
