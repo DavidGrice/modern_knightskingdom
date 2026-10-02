@@ -48,7 +48,7 @@ export function isWatchHours(time: number): boolean {
 // Wave 17 #4 · was `(BUILD_REGION.min+max)/2` on each axis, which only ever
 // evaluated to (0, 0) because BUILD_REGION was a square centred on the
 // origin. Now that the south fence is pinned independently of the other
-// three sides (see buildables.ts's LAND_TIERS note), that same formula would
+// three sides (see landTiers.ts's LAND_TIERS note), that same formula would
 // drift NORTH as the land tiers grow — up to 14 on Z at the max tier, a full
 // WANDER_RADIUS (Villagers.tsx) away from true origin — which is not a
 // change anything downstream asked for: every one of HOME_X/HOME_Z's

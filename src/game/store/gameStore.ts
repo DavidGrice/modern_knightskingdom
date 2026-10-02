@@ -16,7 +16,7 @@ import { arriveByRoad, villagerMobs } from '../villagerMobs';
 import { npcMobs } from '../npcMobs';
 import { KEEP_PART_BY_ID, KEEP_SIZE, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, maxHpForPart, type KeepState } from '../data/keep';
 import { brickLabel } from '../data/brickResources';
-import { LAND_TIERS, MAX_LAND_TIER } from '../data/buildables';
+import { LAND_TIERS, MAX_LAND_TIER } from '../data/landTiers';
 import { stabledHorses } from '../riding';
 // Wave 31 hotfix · this used to import `homeGroundY` from
 // '@/components/world/TemplateWorld' directly, reasoning that

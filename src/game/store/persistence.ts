@@ -19,7 +19,7 @@
 // that is saved.
 import type { CharacterConfig, DifficultyId, LifetimeStats, SaveGame, SkillId, WaterFeature } from '../types';
 import type { KeepState } from '../data/keep';
-import { MAX_LAND_TIER } from '../data/buildables';
+import { MAX_LAND_TIER } from '../data/landTiers';
 
 export const ZERO_XP: Record<SkillId, number> = {
   woodcutting: 0, mining: 0, smithing: 0, fishing: 0, building: 0, combat: 0, farming: 0,

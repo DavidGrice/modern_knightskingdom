@@ -3,7 +3,7 @@ import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WORLD_HALF, POND } from '@/game/data/world';
-import { landHalf, landSouthHalf } from '@/game/data/buildables';
+import { landHalf, landSouthHalf } from '@/game/data/landTiers';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv, seasonOf } from '@/game/env';
 import { SEASON_GRASS } from './seasonGrass';
@@ -22,7 +22,7 @@ export default function Terrain() {
   //
   // Wave 17 #4 · asymmetric on Z: `half` is still shared by the north/east/
   // west sides, but south is the separate, fixed `landSouthHalf` (see
-  // buildables.ts's LAND_TIERS note) — so the overlay's own centre has to be
+  // landTiers.ts's LAND_TIERS note) — so the overlay's own centre has to be
   // derived from THIS tier's two numbers, not from BUILD_REGION (which is
   // built off MAX_LAND_TIER and would put the overlay in the wrong place for
   // every tier below the top one, the moment the two Z bounds stopped

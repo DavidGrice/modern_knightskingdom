@@ -79,7 +79,7 @@
 // as the destination worlds do it; a second analytic copy consulted at
 // runtime is how the visible ground and the ground you stand on drift apart.
 
-import { landHalf, MAX_LAND_TIER } from './buildables';
+import { landHalf, MAX_LAND_TIER } from './landTiers';
 import { ROAD_TILE, routeCells } from './road';
 import { GROUNDS } from './grounds';
 import { DIG_OUTSKIRT } from '../waterworks';

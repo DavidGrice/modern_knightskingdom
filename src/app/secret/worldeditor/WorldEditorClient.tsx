@@ -29,7 +29,7 @@ interface LandTierRow {
   walls: number;
   half: number;
   // Wave 17 #4 · the south fence no longer grows with the rest — `half`
-  // stays shared by north/east/west (see buildables.ts's LAND_TIERS note),
+  // stays shared by north/east/west (see landTiers.ts's LAND_TIERS note),
   // `southHalf` is this table's own separate, normally-constant south bound.
   southHalf: number;
   cost: number;

@@ -66,7 +66,7 @@ export const MAX_WATERWORKS = 24;
  *  is not unbounded either, for a reason that is mechanical rather than
  *  thematic: nav-blocking only exists on the home grid. The widest
  *  north/east/west fence is 40m (Wave 17 #4's `landHalf`, up from 32 — see
- *  buildables.ts's LAND_TIERS note), so 40 + 16 = 56 is this constant's own
+ *  landTiers.ts's LAND_TIERS note), so 40 + 16 = 56 is this constant's own
  *  bound, chosen independently of grid size. It used to land EXACTLY on the
  *  home nav grid's own edge (±56m) — no margin left on those three sides —
  *  but Wave 17 #6 widened that grid to ±200m (src/ai/config/navgrid.json) so

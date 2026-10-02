@@ -28,7 +28,7 @@ function validateRow(table: TableName, row: unknown): string | null {
 
   if (table === 'landTiers') {
     // southHalf (Wave 17 #4): the separate, normally-constant south fence
-    // bound — see buildables.ts's LAND_TIERS note. Checked with the same
+    // bound — see landTiers.ts's LAND_TIERS note. Checked with the same
     // `num()` as every other numeric field here, not a range check against
     // the real road position — this route has no business knowing where the
     // road is, that's what WorldEditorClient's own live preview is for.

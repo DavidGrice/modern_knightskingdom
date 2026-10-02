@@ -9,7 +9,7 @@
 // belongs to a deed. You can walk into a ground above your tier and see what
 // is in it — that is the point — but you cannot work it until the deed covers
 // it. Buying the Freehold hands you the quarry; the Manor, the iron seam.
-import { LAND_TIERS, landHalf, landSouthHalf, MAX_LAND_TIER } from './buildables';
+import { LAND_TIERS, landHalf, landSouthHalf, MAX_LAND_TIER } from './landTiers';
 import GROUNDS_DATA from './grounds.generated.json';
 import type { RectSection } from '../types/world';
 import { aabbOverlapCenterHalf } from '@/lib/geometry';
@@ -87,7 +87,7 @@ export function sectionsOverlap(a: RectSection, b: RectSection): boolean {
 /** does a section sit clear of the homestead at its widest bought extent?
  *
  *  Wave 17 #4 · the fence is no longer one shared number on every side (see
- *  buildables.ts's LAND_TIERS note): north/east/west still share `half`, but
+ *  landTiers.ts's LAND_TIERS note): north/east/west still share `half`, but
  *  south is the separate, fixed `southHalf`. The X check stays against
  *  `half` (both east and west really do still share it), but the Z check now
  *  picks the bound for the side the section is actually ON — `southHalf` for
