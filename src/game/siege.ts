@@ -127,6 +127,9 @@ export function explodeBall(ball: Cannonball) {
   let hits = 0;
   for (const e of enemies) {
     if (e.mob.state === 'dying') continue;
+    // a duel with Storm is settled sword-to-sword — a blast passes her by,
+    // the same as a bolt does (see stepBolt)
+    if (e.kind === 'storm') continue;
     const d = Math.hypot(e.mob.x - ball.pos.x, e.mob.z - ball.pos.z);
     if (d > 4.5) continue;
     e.hp -= 6;
@@ -165,7 +168,7 @@ export function detonate(charge: PlacedBuilding) {
   audio.play('explosion', 1);
   const { enemies } = useEnemyStore.getState();
   for (const e of enemies) {
-    if (e.mob.state === 'dying') continue;
+    if (e.mob.state === 'dying' || e.kind === 'storm') continue; // Storm: see explodeBall's own note
     if (Math.hypot(e.mob.x - x, e.mob.z - z) > 6.5) continue;
     e.hp -= 14;
     if (e.hp <= 0) resolveEnemyKill(e, { by: 'charge' });

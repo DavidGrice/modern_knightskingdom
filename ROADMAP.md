@@ -7094,7 +7094,7 @@ destinations visited: 32 to 110 textures, 1.9 to 3.4 MB of buffers, then flat).
 - `next dev` and the production build both run the whole sequence with 0 console errors;
   `lib/disposeObject3D.test.ts` (5 tests) fails 3 of them when the texture disposal is removed.
 
-## Bug: Tam can fell Princess Storm in the player's own duel — FOUND 2026-10-02 (during CLN-12), not yet fixed
+## Bugfix: Tam could fell Princess Storm in the player's own duel — FOUND AND FIXED 2026-10-02 (during CLN-12)
 
 **Found by** CLN-12's golden master, which drives every ally against every enemy kind: an ally's blow on Storm was
 settled as an ordinary kill. Then reproduced in the running game.
@@ -7109,16 +7109,40 @@ Tam's perception lists her like any hostile, so `assist_leader` charges her, and
 **Observed** (branch dev build, The Sister Keep, Tam recruited, Storm 9 m away): about 2.5 seconds after she appears
 the toast reads "Tam defeats a raider!", Storm plays a monster's death, `stats.killsByKind.storm` is 1, and the duel is
 never resolved — no reputation, no 40 XP and 20 gold, no credit toward her first-blood errand, no cooldown. The
-player did nothing. The code is the same on `main`.
+player did nothing. Reproduced on a production build of `main` afterwards (below).
 
-**Also true, not seen in play:** a cannonball or a placed charge fells her the same way (`explodeBall` and `detonate`
-do not skip her), announced as "Bandit blasted!". Her dome is in a destination the player can claim — the plot is
-wherever they stand when they claim it — so an engine could be set up within reach; that was not tried. Defenders
-and ordinary villagers cannot reach her: they only ever stand at home or in a settlement, and she only ever appears
-at her dome.
+**Also true before the fix, though never seen in play:** a cannonball or a placed charge felled her the same way
+(`explodeBall` and `detonate` did not skip her), announced as "Bandit blasted!". Her dome is in a destination the
+player can claim — the plot is wherever they stand when they claim it — so an engine could have been set up within
+reach; that was not tried. Defenders and ordinary villagers cannot reach her: they only ever stand at home or in a
+settlement, and she only ever appears at her dome.
 
-**Fix, to follow in its own change:** allies and blasts leave Storm alone, the rule those three paths already
-follow.
+**Fix:** three places now leave her alone, and the one that settles a death refuses to settle hers.
+
+- `ai/perception/VisionSensor.ts` no longer lists her as a hostile. No agent forms a belief about her by sight, so
+  none answers one — Tam stays at the player's side.
+- `explodeBall` and `detonate` (`game/siege.ts`) pass her by, as `stepBolt` always has.
+- `resolveEnemyKill` (`game/combat/kill.ts`) owns the rule: the player's own blade wins the duel (`resolveDuel`), and
+  for every other cause it does nothing. The blade's special case moved there from `landMeleeHit`.
+
+**Verified:**
+
+- Unit tests: `ai/perception/VisionSensor.test.ts` (3, new — a raider beside the agent is noticed, a falling one is
+  not, Storm is not and does not hide the raider next to her) and four in `game/combat/kill.test.ts` under "Storm's
+  duel"; 99 in total. Each part of the fix was taken out in turn (six mutations) and a test failed every time.
+- CLN-12's 90-step golden master. With Storm left out of every step it is byte-identical between `main` and the fix
+  (353 KB), so nothing but her handling changed. With her in, the steps whose own outcome differs are the ones she is
+  in: the two blasts into a crowd (she is untouched) and each ally's blow on her (no kill, no toast).
+- Live, on production builds, at The Sister Keep with Tam recruited, three duels in a row. On `main` Tam ends two of
+  the three ("Tam defeats a raider!" 2.5 seconds in, `killsByKind.storm` 2) and the player wins the one where they
+  strike first. On the fix Tam sees no hostile and stays put, and all three end as duels should — Storm's blade first,
+  the player's blow first (+10 reputation, "Worthy Opponent"), Storm's blade first — with no kill recorded. The same
+  under `next dev`; 0 console errors. The CLN-12 kill probe (blade, cannonball, charge, the defender cascade, Tam
+  against a Royal Knight) is unchanged apart from Storm no longer being caught in the two blasts.
+
+**Left as it is:** a won duel is still heard. The player's blow makes the usual combat sound, keyed to her, so an
+agent in earshot briefly holds a faint belief about an enemy who is already gone (threat 0 in the probe). Nothing
+can come of it — there is nobody left to strike.
 
 ## Open decision: what a cannon or a charge kill is worth — logged 2026-10-02 (during CLN-12)
 

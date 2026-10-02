@@ -116,6 +116,12 @@ function collectCandidates(agent: Agent, range2: number): void {
     // the instant it starts falling, not 12 seconds later when its belief
     // finally decays out
     if (e.mob.state === 'dying') continue;
+    // Princess Storm is nobody's hostile but the player's. Her duel is first
+    // blood between the two of them, and her own side already keeps it that
+    // way (Enemies.tsx never lets her target a defender, Tam or a villager).
+    // Seen like any other mob, she was a threat to answer: Tam charged her the
+    // moment the duel began, and his blow ended it as an ordinary kill.
+    if (e.kind === 'storm') continue;
     const dx = e.mob.x - ax;
     const dz = e.mob.z - az;
     const d2 = dx * dx + dz * dz;

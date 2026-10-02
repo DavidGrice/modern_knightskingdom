@@ -8,6 +8,7 @@ import { ITEMS } from '../data/items';
 import { rollBossLegendaryDrop } from '../bossEncounter';
 import { arenaState } from '../arena';
 import { KIND_LABEL, KIND_XP, KIND_XP_RANGED, type EnemyKind } from '../data/enemies';
+import { resolveDuel } from './duel';
 import type { EnemyData } from './enemyStore';
 import { lootFor } from './loot';
 
@@ -90,12 +91,21 @@ const ALLY_KILL_XP = 15;
  * that happens here, in one order for every cause: the enemy starts to fall, the kill is recorded, then the arena
  * tally, the experience, the purse, the line the player reads, and last whatever the kill sets in motion.
  *
- * Not for Storm's duel — that is settled by `resolveDuel`, not by a death (see melee.ts's landMeleeHit) — and not
- * for an enemy that simply falls with nobody to credit (a raider whose wall comes down under it, skeletons at
- * dawn: Enemies.tsx sets `state = 'dying'` itself for those).
+ * Princess Storm is the one enemy this never kills: see the first lines of the body. And it is not for an enemy that
+ * simply falls with nobody to credit (a raider whose wall comes down under it, skeletons at dawn: Enemies.tsx sets
+ * `state = 'dying'` itself for those).
  */
 export function resolveEnemyKill(e: EnemyData, cause: KillCause): void {
   if (e.mob.state === 'dying') return; // already settled — a death is only ever paid out once
+  // Princess Storm is never killed. Her duel is first blood between her and the player, so the player's own blade
+  // wins it (`resolveDuel`, which removes her rather than felling her) and nothing else can end it. Nothing else
+  // should reach her in the first place — allies do not see her as a hostile (VisionSensor.ts), and bolts and
+  // blasts pass her by (stepBolt, siege.ts) — so for every cause but the blade this is the second line of defence:
+  // before it, Tam's blow ended the duel as "Tam defeats a raider!" and nobody won.
+  if (e.kind === 'storm') {
+    if (cause.by === 'melee') resolveDuel(true, e.id);
+    return;
+  }
   const st = useGameStore.getState();
   const rules = RULES[cause.by];
   e.mob.state = 'dying';
