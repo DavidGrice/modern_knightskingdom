@@ -21,7 +21,7 @@
 // per tick with the rest round-robined to the next tick.
 
 import { useEnemyStore } from '@/game/combat';
-import { getNavGrid, type NavGrid } from '@/game/navgrid';
+import { getNavGridOrNull, type NavGrid } from '@/game/navgrid';
 import { playerState } from '@/game/playerState';
 import { PERCEPTION, VISION_HALF_COS } from '../config';
 import type { Agent } from '../core/Agent';
@@ -42,24 +42,6 @@ const candX: number[] = [];
 const candZ: number[] = [];
 const candDist: number[] = [];
 let candCount = 0;
-
-/** `getNavGrid` throws for an unknown destination id and for the Crypt before
- *  a layout has generated (navgrid.ts) — neither should be reachable here
- *  (an agent's region only ever comes from `gameStore.destination`, and the
- *  player is standing in the Crypt if any agent is tiered into it), but a
- *  thrown error inside a think tick would take down the whole scheduler for
- *  every agent, not just this one. Failing OPEN (no grid = nothing known to
- *  block sight) is the right direction: perception is an enhancement over the
- *  pre-phase-6 behaviour of seeing nothing at all, so a missing grid should
- *  degrade to "sees through walls", never to "goes blind and throws". */
-function losGridFor(region: string | null): NavGrid | null {
-  try {
-    return getNavGrid(region);
-  } catch {
-    return null;
-  }
-}
-
 /** The narrow phase. Marches the segment between two points at half-cell
  *  steps and reports whether every intermediate sample is walkable.
  *
@@ -183,7 +165,8 @@ export function updateVision(agent: Agent, st: PerceptionState, now: number, dt:
   // its head and no way to tell from the numbers alone.
   const fx = -Math.sin(agent.yaw);
   const fz = -Math.cos(agent.yaw);
-  const grid = losGridFor(agent.region);
+  // fails OPEN: no grid means nothing is known to block sight (sees through walls rather than going blind)
+  const grid = getNavGridOrNull(agent.region);
 
   // §6.1's round-robin: the cursor persists across ticks on the agent's own
   // perception state, so with more candidates than the per-tick LOS budget

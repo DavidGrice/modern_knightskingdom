@@ -7,7 +7,7 @@
 // Phase-2 deliverable, not yet wired into anything real: phase 5's gather/
 // haul actions are the first real caller.
 
-import { getNavGrid } from '@/game/navgrid';
+import { getNavGridOrNull } from '@/game/navgrid';
 import type { Target } from './TargetRegistry';
 import { exposeDebug } from '@/lib/debugHooks';
 
@@ -59,12 +59,8 @@ function rotateQuarter(x: number, z: number, quarter: number): [number, number] 
  * nearestWalkable fallback found anything open.
  */
 export function resolveAnchor(target: Target, fromX: number, fromZ: number): ResolvedAnchor | null {
-  let grid;
-  try {
-    grid = getNavGrid(target.region);
-  } catch {
-    return null;
-  }
+  const grid = getNavGridOrNull(target.region);
+  if (!grid) return null;
 
   const rule = target.anchorRule;
   if (rule.mode === 'fixed') {

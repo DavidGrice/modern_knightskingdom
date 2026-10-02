@@ -47,7 +47,7 @@
 import { useEnemyStore, KIND_LABEL } from '@/game/combat';
 import { heightOf, sizeFor } from '@/game/data/buildables';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
-import { getNavGrid, type NavGrid } from '@/game/navgrid';
+import { getNavGridOrNull } from '@/game/navgrid';
 import { useGameStore } from '@/game/store/gameStore';
 import { isBuilt } from '@/game/types';
 import { COMBAT } from '../config';
@@ -73,21 +73,6 @@ const ACTION_ID = 'take_cover';
 function threatOf(agent: Agent): Belief | null {
   return nearestNoticedHostile(agent.bb, agent.position.x, agent.position.z);
 }
-
-/** Same fail-open contract `VisionSensor.losGridFor` documents: `getNavGrid`
- *  throws for an unknown region and for the Crypt before a layout exists, and
- *  a throw inside a think tick takes down the scheduler for every agent, not
- *  just this one. No grid simply means "no walkability opinion" — the cover
- *  point is used unchecked, which degrades to the pre-phase-7 behaviour of
- *  walking wherever `navSteer` can get to, never to a crash. */
-function gridFor(region: string | null): NavGrid | null {
-  try {
-    return getNavGrid(region);
-  } catch {
-    return null;
-  }
-}
-
 interface CoverPick { x: number; z: number; label: string }
 
 /** Pick somewhere to stand that puts a real standing piece between this agent
@@ -122,7 +107,8 @@ function chooseCover(agent: Agent, tx: number, tz: number): CoverPick {
   const ax = agent.position.x;
   const az = agent.position.z;
   const distNow = Math.hypot(ax - tx, az - tz);
-  const grid = gridFor(agent.region);
+  // no grid means no walkability opinion: the cover point is used unchecked, never a crash
+  const grid = getNavGridOrNull(agent.region);
 
   let best: CoverPick | null = null;
   let bestCost = Infinity;

@@ -42,29 +42,13 @@
 // tick, with no second list to keep in sync.
 import { BUILD_REGION } from '@/game/data/buildables';
 import { villagerHomeSpot } from '@/game/data/villagers';
-import { getNavGrid, type NavGrid } from '@/game/navgrid';
+import { getNavGridOrNull } from '@/game/navgrid';
 import { useGameStore } from '@/game/store/gameStore';
 import { AMBIENT } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 import type { Curve } from '../core/curves';
 import { clamp } from '@/lib/math';
-
-/** Same fail-open contract `AnchorResolution.resolveAnchor`, phase 7's
- *  `takeCover.gridFor` and phase 8's `Locomotion.gridOrNull` all already
- *  document (a third copy rather than a shared export, matching the two that
- *  exist): `getNavGrid` throws for an unknown region, and a throw in here comes
- *  out of a think tick. No grid means no walkability opinion, so the candidate
- *  point is accepted unchecked — which is exactly what the cascade this ring
- *  came from does, since it never consulted the grid at all. */
-function gridFor(region: string | null): NavGrid | null {
-  try {
-    return getNavGrid(region);
-  } catch {
-    return null;
-  }
-}
-
 /** A walkable point on Villagers.tsx's own wander ring, or null if this agent
  *  has nowhere sensible to go.
  *
@@ -104,7 +88,8 @@ function chooseWanderPoint(agent: Agent): { x: number; z: number } | null {
   // `world` is still null — Villagers.tsx's own filter comment says so), which
   // is precisely why it costs one line now rather than a bug later.
   const atHome = (villager.world ?? null) === null;
-  const grid = gridFor(agent.region);
+  // no grid means no walkability opinion: the candidate point is accepted unchecked
+  const grid = getNavGridOrNull(agent.region);
 
   for (let i = 0; i < cfg.samples; i++) {
     const a = Math.random() * Math.PI * 2;

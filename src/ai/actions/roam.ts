@@ -44,23 +44,11 @@
 // so "spawn position" and "home perch" are the same point for the whole
 // session). A plain module-local Map, the same "small mutable leaf state"
 // shape Locomotion.ts's own `steerState`/`anchorCache` already use.
-import { getNavGrid, type NavGrid } from '@/game/navgrid';
+import { getNavGridOrNull } from '@/game/navgrid';
 import { AMBIENT } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
 import type { Curve } from '../core/curves';
-
-/** Same fail-open contract wander.ts's own `gridFor` documents (a third
- *  copy, matching that file's own precedent rather than a shared export —
- *  see its header). */
-function gridFor(region: string | null): NavGrid | null {
-  try {
-    return getNavGrid(region);
-  } catch {
-    return null;
-  }
-}
-
 // No despawn cleanup, unlike Locomotion.ts's own per-agent steerState/
 // anchorCache: a wildlife id is a small, fixed, authored string that never
 // changes across sessions (wildlifeSync.ts's own WILDLIFE_POPULATION) and
@@ -77,7 +65,8 @@ function chooseRoamPoint(agent: Agent): { x: number; z: number } | null {
     home = { x: agent.position.x, z: agent.position.z };
     homeSpots.set(agent.id, home);
   }
-  const grid = gridFor(agent.region);
+  // no grid (an unknown region) means no walkability opinion: the point is accepted unchecked
+  const grid = getNavGridOrNull(agent.region);
   for (let i = 0; i < cfg.samples; i++) {
     const a = Math.random() * Math.PI * 2;
     const r = cfg.minRadius + Math.random() * (cfg.radius - cfg.minRadius);
