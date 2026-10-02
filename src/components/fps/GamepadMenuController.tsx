@@ -22,7 +22,7 @@
 // EmoteWheel/NpcEquipPanel) added `tabIndex`+Enter/Space wiring to the
 // specific onClick-`<div>` spots that weren't buttons. This also makes
 // keyboard Tab+Enter an official, visible, working feature (see
-// `.game-panel :focus-visible` in globals.css), not just gamepad.
+// `.game-panel :focus-visible` in kk-legacy-panels.css), not just gamepad.
 //
 // Explicitly still out of scope, permanently: the two HTML5 drag-and-drop
 // equip gestures (InventoryPanel's weapon row, NpcEquipPanel's Armory/gear

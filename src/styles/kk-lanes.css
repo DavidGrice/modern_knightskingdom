@@ -189,7 +189,7 @@
 }
 
 /* ============================================================
-   The HUD clusters (kk-screens.css) all wear `.kk-glass`, which is the
+   The HUD clusters (kk-hud-field.css) all wear `.kk-glass`, which is the
    Aero Glass recipe hardcoded. The four lanes have to reach it too —
    that IS the point of the setting — so each one re-skins `.kk-glass`
    here. Metrics (radii, insets, bar heights) are deliberately left
@@ -275,7 +275,7 @@
    background (kk-screen-* fixed that part already) but every card,
    input and button INSIDE those screens still being the one baked-in
    look. These eight custom properties are that missing lane hookup:
-   defined once here per lane, referenced by kk-screens.css's own card
+   defined once here per lane, referenced by kk-screen-frontdoor.css's own card
    rules instead of a hardcoded hex value, so both screens (and any
    future one) pick up the SAME chosen lane's card language together.
    Chrome and leather's own values below are exactly what was already

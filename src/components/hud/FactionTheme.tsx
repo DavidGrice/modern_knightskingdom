@@ -4,7 +4,7 @@
 // Cedric's horns) — while the chrome triad (--chrome / --chrome-2 /
 // --chrome-glow: every border, frame, divider, heraldic header band and
 // hover glow) shifts with the sworn side via a [data-faction] attribute on
-// the root element (see globals.css's token blocks): unsworn aged gold-iron,
+// the root element (see kk-base.css's token blocks): unsworn aged gold-iron,
 // the crown blue/gold/white, the Bull red/grey/black. Values grounded in
 // the extraction's own materials (see the faction-palette proposal artifact).
 import { useEffect } from 'react';

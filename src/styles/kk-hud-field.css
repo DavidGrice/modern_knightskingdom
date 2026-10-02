@@ -1,0 +1,488 @@
+/* CLN-32 · split out of kk-screens.css unchanged (that file's header, with the port's history, now opens
+   kk-screen-frontdoor.css). */
+/* ============================================================
+   FIELD HUD — nine clusters, each anchored to a viewport edge.
+   Rule (HANDOFF §5.8): while a side panel is open nothing in the
+   HUD may be horizontally centred; every cluster stacks from an
+   edge at var(--kk-hud-inset).
+   ============================================================ */
+
+/* --- vitals, top-left: one vigour bar with a numeric readout --- */
+.kk-vitals {
+  position: absolute;
+  left: var(--kk-hud-inset);
+  top: var(--kk-hud-inset);
+  border-radius: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 18px 11px 11px;
+  overflow: hidden;
+}
+.kk-vitals-crest {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+  color: var(--kk-renown);
+}
+.kk-vitals-main { position: relative; display: flex; flex-direction: column; gap: 7px; width: 240px; }
+.kk-vitals-name-row { display: flex; align-items: baseline; gap: 8px; }
+.kk-vitals-name {
+  font: 500 16px/1 var(--kk-font-display);
+  letter-spacing: -.015em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kk-vitals-lv {
+  flex: none;
+  font: 600 9.5px/1 var(--kk-font);
+  letter-spacing: .1em;
+  padding: 3px 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .12);
+  color: var(--kk-renown);
+}
+/* the vigour bar replaces the row of heart glyphs — a row of 8 hearts
+   cannot show 178/240 and does not scale past 10 (HANDOFF §5.1) */
+.kk-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, .45);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  overflow: hidden;
+}
+.kk-bar > i {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  bottom: 1px;
+  display: block;
+  border-radius: 99px;
+  transition: width .18s ease;
+}
+.kk-bar.vigour > i { background: linear-gradient(90deg, color-mix(in oklch, var(--kk-vigour) 70%, #000), var(--kk-vigour)); }
+.kk-bar.stamina { height: 8px; }
+.kk-bar.stamina > i { background: linear-gradient(90deg, color-mix(in oklch, var(--kk-stamina) 70%, #000), var(--kk-stamina)); }
+.kk-bar.stamina.blocking > i { background: linear-gradient(90deg, #8a5c12, var(--kk-renown)); }
+.kk-bar.xp { height: 8px; }
+.kk-bar.xp > i { background: linear-gradient(90deg, color-mix(in oklch, var(--kk-renown) 65%, #000), var(--kk-renown)); }
+.kk-bar-num {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 700 9px/1 var(--kk-font-num);
+  color: rgba(255, 255, 255, .92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+  pointer-events: none;
+}
+.kk-vitals-sub { display: flex; gap: 7px; }
+.kk-vitals-sub .kk-bar:first-child { flex: 1; }
+.kk-vitals-sub .kk-bar.xp { width: 92px; flex: none; }
+.kk-vitals-flags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font: 500 10.5px/1 var(--kk-font);
+  color: rgba(255, 255, 255, .8);
+}
+.kk-vitals-flags .warn { color: var(--kk-warn); }
+.kk-vitals-flags .ok { color: var(--kk-ok); }
+.kk-vitals-flags .gold { color: var(--kk-renown); }
+
+/* --- compass strip + world clock, top-right --- */
+.kk-topright {
+  position: absolute;
+  right: var(--kk-hud-inset);
+  top: var(--kk-hud-inset);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+.kk-compass {
+  position: relative;
+  width: 250px;
+  height: 32px;
+  border-radius: 99px;
+  overflow: hidden;
+}
+/* Requested 2026-07-31: Options' "Show FPS counter" switch */
+.kk-fps-readout {
+  font: 700 10px/1 var(--kk-font-num);
+  letter-spacing: .08em;
+  color: rgba(255, 255, 255, .55);
+  padding: 3px 8px;
+}
+.kk-compass-ticks {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  font: 600 10px/1 var(--kk-font);
+  letter-spacing: .14em;
+  color: rgba(255, 255, 255, .55);
+}
+/* absolutely-positioned children ignore the flex alignment of their
+   container, so the ticks need their own vertical centring */
+.kk-compass-ticks > span { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.kk-compass-ticks > span.n { color: #fff; }
+.kk-compass-bearing {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  transform: translateX(-1px);
+  background: var(--kk-a-400);
+  box-shadow: 0 0 8px var(--kk-a-500);
+}
+.kk-compass-pip {
+  position: absolute;
+  top: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-left: -4.5px;
+  box-shadow: 0 0 8px currentColor;
+  background: currentColor;
+}
+.kk-compass-pip.objective { color: var(--kk-renown); }
+.kk-compass-pip.threat { color: var(--kk-taint); }
+.kk-clock {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border-radius: 99px;
+  font: 500 10px/1 var(--kk-font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .9);
+}
+.kk-clock .pips { display: flex; gap: 4px; }
+.kk-clock .pips span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .22);
+}
+.kk-clock .pips span.on { background: var(--kk-renown); box-shadow: 0 0 6px var(--kk-renown); }
+
+/* --- objective card, right rail under the compass --- */
+.kk-objective {
+  position: absolute;
+  right: var(--kk-hud-inset);
+  top: 100px;
+  width: 262px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* ---------- responsive: vitals vs. compass/clock ----------
+   Audit 2026-08-03: .kk-vitals (left, ~339px) and .kk-topright (right, its
+   .kk-compass alone is 250px) both sit at top: var(--kk-hud-inset) with no
+   responsive rule — below ~633px viewport they overlap outright (250px of
+   overlap at 375px). Fine at 768px (135px clear gap per the same audit), so
+   this only needs the phone tier. .kk-topright drops below .kk-vitals'
+   tallest state (crest + a wrapped flags row) instead of shrinking either
+   cluster's content, and .kk-objective — which already stacks under
+   .kk-topright at top: 100px on desktop — moves down to keep stacking under
+   its new position rather than colliding with it.
+   Verified live 2026-08-04: this block originally sat BEFORE the
+   unconditional `.kk-objective { top: 100px; ... }` rule above — same
+   selector, same specificity, so per the cascade the later unconditional
+   rule always won regardless of the media query's own condition, and the
+   objective card never actually moved on phone. It fully overlapped and
+   hid the compass/clock underneath (both same top-right corner, same
+   opaque card background) rather than stacking below it as intended.
+   Moved below the base rule it needs to override — plain CSS source-order,
+   not a specificity trick — so the phone-width value actually wins. */
+@media (max-width: 480px) {
+  .kk-topright { top: 126px; }
+  .kk-objective { top: 226px; }
+}
+.kk-objective-in { position: relative; padding: 13px 16px 15px; }
+.kk-objective-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 9.5px/1 var(--kk-font);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--kk-renown);
+}
+.kk-objective-kicker button {
+  margin-left: auto;
+  border: 0;
+  background: rgba(255, 255, 255, .1);
+  border-radius: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .8);
+  display: grid;
+  place-items: center;
+}
+.kk-objective-title {
+  margin-top: 7px;
+  font: 500 15px/1.25 var(--kk-font-display);
+  letter-spacing: -.012em;
+  color: #fff;
+}
+.kk-objective-steps { margin-top: 11px; display: flex; flex-direction: column; gap: 8px; }
+.kk-step {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font: 400 12px/1.3 var(--kk-font);
+  color: rgba(255, 255, 255, .72);
+}
+.kk-step .dot {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3);
+}
+.kk-step .num { margin-left: auto; font: 600 11px/1 var(--kk-font-num); }
+.kk-step.active { font-weight: 500; color: #fff; }
+.kk-step.active .dot { box-shadow: inset 0 0 0 1px var(--kk-renown); }
+.kk-step.done { color: rgba(255, 255, 255, .45); }
+.kk-step.done .dot { background: var(--kk-ok); color: #06210f; box-shadow: none; }
+
+/* --- reticle + hold-E ring, centre --- */
+.kk-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  pointer-events: none;
+}
+.kk-reticle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #fff;
+}
+.kk-prompt {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 42px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px 9px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+/* one element, no DOM churn per frame — the ring is a conic-gradient
+   whose stop is driven by a CSS custom property */
+.kk-prompt-ring {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--kk-renown) calc(var(--kk-hold, 0) * 360deg), rgba(255, 255, 255, .14) 0);
+}
+.kk-prompt-ring > span {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(12, 18, 14, .92);
+  color: #fff;
+}
+.kk-prompt-verb { font: 500 15px/1.15 var(--kk-font-display); color: #fff; }
+.kk-prompt-key {
+  font: 600 9px/1 var(--kk-font);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .68);
+  margin-bottom: 4px;
+}
+.kk-prompt-key b {
+  display: inline-block;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .16);
+  color: #fff;
+  font-family: var(--kk-font-num);
+  letter-spacing: 0;
+}
+
+/* --- bottom band: ONE flow row, never three independent clusters --- */
+.kk-bottom {
+  position: absolute;
+  left: var(--kk-hud-inset);
+  right: var(--kk-hud-inset);
+  bottom: var(--kk-hud-inset);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px;
+  pointer-events: none;
+}
+.kk-bottom > * { pointer-events: auto; }
+.kk-ledger {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 99px;
+  flex-wrap: wrap;
+}
+.kk-ledger .chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 5px;
+  font: 600 11.5px/1 var(--kk-font-num);
+  color: rgba(255, 255, 255, .92);
+}
+.kk-ledger .chip.gold { color: var(--kk-renown); }
+.kk-hotbar { display: flex; gap: var(--kk-slot-gap); padding: 8px; border-radius: 20px; }
+.kk-slot {
+  position: relative;
+  width: var(--kk-slot);
+  height: var(--kk-slot);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13);
+  color: rgba(255, 255, 255, .92);
+}
+.kk-slot::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 3px;
+  height: 38%;
+  border-radius: 99px;
+  background: linear-gradient(rgba(255, 255, 255, .22), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.kk-slot.on { box-shadow: inset 0 0 0 1px var(--kk-renown), 0 0 14px rgba(232, 193, 65, .35); }
+.kk-slot.empty { opacity: .38; }
+.kk-slot .digit {
+  position: absolute;
+  left: 5px;
+  bottom: 2px;
+  font: 600 9px/1 var(--kk-font-num);
+  color: rgba(255, 255, 255, .6);
+}
+.kk-slot .count {
+  position: absolute;
+  right: 5px;
+  bottom: 2px;
+  font: 600 10px/1 var(--kk-font-num);
+  color: #fff;
+}
+
+/* the minimap keeps one shape per lane; glass gets the rounded slab */
+.kk-minimap-frame {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.kk-minimap-label {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  font: 600 8.5px/1 var(--kk-font);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .75);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+  pointer-events: none;
+}
+
+/* --- toasts, right-middle --- */
+.kk-toasts {
+  position: absolute;
+  right: var(--kk-hud-inset);
+  top: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.kk-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 15px 9px 10px;
+  border-radius: 99px;
+  font: 500 12.5px/1.3 var(--kk-font);
+  color: #fff;
+  max-width: 300px;
+}
+.kk-toast .mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .14);
+}
+.kk-toast.gold { color: var(--kk-renown); }
+
+/* --- build-mode control hints: left-aligned UNDER the vitals cluster.
+       Never centred — while the build palette is open the top band has
+       fixed clusters pinned at both edges (HANDOFF §5.8). --- */
+.kk-buildhint {
+  position: absolute;
+  left: var(--kk-hud-inset);
+  top: 132px;
+  max-width: 340px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font: 400 11.5px/1.6 var(--kk-font);
+  color: rgba(255, 255, 255, .85);
+}
+.kk-buildhint b { color: var(--kk-renown); font-family: var(--kk-font-num); font-size: 11px; }
+
+/* glass is the default surface for anything floating over the render:
+   the world renders BRIGHT, so an opaque panel reads as a hole in it */
+.kk-glass {
+  background: linear-gradient(rgba(16, 24, 20, .70), rgba(8, 14, 11, .82));
+  backdrop-filter: blur(20px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-top-color: rgba(255, 255, 255, .46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), var(--kk-sh-panel);
+  color: #fff;
+}
+[data-kk-quality='low'] .kk-glass { backdrop-filter: none; background: rgba(10, 16, 12, .92); }

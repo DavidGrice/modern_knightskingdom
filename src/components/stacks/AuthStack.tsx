@@ -17,7 +17,7 @@ export default function AuthStack() {
   const setGuest = useAppStore((s) => s.setGuest);
   const resetTo = useAppStore((s) => s.resetTo);
   // one shared theme now, not the mockup's fixed "title = chrome" pick —
-  // see kk-screens.css's own header for the full story
+  // see kk-screen-frontdoor.css's own header for the full story
   const uiTheme = useAppStore((s) => s.settings.uiTheme);
 
   async function submit(e: React.FormEvent) {

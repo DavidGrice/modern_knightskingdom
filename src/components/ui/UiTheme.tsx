@@ -3,7 +3,7 @@
 //
 // The handoff ships four approved surface treatments over ONE set of metrics,
 // so the whole look swaps by changing a single attribute — nothing reflows.
-// `data-kk-lane` on <html> selects the treatment; globals.css maps it onto the
+// `data-kk-lane` on <html> selects the treatment; kk-lanes.css maps it onto the
 // game's existing panel/HUD classes rather than every component having to know
 // which lane it's in.
 //

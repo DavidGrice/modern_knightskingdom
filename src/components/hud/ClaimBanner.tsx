@@ -27,7 +27,7 @@ export default function ClaimBanner() {
 
   return (
     // Bugfix (2026-08-14, found by Wave 13's verify pass): this div sits
-    // directly under HUD's outer `.hud`, and globals.css sets
+    // directly under HUD's outer `.hud`, and kk-legacy-hud.css sets
     // `.hud > * { pointer-events: none }`, only lifted back by the
     // `.clickable` class (see DialoguePanel/Panels.tsx's `game-panel
     // clickable` for the same pattern) — without it the button rendered but

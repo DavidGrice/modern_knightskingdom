@@ -1,0 +1,298 @@
+/* CLN-32 · split out of globals.css unchanged: the in-game panels (.game-panel and everything inside one), the
+   station crafting menus, the Quest Log's parchment page, build mode's right rail, and pause. */
+/* ---------- in-game panels ---------- */
+.game-panel {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background:
+    linear-gradient(180deg, rgba(11, 13, 18, 0.9), rgba(7, 9, 13, 0.95)),
+    var(--stone) repeat;
+  background-size: auto, 256px 256px;
+  border: 2px solid var(--chrome); border-radius: 10px; padding: 22px 26px;
+  box-shadow:
+    0 0 50px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -3px 12px rgba(0, 0, 0, 0.6);
+  /* same fluid-floor fix as .panel above, same reason (min-width otherwise
+     outranks max-width(86vw) under ~535px, breakpoint-mask notwithstanding) */
+  min-width: min(460px, 86vw); max-width: 86vw; max-height: 82vh; overflow-y: auto; z-index: 15;
+}
+/* the six MenuTabs-family panels (Satchel/Crafting/Quests/Abilities/Roster/
+   Lore, plus the Equip-villager sub-panel) share one tab bar, so switching
+   tabs or toggling an internal filter/tab/collapsible region used to resize
+   and re-center the whole box every time — a fixed footprint with an inner
+   scroll region keeps it planted in one spot regardless of content height */
+.game-panel.menu-family {
+  display: flex; flex-direction: column;
+  width: min(760px, 92vw); min-width: 0;
+  height: min(78vh, 720px); max-height: 78vh; overflow: hidden;
+}
+.game-panel.menu-family > .panel-scroll {
+  flex: 1 1 auto; overflow-y: auto; min-height: 0;
+}
+/* heraldic banding: the header's underline carries the sworn faction's
+   tricolor — unsworn gold-iron, the crown blue→gold→white, the Bull
+   red→gold→grey */
+.game-panel h2 {
+  color: var(--gold); letter-spacing: 2px; font-size: 21px; margin-bottom: 14px;
+  font-variant: small-caps;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, var(--chrome), var(--gold), var(--chrome-2)) 1;
+  padding-bottom: 7px;
+}
+/* Wave 61 (H1) · every focusable descendant (a real <button>, or one of the
+   short list of onClick-<div>s that picked up tabIndex this wave) gets a
+   visible ring — this is what makes GamepadMenuController's new roving focus
+   (and plain keyboard Tab, which reaches the exact same elements) actually
+   visible rather than a cursor moving with nothing to show for it. Mirrors
+   kk-tokens.css's `.kk-interactive:focus-visible` convention, just scoped to
+   this file's own `.game-panel` (a different colour token on purpose — gold
+   matches this panel family's own heading/border accent). */
+.game-panel :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.panel-close { position: absolute; top: 10px; right: 14px; background: none; border: none; color: var(--parchment-dark); font-size: 21px; }
+.panel-close:hover { color: var(--gold); }
+
+.inv-grid { display: grid; grid-template-columns: repeat(6, 74px); gap: 8px; }
+.inv-slot {
+  width: 74px; height: 74px; background: rgba(0,0,0,0.4); border: 1px solid var(--chrome-2); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; position: relative;
+}
+.inv-slot .icon { font-size: 26px; }
+/* J45 · a parts-bin slot shows the piece itself, rendered, not an emoji */
+.inv-slot.brick { border-color: var(--gold-dim); background: rgba(232, 193, 65, 0.06); justify-content: flex-start; padding-top: 6px; }
+.inv-slot.brick .count { top: 3px; right: 4px; bottom: auto; }
+.inv-slot.brick .iname { line-height: 1.15; }
+.inv-slot .brick-thumb {
+  width: 42px; height: 42px; object-fit: contain;
+  image-rendering: auto; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6));
+}
+/* and a build cost is a bill of those same pieces */
+.build-item .b-cost-part { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }
+/* J51 · the socket panel: what can stand on this corner */
+.keep-options { display: flex; flex-direction: column; gap: 8px; }
+.keep-option {
+  display: flex; gap: 12px; align-items: center; text-align: left; width: 100%;
+  padding: 10px 12px; background: rgba(0, 0, 0, .4); border: 1px solid var(--chrome-2);
+  border-radius: 8px; color: var(--parchment); cursor: pointer;
+}
+.keep-option:hover:not(:disabled) { border-color: var(--gold); background: rgba(232, 193, 65, .1); }
+.keep-option:disabled, .keep-option.short { opacity: .55; cursor: not-allowed; }
+.keep-option-thumb { width: 56px; height: 56px; object-fit: contain; flex: none; }
+.keep-option-body { flex: 1; min-width: 0; }
+.keep-option-name { font-size: 14px; color: var(--gold); }
+.keep-option-blurb { font-size: 11.5px; color: var(--parchment-dark); margin: 2px 0 5px; }
+.keep-option-cost { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; }
+.keep-option-cost .b-cost-part.short { color: var(--danger, #c9553d); }
+.build-item .b-cost-thumb { width: 16px; height: 16px; object-fit: contain; }
+.inv-slot .iname { font-size: 10.5px; color: var(--parchment-dark); text-align: center; line-height: 1.1; padding: 0 2px; }
+.inv-slot .count { position: absolute; bottom: 3px; right: 6px; color: var(--gold); font-size: 13px; font-weight: bold; }
+
+.recipe-row {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px; border: 1px solid var(--chrome-2);
+  border-radius: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.28);
+}
+.recipe-row .icon { font-size: 24px; width: 34px; text-align: center; }
+.recipe-row .r-main { flex: 1; }
+.recipe-row .r-name { font-size: 15.5px; }
+.recipe-row .r-cost { font-size: 12.5px; color: var(--parchment-dark); margin-top: 2px; }
+.recipe-row .r-station { font-size: 11px; color: #8fb0d0; }
+.recipe-row button { padding: 7px 14px; font-size: 13.5px; border-radius: 5px; background: var(--wood-light); color: var(--parchment); border: 1px solid var(--gold-dim); }
+.recipe-row button:disabled { opacity: 0.4; cursor: default; }
+.recipe-row button:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+.recipe-row.locked { opacity: 0.55; }
+
+/* ---------- station-specific crafting menus (2026-07-20) ---------- */
+.station-tabs { display: flex; gap: 6px; margin: 2px 0 14px; flex-wrap: wrap; border-bottom: 1px solid var(--chrome-2); padding-bottom: 12px; }
+.station-tabs button {
+  padding: 6px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--chrome-2); border-radius: 6px;
+  color: var(--parchment-dark); font-size: 13px; display: flex; align-items: center; gap: 5px;
+}
+.station-tabs button:hover { border-color: var(--chrome); color: var(--parchment); }
+.station-tabs button.active { border-color: var(--gold); color: var(--gold); background: rgba(232,193,65,0.12); }
+.station-tab-here { color: #7fce6a; font-size: 9px; }
+
+.craft-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.craft-search { width: auto; flex: 1 1 160px; padding: 7px 10px; font-size: 13px; }
+.craft-sort { display: flex; gap: 4px; }
+.craft-sort button {
+  font-size: 11px; padding: 5px 9px; background: rgba(0,0,0,0.3); border: 1px solid var(--chrome-2);
+  border-radius: 5px; color: var(--parchment-dark); white-space: nowrap;
+}
+.craft-sort button.selected { border-color: var(--gold); color: var(--gold); }
+.craft-filter-toggle { font-size: 12px; color: var(--parchment-dark); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+.skill-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.skill-row .s-ico { font-size: 24px; width: 34px; text-align: center; }
+.skill-row .s-body { flex: 1; }
+.skill-row .s-name { font-size: 15px; }
+.skill-row .s-name span { color: var(--gold); }
+.skill-row .s-locked { color: var(--parchment-dark); font-size: 12.5px; font-style: italic; }
+
+.quest-item { border: 1px solid var(--chrome-2); border-radius: 6px; padding: 10px 14px; margin-bottom: 9px; background: rgba(0,0,0,0.28); }
+.quest-item .q-name { color: var(--gold); font-size: 15.5px; }
+.quest-item .q-desc { font-size: 13px; color: var(--parchment-dark); margin: 4px 0; }
+.quest-item.completed { opacity: 0.55; }
+.quest-item.completed .q-name { color: #9fce6a; }
+
+/* ---------- Quest Log: an aged-parchment journal page (2026-07-20) ----------
+   Deliberate exception to the dark-stone chrome shell: the panel FRAME
+   around it stays the same castle stone every other panel uses (tab bar,
+   close button, h2 heraldry), but the journal content reads as a real page
+   of vellum you've opened inside it — warm, mottled, hand-ruled, ink-brown
+   text — the one place in the UI that's allowed to feel like paper. */
+.quest-journal {
+  position: relative;
+  margin-top: 4px;
+  padding: 20px 22px;
+  border-radius: 3px;
+  color: #3a2c1a;
+  background:
+    radial-gradient(ellipse at 15% 8%, rgba(120,86,40,0.10), transparent 45%),
+    radial-gradient(ellipse at 85% 92%, rgba(100,70,30,0.13), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(140,110,60,0.06), transparent 70%),
+    linear-gradient(160deg, #ecdfc0 0%, #e0d0a4 45%, #e6d8b3 100%);
+  box-shadow:
+    inset 0 0 50px rgba(90,60,20,0.22),
+    inset 0 0 3px rgba(60,40,10,0.5),
+    0 6px 18px rgba(0,0,0,0.45);
+  border: 1px solid #8a7245;
+}
+/* a faint fibrous grain, so it doesn't read as a flat color fill */
+.quest-journal::before {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(3deg, rgba(70,50,20,0.035) 0px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(93deg, rgba(70,50,20,0.03) 0px, transparent 1px, transparent 4px);
+}
+
+.quest-journal-toolbar { display: flex; gap: 8px; margin-bottom: 14px; position: relative; }
+.journal-filter {
+  font-family: Georgia, serif; font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.5px;
+  padding: 5px 12px; border-radius: 3px; cursor: pointer;
+  background: rgba(255,250,235,0.4); border: 1px solid rgba(90,60,20,0.4); color: #5a4326;
+}
+.journal-filter:hover { background: rgba(255,250,235,0.65); }
+.journal-filter.selected { background: #d8b74a; border-color: #8a6a20; color: #2a1e0e; font-weight: bold; }
+
+.quest-region { position: relative; margin-bottom: 10px; }
+.quest-region-header {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+  font-family: Georgia, serif; font-variant: small-caps; letter-spacing: 1px;
+  font-size: 16.5px; color: #4a331a; padding: 7px 10px; border-radius: 3px;
+  background: linear-gradient(180deg, rgba(150,110,55,0.16), rgba(150,110,55,0.03));
+  border: 1px solid rgba(110,80,40,0.4); border-bottom: 1px dashed rgba(110,80,40,0.5);
+}
+.quest-region-header:hover { background: rgba(150,110,55,0.26); }
+.quest-region-arrow { width: 12px; display: inline-block; color: #8a6a2a; }
+.quest-region-icon { font-size: 15px; }
+.quest-region-body { padding: 10px 6px 4px 16px; }
+
+.quest-giver { margin-bottom: 14px; }
+.quest-giver-name {
+  font-family: Georgia, serif; font-size: 14.5px; font-weight: bold; color: #5a3d1a;
+  border-bottom: 1px dotted rgba(90,60,20,0.4); padding-bottom: 4px; margin-bottom: 6px;
+}
+.quest-giver-title { font-weight: normal; font-style: italic; color: #8a6a3a; font-size: 12.5px; margin-left: 6px; }
+.quest-giver-locked { opacity: 0.65; }
+.quest-giver-hint { font-size: 12.5px; color: #7a6244; font-style: italic; }
+
+.quest-entry { padding: 6px 0 6px 10px; border-left: 3px solid #a08050; margin: 4px 0 8px; }
+.quest-entry-name { font-size: 14.5px; color: #3a2c1a; }
+.quest-entry-tag {
+  font-size: 11px; color: #8a6a2a; border: 1px solid rgba(120,90,40,0.4); border-radius: 3px;
+  padding: 1px 6px; margin-left: 8px; font-variant: small-caps;
+}
+.quest-entry-meta { font-size: 12.5px; color: #6a5535; margin: 3px 0; }
+.quest-entry-hint { font-size: 11.5px; color: #8a7250; font-style: italic; }
+.quest-obj-line { font-size: 12.5px; color: #5a4a30; padding-left: 4px; }
+.quest-obj-line.done { color: #4d7038; text-decoration: line-through; }
+
+.quest-entry.done { border-left-color: #6b8f5a; opacity: 0.68; }
+.quest-entry.done .quest-entry-name { color: #4d7038; }
+.quest-entry.active { border-left-color: #b8862f; background: rgba(216,183,74,0.16); }
+.quest-entry.locked { opacity: 0.6; font-style: italic; }
+.quest-entry.available { border-left-color: #8a7245; }
+
+.quest-track-pin {
+  font-size: 11px; color: #6a5228; background: rgba(255,255,255,0.35);
+  border: 1px solid rgba(120,90,40,0.5); border-radius: 4px; padding: 1px 7px;
+  margin-left: 10px; cursor: pointer; font-family: inherit;
+}
+.quest-track-pin:hover:not(:disabled) { border-color: #8a6a2a; color: #3a2c1a; }
+.quest-track-pin:disabled { color: #8a6a2a; font-weight: 600; cursor: default; opacity: 0.85; }
+
+/* ---------- build mode (moved to the right rail 2026-07-20 — the minimap
+   already hides during build mode, so that whole side sat empty for a
+   cramped bottom bar) ---------- */
+.build-menu {
+  position: absolute; top: 118px; right: 14px; bottom: 16px;
+  background: rgba(11,13,18,0.92); border: 1px solid var(--gold-dim);
+  border-radius: 10px; padding: 12px; width: 300px;
+  display: flex; flex-direction: column;
+}
+.build-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; flex-shrink: 0;
+}
+.build-tabs button {
+  padding: 6px 8px; font-size: 12.5px; border-radius: 6px; text-align: left;
+  background: rgba(0,0,0,0.3); color: var(--parchment-dark); border: 1px solid var(--chrome-2);
+  display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden;
+}
+.build-tabs button.active { background: var(--wood-light); color: var(--gold); border-color: var(--gold); }
+.build-tab-count { margin-left: auto; font-size: 10px; color: var(--parchment-dark); opacity: 0.8; }
+.build-tabs button.active .build-tab-count { color: var(--gold); }
+.build-search {
+  width: 100%; padding: 6px 10px; font-size: 13px; margin-bottom: 8px; flex-shrink: 0;
+}
+.build-toolbar {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; flex-shrink: 0;
+}
+.build-sort { display: flex; gap: 4px; }
+.build-sort button {
+  flex: 1; font-size: 10.5px; padding: 5px 4px; background: rgba(0,0,0,0.3); border: 1px solid var(--chrome-2);
+  border-radius: 5px; color: var(--parchment-dark);
+}
+.build-sort button.selected { border-color: var(--gold); color: var(--gold); }
+.build-filter-toggle { font-size: 11.5px; color: var(--parchment-dark); display: flex; align-items: center; gap: 5px; }
+.build-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  overflow-y: auto; flex: 1 1 auto; min-height: 0; align-content: start;
+}
+/* Pinned last in flow, NOT absolutely positioned (HANDOFF §5.8): the grid
+   above is `flex:1; min-height:0`, so the footer keeps its place without
+   being sliced by the panel's own clip. */
+.build-foot {
+  flex: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--chrome-2);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: 11px; color: var(--parchment-dark);
+}
+.build-foot b { color: var(--gold); font-family: var(--kk-font-num); font-size: 12px; }
+.build-item {
+  border: 1px solid var(--chrome-2); border-radius: 7px; background: rgba(0,0,0,0.35);
+  padding: 6px 4px; text-align: center; cursor: pointer; color: var(--parchment);
+}
+.build-item img { width: 100%; max-width: 48px; height: 40px; object-fit: contain; image-rendering: auto; }
+.build-item .b-ico { font-size: 30px; line-height: 40px; }
+.build-item .b-name { font-size: 10.5px; line-height: 1.15; margin-top: 2px; }
+.build-item .b-cost { font-size: 9.5px; color: var(--parchment-dark); margin-top: 2px; }
+.build-item.selected { border-color: var(--gold); box-shadow: 0 0 10px rgba(232,193,65,0.5); }
+.build-item.unaffordable { opacity: 0.5; }
+.build-item.locked { opacity: 0.35; }
+/* Left-aligned UNDER the vitals cluster (HANDOFF §5.8). Never centred:
+   while the build palette is open the top band has fixed clusters pinned at
+   both edges, leaving a corridor too narrow for a key list — a centred hint
+   slides under one or the other. */
+.build-hint {
+  position: absolute; top: 132px; left: 22px; max-width: 340px;
+  background: rgba(11,13,18,0.85); border: 1px solid var(--gold-dim); border-radius: 12px;
+  padding: 10px 14px; font-size: 12px; line-height: 1.6; text-align: left;
+}
+.build-hint b { color: var(--gold); }
+
+/* ---------- pause ---------- */
+.pause-overlay {
+  position: absolute; inset: 0; background: rgba(8,5,2,0.72); z-index: 18;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-note { color: var(--parchment-dark); font-style: italic; text-align: center; padding: 20px; }

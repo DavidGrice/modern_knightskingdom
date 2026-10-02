@@ -25,7 +25,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     display: 'standalone',
     orientation: 'any',
-    // matches html/body's own real background (globals.css) — the color an
+    // matches html/body's own real background (kk-base.css) — the color an
     // installed launch actually shows before the game's own canvas paints
     background_color: '#0b0d12',
     // matches the icon's own plate colour (icon.svg / public/icons/icon.svg)

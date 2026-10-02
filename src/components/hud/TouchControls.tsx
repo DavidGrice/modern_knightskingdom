@@ -26,7 +26,7 @@ import { crewState } from '@/game/crew';
 
 // Wave 15 responsive residual (2026-08-17): used to be a flat 52px, tuned
 // by eye to the old fixed 120px CSS base — now that the base's own CSS size
-// is viewport-relative (globals.css's clamp(84px, 22vmin, 120px)), a
+// is viewport-relative (kk-touch-controls.css's clamp(84px, 22vmin, 120px)), a
 // hardcoded travel radius here would silently stop matching it below
 // ~730px-wide viewports (base shrinks, JS didn't), letting the knob visibly
 // overshoot its own ring. Measured from the base's live rendered size at
