@@ -69,8 +69,7 @@ export default function GuildPanel() {
           <div style={{ fontSize: 13.5, color: 'var(--gold)', marginTop: 8 }}>⚑ This is your banner.</div>
         ) : (
           <button
-            className="menu-btn small"
-            style={{ margin: '8px 0 0' }}
+            className="menu-btn small follow"
             disabled={!eligible}
             onClick={() => joinGuild(g.id)}
           >

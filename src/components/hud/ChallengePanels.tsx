@@ -63,8 +63,7 @@ export default function ChallengePanels() {
     return (
       <div className="clickable" style={START_WRAP}>
         <button
-          className="menu-btn"
-          style={{ width: 'auto', padding: '10px 22px', whiteSpace: 'nowrap' }}
+          className="menu-btn banner"
           onClick={() => {
             startGatherChallenge(destination);
             notify(`Gather ${GATHER_TARGET_COUNT} markers in ${GATHER_TIME_MS / 1000}s!`, true);
@@ -93,8 +92,7 @@ export default function ChallengePanels() {
     return (
       <div className="clickable" style={START_WRAP}>
         <button
-          className="menu-btn"
-          style={{ width: 'auto', padding: '10px 22px', whiteSpace: 'nowrap' }}
+          className="menu-btn banner"
           onClick={() => {
             startDefendChallenge(destination);
             notify(`Raise the banner — defend the plot for ${DEFEND_TIME_MS / 1000}s!`, true);
@@ -124,8 +122,7 @@ export default function ChallengePanels() {
     return (
       <div className="clickable" style={START_WRAP}>
         <button
-          className="menu-btn"
-          style={{ width: 'auto', padding: '10px 22px', whiteSpace: 'nowrap' }}
+          className="menu-btn banner"
           onClick={() => {
             startJoustChallenge(destination);
             notify(`Ready the lance — clear ${JOUST_RING_COUNT} rings in ${JOUST_TIME_MS / 1000}s!`, true);

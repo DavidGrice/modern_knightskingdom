@@ -259,8 +259,7 @@ export default function DialoguePanel() {
                 </div>
                 <div className="q-desc">Cost: {costText} (you have {Object.entries(cost).map(([id]) => inventory[id as ItemId] ?? 0).join(', ')})</div>
                 <button
-                  className="menu-btn small"
-                  style={{ margin: '8px 0 0' }}
+                  className="menu-btn small follow"
                   disabled={!afford}
                   onClick={() => { recruitVillageFolk(npc.id as 'farmer_alric' | 'miller_beda'); setPanel('none'); }}
                 >
@@ -307,8 +306,7 @@ export default function DialoguePanel() {
                     </div>
                   )}
                   <button
-                    className="menu-btn small"
-                    style={{ margin: '8px 0 0' }}
+                    className="menu-btn small follow"
                     onClick={() => collectSettlementYield(world)}
                   >
                     Collect Yield
@@ -345,8 +343,7 @@ export default function DialoguePanel() {
                       })
                     </div>
                     <button
-                      className="menu-btn small"
-                      style={{ margin: '8px 0 0' }}
+                      className="menu-btn small follow"
                       disabled={!afford}
                       onClick={() => {
                         const groundY = sampleTemplateGroundY(playerState.x, playerState.z);
@@ -400,8 +397,7 @@ export default function DialoguePanel() {
                       <>
                         <div className="q-desc">The caravan from {originName} has arrived.</div>
                         <button
-                          className="menu-btn small"
-                          style={{ margin: '8px 0 0' }}
+                          className="menu-btn small follow"
                           onClick={() => collectCaravan(run.from, run.to)}
                         >
                           ✅ Collect Caravan
@@ -486,8 +482,7 @@ export default function DialoguePanel() {
                             {route ? ` (${Math.round(effectiveCaravanRisk(route.riskPct, allegiance) * 100)}% risk uninsured)` : ''}.
                           </div>
                           <button
-                            className="menu-btn small"
-                            style={{ margin: '8px 0 0' }}
+                            className="menu-btn small follow"
                             disabled={caravanInsured && (inventory.gold ?? 0) < insuranceCost}
                             onClick={() => {
                               dispatchCaravan(world, partner, caravanItem, qty, caravanInsured);
@@ -521,8 +516,7 @@ export default function DialoguePanel() {
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button
-                    className="menu-btn small"
-                    style={{ margin: 0 }}
+                    className="menu-btn small flush"
                     disabled={!ready || notHere}
                     onClick={turnInSideQuest}
                   >
@@ -553,8 +547,7 @@ export default function DialoguePanel() {
                     </div>
                   )}
                   <button
-                    className="menu-btn small"
-                    style={{ margin: '8px 0 0' }}
+                    className="menu-btn small follow"
                     onClick={() => acceptSideQuest(npc.id, offer.id)}
                   >
                     Accept Errand

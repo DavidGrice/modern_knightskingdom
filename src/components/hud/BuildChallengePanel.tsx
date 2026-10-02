@@ -61,8 +61,7 @@ export default function BuildChallengePanel() {
     // hatch DialoguePanel/Panels.tsx already rely on.
     <div className="clickable" style={{ position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)', zIndex: 11, textAlign: 'center' }}>
       <button
-        className="menu-btn"
-        style={{ width: 'auto', padding: '10px 22px', whiteSpace: 'nowrap' }}
+        className="menu-btn banner"
         onClick={() => {
           startBuildChallenge();
           notify(`The bell rings — raise ${BUILD_CHALLENGE_TARGET} pieces in ${BUILD_CHALLENGE_TIME_MS / 1000}s!`, true);

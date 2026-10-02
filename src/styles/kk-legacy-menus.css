@@ -87,12 +87,14 @@
 .menu-btn:disabled { opacity: 0.45; cursor: default; }
 .menu-btn.small { font-size: 14px; padding: 8px 12px; }
 .menu-btn.danger { border-color: var(--danger); }
-/* CLN-32 · spacing variants, in place of the inline style objects nineteen call sites repeated. They sit AFTER
+/* CLN-32 · spacing and sizing variants, in place of the inline style objects 38 buttons repeated. They sit AFTER
    .small on purpose: same specificity, so position is what lets .compact's padding win over .small's. */
 .menu-btn.flush { margin: 0; }                /* in a row of buttons, or under its own heading: no stack margin */
 .menu-btn.follow { margin: 8px 0 0; }         /* the action under a paragraph of dialogue */
 .menu-btn.closing { margin-top: 14px; }       /* a panel's own closing button, set off from its content */
-.menu-btn.compact { margin: 0; width: auto; padding: 2px 10px; }  /* chip-sized, inside a line of text */
+.menu-btn.compact { margin: 0; width: auto; padding: 2px 10px; }  /* chip-sized: steppers, confirm/cancel chips */
+.menu-btn.inline { display: inline; }         /* ...and sitting inside a sentence (the build bar's hints) */
+.menu-btn.banner { width: auto; padding: 10px 22px; white-space: nowrap; }  /* the one call-to-action over the world */
 
 .form-row { margin: 12px 0; }
 .form-label { display: block; font-size: 13px; color: var(--parchment-dark); margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }

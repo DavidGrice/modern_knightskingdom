@@ -50,8 +50,7 @@ export default function ParleyPanel() {
             crown will still have you. Cedric will never trust you again.
           </div>
           <button
-            className="menu-btn small danger"
-            style={{ margin: '8px 0 0' }}
+            className="menu-btn small danger follow"
             onClick={betrayCedric}
           >
             Turn on the Bull

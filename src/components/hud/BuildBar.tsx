@@ -47,8 +47,7 @@ function DemolishConfirm() {
       )}
       {' '}
       <button
-        className="menu-btn small"
-        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        className="menu-btn small compact inline"
         disabled={ids.length === 0}
         onClick={demolishArea}
       >
@@ -56,8 +55,7 @@ function DemolishConfirm() {
       </button>
       {' '}
       <button
-        className="menu-btn small"
-        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        className="menu-btn small compact inline"
         onClick={() => setDemolishRect(null)}
       >
         Cancel
@@ -100,8 +98,7 @@ function DigConfirm() {
       {view.problem && <> · <span style={{ color: '#ffb0a4' }}>{view.problem}</span></>}
       {' '}
       <button
-        className="menu-btn small"
-        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        className="menu-btn small compact inline"
         disabled={!!view.problem}
         onClick={digArea}
       >
@@ -109,8 +106,7 @@ function DigConfirm() {
       </button>
       {' '}
       <button
-        className="menu-btn small"
-        style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }}
+        className="menu-btn small compact inline"
         onClick={() => setDigRect(null)}
       >
         Cancel
@@ -240,7 +236,7 @@ export default function BuildBar() {
         {moving ? (
           <>
             <b>Moving {BUILDABLES.find((b) => b.id === moving.type)?.name}</b> — click to set down · <b>R</b> rotate ·{' '}
-            <button className="menu-btn small compact" style={{ display: 'inline' }} onClick={cancelMove}>
+            <button className="menu-btn small compact inline" onClick={cancelMove}>
               Cancel
             </button>
           </>

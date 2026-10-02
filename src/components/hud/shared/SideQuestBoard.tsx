@@ -53,8 +53,7 @@ export default function SideQuestBoard({ giverId, mineIcon = '', offerIcon = '',
           <div className="q-desc">Progress: {mine.have}/{mineDef.need} · Reward: {rewardText(mineDef)}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button
-              className="menu-btn small"
-              style={{ margin: 0 }}
+              className="menu-btn small flush"
               disabled={mine.have < mineDef.need}
               onClick={turnInSideQuest}
             >
