@@ -15,7 +15,7 @@
 // `stabledHorses` already uses for the mounted-patrol AI.
 //
 // WHAT THIS DELIBERATELY IS NOT: a carve. The home terrain is one GLB bake
-// (Terrain.tsx's HomeMeadow, template-09) with no runtime geometry surgery, so
+// (HomeMeadowWater.tsx's HomeMeadow, template-09) with no runtime geometry surgery, so
 // the water is drawn as an overlay on flat ground — the same way the static
 // POND has always been drawn, generalised from one hardcoded circle to a list.
 // Everything about a dug pond is mechanically real (it blocks pathing, it stops
@@ -104,7 +104,7 @@ export const BANK_Y = 0.02;
 export const WATER_Y = 0.06;
 
 /** Wave 59 (H3) · how far below grade the water itself actually sits once
- *  Terrain.tsx cuts a real hole in HomeMeadow for it — vertical walls run
+ *  HomeMeadowWater.tsx cuts a real hole in HomeMeadow for it — vertical walls run
  *  from grade down to this depth at the water rectangle's own edge (the
  *  SAME zero-margin rect `waterAt`/`featureRect` already use), and the water
  *  surface fills the pit right up near the top, like a real dug pond or
@@ -123,7 +123,7 @@ export const WATER_Y = 0.06;
  *  and rejected too — confirmed live to paint the water straight through a
  *  solid wall standing between the camera and it, which real play will hit
  *  constantly (a moat is explicitly meant to run along a fence). Only an
- *  actual hole (Terrain.tsx's `HomeMeadow`, fragment-discarding both its
+ *  actual hole (HomeMeadowWater.tsx's `HomeMeadow`, fragment-discarding both its
  *  visible material AND its shadow depth material over this same rectangle)
  *  renders correctly from every angle and interacts correctly with any
  *  other real object's own depth.

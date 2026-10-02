@@ -16,7 +16,7 @@
 // even at human-scale calibration they read as "far too small" next to how
 // grand these castles/camps are meant to feel (requested 2026-08-03) —
 // template-09 is the one exception, since it's also the literal homestead
-// terrain (Terrain.tsx's HomeMeadow) with a large amount of hardcoded
+// terrain (HomeMeadowWater.tsx's HomeMeadow) with a large amount of hardcoded
 // world geometry calibrated against its current, unchanged scale.
 //
 // Revised 2026-08-04: the initial 2x bump (below) overshot — user feedback
@@ -100,7 +100,7 @@ export interface WorldDestination {
    *  (TemplateWorld.tsx) for this one destination's bake. Absent = the
    *  shared template scale, unchanged behavior for all 9 existing templates. */
   worldScale?: number;
-  /** requested 2026-08-04 — which `SKY_VARIANTS` entry (Terrain.tsx's
+  /** requested 2026-08-04 — which `SKY_VARIANTS` entry (Sky.tsx's
    *  `GameSky`) renders behind this destination. Absent = 'grass', the
    *  original single hardcoded skybox every destination used to render
    *  through regardless of theme (an icy mountain pass under a summer-grass
@@ -124,7 +124,7 @@ export interface WorldDestination {
 // 0.06->0.32 jump bumped radius ~5.33x alongside it, to keep the walkable
 // fraction of each diorama consistent rather than leaving the player stuck
 // in a relatively tinier slice of a visually bigger scene). template-09
-// deliberately excluded: it's rendered a second way too (Terrain.tsx's
+// deliberately excluded: it's rendered a second way too (HomeMeadowWater.tsx's
 // HomeMeadow, mounted directly, not through this destinations list), and a
 // large amount of hardcoded homestead geometry (SPAWN, POND, the road,
 // BUILD_REGION, the resource grounds) is calibrated against its CURRENT

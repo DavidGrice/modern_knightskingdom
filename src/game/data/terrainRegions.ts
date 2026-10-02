@@ -71,7 +71,7 @@
 // — see that check for what it actually covers.
 //
 // WHAT GAMEPLAY ACTUALLY READS. Not this file. The heights below are the
-// AUTHORING field: they build the mesh (Terrain.tsx's TerrainRegions/
+// AUTHORING field: they build the mesh (TerrainRegions.tsx's TerrainRegions/
 // TerrainKnollSurface) and nothing else. The player's floor, the camera and the
 // raiders all read the mesh's own triangles through TemplateWorld.tsx's
 // raycast sampler — the very same mechanism every destination bake already
@@ -158,7 +158,7 @@ export function regionAt(x: number, z: number, pad = 0): TerrainRegion | null {
 
 /** A region's knoll mesh's surface at (x, z), in world y — NEGATIVE across
  *  the whole outer margin, which is the point (see DOWNS_SINK). Authoring
- *  only: this is what Terrain.tsx displaces its plane by, region-relative
+ *  only: this is what TerrainRegions.tsx displaces its plane by, region-relative
  *  (raised-cosine hills: zero slope at the centre AND at the rim, which is
  *  what lets them join the meadow — and each other — without a crease, and
  *  what keeps the gradient bounded; peak slope is exactly h·π/2r, checked

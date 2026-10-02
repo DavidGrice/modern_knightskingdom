@@ -7032,3 +7032,64 @@ else or a plain `gather` errand.
 planks) and passes after, including the hand-over at The Old Ruins taking the 8 planks; live in a production build,
 through the real actions: accept → craft 4× (2 planks each) → 8/8 → travel to template-08 → turn in → errand
 complete, planks 8 → 0, 0 console errors.
+
+## Bugfix: every trip away from home leaked GPU memory — FOUND AND FIXED 2026-10-02 (during CLN-24)
+
+**Found by** measuring before fixing. CLN-24 named two leaks (instanced props and torch flames). A probe that wraps the
+WebGL context's create/delete calls, holds each texture and buffer only through a `WeakRef`, and forces a garbage
+collection before every reading showed those two were the small part — and that the destination bakes, which Wave 18
+(Stage 0b) believed it had already released, were the large one.
+
+**The bug:** three.js never frees what it has uploaded for an object that is merely un-referenced, and
+react-three-fiber disposes only the objects it created from JSX. Anything handed to it ready-made — a `<primitive>`, a
+`geometry={...}`, `material={...}` or `map={...}` prop — is the caller's to release, and four places never did:
+
+- **Destination bakes** (`TemplateWorld.tsx`). Leaving a destination dropped its GLTF cache entry, on the written
+  assumption that this left the graph "unreachable and GC-eligible". For anything already drawn it does not: the
+  renderer keeps an undisposed geometry's attributes reachable through its vertex-array cache, so the vertex buffers
+  stay on the GPU for good. Measured on `main`, vertex-buffer memory still held after returning home, per visit:
+  **+1.67 MB** for The King's Approach, +0.85 MB for The River Landing, +0.38 MB for The Rival Castle, +0.19 MB for
+  The Frozen Pass. Eight trips took it from 6.5 MB to 12.7 MB (1,266 to 1,860 live buffers); it never came back.
+- **Instanced props** (`InstancedProps.tsx`, and the rock groups in `ResourceNodes.tsx`). Each mount cloned its
+  geometry and material and nothing released them: up to 39 buffers pinned per return home (trees, herbs, fences, rocks),
+  and the same again for the crypt's walls on every descent (+18 to +29 geometries per descent, +9 per arena run).
+- **Hand-loaded textures**: the pond, brook and waterfall ripples (re-created on every return home, since `Terrain`
+  is home-only), and the five skybox faces (on every flip between a grass and a mountain destination). These were
+  not pinned — the browser reclaimed them when the garbage collector found the JavaScript objects — so this half was
+  late and unpredictable release rather than unbounded growth. three's own counter shows the churn: 15 textures at
+  boot, 152 after six trips to The King's Approach.
+- **Torch and forge flames** (`LabFlame.tsx`). Clones of the flame strip share one GPU texture, so a flame never cost
+  a second upload — but an undisposed clone held that texture's use count up for good, so it could never be freed.
+
+**Fix:** release on unmount, where each object is created. `lib/disposeObject3D.ts` disposes the geometry, materials
+and textures of a whole loaded graph, and the destination scene calls it on the cached bake when it unmounts.
+`useDisposeSubMeshes` (InstancedProps) releases a sub-mesh list's cloned geometry and material — not its textures,
+which belong to the shared GLTF cache. `useRippleTexture` replaces three copies of the water-texture loader block and
+disposes what it loads; the sky disposes its faces when the variant changes; a flame disposes its clone. `dispose()`
+only frees the GPU side — the objects stay usable and are uploaded again if drawn — so none of this depends on
+unmount order.
+
+**Deliberately left alone:** the home meadow's per-mount material clones. Nothing pins them (the meadow uses its own
+depth material, so the shadow pass caches nothing for them), and disposing them would throw away the meadow's patched
+shader on every trip only to recompile it on every return. Prop and minifig models loaded at destinations also stay
+in drei's cache for the session, as before — that is bounded by the number of distinct assets, not by trips (four
+destinations visited: 32 to 110 textures, 1.9 to 3.4 MB of buffers, then flat).
+
+**Verified** on production builds of `main` and the branch, headless, same scripts:
+
+- GPU objects still held after a forced garbage collection, over twelve trips cycling four destinations — `main`:
+  buffers 1,266 → 1,860 and 6.5 → 12.7 MB across the last eight; branch: 957 → 933 and 3.42 → 3.40 MB, textures 110
+  on every one of the last nine readings.
+- three's own counters over six trips to The King's Approach — `main`: geometries 186 → 445, textures 15 → 152;
+  branch: 217–218 and 34 at home on every return, 202 and 54 at the destination from the second visit on. Crypt
+  and arena runs: flat on the branch after warm-up. Twenty forges placed and removed, four times: the flame texture
+  is released each time (39 → 40 → 39) instead of staying allocated.
+- Nothing visible changed: ten screenshot pairs (pond, a dug waterway, trees, rocks, the destination; before and
+  after two round trips, i.e. after every dispose path has run) differ in at most 0.05% of pixels, and the scene
+  signature after the trips — 370 meshes, 20 instanced groups with their counts, the four water textures with their
+  tiling — is identical.
+- Cost: once a destination has loaded for the first time, the longest frame on arriving there again is 50 ms on the
+  branch against 33 ms on `main` (materials that were never released kept their shaders compiled); returning home
+  is the same on both, 17–33 ms.
+- `next dev` and the production build both run the whole sequence with 0 console errors;
+  `lib/disposeObject3D.test.ts` (5 tests) fails 3 of them when the texture disposal is removed.

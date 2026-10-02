@@ -16,7 +16,7 @@
 // So this is the shared fire, and it is the real one: the same strip, stepped
 // frame by frame, on a billboard that turns to face you. Torches, campfires,
 // the forge hearth and anything set alight all draw on it.
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
@@ -65,6 +65,10 @@ export default function LabFlame({
     m.repeat.set(FRAME_U, 1);
     return m;
   }, [tex]);
+  // CLN-24 · the clone is this fire's own, so it is released with it. Clones of one image share a single GPU texture
+  // inside three (same source, same sampler settings), so an undisposed clone never cost a second upload — but it did
+  // hold that shared texture's use count up for good, which meant the strip could never be released at all.
+  useEffect(() => () => map.dispose(), [map]);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);

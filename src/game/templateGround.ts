@@ -23,7 +23,7 @@ export const mountedRoot: { current: THREE.Object3D | null } = { current: null }
 // mounted at a time.
 export const mountedRegion: { current: string | null } = { current: null };
 
-// Wave 12 · the homestead's own elevated ground height (Terrain.tsx's
+// Wave 12 · the homestead's own elevated ground height (TerrainRegions.tsx's
 // TerrainRegions) used to register and raycast HERE too, sharing this file's
 // raycastGroundY. Wave 31 hotfix moved that half out to src/game/homeGround.ts
 // (a genuine leaf module, so gameStore.ts can read it without closing a

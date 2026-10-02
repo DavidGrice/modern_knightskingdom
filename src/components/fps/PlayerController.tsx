@@ -98,7 +98,7 @@ const _terrainOut = { y: 0 };
  *  five or six seconds for a barrel. */
 const CONSTRUCT_MAX_SWINGS = 26;
 
-// exported (Wave 59, H3) so Terrain.tsx's real dug-water hole can dev-assert
+// exported (Wave 59, H3) so HomeMeadowWater.tsx's real dug-water hole can dev-assert
 // its own hole-margin against the actual, live constant rather than a
 // remembered copy of the number — this file's only other change for H3.
 export const PLAYER_RADIUS = 0.45;

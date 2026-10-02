@@ -27,7 +27,7 @@
 // (TemplatePopulation.tsx's `Grounded` reads height from a LIVE raycast
 // against whatever bake actually rendered, never the stored population Y) —
 // only X/Z placement matters there, and a pure Y-mirror never touches those.
-// template-09 (HomeMeadow, Terrain.tsx) is NOT flipped: it's a separate,
+// template-09 (HomeMeadow, HomeMeadowWater.tsx) is NOT flipped: it's a separate,
 // already-verified call site, and its own bbox is near-flat (~±1 raw unit)
 // where a flip would be visually meaningless anyway — left alone rather
 // than risk its already-tuned 'origin' groundAnchor logic for zero benefit.
@@ -43,12 +43,13 @@ import { arenaState } from '@/game/arena';
 // Wave 31 hotfix · homeGroundY/registerHomeGroundRoot moved to their own leaf
 // module (src/game/homeGround.ts) — see that file's header for why. Imported
 // AND re-exported below (the `export { ... }` further down) so every existing
-// `from './TemplateWorld'` call site (Defenders.tsx, Villagers.tsx, Terrain.tsx,
+// `from './TemplateWorld'` call site (Defenders.tsx, Villagers.tsx, Weather.tsx,
 // etc.) keeps working unchanged — only gameStore.ts's own import needed to move.
 import { homeGroundY, registerHomeGroundRoot } from '@/game/homeGround';
 import DungeonScene from './DungeonScene';
 import ArenaScene from './ArenaScene';
 import { exposeDebug } from '@/lib/debugHooks';
+import { disposeObject3D } from '@/lib/disposeObject3D';
 // CLN-14 · the ground probes and bake normalization live in two React-free leaf modules now (game/templateGround.ts,
 // game/templateBake.ts) so game-layer code such as navgrid no longer has to import this component file. They are
 // re-exported here so every existing `from './TemplateWorld'` call site keeps working unchanged.
@@ -71,6 +72,13 @@ function NormalizedTemplateScene({ url, scale, flipY, destId }: { url: string; s
     bakeOffset.copy(offset);
     return () => { bakeOffset.set(0, 0, 0); };
   }, [offset]);
+  // CLN-24 · release the bake's GPU resources when this destination unmounts. TemplateWorldRoot's cleanup drops the
+  // GLTF cache entry, but un-referencing is not disposal (see lib/disposeObject3D.ts): measured before this, each
+  // visit to The King's Approach left about 1.7 MB of vertex buffers pinned inside the renderer for good, and its
+  // textures waiting on the garbage collector. The mounted group is a clone that shares geometry, materials and
+  // textures with the cached `scene` by reference, so disposing through `scene` covers both — and a `<primitive>` is
+  // never disposed by react-three-fiber itself.
+  useEffect(() => () => disposeObject3D(scene), [scene]);
   return <primitive object={group} />;
 }
 
@@ -188,7 +196,10 @@ function TemplateWorldRoot({ destId }: { destId: string }) {
       // module-level Suspense cache array — it does not itself call
       // .dispose() on anything — so this is what lets the whole graph
       // finally become unreachable and GC-eligible instead of staying
-      // resident for the rest of the session. dungeon/arena have no real
+      // resident for the rest of the session. (CLN-24: unreachable from the
+      // APP, that is. What three had already uploaded stayed pinned inside
+      // the renderer regardless; NormalizedTemplateScene's own cleanup now
+      // disposes it.) dungeon/arena have no real
       // bake (model: ''); guarded off since there's nothing to clear and
       // NormalizedTemplateScene is never rendered for them.
       if (dest?.model) useGLTF.clear(dest.model);
