@@ -41,7 +41,7 @@ export default function BuildChallengePanel() {
     // the world while a challenge is in progress)
     return (
       <div style={{ position: 'absolute', top: '16%', left: '50%', transform: 'translate(-50%,0)', textAlign: 'center', zIndex: 11 }}>
-        <div className="rank-badge" style={{ minWidth: 0, padding: '7px 14px', display: 'inline-block' }}>
+        <div className="rank-badge compact">
           <span style={{ fontSize: 14 }}>
             🔔 {Math.ceil(remainingMs / 1000)}s — {buildChallengeState.built}/{BUILD_CHALLENGE_TARGET} raised
           </span>

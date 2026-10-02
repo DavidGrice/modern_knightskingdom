@@ -240,7 +240,7 @@ export default function BuildBar() {
         {moving ? (
           <>
             <b>Moving {BUILDABLES.find((b) => b.id === moving.type)?.name}</b> — click to set down · <b>R</b> rotate ·{' '}
-            <button className="menu-btn small" style={{ display: 'inline', width: 'auto', padding: '2px 10px', margin: 0 }} onClick={cancelMove}>
+            <button className="menu-btn small compact" style={{ display: 'inline' }} onClick={cancelMove}>
               Cancel
             </button>
           </>

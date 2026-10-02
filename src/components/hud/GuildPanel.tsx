@@ -132,7 +132,7 @@ export default function GuildPanel() {
         </>
       )}
 
-      <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
+      <button className="menu-btn closing" onClick={() => setPanel('none')}>
         Leave the hall
       </button>
     </PopupFrame>

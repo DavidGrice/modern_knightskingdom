@@ -53,7 +53,7 @@ export default function ChallengePanels() {
       const collected = g.points.filter((p) => p.collected).length;
       return (
         <div style={BADGE}>
-          <div className="rank-badge" style={{ minWidth: 0, padding: '7px 14px', display: 'inline-block' }}>
+          <div className="rank-badge compact">
             <span style={{ fontSize: 14 }}>🌿 {Math.ceil(remainingMs / 1000)}s — {collected}/{GATHER_TARGET_COUNT} gathered</span>
           </div>
           <Bar frac={remainingMs / GATHER_TIME_MS} color="linear-gradient(90deg,#2c8ac9,#41c1e8)" />
@@ -83,7 +83,7 @@ export default function ChallengePanels() {
       const remainingMs = Math.max(0, d.deadline - performance.now());
       return (
         <div style={BADGE}>
-          <div className="rank-badge" style={{ minWidth: 0, padding: '7px 14px', display: 'inline-block' }}>
+          <div className="rank-badge compact">
             <span style={{ fontSize: 14 }}>🛡️ {Math.ceil(remainingMs / 1000)}s — banner holding</span>
           </div>
           <Bar frac={d.plotHp / DEFEND_START_HP} color="linear-gradient(90deg,#8a2c2c,#e85f5f)" />
@@ -114,7 +114,7 @@ export default function ChallengePanels() {
       const avgPrecision = j.hits > 0 ? Math.round((j.precisionSum / Math.max(1, j.ringIndex)) * 100) : 0;
       return (
         <div style={BADGE}>
-          <div className="rank-badge" style={{ minWidth: 0, padding: '7px 14px', display: 'inline-block' }}>
+          <div className="rank-badge compact">
             <span style={{ fontSize: 14 }}>🏇 {Math.ceil(remainingMs / 1000)}s — ring {Math.min(j.ringIndex + 1, JOUST_RING_COUNT)}/{JOUST_RING_COUNT} ({avgPrecision}% precision)</span>
           </div>
           <Bar frac={j.ringIndex / JOUST_RING_COUNT} color="linear-gradient(90deg,#c98a2c,#e8c141)" />

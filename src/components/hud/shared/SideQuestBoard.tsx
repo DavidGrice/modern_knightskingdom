@@ -60,7 +60,7 @@ export default function SideQuestBoard({ giverId, mineIcon = '', offerIcon = '',
             >
               {mine.have >= mineDef.need ? 'Turn In' : 'Not finished yet'}
             </button>
-            <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
+            <button className="menu-btn small danger flush" onClick={abandonSideQuest}>
               Abandon
             </button>
           </div>
@@ -77,7 +77,7 @@ export default function SideQuestBoard({ giverId, mineIcon = '', offerIcon = '',
             <div className="quest-item" key={offer.id}>
               <div className="q-name">{offerIcon}{offer.label}</div>
               <div className="q-desc">Reward: {rewardText(offer)}</div>
-              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => acceptSideQuest(giverId, offer.id)}>
+              <button className="menu-btn small follow" onClick={() => acceptSideQuest(giverId, offer.id)}>
                 Take the Job
               </button>
             </div>

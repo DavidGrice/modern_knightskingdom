@@ -185,8 +185,8 @@ export default function DialoguePanel() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--parchment-dark)' }}>{loreStep + 1} / {lore.length}</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="menu-btn small" style={{ margin: 0 }} onClick={skipLore}>Skip</button>
-              <button className="menu-btn small" style={{ margin: 0 }} onClick={continueLore}>
+              <button className="menu-btn small flush" onClick={skipLore}>Skip</button>
+              <button className="menu-btn small flush" onClick={continueLore}>
                 {loreStep + 1 < lore.length ? 'Continue' : 'Finish'}
               </button>
             </div>
@@ -212,7 +212,7 @@ export default function DialoguePanel() {
                 Swear fealty to the crown, and Cedric&apos;s rabble will forever be your enemy.
                 Or hold your tongue — the Bull makes his own offers to unsworn knights.
               </div>
-              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={() => pledgeAlliance('leo')}>
+              <button className="menu-btn small follow" onClick={() => pledgeAlliance('leo')}>
                 Pledge your sword to the crown
               </button>
             </div>
@@ -232,7 +232,7 @@ export default function DialoguePanel() {
             <div className="quest-item">
               <div className="q-name">⚔ Battle Dome Duel</div>
               <div className="q-desc">First blood wins — land the first hit, or take one and try again.</div>
-              <button className="menu-btn small" style={{ margin: '8px 0 0' }} onClick={challengeStorm}>
+              <button className="menu-btn small follow" onClick={challengeStorm}>
                 Challenge to a Duel
               </button>
             </div>
@@ -461,12 +461,12 @@ export default function DialoguePanel() {
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0' }}>
                             <button
-                              className="menu-btn small" style={{ margin: 0, width: 'auto', padding: '2px 10px' }}
+                              className="menu-btn small compact"
                               onClick={() => setCaravanQty((q) => Math.max(1, q - 1))}
                             >-</button>
                             <span>{qty} / {cap} cap</span>
                             <button
-                              className="menu-btn small" style={{ margin: 0, width: 'auto', padding: '2px 10px' }}
+                              className="menu-btn small compact"
                               onClick={() => setCaravanQty((q) => Math.min(cap, held, q + 1))}
                             >+</button>
                           </div>
@@ -528,7 +528,7 @@ export default function DialoguePanel() {
                   >
                     {!ready ? 'Not finished yet' : notHere ? 'Not delivered here' : 'Turn In'}
                   </button>
-                  <button className="menu-btn small danger" style={{ margin: 0 }} onClick={abandonSideQuest}>
+                  <button className="menu-btn small danger flush" onClick={abandonSideQuest}>
                     Abandon
                   </button>
                 </div>
@@ -570,7 +570,7 @@ export default function DialoguePanel() {
             </div>
           )}
 
-          <button className="menu-btn" style={{ marginTop: 14 }} onClick={() => setPanel('none')}>
+          <button className="menu-btn closing" onClick={() => setPanel('none')}>
             Farewell
           </button>
         </>
