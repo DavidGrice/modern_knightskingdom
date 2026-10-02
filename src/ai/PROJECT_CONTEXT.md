@@ -254,91 +254,14 @@ rooms should happen before phase 2 starts, not during.
 
 ---
 
-## 7. Phase 1, as actually built
+## 7–8. Retired: the phase-1 API surface and the per-phase open questions
 
-Full API surface, so code can be written against it without seeing the repo.
-
-```ts
-// src/ai/core/AgentManager.ts
-export const agentManager: AgentManager;         // module singleton, window.__kkai
-  agents: Agent[]                                 // registry
-  now: number                                     // GAME seconds, dt-driven, pauses
-  activeRegion: string | null
-  spawn(id, archetype, x, z, region = null): Agent   // idempotent by id
-  despawn(id); get(id); clear()
-  update(dt, camera, activeRegion)                // called once per frame
-  thinksPerSec, peakThinksPerFrame, thinkBudget   // debug readouts
-
-// src/ai/core/Agent.ts
-class Agent {
-  id; archetype; def: ArchetypeDef; bb: Blackboard
-  position: THREE.Vector3; yaw: number; region: string | null
-  tier: 'A'|'B'|'C'|'D'; thinkHz; perceiveHz; steering
-  thinkCount; measuredHz
-  think(now)                 // decays needs. Nothing else yet.
-  addNeed(id, delta)         // clamped 0..1
-}
-
-// src/ai/core/Blackboard.ts  — plain object, spec §3.2 verbatim
-{ id, needs, beliefs: Map, threatLevel, lastDamageAt, leaderId, homeRegion,
-  currentActionId, currentActionStartedAt, cooldowns: Map, reservation,
-  lastScores: ScoredAction[] }
-
-// src/ai/config/index.ts
-NEED_IDS  // energy hygiene bladder hunger fun social comfort
-needProfile(profileId) → Record<NeedId, {decayPerSec, start}>
-archetypeDef(id) → {label, needProfile, intrinsic: string[]}
-LOD, tierDef(tier)
-```
-
-**Needs are satisfaction, 0..1, all decaying downward.** `1` = fully satisfied.
-`bladder: 1` = empty, `0` = bursting. So a consideration reads urgency as
-`1 - needs.x`. Decay is per **game** second; a full day is 720 s.
-
-**Scheduler:** round-robin, hard cap of 3 thinks per frame across all agents,
-cursor persists across frames so a deferred agent gets first refusal next
-frame. Verified: 20 agents, budget never exceeded, 5 thinks each over 5 s,
-zero starvation.
-
-**Needs decay by time elapsed since that agent's *last think*,** not by a fixed
-step — which is what makes a 0.5 Hz tier-D agent end up exactly as hungry as a
-10 Hz tier-A one, with no separate statistical path (§8 asked for one; it is
-not needed).
-
-**Debug overlay:** `` ` `` toggles, `Shift+`` ` `` cycles agents. Renders the
-§9 layout including the full scored-action row with `input→output` per
-consideration — that renderer is already written, so phase 5 only has to fill
-`bb.lastScores`.
-
-**The phase-1 agent (`probe_01`) has no mesh and no behaviour.** That is
-deliberate per §10.1.
-
----
-
-## 8. What is genuinely open, per phase
-
-Ranked by how much a wrong assumption costs.
-
-1. **Phase 2 — navcat vs. extending navgrid.** See §5. Highest-stakes
-   decision in the whole plan.
-2. **Phase 4 — anchors on runtime-placed buildings.** §4.1's Blender-baked
-   `ANCHOR_` empties do not fit player-placed furniture. Likely answer: a
-   type→anchor-offset table in JSON, rotated by the building's `rot`. Needs
-   designing, and it changes what the affordance JSON looks like.
-3. **Phase 4/5 — affordance content against 15 clips.** See §4. Either the
-   content is built from what exists, or new animation work gets scoped
-   explicitly. Both are fine; silently assuming `bathe_loop` is not.
-4. **Phase 3 — actuation vs. the existing renderers.** Each actor type has its
-   own component driving a rig. Does the Actuator drive those components, or
-   replace them? Migration order matters: villagers are the obvious first
-   candidate (7 branches, all needs-shaped); enemies are the riskiest
-   (combat is tuned and players notice).
-5. **Phase 5 — the tuning pass.** The spec says this is where the time goes
-   and it is right. The overlay is ready for it.
-6. **Phase 7 — combat has an existing owner.** `game/combat.ts` (~630 lines)
-   holds stamina, weapons, damage, loot, duel special-cases. §0.2's "one
-   arbiter" means the reasoner *selects* combat actions while `combat.ts`
-   stays the mechanics layer — the boundary needs stating before code.
+These two sections described the system as it stood after phase 1 (the API of a needs-only `Agent`, the original
+seven need ids, an empty reasoner) and the questions phases 2–7 still had to answer. Every one of those questions
+has since been decided and built, so the text had become misleading rather than useful. For the system as it
+actually is, read [`PHASE_STATUS.md`](./PHASE_STATUS.md) (per-phase status, including the later waves that changed
+`src/ai`) and the code itself (`core/AgentManager.ts`, `core/Reasoner.ts` + `scoring.ts`/`commitment.ts`,
+`config/types.ts`). The original text is in git history (`git log -p -- src/ai/PROJECT_CONTEXT.md`). — CLN-34, 2026-10-01
 
 ---
 
