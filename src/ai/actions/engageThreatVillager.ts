@@ -58,7 +58,7 @@
 // order — the same small, already-precedented category-default deviation
 // this codebase uses for haul_to_deposit (1.4 vs work's 1.2).
 
-import { lootFor } from '@/game/combat';
+import { resolveEnemyKill } from '@/game/combat';
 import { attrsOf } from '@/game/data/attributes';
 import { difficultyState } from '@/game/difficulty';
 import { useGameStore } from '@/game/store/gameStore';
@@ -189,12 +189,12 @@ class EngageThreatVillagerActivity implements Activity {
     cs.coverLabel = 'engaging';
   }
 
-  /** One blow, at a villager's own much weaker tier. Kill bookkeeping mirrors
-   *  `engage_threat`'s (kill recorded, loot dropped, player told) but
-   *  deliberately WITHOUT `gainDefenderXp` — that is a defender-only leveling
-   *  field on the Villager record, and calling it on a farmer's id would
-   *  start populating a stray level/xp on a non-defender record for no
-   *  defined reason. */
+  /** One blow, at a villager's own much weaker tier. Kill bookkeeping is
+   *  resolveEnemyKill's 'villager' cause, which mirrors `engage_threat`'s
+   *  (kill recorded, loot dropped, player told) but deliberately WITHOUT
+   *  `gainDefenderXp` — that is a defender-only leveling field on the
+   *  Villager record, and calling it on a farmer's id would start populating
+   *  a stray level/xp on a non-defender record for no defined reason. */
   private strike(agent: Agent, t: Belief): void {
     const gs = useGameStore.getState();
     const villager = gs.villagers.find((v) => v.id === agent.id);
@@ -209,11 +209,7 @@ class EngageThreatVillagerActivity implements Activity {
     target.hp -= villagerStrike();
     combatStateFor(agent.id).hits++;
     if (target.hp > 0 || target.mob.state === 'dying') return;
-    target.mob.state = 'dying';
-    target.mob.dieT = 0;
-    gs.recordKill(target.kind);
-    gs.addItems(lootFor(target), 'grant');
-    gs.notify(`${villager.name} fights off a raider!`, true);
+    resolveEnemyKill(target, { by: 'villager', villager });
   }
 }
 

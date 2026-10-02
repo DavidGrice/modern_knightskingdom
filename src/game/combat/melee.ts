@@ -2,19 +2,14 @@
 // CLN-11 · split out of game/combat.ts unchanged: the player's melee — which weapon is readied, the dodge-roll,
 // the swing itself and what one landed blow does.
 import { audio } from '@/lib/audio';
-import type { ItemId } from '../types';
 import { atGuildMaxRank, useGameStore } from '../store/gameStore';
 import { callingSignature } from '../data/classes';
 import { playerState } from '../playerState';
 import { ridingState } from '../riding';
 import { raiderRamState, RAM_RADIUS } from '../raiderRam';
 import { raiderLadderState, LADDER_RADIUS } from '../raiderLadder';
-import { ITEMS } from '../data/items';
-import { rollBossLegendaryDrop } from '../bossEncounter';
-import { arenaState } from '../arena';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { enemyBeliefId } from '@/ai/perception/Belief';
-import { KIND_LABEL, KIND_XP } from '../data/enemies';
 import { WEAPON_SLOTS, isMeleeSlot, type MeleeWeaponId, type WeaponSlot } from '../data/weapons';
 import {
   COMBO_CHAIN_LENGTH, COMBO_FINISHER_MULT, COMBO_WINDOW_MS, DODGE_COOLDOWN_MS, DODGE_DURATION_MS, DODGE_IFRAME_MS,
@@ -22,8 +17,8 @@ import {
 } from '../data/melee';
 import { combatState } from './state';
 import { useEnemyStore, type EnemyData } from './enemyStore';
-import { lootFor } from './loot';
 import { resolveDuel } from './duel';
+import { resolveEnemyKill } from './kill';
 import { SHIELD_REDUCTION, isFrontalHit } from './shield';
 import { hitRaiderLadder, hitRaiderRam } from './structures';
 
@@ -118,11 +113,11 @@ export function cycleWeapon(): void {
 }
 
 /** Resolve ONE landed melee blow: damage, the camp's rally, knockback, and
- *  the kill/loot/notify path if it fell. Split out of playerAttack when the
- *  halberd's sweep made "the single best target" no longer the only shape a
- *  swing can have — a swept kill has to loot, rally and credit the arena
- *  exactly like a thrust one, and that is not a rule worth keeping two
- *  copies of. */
+ *  the kill/loot/notify path if it fell (kill.ts's resolveEnemyKill). Split
+ *  out of playerAttack when the halberd's sweep made "the single best
+ *  target" no longer the only shape a swing can have — a swept kill has to
+ *  loot, rally and credit the arena exactly like a thrust one, and that is
+ *  not a rule worth keeping two copies of. */
 function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
   const st = useGameStore.getState();
   const { enemies } = useEnemyStore.getState();
@@ -157,33 +152,7 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
       resolveDuel(true, e.id);
       return;
     }
-    e.mob.state = 'dying';
-    e.mob.dieT = 0;
-    st.recordKill(e.kind);
-    if (e.arena) arenaState.kills++;
-    st.addXp('combat', KIND_XP[e.kind]);
-    // hand over what this individual was actually carrying (rolled at spawn)
-    const drop = lootFor(e);
-    st.addItems(drop, 'grant');
-    const haul = Object.entries(drop)
-      .filter(([, n]) => (n ?? 0) > 0)
-      .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
-      .join(', ');
-    st.notify(haul ? `${KIND_LABEL[e.kind]} defeated! Looted ${haul}.` : `${KIND_LABEL[e.kind]} defeated!`);
-    // Cedric's Siege: only the sanctioned final stand ever permanently
-    // defeats him — every other spawn of his kind flees well before 0 HP
-    // (see Enemies.tsx's flee-guard), so reaching this branch with
-    // finalStand unset should be effectively unreachable, but the gate stays
-    // as the deliberate second line of defense against that assumption.
-    // Wave 50 (C2): the legendary-halberd roll is computed HERE (this file
-    // already safely imports bossEncounter.ts) and merely passed in as a
-    // value — gameStore.ts deliberately does not import bossEncounter.ts
-    // (see markCedricDefeated's own comment there for the real import cycle
-    // that would create). Only rolled on the one-shot capstone (cedricCaptures
-    // === 0), never on a farmable rematch.
-    if (e.kind === 'cedric' && e.finalStand) {
-      st.markCedricDefeated(st.cedricCaptures === 0 ? rollBossLegendaryDrop('cedric') : null);
-    }
+    resolveEnemyKill(e, { by: 'melee' });
   }
 }
 

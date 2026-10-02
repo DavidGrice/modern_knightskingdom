@@ -7093,3 +7093,57 @@ destinations visited: 32 to 110 textures, 1.9 to 3.4 MB of buffers, then flat).
   is the same on both, 17–33 ms.
 - `next dev` and the production build both run the whole sequence with 0 console errors;
   `lib/disposeObject3D.test.ts` (5 tests) fails 3 of them when the texture disposal is removed.
+
+## Bug: Tam can fell Princess Storm in the player's own duel — FOUND 2026-10-02 (during CLN-12), not yet fixed
+
+**Found by** CLN-12's golden master, which drives every ally against every enemy kind: an ally's blow on Storm was
+settled as an ordinary kill. Then reproduced in the running game.
+
+**The bug:** a duel with Storm is first blood between her and the player — `resolveDuel` ends it either way, and
+she is removed, not killed. Everything on her side already keeps it that way: she never targets a defender, Tam or a
+villager (`Enemies.tsx`: "Storm duels stay strictly player-vs-Storm"), bolts pass through her (`stepBolt`), and
+self-firing emplacements never pick her as a target (`Emplacements.tsx`). The other direction was never closed.
+Tam's perception lists her like any hostile, so `assist_leader` charges her, and his 1.5 damage is more than her
+1 HP.
+
+**Observed** (branch dev build, The Sister Keep, Tam recruited, Storm 9 m away): about 2.5 seconds after she appears
+the toast reads "Tam defeats a raider!", Storm plays a monster's death, `stats.killsByKind.storm` is 1, and the duel is
+never resolved — no reputation, no 40 XP and 20 gold, no credit toward her first-blood errand, no cooldown. The
+player did nothing. The code is the same on `main`.
+
+**Also true, not seen in play:** a cannonball or a placed charge fells her the same way (`explodeBall` and `detonate`
+do not skip her), announced as "Bandit blasted!". Her dome is in a destination the player can claim — the plot is
+wherever they stand when they claim it — so an engine could be set up within reach; that was not tried. Defenders
+and ordinary villagers cannot reach her: they only ever stand at home or in a settlement, and she only ever appears
+at her dome.
+
+**Fix, to follow in its own change:** allies and blasts leave Storm alone, the rule those three paths already
+follow.
+
+## Open decision: what a cannon or a charge kill is worth — logged 2026-10-02 (during CLN-12)
+
+CLN-12 put every kill's bookkeeping in one place (`src/game/combat/kill.ts`), which sets the two blast paths' rules
+side by side with the rest. They are kept exactly as they were — this is `CLEANUP_PLAN.md`'s open question, and a
+change of what the game pays — but the facts are now in one table:
+
+| | the player's blade | bolt or arrow | cannonball | placed charge |
+|---|---|---|---|---|
+| combat XP | the kind's own (20 to 150) | the kind's own, a little more | 20 for a skeleton, **30 for anything else** | **30 for anything** |
+| the enemy's purse | handed over | handed over | **kept** | **kept** |
+| what the player reads | "Royal Knight defeated! Looted …" | "Royal Knight shot down! Looted …" | "Skeleton blasted!", otherwise **"Bandit blasted!"** | **nothing** |
+| arena tally | counted | counted | not counted | not counted |
+| Cedric's final stand | ends his rebellion | ends his rebellion | does not | does not |
+
+So a cannon that fells Gilbert pays 30 where a sword pays 45, Cedric 30 where a sword pays 150, and a Mounted Raider,
+a Hedge Witch, a Shieldbearer, a Siege Engineer, a Royal Knight, Gilbert and Cedric are all announced as "Bandit
+blasted!". The cannonball's two numbers and two names are exactly the skeleton and bandit rows of the tables every
+other path reads. The arena row cannot matter today (the arena cannot be claimed, so no engine can stand there);
+Cedric's camp is in a destination that can be claimed, so the final-stand row might.
+
+This is also what an automated defence pays: a cannon, catapult or manned tower that fires on its own
+(`Emplacements.tsx`) kills through the cannonball path, and a powder charge that a raider walks onto through the
+charge path. A raid beaten off by engines alone hands over no purse at all — which may be exactly the intent.
+
+**To decide:** whether blast kills should follow the same tables as the blade (name, XP, purse, tally, final stand)
+or stay cheaper on purpose. Either way it is now an edit to two rows of `RULES` in `kill.ts`, and
+`combat/kill.test.ts`'s "blast kills are kept as they were found" is the test to change with it.

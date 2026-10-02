@@ -4,24 +4,20 @@
 import { create } from 'zustand';
 import { audio } from '@/lib/audio';
 import type { RigJoint } from '@/lib/minifigRig';
-import type { ItemId } from '../types';
 import { useGameStore } from '../store/gameStore';
 import { playerState } from '../playerState';
 import { ridingState } from '../riding';
 import { raiderRamState, RAM_RADIUS } from '../raiderRam';
 import { raiderLadderState, LADDER_RADIUS } from '../raiderLadder';
 import { hitTestCharacter, PART_DAMAGE, PART_LABEL, type PartHit } from '../hitbox';
-import { ITEMS } from '../data/items';
-import { rollBossLegendaryDrop } from '../bossEncounter';
-import { arenaState } from '../arena';
 import { hasLineOfSight, GROUND_LOS_Y } from '../navgrid';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { enemyBeliefId } from '@/ai/perception/Belief';
-import { KIND_LABEL, KIND_XP_RANGED, MOUNT_SEAT_Y } from '../data/enemies';
+import { MOUNT_SEAT_Y } from '../data/enemies';
 import { combatState, onBattlement } from './state';
 import { useEnemyStore, type EnemyData } from './enemyStore';
 import { damagePlayer } from './playerDamage';
-import { lootFor } from './loot';
+import { resolveEnemyKill } from './kill';
 import { SHIELD_REDUCTION, isFrontalHit } from './shield';
 import { hitRaiderLadder, hitRaiderRam } from './structures';
 
@@ -325,27 +321,7 @@ export function stepBolt(b: Bolt, dt: number): boolean {
       if (hit.part === 'head' && e.hp > 0) {
         useGameStore.getState().notify(`${PART_LABEL[hit.part]} shot! ×${mult}`);
       }
-      if (e.hp <= 0) {
-        e.mob.state = 'dying';
-        e.mob.dieT = 0;
-        st.recordKill(e.kind);
-        if (e.arena) arenaState.kills++;
-        st.addXp('combat', KIND_XP_RANGED[e.kind]);
-        // a ranged kill dropped NOTHING before 2026-07-20 — only the melee
-        // path ever granted loot, so bow/crossbow play quietly paid less
-        const rDrop = lootFor(e);
-        st.addItems(rDrop, 'grant');
-        const rHaul = Object.entries(rDrop)
-          .filter(([, n]) => (n ?? 0) > 0)
-          .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)
-          .join(', ');
-        st.notify(rHaul ? `${KIND_LABEL[e.kind]} shot down! Looted ${rHaul}.` : `${KIND_LABEL[e.kind]} shot down!`, true);
-        // Cedric's Siege: see the matching gate in melee.ts's landMeleeHit for why
-        // (Wave 50 (C2): same legendary-roll pass-through as that call site).
-        if (e.kind === 'cedric' && e.finalStand) {
-          st.markCedricDefeated(st.cedricCaptures === 0 ? rollBossLegendaryDrop('cedric') : null);
-        }
-      }
+      if (e.hp <= 0) resolveEnemyKill(e, { by: 'ranged' });
       // NOT removed: a stuck bolt stays in the world (Bolts.tsx parents it to
       // the struck mob). It expires with the corpse, not on contact.
       return false;
