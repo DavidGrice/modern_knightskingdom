@@ -123,7 +123,9 @@ These are the natural §4 smart objects — `bed` genuinely is a bed — but:
 ## 5. Navigation already exists — read this before planning phase 2
 
 `src/game/navgrid.ts`. Not a stub; it is what every villager, enemy and court
-NPC steers with today.
+NPC steers with today. (Since CLN-14 that file is the public barrel; the code
+is in `src/game/nav/` — `grid.ts` for the grid and A\*, `registry.ts` for the
+per-region grids, `lineOfSight.ts`, `steering.ts`.)
 
 - **1 m grid, A\* with octile heuristic**, covering ±200 m centred on the
   homestead (widened from ±56 m in Wave 17 #6 — see `navgrid.json`'s own

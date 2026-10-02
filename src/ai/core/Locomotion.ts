@@ -18,7 +18,7 @@
 // modes are now three real cadences, and tier D gets §8's own "jump along its
 // path in coarse steps" because it has no renderer to step it at all.
 
-import { getNavGrid, navSteer, type NavAgent } from '@/game/navgrid';
+import { getNavGridOrNull, navSteer, type NavAgent } from '@/game/navgrid';
 import { roadSpeedMult } from '@/game/data/road';
 import { LOD, type Tier } from '../config';
 import type { Agent } from './Agent';
@@ -93,21 +93,6 @@ function steerIntervalFor(agent: Agent): number {
   if (agent.steering === 'teleport') return LOD.steering.teleportInterval;
   return 0;
 }
-
-/** Same fail-open contract `AnchorResolution.resolveAnchor` and phase 7's
- *  `takeCover.gridFor` already document: `getNavGrid` throws for an unknown
- *  region and for the Crypt before a layout exists, and a throw in here would
- *  come out of a render frame or a think tick and take down far more than one
- *  agent. No grid means no walkability opinion — the coarse step is taken
- *  unchecked, which is the pre-phase-8 behaviour, never a crash. */
-function gridOrNull(region: string | null) {
-  try {
-    return getNavGrid(region);
-  } catch {
-    return null;
-  }
-}
-
 // Performance pass (2026-07-28): resolveAnchor() was being called every
 // single RENDER FRAME for every agent walking to an anchor — 8 trig
 // evaluations plus 8 nav-grid walkability samples, to re-derive a point that
@@ -221,7 +206,8 @@ function jumpAlongPath(agent: Agent, steer: SteerState, nx: number, nz: number, 
   // does with all of it.
   if (left > 0) { x += nx * left; z += nz * left; }
 
-  const grid = gridOrNull(agent.region);
+  // no grid means no walkability opinion: the step is taken unchecked
+  const grid = getNavGridOrNull(agent.region);
   if (grid && !grid.isWalkable(x, z)) {
     const open = grid.nearestWalkable(x, z, LOD.steering.reentrySnapCells);
     if (!open) return 0;
@@ -485,7 +471,8 @@ function onTierChange(agent: Agent, from: Tier, to: Tier): void {
   if (state) state.nav = undefined;
   anchorCache.delete(agent.id);
 
-  const grid = gridOrNull(agent.region);
+  // no grid means no walkability opinion: the step is taken unchecked
+  const grid = getNavGridOrNull(agent.region);
   if (!grid || grid.isWalkable(agent.position.x, agent.position.z)) return;
   const open = grid.nearestWalkable(agent.position.x, agent.position.z, LOD.steering.reentrySnapCells);
   if (!open) return;

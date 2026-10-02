@@ -16,9 +16,10 @@
 // documents hitting before (a different edge into the same
 // DungeonScene->Buildings->siege->combat->difficulty chain) — fixed there,
 // as here, by inverting the dependency rather than reasoning a new edge is
-// safe. `regionAt` (terrainRegions.ts) and `three` are both genuine leaves
-// (no path back to gameStore.ts), so this module cannot re-create the cycle
-// no matter who imports it.
+// safe. `regionAt` (terrainRegions.ts), `three` and (since CLN-14)
+// templateGround.ts — itself only three plus the data/world table — have no
+// path back to gameStore.ts, so this module cannot re-create the cycle no
+// matter who imports it.
 //
 // TemplateWorld.tsx re-exports `homeGroundY` / `registerHomeGroundRoot` from
 // here so every existing `from './TemplateWorld'` call site (Defenders.tsx,
@@ -26,27 +27,15 @@
 // gameStore.ts's own import needed to move.
 import * as THREE from 'three';
 import { regionAt } from './data/terrainRegions';
+import { raycastGroundY } from './templateGround';
 
 // Terrain.tsx hands its raised-terrain surface group over here on mount, and
 // takes it back on unmount — same "register the geometry, then everyone
 // raycasts it" contract TemplateWorld.tsx's own mountedRoot has always had.
 const homeGroundRoot: { current: THREE.Object3D | null } = { current: null };
-const raycaster = new THREE.Raycaster();
-const rayOrigin = new THREE.Vector3();
-const DOWN = new THREE.Vector3(0, -1, 0);
-
-/** Drop a ray from well above (x, z) onto the registered home-ground root.
- *  Deliberately a small duplicate of TemplateWorld.tsx's own
- *  raycastGroundY rather than an import of it — importing anything from
- *  TemplateWorld.tsx here would drag its whole DungeonScene chain back in
- *  and re-create the exact cycle this file exists to avoid. */
-function raycastGroundY(root: THREE.Object3D, x: number, z: number): number | null {
-  rayOrigin.set(x, 400, z);
-  raycaster.set(rayOrigin, DOWN);
-  raycaster.far = 500;
-  const hits = raycaster.intersectObject(root, true);
-  return hits.length ? hits[0].point.y : null;
-}
+// CLN-14 · the ray probe itself is shared with the destination half (game/templateGround.ts) now. This file used
+// to keep its own copy because the only other one lived in TemplateWorld.tsx, and importing that component would
+// have dragged the DungeonScene chain back in; templateGround.ts is a leaf (three + a data table), so it cannot.
 
 export function registerHomeGroundRoot(root: THREE.Object3D | null): void {
   homeGroundRoot.current = root;
