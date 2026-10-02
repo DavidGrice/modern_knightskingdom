@@ -81,20 +81,28 @@ export default function StatsStack() {
   // CLN-31 · migrated onto the same kk-screen/kk-screen-pad shell every
   // sibling stack screen already uses, so this picks up uiTheme lane
   // theming (background/vignette) for the first time -- a deliberate,
-  // visible fix, not a bug (see CLEANUP_PLAN.md's CLN-31 entry). The inner
-  // width:460 wrapper replaces `.panel`'s own inline `style={{width:460}}`
-  // one level in -- kk-screen-pad alone is `flex:0 1 min(1120px,100%)`, and
-  // dropping the width cap entirely would stretch every StatRow's
-  // label/value apart across ~1120px, a bigger change than asked for.
+  // visible fix, not a bug (see CLEANUP_PLAN.md's CLN-31 entry). The old
+  // `.stack-screen > .panel` frame is gone with it, so this screen also
+  // takes the sibling screens' look: `.kk-screen`'s font (Inter, not the
+  // legacy Georgia) and no stone-glazed box/border behind the column.
+  // The inner wrapper is the content column `.panel` used to give: 376px
+  // is `.panel`'s inline `width:460` (border-box) minus its 2x40px padding
+  // and 2x2px border, so every StatRow and both bar charts keep main's
+  // exact column width on desktop. `maxWidth:'100%'` is load-bearing --
+  // `.kk-screen` is `overflow:hidden` and `kk-screen-scroll` only re-opens
+  // the vertical axis, so a fixed width wider than kk-screen-pad's content
+  // box (343px at a 375px phone) would be clipped with no way to scroll to
+  // it; `.panel` had `max-width:92vw/94vw` doing this job before.
+  // kk-screen-pad alone is `flex:0 1 min(1120px,100%)`; without a column
+  // width every StatRow's label/value would stretch apart across ~1120px.
   // kk-screen-scroll replaces `.panel`'s own `overflow:auto;max-height:90vh`
   // (the same modifier CreditsStack/CharacterCreator already use for the
   // same reason) so the long content (2 bar charts + N challenge rows)
-  // still scrolls. `.opt-row`/`.skill-row`/`.game-title` are unscoped
-  // selectors, so they render identically under the new parent.
+  // still scrolls.
   return (
     <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>
       <div className="kk-screen-pad">
-        <div style={{ width: 460, margin: '0 auto' }}>
+        <div style={{ width: 376, maxWidth: '100%', margin: '0 auto' }}>
           <h1 className="game-title" style={{ fontSize: 30 }}>Chronicle of Deeds</h1>
           <p style={{ textAlign: 'center', opacity: 0.7, marginTop: -8 }}>
             {character?.name ?? 'Your'}&apos;s lifetime record
