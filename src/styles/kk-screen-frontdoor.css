@@ -52,7 +52,7 @@
   background: linear-gradient(90deg, transparent, var(--kk-a-400), transparent);
   box-shadow: 0 0 14px var(--kk-a-500);
 }
-.kk-screen-leather { background: linear-gradient(#3b2a1c, #2a1d13 62%, #201509); }
+.kk-screen-leather { background: var(--kk-lane-leather-bg); }
 .kk-screen-leather::before {
   content: '';
   position: absolute;

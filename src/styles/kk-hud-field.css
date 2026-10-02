@@ -478,7 +478,7 @@
 /* glass is the default surface for anything floating over the render:
    the world renders BRIGHT, so an opaque panel reads as a hole in it */
 .kk-glass {
-  background: linear-gradient(rgba(16, 24, 20, .70), rgba(8, 14, 11, .82));
+  background: var(--kk-lane-glass-bg);
   backdrop-filter: blur(20px) saturate(1.25);
   border: 1px solid rgba(255, 255, 255, .18);
   border-top-color: rgba(255, 255, 255, .46);

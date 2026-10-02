@@ -66,6 +66,13 @@
 
   /* ---------- Aero Glass's own accent: a lush green, distinct from the blurple system accent ---------- */
   --kk-aero: #a8f5cd; --kk-aero-deep: #6ee7a8;
+
+  /* ---------- lane surfaces: the one background each lane paints a panel with. kk-lanes.css applies them;
+       nothing else should spell these gradients out again ---------- */
+  --kk-lane-glass-bg:   linear-gradient(rgba(16, 24, 20, .70), rgba(8, 14, 11, .82));
+  --kk-lane-metal-bg:   linear-gradient(104deg, rgba(30, 33, 43, .95), rgba(15, 17, 23, .96) 40%, rgba(38, 42, 56, .94) 62%, rgba(13, 15, 20, .96));
+  --kk-lane-chrome-bg:  linear-gradient(rgba(238, 247, 255, .94), rgba(186, 212, 232, .92));
+  --kk-lane-leather-bg: linear-gradient(#3b2a1c, #2a1d13 62%, #201509);
 }
 
 /* ============================================================
