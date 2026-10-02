@@ -11,7 +11,7 @@ import type { CarrierTier, ItemId } from '@/game/types';
  *  a carrier can hang without colliding with the resource cube in the hand,
  *  which is exactly when it will most often be on screen.
  *
- *  Procedural, like `Chestplate` and `ResourceProp` above and for the same
+ *  Procedural, like `Chestplate` (./armor.tsx) and `ResourceProp` (below) and for the same
  *  reason: the extraction has no basket or cart mold. Same silhouette family
  *  for both tiers so they read as one upgrade path — a slung box, plus a pair
  *  of wheels and a haul-handle at cart size. */
@@ -71,7 +71,7 @@ const DEFAULT_RESOURCE_LOOK: { color: string; roughness: number; metalness?: num
 
 /** §3.3/§4.1's carried-item attach point: portals onto `rig.joints.rightarm`,
  *  same joint (and the same hand-local offset family) `HeldHalberd`/
- *  `HeldCrossbow` above already use for a held object, not re-derived. Own
+ *  `HeldCrossbow` (./held.tsx) already use for a held object, not re-derived. Own
  *  internal offset for the same reason `HeldHelmet`/`Chestplate` carry one —
  *  a portaled child inherits the joint's pivot, not the hand itself. */
 export function ResourceProp({ resource, side = -1 }: { resource: ItemId; side?: number }) {

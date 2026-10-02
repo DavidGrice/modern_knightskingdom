@@ -13,8 +13,9 @@
 // dependency and change nothing. Left hardcoded deliberately.
 //
 // CLN-28 · the components now live in ./gear/{held,armor,carried}.tsx; this file re-exports them so every
-// `from '../character/Equipment'` import is unchanged. (The folder is `gear/`, not `equipment/`: on a
-// case-insensitive filesystem `./equipment` would resolve to this file, on Linux to the folder.)
+// `from '../character/Equipment'` import is unchanged. (The folder is `gear/`, not `equipment/`, so no path
+// in this tree differs from a sibling only by letter case — the plan's own version, an `equipment/index`
+// barrel replacing this file, would have resolved `../character/Equipment` on Windows but not on Linux CI.)
 export { HeldSword, HeldHalberd, HeldSpear, HeldCrossbow, SpellHandGlow, ArmShield } from './gear/held';
 export { HeldHelmet, Chestplate } from './gear/armor';
 export { WornCarrier, ResourceProp } from './gear/carried';

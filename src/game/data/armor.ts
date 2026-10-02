@@ -15,7 +15,7 @@
 // consumes them as weapon geometry.
 //
 // So the tiers are rendered the way this game already renders a chestplate:
-// PROCEDURALLY. `Chestplate()` (components/character/Equipment.tsx) has always
+// PROCEDURALLY. `Chestplate()` (components/character/gear/armor.tsx) has always
 // been a hand-built plate — "procedural where the original has no equivalent",
 // the same rule the pickaxe, campfire, forge and bed follow (Wave 34: the axe
 // weapon now has a real mold — weaponParts.ts — so it no longer belongs on
