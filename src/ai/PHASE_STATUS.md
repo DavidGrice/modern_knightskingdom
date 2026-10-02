@@ -951,7 +951,11 @@ Taken from `git log -- src/ai` (2026-08-12 onward, cleanup PRs excluded). Each w
 - Wave 57 — Dragonfire Siege follow-ups, defender formations, duel spectator (#215)
 
 Later cleanup PRs restructured `src/ai` without changing behaviour: CLN-04 (`AgentManager.clearHooks`, #226),
-CLN-05 (`exposeDebug`, #227) and CLN-16 (Reasoner → `scoring.ts`/`commitment.ts`, config → `config/types.ts`, #231).
+CLN-05 (`exposeDebug`, #227), CLN-16 (Reasoner → `scoring.ts`/`commitment.ts`, config → `config/types.ts`, #231)
+and CLN-15 (one shared state machine each for the three melee actions — `actions/meleeEngage.ts` —, the three work
+actions — `actions/workActivity.ts` — and the two walks — `actions/walkLoop.ts` —, plus `BOOL_CURVE` and
+`NOT_THREATENED_CURVE` in `core/curves.ts`). One bugfix since: allies no longer see Princess Storm as a hostile, so
+Tam stays out of her duel with the player (#242).
 
 ---
 

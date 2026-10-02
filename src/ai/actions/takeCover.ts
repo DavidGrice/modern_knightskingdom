@@ -54,7 +54,7 @@ import { COMBAT } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Belief } from '../core/Blackboard';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { BOOL_CURVE, type Curve } from '../core/curves';
 import { nearestNoticedHostile } from '../perception/Belief';
 import { emitSound } from '../perception/sounds';
 import { claimAlarm, clearCombatState, combatStateFor, peekCombatState, type CombatState } from './combatState';
@@ -377,7 +377,6 @@ class TakeCoverActivity implements Activity {
   }
 }
 
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
 /** §5.2 — a linear ramp that reaches 0 exactly AT `cover.minThreat`, so a
  *  threat below the floor gates the whole action out (scoreAction stops on a
  *  zero) rather than scoring it a little bit. Derived from the authored number
@@ -474,7 +473,7 @@ export const TAKE_COVER: Action = {
         if (run && isCommittedRun(run, ctx.now)) return 1;
         return threatOf(agent) ? 1 : 0;
       },
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
   ],
   createActivity: () => new TakeCoverActivity(),

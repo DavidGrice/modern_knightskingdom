@@ -46,8 +46,9 @@ import { getNavGridOrNull } from '@/game/navgrid';
 import { useGameStore } from '@/game/store/gameStore';
 import { AMBIENT } from '../config';
 import type { Agent } from '../core/Agent';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import type { Action } from '../core/Reasoner';
+import { BOOL_CURVE, NOT_THREATENED_CURVE } from '../core/curves';
+import { WalkToPointActivity, type Walk } from './walkLoop';
 import { clamp } from '@/lib/math';
 /** A walkable point on Villagers.tsx's own wander ring, or null if this agent
  *  has nowhere sensible to go.
@@ -109,59 +110,9 @@ function chooseWanderPoint(agent: Agent): { x: number; z: number } | null {
   return null;
 }
 
-class WanderActivity implements Activity {
-  private elapsed = 0;
-  private stepped = false;
-
-  start(agent: Agent, _ctx: Context): void {
-    this.elapsed = 0;
-    this.stepped = false;
-    const point = chooseWanderPoint(agent);
-    // No intent at all, deliberately: update() reads that back as FAILURE on
-    // the very next line of the same tick. Emitting nothing is what makes a
-    // failed pick cost one scoreAction rather than a held intent.
-    if (!point) { agent.intent = null; return; }
-    agent.intent = {
-      type: 'MOVE_TO', position: point, speed: 'walk', stopDistance: AMBIENT.wander.stopDistance,
-    };
-  }
-
-  update(agent: Agent, dt: number, _now: number): ActivityStatus {
-    if (!agent.intent) return 'FAILURE';
-    this.elapsed += dt;
-
-    // gather.ts's `travelStepped` rule, for the same reason and worth
-    // repeating rather than sharing: bb.movement holds whatever the LAST
-    // stepLocomotion call left it as, and start() runs in the same tick as
-    // this first update() — before anything has stepped the intent just
-    // issued. Its resting default is 'arrived', so trusting it here would
-    // complete every wander instantly, on the spot, forever.
-    if (!this.stepped) { this.stepped = true; return 'RUNNING'; }
-
-    const status = agent.bb.movement.status;
-    if (status === 'arrived') { agent.intent = null; return 'SUCCESS'; }
-    // Real, and new in phase 8: the coarse-step branch reports 'blocked' when a
-    // jump's landing point has no walkable cell near it (Locomotion's
-    // `jumpAlongPath`), which is the one thing waiting cannot fix — the ground
-    // was built over while this agent was away. Ending now re-picks a fresh
-    // point after the pause instead of grinding at it until giveUpSec.
-    if (status === 'blocked') { agent.intent = null; return 'FAILURE'; }
-    // The other stall has no status of its own to report: with no path,
-    // navSteer falls back to straight-line steering, so an agent pressed
-    // against a corner keeps reporting 'moving' while covering no ground. A
-    // clock is the only thing that ends that.
-    if (this.elapsed >= AMBIENT.wander.giveUpSec) { agent.intent = null; return 'FAILURE'; }
-    return 'RUNNING';
-  }
-
-  abort(agent: Agent): void {
-    agent.intent = null;
-  }
-}
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
-// the identical shape the other six `not_threatened` considerations use
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
+/** The stroll itself is walkLoop.ts's shared loop (CLN-15): the point comes
+ *  from the wander ring above, the patience from ambient.json's `wander`. */
+const STROLL: Walk = { pick: chooseWanderPoint, config: AMBIENT.wander };
 
 export const WANDER: Action = {
   id: 'wander',
@@ -185,12 +136,12 @@ export const WANDER: Action = {
       // that mapping to keep in agreement with lod.json by hand.
       name: 'no_renderer',
       input: (agent) => (agent.steering === 'teleport' ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       name: 'roster_villager',
       input: (agent) => (agent.bb.job !== null ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       // Still meaningful with the sensors off (§8): tier D skips perception
@@ -199,8 +150,8 @@ export const WANDER: Action = {
       // threat to fall, rather than ambling off the instant they stop seeing.
       name: 'not_threatened',
       input: (agent) => 1 - agent.bb.threatLevel,
-      curve: notThreatenedCurve,
+      curve: NOT_THREATENED_CURVE,
     },
   ],
-  createActivity: () => new WanderActivity(),
+  createActivity: () => new WalkToPointActivity(STROLL),
 };

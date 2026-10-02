@@ -2,10 +2,9 @@
 // own, much weaker answer to a believed hostile. A distinct action id from
 // `engage_threat` on purpose, kept fully separate so nothing here ever
 // touches the defender-tuned path (see engageThreat.ts's own header for why
-// that file needs its own sign-off) — the only piece of it this reuses is
-// the live-target resolution helper (`liveTargetFor`, exported from there for
-// exactly this), which is the one part of "resolve a belief id to a real
-// entity to hit" that is not safe to fork.
+// that file needs its own sign-off). What the two do share is the
+// approach/face/swing state machine itself (meleeEngage.ts, CLN-15), which
+// neither tunes: every gate and every number below is this action's own.
 //
 // WHO THIS FIRES FOR, and why each gate exists (Wave 21 investigation —
 // checked against the live reasoner math in Reasoner.ts, not assumed):
@@ -58,27 +57,15 @@
 // order — the same small, already-precedented category-default deviation
 // this codebase uses for haul_to_deposit (1.4 vs work's 1.2).
 
-import { resolveEnemyKill } from '@/game/combat';
 import { attrsOf } from '@/game/data/attributes';
 import { difficultyState } from '@/game/difficulty';
 import { useGameStore } from '@/game/store/gameStore';
 import { registerVillagerCombat, villagerStrike } from '@/game/villagerCombat';
 import { COMBAT } from '../config';
 import type { Agent } from '../core/Agent';
-import type { Belief } from '../core/Blackboard';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
-import { nearestNoticedHostile } from '../perception/Belief';
-import { clearCombatState, combatStateFor } from './combatState';
-import { liveTargetFor } from './engageThreat';
-
-/** Same reserved reaction clip `engage_threat` uses — see that file's own
- *  comment on why it's kept out of `idle_fidget`'s pool. */
-const SWING_CLIP = 'anim_g_swordswish';
-
-function threatOf(agent: Agent): Belief | null {
-  return nearestNoticedHostile(agent.bb, agent.position.x, agent.position.z);
-}
+import type { Action } from '../core/Reasoner';
+import { BOOL_CURVE, type Curve } from '../core/curves';
+import { MeleeEngageActivity, threatOf, type MeleeFighter } from './meleeEngage';
 
 /** The `close_quarters` gate's real test — see this file's header. */
 function nearEnoughToFight(agent: Agent): boolean {
@@ -88,132 +75,27 @@ function nearEnoughToFight(agent: Agent): boolean {
   return d <= COMBAT.engageVillager.closeRange;
 }
 
-/** Structured exactly like `engageThreat.ts`'s own `EngageThreatActivity` —
- *  same approach/face/swing state machine, same live-target adjudication at
- *  the moment of the blow — just swinging for `villagerStrike()`'s flat,
- *  unleveled damage instead of `defenderStrike()`'s formula. */
-class EngageThreatVillagerActivity implements Activity {
-  private swingCd = 0;
-  private aimedX = 0;
-  private aimedZ = 0;
-  private facingX = 0;
-  private facingZ = 0;
-  private closing = false;
+/** An ordinary villager's side of the fight: `villagerStrike()`'s flat,
+ *  unleveled damage instead of `defenderStrike()`'s formula. Kill bookkeeping
+ *  is resolveEnemyKill's 'villager' cause, which mirrors `engage_threat`'s
+ *  (kill recorded, loot dropped, player told) but deliberately WITHOUT
+ *  `gainDefenderXp` — that is a defender-only leveling field on the
+ *  Villager record, and calling it on a farmer's id would start populating
+ *  a stray level/xp on a non-defender record for no defined reason.
+ *
+ *  `isDowned` is the same test the `not_downed` gate below makes, repeated by
+ *  the state machine on every update (see meleeEngage.ts for why the gate
+ *  alone is not enough). This villager's own HP/downed record
+ *  (game/villagerCombat.ts) is owned by Enemies.tsx's damage path. */
+const VILLAGER: MeleeFighter = {
+  config: COMBAT.engageVillager,
+  isDowned: (agent) => registerVillagerCombat(agent.id).state === 'downed',
+  blow: (agent) => {
+    const villager = useGameStore.getState().villagers.find((v) => v.id === agent.id);
+    return villager ? { damage: villagerStrike(), cause: { by: 'villager', villager } } : null;
+  },
+};
 
-  start(agent: Agent, _ctx: Context): void {
-    this.swingCd = 0;
-    const t = threatOf(agent);
-    if (!t) return; // update() fails cleanly on the next tick
-    const cs = combatStateFor(agent.id);
-    cs.mode = 'engage';
-    cs.hits = 0;
-    this.approach(agent, t);
-  }
-
-  update(agent: Agent, dt: number, now: number): ActivityStatus {
-    // A blow landed (Enemies.tsx) between this tick's scoring and this
-    // Activity's own next think — `not_downed`'s gate only stops a NEW
-    // engage from starting, it cannot reach back and cancel one already
-    // mid-swing this same tick. SUCCESS, not RUNNING: ending cleanly here is
-    // what makes the "gated running action loses its protection" rule
-    // (documented in flee.ts/takeCover.ts) actually bite on the very next
-    // pickAction instead of leaving one more strike() to land while downed.
-    if (registerVillagerCombat(agent.id).state === 'downed') { clearCombatState(agent.id); return 'SUCCESS'; }
-    if (this.swingCd > 0) this.swingCd -= dt;
-    combatStateFor(agent.id).swingCd = this.swingCd;
-    const t = threatOf(agent);
-    if (!t) { clearCombatState(agent.id); return 'SUCCESS'; }
-
-    const cfg = COMBAT.engageVillager;
-    const tx = t.lastKnownPosition.x;
-    const tz = t.lastKnownPosition.z;
-    const dist = Math.hypot(tx - agent.position.x, tz - agent.position.z);
-
-    if (dist > cfg.reach) {
-      if (!this.closing || Math.hypot(tx - this.aimedX, tz - this.aimedZ) > 1) this.approach(agent, t);
-      return 'RUNNING';
-    }
-
-    if (!t.isVisibleNow && now - t.lastSeenAt > cfg.loseTargetSec) {
-      clearCombatState(agent.id);
-      return 'SUCCESS';
-    }
-
-    this.closing = false;
-    if (this.swingCd > 0) {
-      if (this.swingCd <= cfg.swingSeconds * 0.5) this.face(agent, tx, tz);
-      return 'RUNNING';
-    }
-
-    this.swingCd = cfg.swingSeconds;
-    agent.intent = { type: 'PLAY_ANIM', clip: SWING_CLIP, loop: false, anchored: true };
-    this.strike(agent, t);
-    return 'RUNNING';
-  }
-
-  private face(agent: Agent, tx: number, tz: number): void {
-    if (agent.intent?.type === 'FACE' && Math.hypot(tx - this.facingX, tz - this.facingZ) < 0.5) return;
-    this.facingX = tx;
-    this.facingZ = tz;
-    agent.intent = { type: 'FACE', target: { x: tx, z: tz } };
-  }
-
-  abort(agent: Agent): void {
-    agent.intent = null;
-    clearCombatState(agent.id);
-    // No reservation, no work signal, no carried load touched — same as
-    // every other combat activity. This villager's own HP/downed record
-    // (game/villagerCombat.ts) is owned by Enemies.tsx's damage path, not
-    // this activity's to unwind.
-  }
-
-  private approach(agent: Agent, t: Belief): void {
-    const tx = t.lastKnownPosition.x;
-    const tz = t.lastKnownPosition.z;
-    this.aimedX = tx;
-    this.aimedZ = tz;
-    this.closing = true;
-    agent.intent = {
-      type: 'MOVE_TO',
-      position: { x: tx, z: tz },
-      speed: 'run',
-      stopDistance: COMBAT.engageVillager.approachStop,
-    };
-    const cs = combatStateFor(agent.id);
-    cs.mode = 'engage';
-    cs.targetBeliefId = t.entityId;
-    cs.threatX = tx;
-    cs.threatZ = tz;
-    cs.coverX = tx;
-    cs.coverZ = tz;
-    cs.coverLabel = 'engaging';
-  }
-
-  /** One blow, at a villager's own much weaker tier. Kill bookkeeping is
-   *  resolveEnemyKill's 'villager' cause, which mirrors `engage_threat`'s
-   *  (kill recorded, loot dropped, player told) but deliberately WITHOUT
-   *  `gainDefenderXp` — that is a defender-only leveling field on the
-   *  Villager record, and calling it on a farmer's id would start populating
-   *  a stray level/xp on a non-defender record for no defined reason. */
-  private strike(agent: Agent, t: Belief): void {
-    const gs = useGameStore.getState();
-    const villager = gs.villagers.find((v) => v.id === agent.id);
-    if (!villager) return;
-    const target = liveTargetFor(t.entityId);
-    if (!target) return;
-    // live adjudication, exactly as engage_threat's own strike() does: a
-    // swing thrown at a remembered position misses if the raider has already
-    // stepped out of reach
-    if (Math.hypot(target.mob.x - agent.position.x, target.mob.z - agent.position.z) > COMBAT.engageVillager.reach) return;
-
-    target.hp -= villagerStrike();
-    combatStateFor(agent.id).hits++;
-    if (target.hp > 0 || target.mob.state === 'dying') return;
-    resolveEnemyKill(target, { by: 'villager', villager });
-  }
-}
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
 /** Same straight-through ramp `engage_threat` uses: the bool gates above
  *  already guarantee a real, near, capable, brave, undowned villager behind
  *  this number, so a little threat is just a little urgency. */
@@ -234,29 +116,29 @@ export const ENGAGE_THREAT_VILLAGER: Action = {
     {
       name: 'not_downed',
       input: (agent) => (registerVillagerCombat(agent.id).state === 'downed' ? 0 : 1),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       name: 'brave_enough',
       input: (agent) => (attrsOf(agent.id).courage >= COMBAT.engageVillager.courageThreshold ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       name: 'world_not_too_dangerous',
       input: () => (difficultyState.tier <= COMBAT.engageVillager.capableTierMax ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       name: 'close_quarters',
       input: (agent) => (nearEnoughToFight(agent) ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     { name: 'threat_present', input: (agent) => agent.bb.threatLevel, curve: threatCurve },
     {
       name: 'hostile_believed',
       input: (agent) => (threatOf(agent) ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
   ],
-  createActivity: () => new EngageThreatVillagerActivity(),
+  createActivity: () => new MeleeEngageActivity(VILLAGER),
 };

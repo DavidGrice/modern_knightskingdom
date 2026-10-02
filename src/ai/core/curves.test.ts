@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evalCurve, type Curve, type CurveType } from './curves';
+import { BOOL_CURVE, NOT_THREATENED_CURVE, evalCurve, type Curve, type CurveType } from './curves';
 import { mulberry32 } from '../../lib/rng';
 
 const curve = (type: CurveType, m = 1, k = 1, b = 0, c = 0): Curve => ({ type, m, k, b, c });
@@ -49,5 +49,14 @@ describe('evalCurve', () => {
       expect(y).toBeGreaterThanOrEqual(0);
       expect(y).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('the shared gate passes above a half and nothing at or below it', () => {
+    expect([0, 0.5, 0.51, 1].map((x) => evalCurve(BOOL_CURVE, x))).toEqual([0, 0, 1, 1]);
+  });
+
+  it('the shared not_threatened curve squares what is left once the threat is taken off', () => {
+    // the input is 1 - threatLevel: no threat is full weight, half the threat is a quarter, a real one is nothing
+    expect([1, 0.5, 0.1, 0].map((x) => evalCurve(NOT_THREATENED_CURVE, x))).toEqual([1, 0.25, 0.010000000000000002, 0]);
   });
 });

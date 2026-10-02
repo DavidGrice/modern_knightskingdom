@@ -25,6 +25,17 @@ export interface Curve {
   c: number;
 }
 
+/** The pass/fail gate: 1 above 0.5, otherwise 0. A `bool` curve reads none of
+ *  its four numbers, so there is nothing for a copy to tune — every gate in
+ *  src/ai/actions shares this one (CLN-15: fourteen files each declared it). */
+export const BOOL_CURVE: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
+
+/** `not_threatened`: the square of (1 − threatLevel), so a little threat costs
+ *  an action little and real danger shuts it down. One instance for every
+ *  action that stands down under threat, so they all stand down at the same
+ *  rate (CLN-15: eight files each declared this same shape). */
+export const NOT_THREATENED_CURVE: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
+
 /** `x` is clamped to [0,1] before the curve runs, and every branch's own
  *  result is clamped again on the way out — an input or a curve authored
  *  outside 0..1 must never propagate an out-of-range score into

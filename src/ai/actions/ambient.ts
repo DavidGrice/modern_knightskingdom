@@ -16,7 +16,7 @@
 // agent been idle" timer needed on top.
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { NOT_THREATENED_CURVE } from '../core/curves';
 import { pick } from '@/lib/rng';
 
 // Deliberately excludes combat-flavored clips (anim_c_angry,
@@ -54,8 +54,6 @@ class IdleFidgetActivity implements Activity {
   }
 }
 
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
-
 export const IDLE_FIDGET: Action = {
   id: 'idle_fidget',
   category: 'ambient',
@@ -64,7 +62,7 @@ export const IDLE_FIDGET: Action = {
   minDuration: 1,
   cooldown: 8,
   considerations: [
-    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
+    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: NOT_THREATENED_CURVE },
   ],
   createActivity: () => new IdleFidgetActivity(),
 };

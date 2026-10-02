@@ -13,7 +13,7 @@ import type { EnemyData } from './enemyStore';
 import { lootFor } from './loot';
 
 /** Who, or what, felled the enemy. */
-type KillCause =
+export type KillCause =
   /** the player's own blade (melee.ts's landMeleeHit) */
   | { by: 'melee' }
   /** the player's own bolt or arrow (projectiles.ts's stepBolt) */

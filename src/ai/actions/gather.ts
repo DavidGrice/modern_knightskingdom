@@ -3,6 +3,9 @@
 // swing loop, the first Activity in this project with an internal multi-
 // phase state machine (flee/sleep's own Activities are a single MOVE_TO,
 // nothing to sequence). Mirrors GotoAndUse's shape from NPC_AI_SPEC.md §3.
+// CLN-15: that skeleton is shared now (workActivity.ts) with the two
+// Activities that copied it, haul.ts and farm.ts; the swing loop is what is
+// left here.
 //
 // Registered live as of 5.8a — §4's workSignal now lets tickVillagers trust
 // this Activity's real presence instead of its own proximity heuristic, so
@@ -14,25 +17,16 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { isWorkingHours, JOB_NODE_KIND } from '@/game/data/villagers';
-import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
 import type { ItemId } from '@/game/types';
-import { targetRegistry, type TargetId } from '../core/TargetRegistry';
-import type { Agent } from '../core/Agent';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { targetRegistry, type Target } from '../core/TargetRegistry';
+import type { Agent, Intent } from '../core/Agent';
+import type { Action, ActivityStatus } from '../core/Reasoner';
+import { BOOL_CURVE, NOT_THREATENED_CURVE, type Curve } from '../core/curves';
+import { WorkActivity, proximityInput } from './workActivity';
 
 const SLOT_KIND = 'gather';
 const SWING_INTERVAL = 1.2; // seconds per swing — no player-side reference left to match (harvestNode now empties a node in one action); chosen for a readable cadence against anim_g_swordswish
-const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRadius
-// Phase 5, 5.9 — how long a genuinely unreachable target (resolveAnchor/
-// navSteer reports 'blocked') stays excluded from scoring after a failed
-// attempt, via bb.blockedTargets (see that field's own comment in
-// Blackboard.ts for the full story). Long enough that a villager doesn't
-// immediately retry and re-fail every tick forever; short enough that a
-// temporarily-blocked path (mid-raid rubble, say) clears on its own once
-// the obstruction is gone, without needing an explicit unblock signal.
-const BLOCKED_RETRY_COOLDOWN = 15;
 
 // Which trade claims which node kind. Wave 10 · this was a private
 // JOB_RESOURCE_MAP literal here holding only lumberjack->tree/miner->rock,
@@ -57,85 +51,21 @@ const NODE_ITEM: Record<string, ItemId> = { tree: 'wood', rock: 'stone', herb: '
 // FARMPLOT_GATHER_ENABLED flag is gone with the question it was holding open.
 const TARGET_KINDS = ['tree', 'rock', 'herb', 'fishing'];
 
-class GatherAtNodeActivity implements Activity {
-  private phase: 'travel' | 'align' | 'perform' = 'travel';
-  private travelStepped = false;
+class GatherAtNodeActivity extends WorkActivity {
+  protected readonly slotKind = SLOT_KIND;
+  protected readonly source = 'node';
   private swingTimer = 0;
-  private targetId: TargetId | null = null;
-  /** true once reserve() actually succeeded — start() can't return a status
-   *  (the Activity interface's start() is void), so a failed reservation is
-   *  flagged here and turned into a real FAILURE on the very next update()
-   *  instead of silently proceeding as if the slot were held. Found during
-   *  5.8a's own review: with only one agent ever gathering (5.7's own
-   *  testing), a failed reserve() never happened, so this was invisible —
-   *  the moment two agents can reach the same tree (2 slots), a third
-   *  "winning" gather_resource for it would otherwise gather from a node
-   *  whose slots are already full, bypassing the cap entirely. */
-  private reserved = false;
 
-  start(agent: Agent, ctx: Context): void {
-    if (!ctx.target) return;
-    this.targetId = ctx.target.id;
-    this.phase = 'travel';
-    this.travelStepped = false;
+  protected beginWork(): void {
     this.swingTimer = 0;
-    this.reserved = targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
-    if (!this.reserved) return; // update() fails cleanly on the next tick
-    agent.bb.reservation = { targetId: ctx.target.id, slotKind: SLOT_KIND };
-    agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
-  update(agent: Agent, dt: number, now: number): ActivityStatus {
-    if (!this.targetId) return 'FAILURE';
-    if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
-    const target = targetRegistry.get(this.targetId);
-    if (!target || target.source !== 'node') return this.finish(agent, 'FAILURE');
+  protected workIntent(): Intent {
+    return { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
+  }
 
-    if (this.phase === 'travel') {
-      // bb.movement reflects whatever the LAST stepLocomotion call left it
-      // as — on the very first update() after start() (called the same
-      // tick, before any stepLocomotion has run against the intent just
-      // issued), that is stale leftover state from before this activity
-      // even began, often 'arrived' (the resting default). §0.1 forbids
-      // writing bb.movement here to invalidate it, so this tick doesn't
-      // trust it at all instead — one tick later, a real stepLocomotion
-      // call has had a chance to run against the actual MOVE_TO_ANCHOR
-      // intent, and the status is trustworthy again.
-      if (!this.travelStepped) { this.travelStepped = true; return 'RUNNING'; }
-      if (agent.bb.movement.status === 'blocked') {
-        // a genuinely unreachable target — without recording this, its raw
-        // score (proximity is straight-line, not path-based) could easily
-        // keep winning every subsequent tick, failing the exact same way
-        // forever; see BLOCKED_RETRY_COOLDOWN's own comment
-        agent.bb.blockedTargets.set(this.targetId, now + BLOCKED_RETRY_COOLDOWN);
-        return this.finish(agent, 'FAILURE');
-      }
-      if (agent.bb.movement.status === 'arrived') {
-        this.phase = 'align';
-        agent.intent = { type: 'FACE', target: { x: target.x, z: target.z } };
-      }
-      return 'RUNNING';
-    }
-
-    if (this.phase === 'align') {
-      // stepLocomotion reports 'arrived' for FACE the instant it's issued —
-      // the yaw lerp itself settles over a few more frames on its own
-      // (Locomotion.ts's own comment), and there is no separate "turn
-      // finished" signal to wait on without reading yaw directly here,
-      // which §0.1's transform-isolation rule forbids. A one-tick align is
-      // the honest choice, not a shortcut: the swing anim starts a couple
-      // of frames before the turn visually settles, which reads fine.
-      this.phase = 'perform';
-      // §4: active from align onward, matching villagerAtWork()'s old
-      // heuristic (arrived = at work) — never during travel, which would be
-      // a strictly weaker presence check than the one it replaces
-      setWorkSignal(agent.id, { active: true, targetId: this.targetId, kind: target.kind });
-      agent.intent = { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
-      return 'RUNNING';
-    }
-
-    // perform
-    agent.intent = { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
+  /** the swing loop: one unit a swing, until the sack is full or the node is spent */
+  protected perform(agent: Agent, dt: number, target: Target): ActivityStatus {
     const cap = agent.bb.carryCapacity;
     if (cap <= 0) return this.finish(agent, 'SUCCESS');
     const expectedItem = NODE_ITEM[target.kind];
@@ -159,7 +89,7 @@ class GatherAtNodeActivity implements Activity {
     if (this.swingTimer < swingInterval) return 'RUNNING';
     this.swingTimer -= swingInterval;
 
-    const result = useGameStore.getState().gatherSwing(this.targetId.slice(5));
+    const result = useGameStore.getState().gatherSwing(target.id.slice(5));
     if (!result) return this.finish(agent, 'SUCCESS'); // depleted/vanished exactly on this swing
     const amount = Math.min(cap, (agent.bb.carrying?.amount ?? 0) + result.amount);
     agent.bb.carrying = { resource: result.item, amount };
@@ -167,44 +97,13 @@ class GatherAtNodeActivity implements Activity {
 
     // §3.5's second SUCCESS case: hitsLeft<=0 or respawnAt!==null (a
     // partial load), re-checked fresh after the swing that may have caused it
-    const after = targetRegistry.get(this.targetId);
+    const after = targetRegistry.get(target.id);
     if (!after || !after.available) return this.finish(agent, 'SUCCESS');
     return 'RUNNING';
   }
-
-  /** Every terminal path (SUCCESS/FAILURE) releases the reservation itself —
-   *  runReasoner only calls abort() when an activity is REPLACED, never on
-   *  its own clean SUCCESS/FAILURE (Reasoner.ts's own runReasoner just nulls
-   *  currentActivity/currentActionId then). Without this, a completed
-   *  gather would hold its slot on the node forever, and — since a tree
-   *  only has 2 slots — the second completion would permanently block every
-   *  future reservation on it. */
-  private finish(agent: Agent, status: ActivityStatus): ActivityStatus {
-    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
-    agent.bb.reservation = null;
-    clearWorkSignal(agent.id);
-    return status;
-  }
-
-  abort(agent: Agent): void {
-    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
-    agent.bb.reservation = null;
-    clearWorkSignal(agent.id);
-    agent.intent = null;
-    // §3.5: abort does NOT clear carrying — whatever was already banked survives
-  }
 }
 
-function proximityInput(agent: Agent, ctx: Context): number {
-  if (!ctx.target) return 0;
-  const dx = ctx.target.x - agent.position.x;
-  const dz = ctx.target.z - agent.position.z;
-  return Math.min(1, Math.hypot(dx, dz) / PROXIMITY_RANGE);
-}
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
 const identityCurve: Curve = { type: 'linear', m: 1, k: 0, b: 0, c: 0 };
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
 const proximityCurve: Curve = { type: 'linear', m: -1, k: 0, b: 1, c: 0 };
 const energyCurve: Curve = { type: 'quadratic', m: 1, k: 0.5, b: 0, c: 0 };
 
@@ -240,7 +139,7 @@ export const GATHER_RESOURCE: Action = {
       name: 'job_match',
       input: (agent, ctx) =>
         ctx.target && ctx.target.source === 'node' && agent.bb.job && JOB_NODE_KIND[agent.bb.job] === ctx.target.kind ? 1 : 0,
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       // Reported 2026-07-30: AI villagers were harvesting nodes on grounds
@@ -270,10 +169,10 @@ export const GATHER_RESOURCE: Action = {
         agent.bb.blockedTargets.delete(ctx.target.id);
         return 1;
       },
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
-    { name: 'is_work_hours', input: () => (isWorkingHours(worldEnv.time) ? 1 : 0), curve: boolCurve },
-    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
+    { name: 'is_work_hours', input: () => (isWorkingHours(worldEnv.time) ? 1 : 0), curve: BOOL_CURVE },
+    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: NOT_THREATENED_CURVE },
     { name: 'proximity', input: (agent, ctx) => proximityInput(agent, ctx), curve: proximityCurve },
     { name: 'energy', input: (agent) => agent.bb.needs.energy, curve: energyCurve },
   ],

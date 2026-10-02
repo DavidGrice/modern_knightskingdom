@@ -26,10 +26,8 @@ import { playerState } from '@/game/playerState';
 import { COMPANION } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { BOOL_CURVE } from '../core/curves';
 import { registerCompanionCombat } from '@/game/companion';
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
 
 class FollowLeaderActivity implements Activity {
   private aimedX = 0;
@@ -95,7 +93,7 @@ export const FOLLOW_LEADER: Action = {
     {
       name: 'is_companion',
       input: (agent) => (agent.archetype === 'companion' ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       // Wave 25 companion-vulnerability wiring's own gate: while downed
@@ -107,7 +105,7 @@ export const FOLLOW_LEADER: Action = {
       // registerVillagerCombat call.
       name: 'not_downed',
       input: (agent) => (registerCompanionCombat(agent.id).state === 'downed' ? 0 : 1),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
   ],
   createActivity: () => new FollowLeaderActivity(),

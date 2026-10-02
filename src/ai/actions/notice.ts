@@ -15,7 +15,7 @@
 import { playerState } from '@/game/playerState';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { BOOL_CURVE, NOT_THREATENED_CURVE } from '../core/curves';
 import { pick } from '@/lib/rng';
 
 const NOTICE_RANGE = 5;
@@ -58,9 +58,6 @@ function distToPlayer(agent: Agent): number {
   return Math.hypot(playerState.x - agent.position.x, playerState.z - agent.position.z);
 }
 
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
-
 export const NOTICE_PLAYER: Action = {
   id: 'notice_player',
   category: 'social',
@@ -72,8 +69,8 @@ export const NOTICE_PLAYER: Action = {
   // that leaving and coming back later gets a fresh reaction
   cooldown: 20,
   considerations: [
-    { name: 'player_close', input: (agent) => (distToPlayer(agent) < NOTICE_RANGE ? 1 : 0), curve: boolCurve },
-    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
+    { name: 'player_close', input: (agent) => (distToPlayer(agent) < NOTICE_RANGE ? 1 : 0), curve: BOOL_CURVE },
+    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: NOT_THREATENED_CURVE },
   ],
   createActivity: () => new NoticePlayerActivity(),
 };

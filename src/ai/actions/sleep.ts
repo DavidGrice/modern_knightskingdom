@@ -10,6 +10,7 @@ import { worldEnv } from '@/game/env';
 import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
+import { BOOL_CURVE } from '../core/curves';
 
 // matches Villagers.tsx's own former night-bed-seek arrival threshold exactly
 const STOP_DISTANCE = 0.6;
@@ -45,7 +46,6 @@ class SleepActivity implements Activity {
   }
 }
 
-const boolCurve = { type: 'bool' as const, m: 0, k: 0, b: 0, c: 0 };
 // tiredness modulates HOW STRONGLY sleep is wanted once it's night — a
 // quadratic curve, not a bool: needs.energy rarely sits at exactly 1.0
 // except right at spawn, so a hard gate here would make sleep score zero
@@ -60,7 +60,7 @@ export const SLEEP: Action = {
   minDuration: 2,
   cooldown: 0,
   considerations: [
-    { name: 'is_night', input: () => (worldEnv.night > 0.6 ? 1 : 0), curve: boolCurve },
+    { name: 'is_night', input: () => (worldEnv.night > 0.6 ? 1 : 0), curve: BOOL_CURVE },
     { name: 'tired', input: (agent) => 1 - agent.bb.needs.energy, curve: tirednessCurve },
   ],
   createActivity: () => new SleepActivity(),

@@ -3,7 +3,9 @@
 // pick-a-point/walk/pause state machine but deliberately NOT that action
 // reused, and NOT an edit to it either. Both were considered and rejected —
 // see the reasoning below, verified live this session against the real
-// wander.ts/config/archetypes.json rather than assumed.
+// wander.ts/config/archetypes.json rather than assumed. (CLN-15: the walking
+// loop itself is shared with wander now — walkLoop.ts — which changes none of
+// this: the two Actions, their gates and their point pickers stay apart.)
 //
 // WHY `wander` CANNOT DRIVE THIS. Read live, `wander.ts`'s own considerations:
 //   - `no_renderer` (`agent.steering === 'teleport' ? 1 : 0`) is a bool gate
@@ -47,8 +49,9 @@
 import { getNavGridOrNull } from '@/game/navgrid';
 import { AMBIENT } from '../config';
 import type { Agent } from '../core/Agent';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import type { Action } from '../core/Reasoner';
+import { BOOL_CURVE, NOT_THREATENED_CURVE } from '../core/curves';
+import { WalkToPointActivity, type Walk } from './walkLoop';
 // No despawn cleanup, unlike Locomotion.ts's own per-agent steerState/
 // anchorCache: a wildlife id is a small, fixed, authored string that never
 // changes across sessions (wildlifeSync.ts's own WILDLIFE_POPULATION) and
@@ -87,43 +90,9 @@ function chooseRoamPoint(agent: Agent): { x: number; z: number } | null {
   return null;
 }
 
-class RoamActivity implements Activity {
-  private elapsed = 0;
-  private stepped = false;
-
-  start(agent: Agent, _ctx: Context): void {
-    this.elapsed = 0;
-    this.stepped = false;
-    const point = chooseRoamPoint(agent);
-    if (!point) { agent.intent = null; return; }
-    agent.intent = {
-      type: 'MOVE_TO', position: point, speed: 'walk', stopDistance: AMBIENT.roam.stopDistance,
-    };
-  }
-
-  update(agent: Agent, dt: number, _now: number): ActivityStatus {
-    if (!agent.intent) return 'FAILURE';
-    this.elapsed += dt;
-    // wander.ts's own `travelStepped` rule, for the same reason (repeated,
-    // not shared — see that file's comment): bb.movement holds whatever the
-    // LAST stepLocomotion call left it as, and start() runs in the same tick
-    // as this first update(), before anything has stepped the fresh intent.
-    if (!this.stepped) { this.stepped = true; return 'RUNNING'; }
-
-    const status = agent.bb.movement.status;
-    if (status === 'arrived') { agent.intent = null; return 'SUCCESS'; }
-    if (status === 'blocked') { agent.intent = null; return 'FAILURE'; }
-    if (this.elapsed >= AMBIENT.roam.giveUpSec) { agent.intent = null; return 'FAILURE'; }
-    return 'RUNNING';
-  }
-
-  abort(agent: Agent): void {
-    agent.intent = null;
-  }
-}
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
+/** The hop itself is walkLoop.ts's shared loop (CLN-15): the point comes from
+ *  the perch above, the patience from ambient.json's `roam`. */
+const HOP: Walk = { pick: chooseRoamPoint, config: AMBIENT.roam };
 
 export const ROAM: Action = {
   id: 'roam',
@@ -141,7 +110,7 @@ export const ROAM: Action = {
     {
       name: 'no_job',
       input: (agent) => (agent.bb.job === null ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     // Real and free: Perception (core/Perception.ts) runs unconditionally
     // for every agent regardless of archetype, so `bb.threatLevel` is
@@ -149,8 +118,8 @@ export const ROAM: Action = {
     {
       name: 'not_threatened',
       input: (agent) => 1 - agent.bb.threatLevel,
-      curve: notThreatenedCurve,
+      curve: NOT_THREATENED_CURVE,
     },
   ],
-  createActivity: () => new RoamActivity(),
+  createActivity: () => new WalkToPointActivity(HOP),
 };

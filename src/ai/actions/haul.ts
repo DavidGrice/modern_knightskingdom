@@ -3,7 +3,8 @@
 // Candidate assembly already picks the nearest usable stockpile/barrel via
 // per-target expansion + the proximity/target_usable considerations, so this
 // Activity doesn't hunt for one itself — it just acts on whichever target
-// won (ctx.target).
+// won (ctx.target). The walk there is workActivity.ts's shared skeleton
+// (CLN-15); the deposit is what is left here.
 //
 // Registered live as of 5.8a (src/ai/actions/index.ts) — see workSignal.ts's
 // own header for why that's now safe. §4's own two-step plan kept
@@ -23,15 +24,15 @@
 // now" call that was the actual blocker, and for why Wit stays out.
 import { useGameStore } from '@/game/store/gameStore';
 import { roomFor } from '@/game/storage';
-import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
 import { spawnDepositFloaty } from '@/game/depositFloaties';
 import { attrsOf, SIDE_GOODS } from '@/game/data/attributes';
 import { hasTrait, HAUL_TRAIT, SIDE_TRAIT } from '@/game/data/companionTraits';
 import type { ItemId } from '@/game/types';
-import { targetRegistry, type TargetId } from '../core/TargetRegistry';
-import type { Agent } from '../core/Agent';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import type { Target } from '../core/TargetRegistry';
+import type { Agent, Intent } from '../core/Agent';
+import type { Action, ActivityStatus } from '../core/Reasoner';
+import { BOOL_CURVE, NOT_THREATENED_CURVE, type Curve } from '../core/curves';
+import { WorkActivity, proximityInput } from './workActivity';
 
 const SLOT_KIND = 'haul';
 /** Every building kind a load can actually be set down at. Exported because
@@ -41,16 +42,12 @@ const SLOT_KIND = 'haul';
  *  Keep in step with STORAGE_PER_BUILDING (game/storage.ts): a deposit point
  *  that holds nothing is a wasted walk. */
 export const DEPOSIT_KINDS = ['storehouse', 'stockpile', 'barrel'];
-const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRadius
 // how long anim_c_pleased holds before the deposit actually lands — without
 // this the Activity would enter 'perform' and complete on the very same
 // tick, so the clip would never render even one frame
 const PERFORM_HOLD = 0.6;
 // flipped true in 5.8b — see this file's own header
 const CARRYING_ENABLED = true;
-// same reasoning and value as gather.ts's own BLOCKED_RETRY_COOLDOWN — see
-// bb.blockedTargets' own comment in Blackboard.ts for the full story
-const BLOCKED_RETRY_COOLDOWN = 15;
 
 /** Wave 10 · the Might/Craft rolls `tickVillagers` has always made, finally
  *  reaching the AI path.
@@ -100,60 +97,24 @@ function rollTripBonus(agent: Agent, resource: ItemId, amount: number): { extra:
   return { extra: haul - amount, side };
 }
 
-class HaulToDepositActivity implements Activity {
-  private phase: 'travel' | 'align' | 'perform' = 'travel';
-  private travelStepped = false;
+class HaulToDepositActivity extends WorkActivity {
+  protected readonly slotKind = SLOT_KIND;
+  /** any deposit point the registry offers: candidate assembly already
+   *  filtered to DEPOSIT_KINDS */
+  protected readonly source = null;
   private holdTimer = 0;
-  private targetId: TargetId | null = null;
-  /** same reasoning as GatherAtNodeActivity's own `reserved` field — see
-   *  that Activity's comment */
-  private reserved = false;
 
-  start(agent: Agent, ctx: Context): void {
-    if (!ctx.target) return;
-    this.targetId = ctx.target.id;
-    this.phase = 'travel';
-    this.travelStepped = false;
+  protected beginWork(): void {
     this.holdTimer = 0;
-    this.reserved = targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
-    if (!this.reserved) return; // update() fails cleanly on the next tick
-    agent.bb.reservation = { targetId: ctx.target.id, slotKind: SLOT_KIND };
-    agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
-  update(agent: Agent, dt: number, now: number): ActivityStatus {
-    if (!this.targetId) return 'FAILURE';
-    if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
-    const target = targetRegistry.get(this.targetId);
-    if (!target) return this.finish(agent, 'FAILURE');
+  protected workIntent(): Intent {
+    return { type: 'PLAY_ANIM', clip: 'anim_c_pleased', loop: false, anchored: true };
+  }
 
-    if (this.phase === 'travel') {
-      // same staleness reasoning as GatherAtNode's own 'travel' phase — see
-      // that Activity's comment
-      if (!this.travelStepped) { this.travelStepped = true; return 'RUNNING'; }
-      if (agent.bb.movement.status === 'blocked') {
-        agent.bb.blockedTargets.set(this.targetId, now + BLOCKED_RETRY_COOLDOWN);
-        return this.finish(agent, 'FAILURE');
-      }
-      if (agent.bb.movement.status === 'arrived') {
-        this.phase = 'align';
-        agent.intent = { type: 'FACE', target: { x: target.x, z: target.z } };
-      }
-      return 'RUNNING';
-    }
-
-    if (this.phase === 'align') {
-      // same one-tick align as GatherAtNode — see that Activity's own
-      // comment for why there is no "turn finished" signal to wait on
-      this.phase = 'perform';
-      this.holdTimer = 0;
-      setWorkSignal(agent.id, { active: true, targetId: this.targetId, kind: target.kind });
-      agent.intent = { type: 'PLAY_ANIM', clip: 'anim_c_pleased', loop: false, anchored: true };
-      return 'RUNNING';
-    }
-
-    // perform — a one-shot deposit, no swing loop
-    agent.intent = { type: 'PLAY_ANIM', clip: 'anim_c_pleased', loop: false, anchored: true };
+  /** a one-shot deposit, no swing loop. Carrying survives an aborted haul,
+   *  same rule as GatherAtNode. */
+  protected perform(agent: Agent, dt: number, _target: Target): ActivityStatus {
     this.holdTimer += dt;
     if (this.holdTimer < PERFORM_HOLD) return 'RUNNING';
     const load = agent.bb.carrying;
@@ -207,31 +168,6 @@ class HaulToDepositActivity implements Activity {
     agent.bb.carrying = left > 0 ? { resource: load.resource, amount: left } : null;
     return this.finish(agent, left > 0 ? 'FAILURE' : 'SUCCESS');
   }
-
-  /** Same reasoning as GatherAtNodeActivity's own finish() — every terminal
-   *  path releases the reservation itself, since runReasoner's own cleanup
-   *  on a clean SUCCESS/FAILURE never calls abort(). */
-  private finish(agent: Agent, status: ActivityStatus): ActivityStatus {
-    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
-    agent.bb.reservation = null;
-    clearWorkSignal(agent.id);
-    return status;
-  }
-
-  abort(agent: Agent): void {
-    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
-    agent.bb.reservation = null;
-    clearWorkSignal(agent.id);
-    agent.intent = null;
-    // carrying survives an aborted haul too, same rule as GatherAtNode
-  }
-}
-
-function proximityInput(agent: Agent, ctx: Context): number {
-  if (!ctx.target) return 0;
-  const dx = ctx.target.x - agent.position.x;
-  const dz = ctx.target.z - agent.position.z;
-  return Math.min(1, Math.hypot(dx, dz) / PROXIMITY_RANGE);
 }
 
 function loadFraction(agent: Agent): number {
@@ -240,9 +176,7 @@ function loadFraction(agent: Agent): number {
   return Math.min(1, agent.bb.carrying.amount / cap);
 }
 
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
 const loadFractionCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
 // m=-0.6, not gather's -1 — a full villager should cross the map to deposit
 // rather than idle beside an unusable tree (PHASE_2 §3.4's own reasoning)
 const proximityCurve: Curve = { type: 'linear', m: -0.6, k: 0, b: 1, c: 0 };
@@ -260,7 +194,7 @@ export const HAUL_TO_DEPOSIT: Action = {
   // three exactly as it already did for two.
   targetKinds: DEPOSIT_KINDS,
   considerations: [
-    { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: boolCurve },
+    { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: BOOL_CURVE },
     { name: 'load_fraction', input: (agent) => loadFraction(agent), curve: loadFractionCurve },
     {
       name: 'target_usable',
@@ -289,9 +223,9 @@ export const HAUL_TO_DEPOSIT: Action = {
         agent.bb.blockedTargets.delete(ctx.target.id);
         return 1;
       },
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
-    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
+    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: NOT_THREATENED_CURVE },
     { name: 'proximity', input: (agent, ctx) => proximityInput(agent, ctx), curve: proximityCurve },
   ],
   createActivity: () => new HaulToDepositActivity(),

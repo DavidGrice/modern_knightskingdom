@@ -9,6 +9,7 @@ import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
+import { BOOL_CURVE } from '../core/curves';
 
 // matches Villagers.tsx's own former raid-flee arrival threshold exactly
 const STOP_DISTANCE = 0.6;
@@ -36,8 +37,6 @@ class FleeToSafetyActivity implements Activity {
   }
 }
 
-const boolCurve = { type: 'bool' as const, m: 0, k: 0, b: 0, c: 0 };
-
 export const FLEE_TO_SAFETY: Action = {
   id: 'flee_to_safety',
   category: 'survival',
@@ -58,7 +57,7 @@ export const FLEE_TO_SAFETY: Action = {
       // defender targeting — read here too rather than inventing a second
       // signal.
       input: () => (useEnemyStore.getState().enemies.some((e) => e.raid) || dragonAir.hostile || dragonAirBlack.hostile ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
   ],
   createActivity: () => new FleeToSafetyActivity(),
