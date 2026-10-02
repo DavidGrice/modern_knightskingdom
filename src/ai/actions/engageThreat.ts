@@ -28,7 +28,9 @@
 // defenderObserver's (empty) list. So `is_defender` scoring 1 for a real
 // defenderObserver agent's `bb.job` is true and irrelevant: this Activity is
 // never even assembled as a candidate for it, let alone scored or won. That
-// is deliberate and it is not a stub — the Activity below is complete, deals
+// is deliberate and it is not a stub — the Activity is complete (since CLN-15
+// it is meleeEngage.ts's shared state machine, run with the defender's own
+// numbers below), deals
 // real damage through the same
 // `EnemyData.hp` path `Defenders.tsx` uses, and shares its damage FORMULA
 // rather than copying it (`defenderStrike`, game/defenders.ts). What it does
@@ -66,183 +68,28 @@
 // own §6.3 threat term. `engage_threat` itself, immediately above, remains
 // exactly as inert as this whole header describes.
 
-import { resolveEnemyKill, useEnemyStore, type EnemyData } from '@/game/combat';
 import { defenderStrike } from '@/game/defenders';
 import { useGameStore } from '@/game/store/gameStore';
 import { COMBAT } from '../config';
-import type { Agent } from '../core/Agent';
-import type { Belief } from '../core/Blackboard';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
-import { nearestNoticedHostile } from '../perception/Belief';
-import { clearCombatState, combatStateFor } from './combatState';
+import type { Action } from '../core/Reasoner';
+import { BOOL_CURVE, type Curve } from '../core/curves';
+import { MeleeEngageActivity, threatOf, type MeleeFighter } from './meleeEngage';
 
-/** Reaction clips deliberately reserved OUT of `idle_fidget`'s pool (see
- *  ambient.ts's own comment on why it excludes the combat-flavoured ones) —
- *  this is what they were being kept for. */
-const SWING_CLIP = 'anim_g_swordswish';
+/** A sworn defender's side of the fight. The swing is `Defenders.tsx`'s own
+ *  formula (`defenderStrike`, game/defenders.ts) rather than a copy of it, and
+ *  the kill is its own bookkeeping, reached through the same call rather than
+ *  reimplemented (resolveEnemyKill's 'defender' cause): the kill is recorded,
+ *  the defender earns their XP, the loot the raider was carrying drops, and the
+ *  player is told. No `isDowned`: a defender's `defenderState` HP is owned by
+ *  Defenders.tsx and is not this layer's to read. */
+const DEFENDER: MeleeFighter = {
+  config: COMBAT.engage,
+  blow: (agent) => {
+    const villager = useGameStore.getState().villagers.find((v) => v.id === agent.id);
+    return villager ? { damage: defenderStrike(villager), cause: { by: 'defender', villager } } : null;
+  },
+};
 
-function threatOf(agent: Agent): Belief | null {
-  return nearestNoticedHostile(agent.bb, agent.position.x, agent.position.z);
-}
-
-/** `enemy:17` -> the live `EnemyData`, or null for a `noise:` belief (nothing
- *  to hit — an unattributed sound has no entity behind it) and for one whose
- *  mob has already died.
- *
- *  This is the ONE place this action touches a live entity, and only to resolve
- *  a blow that is already being thrown. §3.3's rule — "combat and search
- *  behavior must read `lastKnownPosition`, never the live transform" — governs
- *  where the agent GOES and what it faces, and every one of those reads goes
- *  through the belief above. Whether a swing actually connects cannot be
- *  answered from a memory: the world adjudicates that, exactly as
- *  `Defenders.tsx`'s own `inRange` test does.
- *
- *  Exported (Wave 21) so `engageThreatVillager.ts` can reuse this exact
- *  resolution instead of forking it — live-target resolution is the one
- *  piece of this file safe (and worth) sharing with that action; everything
- *  else (the damage formula, the gates, the tuning) stays fully separate. */
-export function liveTargetFor(beliefId: string): EnemyData | null {
-  if (!beliefId.startsWith('enemy:')) return null;
-  const id = Number(beliefId.slice(6));
-  const e = useEnemyStore.getState().enemies.find((x) => x.id === id);
-  return e && e.mob.state !== 'dying' ? e : null;
-}
-
-class EngageThreatActivity implements Activity {
-  private swingCd = 0;
-  private aimedX = 0;
-  private aimedZ = 0;
-  private facingX = 0;
-  private facingZ = 0;
-  private closing = false;
-
-  start(agent: Agent, _ctx: Context): void {
-    this.swingCd = 0;
-    const t = threatOf(agent);
-    if (!t) return; // update() fails cleanly on the next tick
-    const cs = combatStateFor(agent.id);
-    cs.mode = 'engage';
-    cs.hits = 0;
-    this.approach(agent, t);
-  }
-
-  update(agent: Agent, dt: number, now: number): ActivityStatus {
-    if (this.swingCd > 0) this.swingCd -= dt;
-    combatStateFor(agent.id).swingCd = this.swingCd; // §9's readout, see combatState.ts
-    const t = threatOf(agent);
-    // Nothing believed hostile is left above the noticed threshold — the fight
-    // is over or the memory has faded. SUCCESS, not FAILURE: giving up on a
-    // target that stopped existing is the action working, not failing.
-    if (!t) { clearCombatState(agent.id); return 'SUCCESS'; }
-
-    const cfg = COMBAT.engage;
-    const tx = t.lastKnownPosition.x;
-    const tz = t.lastKnownPosition.z;
-    const dist = Math.hypot(tx - agent.position.x, tz - agent.position.z);
-
-    if (dist > cfg.reach) {
-      // §3.3 again: the walk is toward where this agent BELIEVES the hostile
-      // is. Re-aimed when that belief moves, not every tick — re-issuing an
-      // identical MOVE_TO would re-stamp `intentSetAt` (Agent.ts's setter) and
-      // hide the intent's real age from the overlay.
-      if (!this.closing || Math.hypot(tx - this.aimedX, tz - this.aimedZ) > 1) this.approach(agent, t);
-      return 'RUNNING';
-    }
-
-    // Standing where the hostile was last known to be, and it is not here: the
-    // belief is stale rather than wrong. Search is a phase of its own that this
-    // game has no content for, so the honest end is to stop rather than to
-    // stand over the spot indefinitely with a swing animation playing.
-    if (!t.isVisibleNow && now - t.lastSeenAt > cfg.loseTargetSec) {
-      clearCombatState(agent.id);
-      return 'SUCCESS';
-    }
-
-    this.closing = false;
-    if (this.swingCd > 0) {
-      // The swing clip gets the FIRST half of the cooldown to itself, then the
-      // guard comes back up. Without that split the PLAY_ANIM would be replaced
-      // by a FACE on the very next think tick — 0.1 s of `anim_g_swordswish` at
-      // tier A, which every renderer's own splice would faithfully show as a
-      // twitch (haul.ts's one-shot deposit clip documents the same "no real
-      // onEnd signal reaches this layer" constraint, and solves it the same
-      // way: a held interval, not a callback).
-      if (this.swingCd <= cfg.swingSeconds * 0.5) this.face(agent, tx, tz);
-      return 'RUNNING';
-    }
-
-    this.swingCd = cfg.swingSeconds;
-    agent.intent = { type: 'PLAY_ANIM', clip: SWING_CLIP, loop: false, anchored: true };
-    this.strike(agent, t);
-    return 'RUNNING';
-  }
-
-  /** Hold the guard facing what is being fought. Re-issued only when that has
-   *  actually moved — `agent.intent`'s setter stamps `intentSetAt` on every
-   *  assignment (Agent.ts), so reassigning an identical FACE each tick would
-   *  peg the overlay's intent age at 0.0 s. */
-  private face(agent: Agent, tx: number, tz: number): void {
-    if (agent.intent?.type === 'FACE' && Math.hypot(tx - this.facingX, tz - this.facingZ) < 0.5) return;
-    this.facingX = tx;
-    this.facingZ = tz;
-    agent.intent = { type: 'FACE', target: { x: tx, z: tz } };
-  }
-
-  abort(agent: Agent): void {
-    agent.intent = null;
-    clearCombatState(agent.id);
-    // No reservation, no work signal, no carried load touched — same as
-    // flee_to_safety/take_cover. A defender's own `defenderState` HP is owned
-    // by Defenders.tsx and is not this activity's to unwind.
-  }
-
-  private approach(agent: Agent, t: Belief): void {
-    const tx = t.lastKnownPosition.x;
-    const tz = t.lastKnownPosition.z;
-    this.aimedX = tx;
-    this.aimedZ = tz;
-    this.closing = true;
-    agent.intent = {
-      type: 'MOVE_TO',
-      position: { x: tx, z: tz },
-      speed: 'run',
-      stopDistance: COMBAT.engage.approachStop,
-    };
-    const cs = combatStateFor(agent.id);
-    cs.mode = 'engage';
-    cs.targetBeliefId = t.entityId;
-    cs.threatX = tx;
-    cs.threatZ = tz;
-    cs.coverX = tx;
-    cs.coverZ = tz;
-    cs.coverLabel = 'engaging';
-  }
-
-  /** One blow. Everything after the range check is `Defenders.tsx`'s own kill
-   *  bookkeeping, reached through the same call rather than reimplemented
-   *  (resolveEnemyKill's 'defender' cause): the kill is recorded, the defender
-   *  earns their XP, the loot the raider was carrying drops, and the player is
-   *  told. */
-  private strike(agent: Agent, t: Belief): void {
-    const gs = useGameStore.getState();
-    const villager = gs.villagers.find((v) => v.id === agent.id);
-    if (!villager) return;
-    const target = liveTargetFor(t.entityId);
-    if (!target) return;
-    // the live adjudication: a swing thrown at a remembered position misses if
-    // the raider has already stepped out of reach, which is exactly what makes
-    // reading beliefs rather than transforms cost something
-    if (Math.hypot(target.mob.x - agent.position.x, target.mob.z - agent.position.z) > COMBAT.engage.reach) return;
-
-    target.hp -= defenderStrike(villager);
-    combatStateFor(agent.id).hits++;
-    if (target.hp > 0 || target.mob.state === 'dying') return;
-    resolveEnemyKill(target, { by: 'defender', villager });
-  }
-}
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
 /** Straight through: unlike `take_cover`'s floor-shifted ramp, there is no
  *  threshold below which an armed defender should decline to fight — a little
  *  threat is a little urgency, and the two bool gates below already ensure
@@ -278,14 +125,14 @@ export const ENGAGE_THREAT: Action = {
       // gives a bare-handed defender the weaker fists number).
       name: 'is_defender',
       input: (agent) => (agent.bb.job === 'defender' ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     { name: 'threat_present', input: (agent) => agent.bb.threatLevel, curve: threatCurve },
     {
       name: 'hostile_believed',
       input: (agent) => (threatOf(agent) ? 1 : 0),
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
   ],
-  createActivity: () => new EngageThreatActivity(),
+  createActivity: () => new MeleeEngageActivity(DEFENDER),
 };

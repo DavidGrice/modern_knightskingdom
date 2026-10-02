@@ -39,6 +39,7 @@ export type { EnemyData } from './combat/enemyStore';
 export { damagePlayer } from './combat/playerDamage';
 export { canChallengeStorm, resolveDuel } from './combat/duel';
 export { resolveEnemyKill } from './combat/kill';
+export type { KillCause } from './combat/kill';
 export { activeMelee, cycleWeapon, playerAttack, tryDodge } from './combat/melee';
 export {
   FULL_DRAW_TIME, MIN_DRAW, fireArrow, fireBolt, fireSpellBolt, stepBolt, useBoltStore,

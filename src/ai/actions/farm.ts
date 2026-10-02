@@ -22,7 +22,7 @@
 // What it reuses rather than reinvents: TargetRegistry's building targets and
 // their existing 4-slot radial anchor rule (config/anchors.json already had a
 // `farmplot` entry), the same reserve/travel/align/perform skeleton
-// gather.ts and haul.ts share, the same workSignal publication so
+// gather.ts and haul.ts share (workActivity.ts, since CLN-15), the same workSignal publication so
 // `villagerAtWork()` trusts a real activity over its proximity heuristic, and
 // the same rule that a yield goes into `bb.carrying` to be hauled — never
 // straight into the inventory. That last one is the balance point: a farmer
@@ -32,22 +32,19 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { isWorkingHours } from '@/game/data/villagers';
-import { setWorkSignal, clearWorkSignal } from '@/game/workSignal';
-import { targetRegistry, type TargetId } from '../core/TargetRegistry';
-import type { Agent } from '../core/Agent';
-import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { targetRegistry, type Target, type TargetId } from '../core/TargetRegistry';
+import type { Agent, Intent } from '../core/Agent';
+import type { Action, ActivityStatus } from '../core/Reasoner';
+import { BOOL_CURVE, NOT_THREATENED_CURVE, type Curve } from '../core/curves';
+import { WorkActivity, proximityInput } from './workActivity';
 
 const SLOT_KIND = 'farm';
-const PROXIMITY_RANGE = 40; // matches assembleCandidates's own default queryRadius
 // One sustained working beat rather than gather's repeated swings: sowing a
 // bed or cutting it is a single act with a single outcome, not an accumulating
 // one. Scaled by bb.tripSpeedMult like every other work duration in Wave 10,
 // so a diligent, well-mastered farmer really does get through their beds
 // faster.
 const WORK_HOLD = 3;
-// same reasoning and value as gather.ts's own BLOCKED_RETRY_COOLDOWN
-const BLOCKED_RETRY_COOLDOWN = 15;
 /** what a cut bed yields — `st.plots` is a wheat field and nothing else today
  *  (gameStore's plantPlot/harvestPlot), so this is a fact about the mechanic,
  *  not a table waiting to grow */
@@ -67,60 +64,22 @@ function plotStateOf(targetId: TargetId): PlotState {
   return left > 0 ? 'growing' : 'ready';
 }
 
-class TendFarmplotActivity implements Activity {
-  private phase: 'travel' | 'align' | 'perform' = 'travel';
-  private travelStepped = false;
+class TendFarmplotActivity extends WorkActivity {
+  protected readonly slotKind = SLOT_KIND;
+  protected readonly source = 'building';
   private holdTimer = 0;
-  private targetId: TargetId | null = null;
-  /** same reasoning as GatherAtNodeActivity's own `reserved` field — a
-   *  farmplot's anchor rule allows 4 slots, so several farmers really can work
-   *  neighbouring beds, and a failed reserve has to fail loudly rather than
-   *  quietly working a bed someone else already claimed */
-  private reserved = false;
 
-  start(agent: Agent, ctx: Context): void {
-    if (!ctx.target) return;
-    this.targetId = ctx.target.id;
-    this.phase = 'travel';
-    this.travelStepped = false;
+  protected beginWork(): void {
     this.holdTimer = 0;
-    this.reserved = targetRegistry.reserve(ctx.target.id, SLOT_KIND, agent.id);
-    if (!this.reserved) return; // update() fails cleanly on the next tick
-    agent.bb.reservation = { targetId: ctx.target.id, slotKind: SLOT_KIND };
-    agent.intent = { type: 'MOVE_TO_ANCHOR', targetId: ctx.target.id, anchorName: 'default', speed: 'walk' };
   }
 
-  update(agent: Agent, dt: number, now: number): ActivityStatus {
-    if (!this.targetId) return 'FAILURE';
-    if (!this.reserved) return 'FAILURE'; // nothing to release — never held a slot
-    const target = targetRegistry.get(this.targetId);
-    if (!target || target.source !== 'building') return this.finish(agent, 'FAILURE');
+  protected workIntent(): Intent {
+    return { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
+  }
 
-    if (this.phase === 'travel') {
-      // same staleness reasoning as GatherAtNode's own 'travel' phase
-      if (!this.travelStepped) { this.travelStepped = true; return 'RUNNING'; }
-      if (agent.bb.movement.status === 'blocked') {
-        agent.bb.blockedTargets.set(this.targetId, now + BLOCKED_RETRY_COOLDOWN);
-        return this.finish(agent, 'FAILURE');
-      }
-      if (agent.bb.movement.status === 'arrived') {
-        this.phase = 'align';
-        agent.intent = { type: 'FACE', target: { x: target.x, z: target.z } };
-      }
-      return 'RUNNING';
-    }
-
-    if (this.phase === 'align') {
-      // same one-tick align as GatherAtNode/HaulToDeposit
-      this.phase = 'perform';
-      this.holdTimer = 0;
-      setWorkSignal(agent.id, { active: true, targetId: this.targetId, kind: target.kind });
-      agent.intent = { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
-      return 'RUNNING';
-    }
-
-    // perform — one sustained beat, then a single tendPlot() call
-    agent.intent = { type: 'PLAY_ANIM', clip: 'anim_g_swordswish', loop: true, anchored: true };
+  /** one sustained beat, then a single tendPlot() call. Carrying survives an
+   *  abort, same rule as GatherAtNode. */
+  protected perform(agent: Agent, dt: number, target: Target): ActivityStatus {
     this.holdTimer += dt;
     if (this.holdTimer < WORK_HOLD * (agent.bb.tripSpeedMult > 0 ? agent.bb.tripSpeedMult : 1)) return 'RUNNING';
 
@@ -130,11 +89,11 @@ class TendFarmplotActivity implements Activity {
     // branch is destructive — tendPlot clears the plot and hands the wheat
     // back, so discovering afterwards that there is nowhere to put it would
     // destroy a real crop.
-    const state = plotStateOf(this.targetId);
+    const state = plotStateOf(target.id);
     if (state === 'gone' || state === 'growing') return this.finish(agent, 'FAILURE');
     if (state === 'ready' && !this.canTakeCrop(agent)) return this.finish(agent, 'SUCCESS');
 
-    const result = useGameStore.getState().tendPlot(this.targetId.slice(5));
+    const result = useGameStore.getState().tendPlot(target.id.slice(5));
     if (!result) return this.finish(agent, 'FAILURE'); // state changed between the check above and the call
     if (result === 'planted') return this.finish(agent, 'SUCCESS'); // a sown bed is a finished job; the wait is the reasoner's problem, not this Activity's
     const cap = agent.bb.carryCapacity;
@@ -153,33 +112,8 @@ class TendFarmplotActivity implements Activity {
     if (!load) return true;
     return load.resource === PLOT_ITEM && load.amount < cap;
   }
-
-  /** same reasoning as GatherAtNodeActivity's own finish() */
-  private finish(agent: Agent, status: ActivityStatus): ActivityStatus {
-    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
-    agent.bb.reservation = null;
-    clearWorkSignal(agent.id);
-    return status;
-  }
-
-  abort(agent: Agent): void {
-    if (this.targetId && this.reserved) targetRegistry.release(this.targetId, SLOT_KIND, agent.id);
-    agent.bb.reservation = null;
-    clearWorkSignal(agent.id);
-    agent.intent = null;
-    // carrying survives, same rule as GatherAtNode
-  }
 }
 
-function proximityInput(agent: Agent, ctx: Context): number {
-  if (!ctx.target) return 0;
-  const dx = ctx.target.x - agent.position.x;
-  const dz = ctx.target.z - agent.position.z;
-  return Math.min(1, Math.hypot(dx, dz) / PROXIMITY_RANGE);
-}
-
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
 const proximityCurve: Curve = { type: 'linear', m: -1, k: 0, b: 1, c: 0 };
 const energyCurve: Curve = { type: 'quadratic', m: 1, k: 0.5, b: 0, c: 0 };
 
@@ -200,7 +134,7 @@ export const TEND_FARMPLOT: Action = {
       name: 'job_match',
       input: (agent, ctx) =>
         ctx.target && ctx.target.source === 'building' && ctx.target.kind === 'farmplot' && agent.bb.job === 'farmer' ? 1 : 0,
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
     {
       // The whole timer-vs-hit-count difference, expressed as one gate. A
@@ -235,10 +169,10 @@ export const TEND_FARMPLOT: Action = {
         if (!load) return 1;
         return load.resource === PLOT_ITEM && load.amount < cap ? 1 : 0;
       },
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
-    { name: 'is_work_hours', input: () => (isWorkingHours(worldEnv.time) ? 1 : 0), curve: boolCurve },
-    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
+    { name: 'is_work_hours', input: () => (isWorkingHours(worldEnv.time) ? 1 : 0), curve: BOOL_CURVE },
+    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: NOT_THREATENED_CURVE },
     { name: 'proximity', input: (agent, ctx) => proximityInput(agent, ctx), curve: proximityCurve },
     { name: 'energy', input: (agent) => agent.bb.needs.energy, curve: energyCurve },
   ],

@@ -39,10 +39,10 @@ import { DEPOSIT_KINDS } from './haul';
 import type { TargetId } from '../core/TargetRegistry';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';
-import type { Curve } from '../core/curves';
+import { BOOL_CURVE, NOT_THREATENED_CURVE } from '../core/curves';
 
-/** the radius haul_to_deposit's own candidate assembly can see (gather.ts/
- *  haul.ts's PROXIMITY_RANGE, = assembleCandidates' default queryRadius) —
+/** the radius haul_to_deposit's own candidate assembly can see
+ *  (workActivity.ts's PROXIMITY_RANGE, = assembleCandidates' default queryRadius) —
  *  this Action's whole job is to get inside it, so it is also exactly where
  *  this Action stops wanting to run */
 const HANDOFF_RANGE = 40;
@@ -157,9 +157,6 @@ class SeekDepositActivity implements Activity {
   }
 }
 
-const boolCurve: Curve = { type: 'bool', m: 0, k: 0, b: 0, c: 0 };
-const notThreatenedCurve: Curve = { type: 'quadratic', m: 1, k: 2, b: 0, c: 0 };
-
 export const SEEK_DEPOSIT: Action = {
   id: 'seek_deposit',
   category: 'work',
@@ -182,7 +179,7 @@ export const SEEK_DEPOSIT: Action = {
   // building list sits last, behind three O(1) gates that reject most agents
   // on most ticks before it is ever reached.
   considerations: [
-    { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: boolCurve },
+    { name: 'is_carrying', input: (agent) => (agent.bb.carrying ? 1 : 0), curve: BOOL_CURVE },
     {
       // Wave 9's "hold your load and wait" rule, applied to the walk as well
       // as to the deposit: if the stores have no room for what they are
@@ -196,9 +193,9 @@ export const SEEK_DEPOSIT: Action = {
         const st = useGameStore.getState();
         return roomFor(load.resource, st.inventory[load.resource] ?? 0, st.buildings) > 0 ? 1 : 0;
       },
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
-    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: notThreatenedCurve },
+    { name: 'not_threatened', input: (agent) => 1 - agent.bb.threatLevel, curve: NOT_THREATENED_CURVE },
     {
       // the handoff, and the whole reason this Action can share a category
       // with haul_to_deposit without fighting it: inside haul's own query
@@ -214,7 +211,7 @@ export const SEEK_DEPOSIT: Action = {
         if (!dest) return 0;
         return dest.dist > HANDOFF_RANGE ? 1 : 0;
       },
-      curve: boolCurve,
+      curve: BOOL_CURVE,
     },
   ],
   createActivity: () => new SeekDepositActivity(),
