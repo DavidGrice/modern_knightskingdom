@@ -857,9 +857,17 @@ function createGameStore() {
     // the only thing that makes it a delivery is WHERE it gets turned in
     // (see turnInSideQuest's deliverTo check below) — so a gather-kind
     // action bump also advances a deliver-kind errand's progress.
-    const matchesKind = def.kind === kind || (def.kind === 'deliver' && kind === 'gather');
+    // Bugfix (CLN-21, found by data/validate.ts): a delivery of CRAFTED goods
+    // (Beda's "cart 8 planks out to Fenwick") is loaded up by crafting them —
+    // planks are never harvested, so with only the gather bump above that
+    // errand's counter could not move and it could never be turned in. A
+    // craft bump carries the RECIPE id, so it is matched on what the recipe
+    // makes rather than on its id.
+    const craftedForDelivery = def.kind === 'deliver' && kind === 'craft';
+    const matchesKind = def.kind === kind || (def.kind === 'deliver' && kind === 'gather') || craftedForDelivery;
     if (!matchesKind) return;
-    if (def.target !== 'any' && def.target !== target) return;
+    const bumped = craftedForDelivery ? RECIPES.find((r) => r.id === target)?.output ?? target : target;
+    if (def.target !== 'any' && def.target !== bumped) return;
     if (sq.have >= def.need) return;
     const have = Math.min(def.need, sq.have + amount);
     set({ sideQuest: { ...sq, have }, dirty: true });

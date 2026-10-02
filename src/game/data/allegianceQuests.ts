@@ -24,7 +24,7 @@
 // The neutral pool matters as much as the other two. Alric and Beda ask for
 // honest village work that neither house has an opinion about, which is what
 // keeps "unsworn" a playable stance instead of a gap you pass through.
-import type { SideQuestDef } from './npcs';
+import type { SideQuestDef } from './cast/types';
 
 /** merged into each giver's own pool by `sideQuestsOf` */
 export const EXTRA_SIDE_QUESTS: Record<string, SideQuestDef[]> = {

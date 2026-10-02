@@ -20,6 +20,8 @@ import Panels from '../hud/Panels';
 import BuildBar from '../hud/BuildBar';
 import AIDebugOverlay from '@/ai/debug/AIDebugOverlay';
 import PerfOverlay from '@/components/hud/PerfOverlay';
+// side-effect import: registers window.__kkdata and, in development, logs any quest/cast data violation
+import '@/game/data/validate';
 
 function PauseMenu({ onQuit }: { onQuit: () => void }) {
   const setPaused = useGameStore((s) => s.setPaused);

@@ -37,7 +37,7 @@
 // instead (spread in from here), matching settlementQuests.ts's own
 // precedent for "a new content module merged into a specific NPC" rather
 // than the EXTRA_SIDE_QUESTS merge path.
-import type { SideQuestDef } from './npcs';
+import type { SideQuestDef } from './cast/types';
 
 const OLD_RUINS = 'template-08';
 
