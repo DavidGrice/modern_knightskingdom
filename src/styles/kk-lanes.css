@@ -149,25 +149,38 @@
 :root[data-kk-quality='low'] .rank-badge,
 :root[data-kk-quality='low'] .quest-tracker { backdrop-filter: none !important; }
 
-/* ---- theme picker (Options) ---- */
+/* ---- theme picker (Options) ----
+   CLN-32 · the cards wear the SELECTED lane's card language (the --kk-card-* tokens at the bottom of this file, the
+   same ones the sign-in card and the hero forge read), so picking a lane restyles the picker itself. They used to
+   read the older gold/parchment tokens, which only a lane's own panels re-point — on this screen that meant the
+   same gold-on-black card in all four lanes, the one thing in Options that never followed the setting it sets.
+   --kk-card-caret is each lane's bright "active" colour (mint, blurple, orange, brass), which is what a selection
+   ring needs to stay visible on a light chrome card and a dark leather one alike. */
 .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
 .theme-card {
   text-align: left; padding: 10px 12px; border-radius: 8px;
-  border: 1px solid var(--chrome-2); background: rgba(0, 0, 0, 0.3);
-  color: var(--parchment); cursor: pointer;
+  border: 1px solid var(--kk-card-border);
+  background: linear-gradient(var(--kk-card-bg-1), var(--kk-card-bg-2));
+  box-shadow: inset 0 1px 0 var(--kk-card-border-top);
+  color: var(--kk-card-text); cursor: pointer;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.theme-card:hover { border-color: var(--gold); }
-.theme-card.selected { border-color: var(--gold); box-shadow: 0 0 12px var(--chrome-glow); }
-.theme-card .tc-name { font-size: 14px; color: var(--gold); letter-spacing: 0.5px; }
-.theme-card .tc-blurb { font-size: 11.5px; color: var(--parchment-dark); margin-top: 3px; line-height: 1.4; }
+.theme-card:hover { border-color: var(--kk-card-caret); }
+.theme-card.selected {
+  border-color: var(--kk-card-caret);
+  box-shadow: inset 0 1px 0 var(--kk-card-border-top), 0 0 0 1px var(--kk-card-caret),
+    0 0 14px color-mix(in srgb, var(--kk-card-caret) 40%, transparent);
+}
+.theme-card .tc-name { font-size: 14px; color: var(--kk-card-text); letter-spacing: 0.5px; }
+.theme-card .tc-blurb { font-size: 11.5px; color: var(--kk-card-text-dim); margin-top: 3px; line-height: 1.4; }
 .theme-card .tc-swatch { height: 26px; border-radius: 5px; margin-bottom: 8px; }
+/* each swatch is its lane's real panel surface, not a look-alike */
 .tc-swatch.glass {
-  background: linear-gradient(rgba(16, 24, 20, 0.7), rgba(8, 14, 11, 0.85));
+  background: var(--kk-lane-glass-bg);
   border: 1px solid rgba(255, 255, 255, 0.28); border-top-color: rgba(255, 255, 255, 0.5);
 }
 .tc-swatch.metal {
-  background: linear-gradient(104deg, #1e212b, #0f1117 40%, #262a38 62%, #0d0f14);
+  background: var(--kk-lane-metal-bg);
   border-top: 1px solid var(--kk-a-400);
 }
 .tc-swatch.chrome {
@@ -270,7 +283,7 @@
    theme from the character creator" actually was — not a missing
    background (kk-screen-* fixed that part already) but every card,
    input and button INSIDE those screens still being the one baked-in
-   look. These eight custom properties are that missing lane hookup:
+   look. These custom properties are that missing lane hookup:
    defined once here per lane, referenced by kk-screen-frontdoor.css's own card
    rules instead of a hardcoded hex value, so both screens (and any
    future one) pick up the SAME chosen lane's card language together.
