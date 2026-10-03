@@ -21,7 +21,7 @@
 // gracefully to straight-line steering for a region with no grid yet (the
 // dungeon before its layout generates), so no special-casing is needed here
 // for that.
-import { agentManager } from './core/AgentManager';
+import { agentManager } from '../core/AgentManager';
 import { playerState } from '@/game/playerState';
 import { COMPANION_ID } from '@/game/data/companion';
 
@@ -31,9 +31,9 @@ let lastDestination: string | null = null;
 export function syncCompanionAgent(recruited: boolean, destination: string | null): void {
   if (recruited && !spawned) {
     // spawned a metre and a bit off the player's own spot rather than
-    // exactly on it — same reasoning mountHorse/npcSync's own spawn points
-    // use, so Tam doesn't render inside the player's own collision volume
-    // for the one frame before follow_leader's first think tick moves him.
+    // exactly on it, so Tam doesn't render inside the player's own collision
+    // volume for the one frame before follow_leader's first think tick moves
+    // him.
     agentManager.spawn(COMPANION_ID, 'companion', playerState.x + 1.2, playerState.z + 1.2, destination);
     spawned = true;
     lastDestination = destination;

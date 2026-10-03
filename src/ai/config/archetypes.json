@@ -24,7 +24,7 @@
     "headers). New 'court' archetype: ONLY those same two actions, nothing",
     "movement/schedule-related — deliberately narrower than villager so a",
     "court NPC (King Leo, Richard, Storm, the starter farmers — anyone",
-    "courtAmbientSync.ts spawns an Agent for) can never wander off post or",
+    "sync/courtSync.ts spawns a 'court' Agent for) can never wander off post or",
     "flee a raid three regions away, while still reading as alive via the",
     "same fidget/notice content a working villager gets.",
     "Updated 2026-08-10 (Wave 10): villager gained seek_deposit (a stranded",

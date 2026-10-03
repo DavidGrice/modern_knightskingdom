@@ -39,7 +39,7 @@ import { liftBlackMaterials } from './Wildlife';
 import { homeGroundY } from './TemplateWorld';
 import { agentManager } from '@/ai/core/AgentManager';
 import { stepLocomotion } from '@/ai/core/Locomotion';
-import { WILDLIFE_POPULATION } from '@/ai/wildlifeSync';
+import { WILDLIFE_POPULATION } from '@/ai/sync/wildlifeSync';
 
 const ASSET_URL = '/assets/props/creatures/l254600.glb';
 // A small ground songbird, distinct from the wild falcon's own 0.9 m — the
