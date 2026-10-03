@@ -7209,13 +7209,13 @@ which he joined the way the game allows (after at least one frame at home). `src
 `sync.test.ts` (21 tests) cover the class, each sync and the hand-over; they catch 51 of 53 single-edit mutants of the
 four sync files, and the other two change nothing.
 
-## Bug: the court vanishes underground whenever it fidgets — FOUND 2026-10-03 (during CLN-17), not yet fixed
+## Bugfix: the court vanished underground whenever it fidgeted — FOUND (during CLN-17) AND FIXED 2026-10-03
 
 **Found by** reading `Npc.tsx` while moving the court sync, then measured in the running game.
 
-**The bug:** `CourtNpc` (`components/world/Npc.tsx`) places a figure in three ways. Standing idle, it uses the ground
+**The bug:** `CourtNpc` (`components/world/Npc.tsx`) places a figure in three ways. Standing idle, it used the ground
 under the NPC's own spot — `destinationGroundY` at a destination, `homeGroundY` at home. But while the NPC's Agent
-holds a `PLAY_ANIM` or a `FACE` intent it uses `homeGroundY` alone, on a Wave 31 note that "a real Agent only ever
+held a `PLAY_ANIM` or a `FACE` intent it used `homeGroundY` alone, on a Wave 31 note that "a real Agent only ever
 exists for a SCHEDULED court NPC … so this branch — and the PLAY_ANIM/FACE branches below it — are provably
 home-only". That stopped being true on 2026-08-03, when every revealed court NPC was given a 'court' Agent
 (`idle_fidget`, `notice_player`) — the ones at destinations included. `homeGroundY` returns 0 anywhere outside the
@@ -7231,4 +7231,20 @@ Richard at the Forge drops from 3.33 to 0, Princess Storm from 15.4, Fenwick at 
 13.31; Torvald and Garrick stand on ground that is at 0 anyway, so nothing shows there. No `FACE` intent (turning to
 the player as they come close) was caught in those runs; it goes through an identical line.
 
-**Fix, to follow in its own change:** the two intent branches use the same ground rule the idle branch does.
+**Fix** (`components/world/Npc.tsx`): one `groundY(x, z)` rule for the component — the destination's baked terrain
+for a resident of a destination, the homestead's for a home NPC — which every branch that places the figure now goes
+through: movement, `PLAY_ANIM`, `FACE`, standing, the night walk. Standing gets what it got before; so do movement and
+the night walk, which only a home NPC reaches.
+
+**Verified** (production builds of `main` at 07bb8d1 and of the fix): a second probe (`npc_ground2`) follows each
+NPC's own figure root frame by frame for fourteen seconds per destination, tagged by the intent its Agent holds (the
+first frame after each change of intent is left out: the figure moves a frame later). It puts the player beside the
+first NPC, and — a `FACE` lasts a single think tick in the game — also hands each Agent a `FACE` twice a second for
+the last five seconds, so that all three kinds are measured: at the destinations, 109 to 475 recorded frames per NPC
+and kind on `main`, 61 to 481 on the fix. On `main` the root is at ground height in every idle frame and at 0 in every
+`PLAY_ANIM` and `FACE` frame, for all seven NPCs whose ground is not at 0 (Richard's `FACE` readings run from 0 to
+3.33: at least one was taken before the figure had moved). On the fix it is at ground height in every frame of all
+three kinds: King Leo and John 15.34, the Queen 15.47, Richard 3.33, Princess Storm 15.4, Fenwick 7.94, Wyeth 13.31,
+Torvald and Garrick at their 0. Alric and Beda, at home, read 0 under all three kinds on both builds. The screenshot
+taken mid-fidget at The King's Approach shows an empty dais on `main` and the King and Queen standing by the throne on
+the fix. The same under `next dev` (home and The King's Approach); 0 console errors in every run.

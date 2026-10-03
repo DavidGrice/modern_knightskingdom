@@ -69,6 +69,14 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
   // than drifting toward the homestead Keep's night-gathering spot,
   // which is a thousand units away in another realm
   const schedule = !!def.revealAfterQuest && !def.world;
+  // The ground under a spot in this NPC's own realm: a destination's resident
+  // stands on that destination's baked terrain, a home NPC on the homestead's.
+  // Every branch below grounds its figure through this one rule. The
+  // PLAY_ANIM and FACE branches used homeGroundY alone, which is 0 anywhere
+  // away from home, so at every destination whose ground is not at 0 the
+  // court dropped under its own hill for as long as an idle fidget or a turn
+  // to the player lasted.
+  const groundY = (x: number, z: number) => (def.world ? destinationGroundY(x, z) : homeGroundY(x, z));
 
   useFrame((_, dt) => {
     if (greetSeq !== seen.current) {
@@ -150,14 +158,13 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       // Wave 31 · only a SCHEDULED court NPC's Agent can hold a movement
       // intent (ai/sync/courtSync.ts: the walkers come from scheduledCourtNpcs,
       // which requires `!def.world`; everyone else gets the 'court' archetype,
-      // which has no movement), so this branch is home-only: homeGroundY, not
-      // the full ternary Villagers.tsx needs. The PLAY_ANIM and FACE branches
-      // below were given the same homeGroundY on the same reasoning, and for
-      // them it stopped holding on 2026-08-03, when every revealed NPC —
-      // destination residents included — got a 'court' Agent that fidgets and
-      // faces the player: ROADMAP.md, "the court vanishes underground whenever
-      // it fidgets".
-      g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
+      // which has no movement), so this branch is home-only today. It is
+      // grounded through groundY like the others all the same: the PLAY_ANIM
+      // and FACE branches below were once given homeGroundY on this very
+      // reasoning, and it stopped holding for them on 2026-08-03, when every
+      // revealed NPC — destination residents included — got a 'court' Agent
+      // that fidgets and faces the player.
+      g.position.set(loc.x - originOffset.x, groundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -177,7 +184,7 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
+      g.position.set(loc.x - originOffset.x, groundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -195,7 +202,7 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
+      g.position.set(loc.x - originOffset.x, groundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
@@ -207,12 +214,10 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       // residents stand on their bake's real terrain (these hillside scenes
       // vary meters in relief); a home NPC now reads the homestead's own
       // terrain regions the same way (Wave 31 — previously a hardcoded 0).
-      // destinationGroundY(def.x, def.z)/homeGroundY(def.x, def.z) stay the
-      // full ABSOLUTE value — see this file's own ZERO_OFFSET comment — only
-      // the final position.set write below is shifted into this group's
-      // local (origin-offset) space.
-      const gy = def.world ? destinationGroundY(def.x, def.z) : homeGroundY(def.x, def.z);
-      g.position.set(def.x - originOffset.x, gy, def.z - originOffset.z);
+      // groundY(def.x, def.z) stays the full ABSOLUTE value — see this
+      // file's own ZERO_OFFSET comment — only the final position.set write
+      // below is shifted into this group's local (origin-offset) space.
+      g.position.set(def.x - originOffset.x, groundY(def.x, def.z), def.z - originOffset.z);
       mob.x = def.x; mob.z = def.z;
       return;
     }
@@ -233,10 +238,9 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     p.z += dz * Math.min(1, dt * 0.15);
     // reachable only for home NPCs (schedule requires !def.world, so
     // originOffset is always ZERO_OFFSET here today) — offset-subtracted
-    // anyway for the same defensive-parity reason as the other three
-    // useFrame branches above. homeGroundY, not the full ternary, for the
-    // same home-only reason those branches use it.
-    g.position.set(p.x - originOffset.x, homeGroundY(p.x, p.z), p.z - originOffset.z);
+    // anyway for the same defensive-parity reason as the other
+    // useFrame branches above.
+    g.position.set(p.x - originOffset.x, groundY(p.x, p.z), p.z - originOffset.z);
     mob.x = p.x;
     mob.z = p.z;
     // only steer the walk/idle animation when not mid-greet — a wave in
