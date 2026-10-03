@@ -7171,3 +7171,64 @@ charge path. A raid beaten off by engines alone hands over no purse at all — w
 **To decide:** whether blast kills should follow the same tables as the blade (name, XP, purse, tally, final stand)
 or stay cheaper on purpose. Either way it is now an edit to two rows of `RULES` in `kill.ts`, and
 `combat/kill.test.ts`'s "blast kills are kept as they were found" is the test to change with it.
+
+## Bugfix: Alric or Beda, once recruited, never had a reasoner Agent again — FOUND AND FIXED 2026-10-03 (during CLN-17)
+
+**Found by** CLN-17's golden master of the AI's population syncs, which drives the roster, court, companion and
+wildlife syncs frame by frame: in the frame Alric joins the roster, his Agent disappears and never comes back.
+
+**The bug:** Alric and Beda keep their NPC ids (`farmer_alric`, `miller_beda`) when "Join the Homestead"
+(`recruitVillageFolk`) puts them on the roster. In that frame the roster sync, which runs first, sees the court's
+'court' Agent under that id, despawns it and spawns him a 'villager' Agent. The court sync runs next; he is no
+longer one of its NPCs (it skips anyone on the roster), so it despawned "his" Agent by id — which was now the
+villager Agent the roster sync had just made. The roster sync still counted him as spawned, so it never made
+another: from then on a recruited Alric or Beda had no Agent at all, whatever job they were given. Villagers.tsx
+still drew them, but none of the reasoner's work — gathering at a node, hauling, tending — ever ran for them.
+
+**Observed** (production build of `main`): recruit Alric, wait three seconds, make him a lumberjack beside a tree and
+a stockpile, wait forty seconds — no Agent the whole time. On the fix: a 'villager' Agent from the first frame, a
+couple of idle fidgets, then `gather_resource`. The same under `next dev`; 0 console errors.
+
+**Fix** (`src/ai/sync/population.ts`): a population of Agents remembers the Agent object it spawned for an id, not
+only the id. Letting an id go despawns that object only while it is still the one registered under the id, so when the
+court lets Alric go, the villager Agent the roster gave him — not the one the court made — stays. Taking an id over is
+explicit too: a population admitting a newcomer despawns whatever Agent holds the id and spawns its own. (The old syncs
+noticed a take-over only when the archetype differed. `agentManager.spawn` hands back an Agent that already exists, so
+a hand-over between two populations of the same archetype — a "scheduled walker" court NPC joining the roster, were
+there any — would have left both holding one Agent, and the first to let go would have despawned it for both. Not
+reachable with today's content; closed anyway.)
+
+**Verified:** the sync golden master is identical to `main` in 28 of its 29 frames; the one that differs is the frame
+Alric joins, now with his villager Agent. A differential fuzz — 600 scripts of 400 store-shaped operations (arrivals,
+recruiting Alric or Beda, job changes, travel, quests, settlements founded, Tam, saves loaded, new games; 96,478
+frames) run through the new syncs and through a transcription of the old ones — finds the two never differing except
+over an Alric or Beda recruited during the session, for whom the new syncs have an Agent and the old ones none (from
+that frame on, where that one id and its figure stand is not compared), and no frame where the new syncs leave anyone
+without the Agent they should have. The old ones have none in all 19,571 cases — a frame, and a recruit in it — in
+which he joined the way the game allows (after at least one frame at home). `src/ai/sync/population.test.ts` and
+`sync.test.ts` (21 tests) cover the class, each sync and the hand-over; they catch 51 of 53 single-edit mutants of the
+four sync files, and the other two change nothing.
+
+## Bug: the court vanishes underground whenever it fidgets — FOUND 2026-10-03 (during CLN-17), not yet fixed
+
+**Found by** reading `Npc.tsx` while moving the court sync, then measured in the running game.
+
+**The bug:** `CourtNpc` (`components/world/Npc.tsx`) places a figure in three ways. Standing idle, it uses the ground
+under the NPC's own spot — `destinationGroundY` at a destination, `homeGroundY` at home. But while the NPC's Agent
+holds a `PLAY_ANIM` or a `FACE` intent it uses `homeGroundY` alone, on a Wave 31 note that "a real Agent only ever
+exists for a SCHEDULED court NPC … so this branch — and the PLAY_ANIM/FACE branches below it — are provably
+home-only". That stopped being true on 2026-08-03, when every revealed court NPC was given a 'court' Agent
+(`idle_fidget`, `notice_player`) — the ones at destinations included. `homeGroundY` returns 0 anywhere outside the
+homestead's own hills, and the destinations' ground is not at 0.
+
+**Observed** (production build of `main`): a probe read, eight times a second for twenty seconds at each destination
+with a court, the height of the highest figure root on each NPC's spot against the intent its Agent held. At The
+King's Approach the ground is 15.34 m up under King Leo and John and 15.47 under the Queen. Within those twenty
+seconds each of them held a `PLAY_ANIM` intent (an idle fidget), and while it lasted the reading fell to 0 for the
+King, to 0 for John (4.52 in one sample) and to between 0 and 0.29 for the Queen — some fifteen metres under the hill.
+In the screenshots the King and Queen stand by the throne while idle and are simply gone while fidgeting. Elsewhere:
+Richard at the Forge drops from 3.33 to 0, Princess Storm from 15.4, Fenwick at the Old Ruins from 7.94, Wyeth from
+13.31; Torvald and Garrick stand on ground that is at 0 anyway, so nothing shows there. No `FACE` intent (turning to
+the player as they come close) was caught in those runs; it goes through an identical line.
+
+**Fix, to follow in its own change:** the two intent branches use the same ground rule the idle branch does.

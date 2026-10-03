@@ -572,7 +572,7 @@ function Enemy({ data }: { data: EnemyData }) {
       // gate has no courage/proximity check to wait on), not an incidental
       // farmer who happened to pick a fight. Deliberately NOT gated on
       // enemyAtHome (Tam follows the player everywhere,
-      // ai/companionSync.ts) — gated instead on this mob's own world
+      // ai/sync/companionSync.ts) — gated instead on this mob's own world
       // matching Tam's own current region, the same per-instance isolation
       // `data.world` already enforces for every other check in this file.
       let companionTarget: { x: number; z: number } | null = null;

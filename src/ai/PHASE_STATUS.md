@@ -954,8 +954,10 @@ Later cleanup PRs restructured `src/ai` without changing behaviour: CLN-04 (`Age
 CLN-05 (`exposeDebug`, #227), CLN-16 (Reasoner → `scoring.ts`/`commitment.ts`, config → `config/types.ts`, #231)
 and CLN-15 (one shared state machine each for the three melee actions — `actions/meleeEngage.ts` —, the three work
 actions — `actions/workActivity.ts` — and the two walks — `actions/walkLoop.ts` —, plus `BOOL_CURVE` and
-`NOT_THREATENED_CURVE` in `core/curves.ts`). One bugfix since: allies no longer see Princess Storm as a hostile, so
-Tam stays out of her duel with the player (#242).
+`NOT_THREATENED_CURVE` in `core/curves.ts`, #243) and CLN-17 (the population syncs moved to `src/ai/sync/`, the two
+court syncs merged into `sync/courtSync.ts`, their shared bookkeeping in `sync/population.ts`). Two bugfixes since:
+allies no longer see Princess Storm as a hostile, so Tam stays out of her duel with the player (#242); and a recruited
+Alric or Beda keeps the villager Agent the roster gives them (found and fixed in CLN-17).
 
 ---
 

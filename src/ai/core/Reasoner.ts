@@ -185,7 +185,7 @@ let registeredActions: Action[] = [];
  *  first time it was tried, with a real `Cannot access 'useGameStore'
  *  before initialization` error, not a hypothetical one. Root cause:
  *  `Agent.ts` already sits deep in a cycle `gameStore.ts` itself is part
- *  of (via `rosterSync.ts`/`npcSync.ts` → `AgentManager.ts` → `Agent.ts`,
+ *  of (via `sync/rosterSync.ts`/`sync/courtSync.ts` → `AgentManager.ts` → `Agent.ts`,
  *  already safe — confirmed by a real production build back in 4.1,
  *  confined to a function body). Once `flee.ts`/`sleep.ts` (5.6's first
  *  real actions) needed `useGameStore`/`useEnemyStore`/`worldEnv` of their

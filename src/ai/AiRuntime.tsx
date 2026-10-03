@@ -14,11 +14,10 @@ import { playerState } from '@/game/playerState';
 import { getNavGrid, setLiveAgents } from '@/game/navgrid';
 import { agentManager, type WindowBounds } from './core/AgentManager';
 import { stepUnrenderedAgents } from './core/Locomotion';
-import { mirrorVillagerPositions, syncVillagerAgents } from './rosterSync';
-import { mirrorNpcPositions, syncNpcAgents } from './npcSync';
-import { mirrorCourtAmbientPositions, syncCourtAmbientAgents } from './courtAmbientSync';
-import { syncCompanionAgent } from './companionSync';
-import { syncWildlifeAgents } from './wildlifeSync';
+import { mirrorVillagerPositions, syncVillagerAgents } from './sync/rosterSync';
+import { mirrorCourtPositions, syncCourtAgents } from './sync/courtSync';
+import { syncCompanionAgent } from './sync/companionSync';
+import { syncWildlifeAgents } from './sync/wildlifeSync';
 // iteration 2.9 — side-effect import only: nothing here calls resolveAnchor
 // yet (phase 5's gather/haul actions are the first real caller), but it
 // needs to be in the client bundle for its own window.__kkanchor debug
@@ -69,24 +68,18 @@ export default function AiRuntime() {
     // not O(search).
     syncVillagerAgents(st.villagers);
     mirrorVillagerPositions();
-    // phase 3, iteration 3.4: the same lifecycle for scheduled court NPCs
-    // (Npc.tsx's own "schedule" concept — see data/npcs.ts's
-    // scheduledCourtNpcs) — a genuinely different population from roster
-    // villagers, previously spawned no Agent at all (found while building
-    // this iteration's own Locomotion splice into Npc.tsx).
-    syncNpcAgents(st.completedQuests, st.destination ?? null, st.villagers);
-    mirrorNpcPositions();
-    // requested 2026-08-03 — the rest of Npc.tsx's own rendered population
-    // (King Leo, the Queen, Richard, John, Storm, the starter farmers): a
-    // narrow 'court' archetype Agent (idle_fidget/notice_player only, see
-    // archetypes.json) so they read as alive too, without any movement/
-    // schedule risk
-    syncCourtAmbientAgents(st.completedQuests, st.destination ?? null, st.villagers);
-    mirrorCourtAmbientPositions();
+    // the same lifecycle for the court NPCs Npc.tsx renders — phase 3.4's
+    // scheduled walkers (none, with today's content) and, since 2026-08-03,
+    // everyone else (King Leo, the Queen, Richard, John, Storm, the starter
+    // farmers) as a narrow 'court' Agent, idle_fidget/notice_player only, so
+    // they read as alive without any movement/schedule risk. One sync since
+    // CLN-17; see sync/courtSync.ts.
+    syncCourtAgents(st.completedQuests, st.destination ?? null, st.villagers);
+    mirrorCourtPositions();
     // Wave 25 — Tam, the companion squire: a single spawn/despawn toggle, not
     // a per-id reconciliation loop (see companionSync.ts's own header for
     // why this is a narrower shape than syncVillagerAgents/
-    // syncCourtAmbientAgents above). No mirror call: components/world/
+    // syncCourtAgents above). No mirror call: components/world/
     // Companion.tsx drives him purely off his own Agent (stepLocomotion),
     // the same way Npc.tsx's CourtNpc does for its own MOVE_TO/FACE branches
     // — there is no separate mob registry for his position to drift from.

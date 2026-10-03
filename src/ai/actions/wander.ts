@@ -30,9 +30,9 @@
 // who has no work Action in this reasoner at all, is essentially always. So
 // the set of agents this can safely move IS the set nothing else is moving.
 //
-// The second gate is `roster_villager`. npcSync.ts spawns scheduled court NPCs
+// The second gate is `roster_villager`. sync/courtSync.ts spawns scheduled court NPCs
 // under the SAME 'villager' archetype (its own comment: nothing consumed
-// archetype selection when it was written), and `mirrorNpcPositions` pins
+// archetype selection when it was written), and `mirrorCourtPositions` pins
 // their `agent.position` to their mob every frame unconditionally — a wander
 // intent there would be overwritten as fast as it was stepped, and a quest
 // giver who has left their post is a bug even when nobody is looking.

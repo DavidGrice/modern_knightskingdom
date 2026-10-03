@@ -38,8 +38,8 @@ export function isNpcPresent(npc: NpcDef, completedQuests: string[], time: numbe
  *  walk, not the static starter farmers or instance residents, who render
  *  (`Npc.tsx`'s own broader reveal filter, unchanged) but never reach a
  *  navSteer call site. Phase 3, iteration 3.4 — the population
- *  `src/ai/npcSync.ts` spawns an Agent per; an Agent for a static NPC
- *  would just sit unused. Mirrors the `revealed` filter `Npc.tsx`'s own
+ *  `src/ai/sync/courtSync.ts` spawns a walker ('villager') Agent per; everyone
+ *  else it renders gets the narrower 'court' one. Mirrors the `revealed` filter `Npc.tsx`'s own
  *  default export already computes inline, plus the schedule condition —
  *  kept here, not duplicated, so the two can't drift apart. */
 export function scheduledCourtNpcs(

@@ -109,9 +109,11 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     //
     // Deliberately NOT gated behind `schedule`: an agent+active-intent check
     // should be the only gate, the same as Villagers.tsx's splice doesn't
-    // care about `job`. npcSync.ts (this same iteration) only ever spawns an
-    // Agent for a scheduled NPC today, so in practice this is equivalent —
-    // but placing the check after `!schedule`'s early return would silently
+    // care about `job`. When this was written the sync of the day (npcSync.ts,
+    // this same iteration) only ever spawned an Agent for a scheduled NPC, so
+    // in practice the two were equivalent; since 2026-08-03 every revealed
+    // NPC has one (ai/sync/courtSync.ts), which is what this placement is for:
+    // placing the check after `!schedule`'s early return would silently
     // stop working the moment anything (a future cutscene, a one-off quest
     // beat) gives a STATIC NPC a real intent without also making them
     // "scheduled." Caught this the hard way: the first version of this
@@ -119,8 +121,9 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     // manually spawns an Agent for the always-static farmer_alric, since
     // zero real NPCs currently satisfy scheduledCourtNpcs at all — showed
     // zero movement despite a real MOVE_TO intent, because the early return
-    // fired first every frame. Nothing issues a real Intent yet regardless
-    // (phase 5's reasoner is the first real writer), so this is inert today.
+    // fired first every frame. No movement intent reaches a court NPC today
+    // regardless (there are no walkers, and a 'court' Agent has no movement),
+    // so this branch is inert; the PLAY_ANIM and FACE branches below are not.
     const agent = agentManager.get(def.id);
     const intent = agent?.intent;
     // Phase 3, iteration 3.5 — resynced unconditionally, same reasoning as
@@ -144,11 +147,16 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       loc.x = agent.position.x;
       loc.z = agent.position.z;
       yaw.current = agent.yaw;
-      // Wave 31 · a real Agent only ever exists for a SCHEDULED court NPC
-      // (npcSync.ts's own syncNpcAgents reads scheduledCourtNpcs, which
-      // requires `!def.world`), so this branch — and the PLAY_ANIM/FACE
-      // branches below it — are provably home-only. homeGroundY, not the
-      // full ternary Villagers.tsx needs.
+      // Wave 31 · only a SCHEDULED court NPC's Agent can hold a movement
+      // intent (ai/sync/courtSync.ts: the walkers come from scheduledCourtNpcs,
+      // which requires `!def.world`; everyone else gets the 'court' archetype,
+      // which has no movement), so this branch is home-only: homeGroundY, not
+      // the full ternary Villagers.tsx needs. The PLAY_ANIM and FACE branches
+      // below were given the same homeGroundY on the same reasoning, and for
+      // them it stopped holding on 2026-08-03, when every revealed NPC —
+      // destination residents included — got a 'court' Agent that fidgets and
+      // faces the player: ROADMAP.md, "the court vanishes underground whenever
+      // it fidgets".
       g.position.set(loc.x - originOffset.x, homeGroundY(loc.x, loc.z), loc.z - originOffset.z);
       g.rotation.y = yaw.current;
       mob.x = loc.x;

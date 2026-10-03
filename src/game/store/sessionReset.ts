@@ -13,11 +13,10 @@
 import type { Villager } from '../types';
 import { resetPlayerState } from '../playerState';
 import { agentManager } from '@/ai/core/AgentManager';
-import { resetVillagerAgentSync } from '@/ai/rosterSync';
-import { resetNpcAgentSync } from '@/ai/npcSync';
-import { resetCourtAmbientAgentSync } from '@/ai/courtAmbientSync';
-import { resetCompanionAgentSync } from '@/ai/companionSync';
-import { resetWildlifeAgentSync } from '@/ai/wildlifeSync';
+import { resetVillagerAgentSync } from '@/ai/sync/rosterSync';
+import { resetCourtAgentSync } from '@/ai/sync/courtSync';
+import { resetCompanionAgentSync } from '@/ai/sync/companionSync';
+import { resetWildlifeAgentSync } from '@/ai/sync/wildlifeSync';
 import { targetRegistry } from '@/ai/core/TargetRegistry';
 import { resetSounds } from '@/ai/perception/sounds';
 import { clearAllWorkSignals } from '../workSignal';
@@ -41,8 +40,7 @@ export function resetSessionModules(next: { villagers: readonly Villager[] }): v
   // per-agent steering/perception/combat bookkeeping keyed by villager id
   agentManager.clear();
   resetVillagerAgentSync();
-  resetNpcAgentSync();
-  resetCourtAmbientAgentSync();
+  resetCourtAgentSync();
   resetCompanionAgentSync();
   resetWildlifeAgentSync();
   // Tam's own combat state is keyed by a FIXED id (unlike a roster villager's)

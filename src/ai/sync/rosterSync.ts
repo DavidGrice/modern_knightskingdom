@@ -27,14 +27,16 @@
 // touch nothing else — no new capability, no new candidate, no new intent
 // can ever be actuated for it, by construction (see archetypes.json).
 
-import { agentManager } from './core/AgentManager';
+import { agentManager } from '../core/AgentManager';
+import type { Agent } from '../core/Agent';
 import { villagerMobs } from '@/game/villagerMobs';
 import { defenderState } from '@/game/defenders';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import type { Villager } from '@/game/types';
+import { AgentPopulation } from './population';
 
 let lastVillagers: Villager[] | null = null;
-const spawnedIds = new Set<string>();
+const roster = new AgentPopulation(() => agentManager);
 /** Phase 8 (§8) — ids whose Agent was last seen owning its own position
  *  because nothing was rendering it (tier D, `steering === 'teleport'`). Used
  *  by `mirrorVillagerPositions` below to spot the frame an agent comes BACK,
@@ -83,50 +85,52 @@ export function syncVillagerAgents(villagers: Villager[]) {
   const liveIds = new Set<string>();
   for (const v of villagers) {
     liveIds.add(v.id);
-    const archetype = v.job === 'defender' ? 'defenderObserver' : 'villager';
     const existing = agentManager.get(v.id);
-    if (existing && existing.archetype !== archetype) {
+    if (existing && existing.archetype !== archetypeOf(v)) {
       // The job crossed the defender boundary since this Agent was spawned.
       // `archetype` is readonly (core/Agent.ts), so there is no in-place
-      // update — despawn it here and fall through to the spawn below, which
-      // `spawnedIds.has(v.id)` would otherwise short-circuit past. Same
-      // despawn() the "no longer on the roster" branch below already calls,
-      // so this gets the same reservation/steering-cache cleanup a real
-      // departure gets (AgentManager.despawn's own comment).
-      agentManager.despawn(v.id);
-      spawnedIds.delete(v.id);
+      // update — despawn it here, and the admit just below spawns the new one
+      // (forget() drops the id from the roster's own bookkeeping, which would
+      // otherwise short-circuit past it). The same despawn() a villager
+      // leaving the roster gets, so this gets the same reservation/steering-
+      // cache cleanup a real departure gets (AgentManager.despawn's own
+      // comment). An Agent that is not the roster's to despawn — the 'court'
+      // one Alric or Beda arrives with — is left for the admit, which
+      // replaces whatever holds a newcomer's id (population.ts).
+      roster.forget(v.id);
       unrendered.delete(v.id);
     }
-    if (spawnedIds.has(v.id)) continue;
-    if (archetype === 'defenderObserver') {
-      // A brand-new defender's `defenderState` entry may not exist yet on
-      // this exact frame — Defenders.tsx's own `registerDefender` runs from
-      // ITS render, which may not have happened yet the first frame a
-      // villager becomes a defender. HOME_X/HOME_Z is a harmless placeholder
-      // for that one frame: `mirrorVillagerPositions` below self-corrects the
-      // moment `defenderState[v.id]` exists, the same lazy-registration shape
-      // `registerCompanionCombat` (game/companion.ts) already uses for Tam.
-      const ds = defenderState[v.id];
-      agentManager.spawn(v.id, archetype, ds?.x ?? HOME_X, ds?.z ?? HOME_Z, null);
-    } else {
-      const mob = villagerMobs[v.id];
-      agentManager.spawn(v.id, archetype, mob?.x ?? 0, mob?.z ?? 0, v.world ?? null);
-    }
-    spawnedIds.add(v.id);
+    roster.admit(v, spawnFor);
   }
 
-  for (const id of spawnedIds) {
-    if (liveIds.has(id)) continue;
-    // Wave 41: a villager reassigned to/from 'defender' no longer reaches
-    // this branch at all — they stay in `liveIds` throughout, and the
-    // archetype-change branch above despawns+respawns them in place. What
-    // still lands here is a villager actually leaving the roster (id no
-    // longer present in `villagers` at all), same unbounded-leak reasoning
-    // as Locomotion's own despawn cleanup for that case.
-    agentManager.despawn(id);
-    spawnedIds.delete(id);
-    unrendered.delete(id);
+  // Wave 41: a villager reassigned to/from 'defender' no longer reaches
+  // this at all — they stay on the roster throughout, and the
+  // archetype-change check above despawns+respawns them in place. What
+  // still lands here is a villager actually leaving the roster (id no
+  // longer present in `villagers` at all), same unbounded-leak reasoning
+  // as Locomotion's own despawn cleanup for that case.
+  roster.retire(liveIds, (id) => unrendered.delete(id));
+}
+
+function archetypeOf(v: Villager): 'defenderObserver' | 'villager' {
+  return v.job === 'defender' ? 'defenderObserver' : 'villager';
+}
+
+function spawnFor(v: Villager): Agent {
+  const archetype = archetypeOf(v);
+  if (archetype === 'defenderObserver') {
+    // A brand-new defender's `defenderState` entry may not exist yet on
+    // this exact frame — Defenders.tsx's own `registerDefender` runs from
+    // ITS render, which may not have happened yet the first frame a
+    // villager becomes a defender. HOME_X/HOME_Z is a harmless placeholder
+    // for that one frame: `mirrorVillagerPositions` below self-corrects the
+    // moment `defenderState[v.id]` exists, the same lazy-registration shape
+    // `registerCompanionCombat` (game/companion.ts) already uses for Tam.
+    const ds = defenderState[v.id];
+    return agentManager.spawn(v.id, archetype, ds?.x ?? HOME_X, ds?.z ?? HOME_Z, null);
   }
+  const mob = villagerMobs[v.id];
+  return agentManager.spawn(v.id, archetype, mob?.x ?? 0, mob?.z ?? 0, v.world ?? null);
 }
 
 /** Keep each villager Agent's tracked position honest against its live
@@ -183,9 +187,8 @@ export function syncVillagerAgents(villagers: Villager[]) {
  *  unconditionally, cannot fight it the way it would for a real wandering
  *  villager. */
 export function mirrorVillagerPositions() {
-  for (const id of spawnedIds) {
-    const agent = agentManager.get(id);
-    if (!agent) continue;
+  for (const agent of roster.agents()) {
+    const id = agent.id;
     if (agent.archetype === 'defenderObserver') {
       const ds = defenderState[id];
       if (ds) agent.position.set(ds.x, 0, ds.z);
@@ -207,12 +210,12 @@ export function mirrorVillagerPositions() {
 }
 
 /** newGame/loadFromSave already call agentManager.clear() (see
- *  gameStore.ts); without this, this module's own spawnedIds/lastVillagers
+ *  gameStore.ts); without this, this module's own roster/lastVillagers
  *  would still think every agent from the last game exists, and never
  *  re-spawn them for the new one. */
 export function resetVillagerAgentSync() {
   lastVillagers = null;
-  spawnedIds.clear();
+  roster.clear();
   // otherwise a villager who happened to be off-region when the player loaded
   // a different save would, on their id's first frame in the new game, have
   // their brand-new Agent's spawn position written over the fresh mob instead
