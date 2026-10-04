@@ -67,7 +67,7 @@ export const BOSS_VICTORY_REWARD: Record<BossId, BossReward> = {
  * granted payout, while this one is a rare, independent roll layered on top
  * of it at each fight's own real Satchel-bound victory moment (both dragon
  * routs, Cedric's one-shot capstone — see combat.ts's markCedricDefeated
- * call sites and DragonSiege.tsx/BlackDragonSiege.tsx's own `end()`). Odds
+ * call sites and DragonSiegeController.tsx's own `end()`). Odds
  * climb with each fight's own unlock tier, the same relative-difficulty
  * ordering `bossTierScale` itself already reasons about: the green dragon
  * (lowest unlockTier, the most repeatable of the three) is the stingiest,

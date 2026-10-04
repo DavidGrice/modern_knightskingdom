@@ -204,7 +204,7 @@ export function dragonAllowed(): boolean {
 }
 
 /** Wave 36 (A8) · may the BLACK dragon come at all? The tier/rangedReady gate
- *  above, plus `dragonRouted` — the flag DragonSiege.tsx's own recordDragonSiege
+ *  above, plus `dragonRouted` — the flag the green dragon's own recordDragonSiege
  *  already sets, once, the first time a player drives the green dragon off
  *  with bolts. Reusing it (rather than a fresh "beaten N dragons" counter of
  *  its own) is the whole point: a harder beast only shows up once the player

@@ -7248,3 +7248,36 @@ three kinds: King Leo and John 15.34, the Queen 15.47, Richard 3.33, Princess St
 Torvald and Garrick at their 0. Alric and Beda, at home, read 0 under all three kinds on both builds. The screenshot
 taken mid-fidget at The King's Approach shows an empty dais on `main` and the King and Queen standing by the throne on
 the fix. The same under `next dev` (home and The King's Approach); 0 console errors in every run.
+
+## Bug: a dragon goes on burning a building its first breath has already ruined — FOUND 2026-10-04 (during CLN-18), not yet fixed
+
+**Found by** CLN-18's live siege probe, which records every store call a siege makes: in the black dragon's siege the
+line "Stockpile scorched by the black dragon's flame to a smoking ruin! Rebuild it to restore it." comes twice for the
+same stockpile, one breath apart.
+
+**The bug** (`components/world/DragonSiegeController.tsx`; before CLN-18, the same lines in both dragon files): when
+nothing is burning, a breath picks a wooden building, damages it and adds it to the burning set — whether or not that
+very breath has just reduced it to a ruin. The next breath then scorches the ruin, and only after that is the piece
+dropped from the set. What that second breath does depends on the piece, because `damageBuilding` counts a ruin from
+its full hit points again (the ruin's own entry is gone):
+
+- *A piece that, whole, has no more hit points than the breath does damage* takes the ruin branch a second time: the
+  same line, the same crash of bricks, `built` set back to 0. That is the black dragon (18) against any piece of 18 or
+  fewer, damaged or not, which is 122 of the catalogue's 142 flammable pieces — stockpiles, workbenches, fences,
+  palisades, campfires, beds, barrels, torches and nearly every wooden brick among them; the frailest piece to outlast
+  a black breath is the Battering Cart (21). The green dragon (14) never does this: no piece has fewer than 15.
+- *A sturdier piece that was already damaged* — hurt in an earlier siege or a raid, low enough for the first breath to
+  finish it — is damaged as a ruin: no line, but the sounds of a hit, and a hit-point entry written onto the ruin (its
+  full points less one breath) that the rebuilt piece then comes back with. Either dragon can do this.
+
+**What it costs:** the repeated line; a breath, five or six seconds, spent on a ruin instead of a fresh target;
+rebuilding done on the ruin in that time undone (the first case); a piece that comes back from its rebuilding already
+wounded (the second).
+
+**Observed** (the first case; production build of `main`, deterministic frames, the black dragon over three
+storehouses, a stockpile and a workbench): with the fire kept from spreading, the stockpile is scorched at siege frame
+179 and again at 479, with the ruin line both times; in the full siege the same happens to the workbench at frames
+1982 and 2283. The green dragon over the same untouched buildings never repeats a ruin line. The second case follows
+from the code and has not been run.
+
+**Fix, to follow in its own change:** a building its first breath has ruined is not added to the burning set.

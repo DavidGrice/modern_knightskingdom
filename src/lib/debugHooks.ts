@@ -11,14 +11,15 @@
 // Dev note: ~70 modules import this file, so editing it under `next dev` re-creates their singletons —
 // reload the page afterwards.
 //
-// Live list: `grep -rn "^ *exposeDebug('" src`. Registered handles, by module (folder/file: names):
+// Live list: `grep -rn "^ *exposeDebug(" src` (two names are not literals at the call: the dragon sieges' come
+// from game/dragonSiegeConfig.ts). Registered handles, by module (folder/file: names):
 //   ai/actions/index:        __kkactions
 //   ai/core/AgentManager:    __kkai            ai/core/AnchorResolution: __kkanchor
 //   ai/core/Locomotion:      __kkloco          ai/core/Memory:           __kkmemory
 //   ai/core/Reasoner:        __kkreason        ai/core/TargetRegistry:   __kktargets
 //   ai/perception/index:     __kkperception    ai/perception/sounds:     __kksounds
 //   components/fps/PlayerController: __kkscene, __kkcam
-//   components/world/BlackDragonSiege: __kkBlackSiege   CedricSiege: __kkCedricSiege   DragonSiege: __kkSiege
+//   components/world/CedricSiege: __kkCedricSiege   DragonSiegeController: __kkSiege, __kkBlackSiege
 //   components/world/Merchant: __kkmerchant   PostProcessing: __kkgl   RiggedProp: __kkpropfire
 //   components/world/TemplatePopulation: __kkpop   TemplateWorld: __kkworld
 //   game/arena: __kkarena                      game/buildCam: __kkbuildcam
