@@ -48,8 +48,8 @@ export const FLEE_TO_SAFETY: Action = {
     {
       name: 'raid_active',
       // Wave 57 (F5): a dragon siege never spawns a real EnemyState (the
-      // beast is a rendering-layer-only mechanism — see DragonSiege.tsx/
-      // BlackDragonSiege.tsx, neither ever calls useEnemyStore().spawn), so
+      // beast is a rendering-layer-only mechanism — see
+      // DragonSiegeController.tsx, which never calls useEnemyStore().spawn), so
       // this used to structurally never fire for either dragon: villagers
       // stood in the open through an entire siege. dragonAir/dragonAirBlack
       // (their own store-free leaf module, game/dragonAir.ts) publish

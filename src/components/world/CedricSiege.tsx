@@ -2,7 +2,7 @@
 // Cedric's Siege — the homestead half of Cedric's two-part arc. Once
 // unlocked (game/cedricSiege.ts's tier gate), a nightly roll can bring his
 // FULL war party — and his siege engines — down on the homestead, mirroring
-// DragonSiege.tsx's own nightly-roll shape exactly. Weathering this never
+// DragonSiegeController.tsx's own nightly-roll shape exactly. Weathering this never
 // jails him: only his final stand (PlayerController.tsx's challenge_cedric
 // handler, upgraded once cedricFinalStandReady) does that — see combat.ts's
 // `finalStand` flag, which is what keeps him alive to fight another night
@@ -149,7 +149,7 @@ export default function CedricSiege() {
   };
   endRef.current = end;
 
-  // test hook, same convention as __kkSiege (DragonSiege)
+  // test hook, same convention as __kkSiege (DragonSiegeController)
   useEffect(() => {
     exposeDebug('__kkCedricSiege', {
       get active() { return active; },

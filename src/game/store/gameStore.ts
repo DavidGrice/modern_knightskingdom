@@ -320,7 +320,7 @@ interface GameState extends PersistedState {
   tickPlots: (dt: number) => void;
   toggleGate: (buildingId: string) => void;
   /** Wave 57 (F5): trailing `leaveRuin` — true only from the two dragon
-   *  sieges (DragonSiege.tsx/BlackDragonSiege.tsx). Every other caller
+   *  sieges (DragonSiegeController.tsx). Every other caller
    *  (siege.ts, CedricSiege.tsx, Enemies.tsx) omits it and keeps today's
    *  delete+half-refund behavior exactly. */
   damageBuilding: (id: string, amount: number, cause?: string, leaveRuin?: boolean) => void;
