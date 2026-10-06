@@ -21,11 +21,9 @@ import { navSteer } from '@/game/navgrid';
 import { registerNpcMob } from '@/game/npcMobs';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { agentManager } from '@/ai/core/AgentManager';
-import { stepLocomotion } from '@/ai/core/Locomotion';
+import { driveIntent, MOVE_CLIPS, strollClip } from '@/ai/core/intentDrive';
 import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
 import { wrapAngle } from '@/lib/math';
-
-const MOVE_CLIPS = new Set(['anim_c_walk', 'anim_r_restpose']);
 
 // origin-offset for an instance rendered inside DestinationScope.tsx's own
 // group (already translated by dest.origin) — the default export below
@@ -71,11 +69,11 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
   const schedule = !!def.revealAfterQuest && !def.world;
   // The ground under a spot in this NPC's own realm: a destination's resident
   // stands on that destination's baked terrain, a home NPC on the homestead's.
-  // Every branch below grounds its figure through this one rule. The
-  // PLAY_ANIM and FACE branches used homeGroundY alone, which is 0 anywhere
-  // away from home, so at every destination whose ground is not at 0 the
-  // court dropped under its own hill for as long as an idle fidget or a turn
-  // to the player lasted.
+  // Every branch below grounds its figure through this one rule. A held
+  // animation and a turn used homeGroundY alone, which is 0 anywhere away
+  // from home, so at every destination whose ground is not at 0 the court
+  // dropped under its own hill for as long as an idle fidget or a turn to
+  // the player lasted.
   const groundY = (x: number, z: number) => (def.world ? destinationGroundY(x, z) : homeGroundY(x, z));
 
   useFrame((_, dt) => {
@@ -107,79 +105,51 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
     g.visible = true;
     mob.clip = clipRef.current;
 
-    // Phase 3, iteration 3.4 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
-    // Intent takes over movement entirely, checked FIRST, before the
-    // `!schedule` early-return below. Mirrors Villagers.tsx's iteration 3.3
-    // splice, adapted to this file's own shape: one navSteer call site (not
-    // seven), no offset on g.rotation.y — §3.2's rig-offset note is explicit
-    // that Npc.tsx keeps none, unlike Villagers.tsx's +Math.PI, so
-    // Locomotion's universal agent.yaw is applied as-is here.
+    // An Agent whose intent drives a figure takes the frame (Phase 3,
+    // iteration 3.4; the rule itself is ai/core/intentDrive.ts, shared with
+    // Villagers.tsx and Companion.tsx), checked FIRST, before the `!schedule`
+    // early return below.
     //
-    // Deliberately NOT gated behind `schedule`: an agent+active-intent check
-    // should be the only gate, the same as Villagers.tsx's splice doesn't
-    // care about `job`. When this was written the sync of the day (npcSync.ts,
-    // this same iteration) only ever spawned an Agent for a scheduled NPC, so
-    // in practice the two were equivalent; since 2026-08-03 every revealed
-    // NPC has one (ai/sync/courtSync.ts), which is what this placement is for:
-    // placing the check after `!schedule`'s early return would silently
-    // stop working the moment anything (a future cutscene, a one-off quest
-    // beat) gives a STATIC NPC a real intent without also making them
-    // "scheduled." Caught this the hard way: the first version of this
-    // splice sat after the early return, and its own smoke test — which
-    // manually spawns an Agent for the always-static farmer_alric, since
-    // zero real NPCs currently satisfy scheduledCourtNpcs at all — showed
-    // zero movement despite a real MOVE_TO intent, because the early return
-    // fired first every frame. No movement intent reaches a court NPC today
-    // regardless (there are no walkers, and a 'court' Agent has no movement),
-    // so this branch is inert; the PLAY_ANIM and FACE branches below are not.
+    // Deliberately NOT gated behind `schedule`: an Agent with an intent is
+    // the only gate, the same as Villagers.tsx's splice doesn't care about
+    // `job`. When this was written the sync of the day (npcSync.ts) only
+    // ever spawned an Agent for a scheduled NPC, so the two were equivalent;
+    // since 2026-08-03 every revealed NPC has one (ai/sync/courtSync.ts),
+    // which is what this placement is for. Caught the hard way: the first
+    // version sat after the early return, and its own smoke test — which
+    // spawned an Agent for the always-static farmer_alric, since no real NPC
+    // satisfies scheduledCourtNpcs — showed zero movement despite a real
+    // MOVE_TO intent, because the early return fired first every frame.
     const agent = agentManager.get(def.id);
     const intent = agent?.intent;
     // Phase 3, iteration 3.5 — resynced unconditionally, same reasoning as
     // Villagers.tsx: covers both entering AND leaving a PLAY_ANIM intent in
-    // one place, rather than only inside the branch below. Outside PLAY_ANIM,
-    // `loop` keeps exactly this file's original clip-derived rule (walk/
-    // restpose loop, anything else — greet waves, a future PLAY_ANIM one-shot
-    // — plays once), just moved from an inline JSX expression into a synced
-    // field so intent.loop can override it.
+    // one place, rather than only when one takes the frame below. Outside
+    // PLAY_ANIM, `loop` keeps exactly this file's original clip-derived rule
+    // (walk/restpose loop, anything else — greet waves, a future PLAY_ANIM
+    // one-shot — plays once), just moved from an inline JSX expression into
+    // a synced field so intent.loop can override it.
     const wantLoop = agent && intent && intent.type === 'PLAY_ANIM' ? intent.loop : MOVE_CLIPS.has(clipRef.current);
     if (loop !== wantLoop) setLoop(wantLoop);
     const wantCarrying = agent?.bb.carrying ?? null;
     if (carrying !== wantCarrying) setCarrying(wantCarrying);
-    if (agent && intent && (intent.type === 'MOVE_TO' || intent.type === 'MOVE_TO_ANCHOR')) {
-      const loc = pos.current;
-      if (Math.hypot(loc.x - agent.position.x, loc.z - agent.position.z) > 6) {
-        loc.x = agent.position.x;
-        loc.z = agent.position.z;
-      }
-      stepLocomotion(agent, dt);
-      loc.x = agent.position.x;
-      loc.z = agent.position.z;
-      yaw.current = agent.yaw;
-      // Wave 31 · only a SCHEDULED court NPC's Agent can hold a movement
-      // intent (ai/sync/courtSync.ts: the walkers come from scheduledCourtNpcs,
-      // which requires `!def.world`; everyone else gets the 'court' archetype,
-      // which has no movement), so this branch is home-only today. It is
-      // grounded through groundY like the others all the same: the PLAY_ANIM
-      // and FACE branches below were once given homeGroundY on this very
-      // reasoning, and it stopped holding for them on 2026-08-03, when every
-      // revealed NPC — destination residents included — got a 'court' Agent
-      // that fidgets and faces the player.
-      g.position.set(loc.x - originOffset.x, groundY(loc.x, loc.z), loc.z - originOffset.z);
-      g.rotation.y = yaw.current;
-      mob.x = loc.x;
-      mob.z = loc.z;
-      if (MOVE_CLIPS.has(clipRef.current)) {
-        const wantClip = agent.bb.movement.status === 'moving' ? 'anim_c_walk' : 'anim_r_restpose';
-        if (clipRef.current !== wantClip) setClip(wantClip);
-      }
-      return;
-    }
-
-    // Phase 3, iteration 3.5 — PLAY_ANIM: hold position, play whatever clip
-    // the intent names. Same unconditional agent+intent gate as the
-    // MOVE_TO/MOVE_TO_ANCHOR branch above, for the same reason (see its own
-    // comment on why this can't sit behind `!schedule`).
-    if (agent && intent && intent.type === 'PLAY_ANIM') {
+    const driving = driveIntent(agent, dt);
+    if (agent && driving) {
+      // The figure stands where the Agent is — Locomotion has just moved or
+      // turned it; a PLAY_ANIM holds it — with no offset on g.rotation.y:
+      // §3.2's rig-offset note is explicit that Npc.tsx keeps none, unlike
+      // Villagers.tsx's +Math.PI, so Locomotion's universal agent.yaw is
+      // applied as-is.
+      //
+      // Of the three kinds of intent only two reach a court NPC today: the
+      // held animation (an idle fidget) and the turn (to the player). No
+      // movement intent does — there are no walkers (courtSync.ts takes them
+      // from scheduledCourtNpcs, which requires `!def.world`), and a 'court'
+      // Agent has no movement. A move is grounded through groundY like the
+      // others all the same: those two were once given homeGroundY on this
+      // very reasoning, and it stopped holding for them on 2026-08-03, when
+      // every revealed NPC — destination residents included — got a 'court'
+      // Agent that fidgets and faces the player.
       const loc = pos.current;
       loc.x = agent.position.x;
       loc.z = agent.position.z;
@@ -188,25 +158,8 @@ function CourtNpc({ def, index, originOffset = ZERO_OFFSET }: { def: NpcDef; ind
       g.rotation.y = yaw.current;
       mob.x = loc.x;
       mob.z = loc.z;
-      if (clipRef.current !== intent.clip) setClip(intent.clip);
-      return;
-    }
-
-    // Phase 3, iteration 3.7 — FACE: a real gap found verifying the full
-    // intent lifecycle in Villagers.tsx (see its own comment on why), fixed
-    // identically here for parity — `stepLocomotion` already lerps yaw
-    // without moving for this intent, no renderer diverted to it before now.
-    if (agent && intent && intent.type === 'FACE') {
-      stepLocomotion(agent, dt);
-      const loc = pos.current;
-      loc.x = agent.position.x;
-      loc.z = agent.position.z;
-      yaw.current = agent.yaw;
-      g.position.set(loc.x - originOffset.x, groundY(loc.x, loc.z), loc.z - originOffset.z);
-      g.rotation.y = yaw.current;
-      mob.x = loc.x;
-      mob.z = loc.z;
-      if (clipRef.current !== 'anim_r_restpose') setClip('anim_r_restpose');
+      const wantClip = strollClip(driving, agent, clipRef.current);
+      if (clipRef.current !== wantClip) setClip(wantClip);
       return;
     }
 

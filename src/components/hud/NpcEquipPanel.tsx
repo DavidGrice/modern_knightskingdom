@@ -7,10 +7,9 @@
 // support both click-to-equip and native HTML5 drag-and-drop (drag an
 // Armory tile onto a villager's slot).
 import { useEffect, useState } from 'react';
-import { createPortal } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
 import RotatablePreview from '../character/RotatablePreview';
-import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate, WornCarrier } from '../character/Equipment';
+import LoadoutGear from '../character/LoadoutGear';
 import { CHESTPLATES, chestplateTierOf } from '@/game/data/armor';
 import { villagerConfig, VILLAGER_LOOKS } from '@/game/data/villagerLooks';
 import { faceThumbFor } from '@/game/data/minifigs';
@@ -197,17 +196,10 @@ export default function NpcEquipPanel() {
           clip="anim_r_restpose"
           className="equip-preview"
           cameraZ={4.4}
-          held={(rig) => (
-            <>
-              {isDefender && loadout === 'sword_shield' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-              {isDefender && loadout === 'sword_shield' && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
-              {isDefender && loadout === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
-              {isDefender && loadout === 'bow' && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
-              {villager!.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
-              {plateTier && createPortal(<Chestplate tier={plateTier} />, rig.joints.body)}
-              {villager!.gear?.carrier && createPortal(<WornCarrier tier={villager!.gear.carrier} />, rig.joints.hips)}
-            </>
-          )}
+          // what they would be seen wearing in the world: a weapon only on a
+          // sworn defender (Defenders.tsx draws it; an ordinary villager's
+          // figure has none), armor and a carrier on anyone
+          held={(rig) => <LoadoutGear rig={rig} loadout={isDefender ? loadout : undefined} gear={villager!.gear} />}
         />
         <div className="equip-slots">
           <div className="creator-section">Armor</div>
