@@ -13,6 +13,9 @@ export default defineConfig({
     // the same `@/*` → `src/*` alias tsconfig.json declares
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  // A test may load a component (*.tsx) to call it as a plain function. tsconfig.json says `jsx: preserve`, which
+  // leaves the JSX for Next to finish; here it is compiled the way Next does it, with the automatic runtime.
+  esbuild: { jsx: 'automatic' },
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',

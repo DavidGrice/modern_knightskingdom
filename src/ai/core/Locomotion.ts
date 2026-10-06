@@ -221,7 +221,8 @@ function jumpAlongPath(agent: Agent, steer: SteerState, nx: number, nz: number, 
 
 /** Advance `agent` one frame per its current Intent. Mutates
  *  agent.position/agent.yaw directly and writes agent.bb.movement; callers
- *  (Villagers.tsx/Npc.tsx, iteration 3.3+) read those back afterward to
+ *  (Villagers.tsx/Npc.tsx/Companion.tsx through intentDrive.ts, iteration
+ *  3.3+; AmbientWildlife.tsx directly) read those back afterward to
  *  mirror their own mob registry entry and Object3D transform — Locomotion
  *  itself knows nothing about either, only the Agent.
  *

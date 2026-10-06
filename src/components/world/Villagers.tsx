@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import RiggedFigure from '../character/RiggedFigure';
-import { HeldHelmet, Chestplate, ResourceProp, WornCarrier } from '../character/Equipment';
+import { ResourceProp } from '../character/Equipment';
+import LoadoutGear from '../character/LoadoutGear';
 import { villagerConfig } from '@/game/data/villagerLooks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { BUILD_REGION } from '@/game/data/buildables';
@@ -16,14 +17,14 @@ import { isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, settlementAnchor, villagerHom
 import { POND } from '@/game/data/world';
 import { roadSpeedMult } from '@/game/data/road';
 import { tripSpeedMult } from '@/game/data/attributes';
-import { chestplateTierOf } from '@/game/data/armor';
 import { registerVillagerMob } from '@/game/villagerMobs';
 import { navSteer } from '@/game/navgrid';
 import { waterAt } from '@/game/waterworks';
 import { bestStore } from '@/game/storage';
 import { agentManager } from '@/ai/core/AgentManager';
-import { stepLocomotion } from '@/ai/core/Locomotion';
+import { driveIntent, gaitClip } from '@/ai/core/intentDrive';
 import { registerVillagerCombat, VILLAGER_MAX_HP, villagerGearHpBonus } from '@/game/villagerCombat';
+import { applyDownedGate } from '@/game/actorDowned';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '@/game/types';
@@ -129,35 +130,31 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     if (!g) return;
     mob.clip = clip;
 
-    // Downed: hide and freeze in place until the recovery timer clears,
-    // mirroring Defenders.tsx's own `ds.state === 'downed'` early-return
-    // exactly (same wall-clock `Date.now()` comparison against `downedUntil`
-    // — that field is stamped from `Date.now()` at the hit that downed them,
-    // in Enemies.tsx). Checked before the Agent-driven MOVE_TO branch below,
-    // same as Defenders.tsx checks it before any of its own movement/attack
-    // logic — a downed villager's position (and `mob.x/z`, which the reasoner's
-    // own position mirror in rosterSync.ts reads every frame) simply stops
+    // Downed (game/actorDowned.ts): hidden and frozen in place until the
+    // recovery time. Checked before the Agent-driven branch below, as
+    // Defenders.tsx checks it before any of its own movement/attack logic —
+    // a downed villager's position (and `mob.x/z`, which the reasoner's own
+    // position mirror in rosterSync.ts reads every frame) simply stops
     // updating for the duration, exactly like a downed defender's `ds.x/z`.
-    if (vc.state === 'downed') {
-      if (Date.now() >= vc.downedUntil) { vc.state = 'ok'; vc.hp = vc.maxHp; }
-      else { g.visible = false; return; }
-    }
-    g.visible = true;
+    if (applyDownedGate(vc, g)) return;
 
-    // Phase 3, iteration 3.3 — an Agent with an active MOVE_TO/MOVE_TO_ANCHOR
-    // Intent takes over movement entirely, checked FIRST before all seven
-    // existing branches below. Per PHASE_3_4_5_ACTUATION_AND_REASONER.md
-    // §3.0's verified splice point: this is a new branch inserted first, not
-    // a source swap — Villagers.tsx has seven separate navSteer call sites,
-    // one per behavioural branch, with no single point that "supplies the
-    // target" to redirect. Nothing issues a real Intent yet (phase 5's
-    // reasoner is the first real writer), so this is inert today — every
-    // villager falls straight through to the existing cascade unchanged.
+    // An Agent whose intent drives a figure takes the frame, checked FIRST,
+    // before all seven branches of the cascade below (Phase 3, iteration
+    // 3.3; PHASE_3_4_5_ACTUATION_AND_REASONER.md §3.0's verified splice
+    // point: a branch in front, not a source swap — the cascade has seven
+    // separate navSteer call sites, one per behavioural branch, with no
+    // single point that "supplies the target" to redirect). Which intents
+    // those are, and which of them step the Agent, is one rule for every
+    // renderer (ai/core/intentDrive.ts): a move, a held animation, and a
+    // turn. The turn was once missing here (iteration 3.7): with no branch
+    // of its own, FACE fell through to the cascade, and a villager in
+    // GotoAndUse's MOVE_TO_ANCHOR -> FACE -> PLAY_ANIM chain wandered off
+    // during the align phase until PLAY_ANIM picked them back up.
     const agent = agentManager.get(villager.id);
     const intent = agent?.intent;
     // Phase 3, iteration 3.5 — a PLAY_ANIM intent drives `loop` too, so it
-    // has to be resynced before the early-return branches below, not inside
-    // just one of them: this single check covers "entering PLAY_ANIM" and
+    // has to be resynced before the early return below, whatever the intent
+    // is: this single check covers "entering PLAY_ANIM" and
     // "leaving PLAY_ANIM back to the legacy cascade" (which always wants
     // loop=true — every hand-written setClip call in this file's cascade is
     // a continuous cycle, never a one-shot) in one place.
@@ -165,16 +162,12 @@ function VillagerFigure({ villager }: { villager: Villager }) {
     if (loop !== wantLoop) setLoop(wantLoop);
     const wantCarrying = agent?.bb.carrying ?? null;
     if (carrying !== wantCarrying) setCarrying(wantCarrying);
-    if (agent && intent && (intent.type === 'MOVE_TO' || intent.type === 'MOVE_TO_ANCHOR')) {
-      // resync from wherever Agent-driven movement last left the villager —
-      // the same drift guard the ARRIVING branch below already applies in
-      // the other direction (mob -> s), so control can hand off cleanly
-      // either way without a visible teleport
-      if (Math.hypot(s.x - agent.position.x, s.z - agent.position.z) > 6) {
-        s.x = agent.position.x;
-        s.z = agent.position.z;
-      }
-      stepLocomotion(agent, dt);
+    const driving = driveIntent(agent, dt);
+    if (agent && driving) {
+      // The figure stands where the Agent is — Locomotion has just moved or
+      // turned it; a PLAY_ANIM holds it. `s` and the mob registry follow, so
+      // the cascade below picks up from here, without a jump, the frame the
+      // intent ends (the ARRIVING branch hands over the other way, mob -> s).
       s.x = agent.position.x;
       s.z = agent.position.z;
       s.yaw = agent.yaw;
@@ -182,50 +175,8 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       g.rotation.y = s.yaw + Math.PI;
       mob.x = s.x;
       mob.z = s.z;
-      const moving = agent.bb.movement.status === 'moving';
-      const wantClip = moving ? (intent.speed === 'run' ? 'anim_c_run' : 'anim_c_walk') : 'anim_r_restpose';
+      const wantClip = gaitClip(driving, agent);
       if (clip !== wantClip) setClip(wantClip);
-      return;
-    }
-
-    // Phase 3, iteration 3.5 — PLAY_ANIM: hold position (Locomotion never
-    // moves the agent for this intent, see its own comment) and just play
-    // whatever clip the intent names. Checked right after MOVE_TO/
-    // MOVE_TO_ANCHOR, same "agent + active intent is the only gate" rule
-    // 3.3/3.4 already established — not folded into that branch above since
-    // this one holds position instead of steering toward one.
-    if (agent && intent && intent.type === 'PLAY_ANIM') {
-      s.x = agent.position.x;
-      s.z = agent.position.z;
-      s.yaw = agent.yaw;
-      g.position.set(s.x, groundY(s.x, s.z), s.z);
-      g.rotation.y = s.yaw + Math.PI;
-      mob.x = s.x;
-      mob.z = s.z;
-      if (clip !== intent.clip) setClip(intent.clip);
-      return;
-    }
-
-    // Phase 3, iteration 3.7 — FACE: a real gap found verifying the full
-    // intent lifecycle, not a deliberate omission. `stepLocomotion` already
-    // lerps yaw without moving for this intent (§3.2) but no renderer ever
-    // diverted to it — MOVE_TO/MOVE_TO_ANCHOR (3.3) and PLAY_ANIM (3.5) each
-    // got their own branch, FACE didn't, so it silently fell through to the
-    // legacy cascade below. That matters for real: NPC_AI_SPEC §3's
-    // GotoAndUse activity chains MOVE_TO_ANCHOR -> FACE -> PLAY_ANIM (phase
-    // 5) — without this branch the villager would visibly wander off mid
-    // interaction during the align phase, only picked back up once
-    // PLAY_ANIM's own branch engaged.
-    if (agent && intent && intent.type === 'FACE') {
-      stepLocomotion(agent, dt);
-      s.x = agent.position.x;
-      s.z = agent.position.z;
-      s.yaw = agent.yaw;
-      g.position.set(s.x, groundY(s.x, s.z), s.z);
-      g.rotation.y = s.yaw + Math.PI;
-      mob.x = s.x;
-      mob.z = s.z;
-      if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
       return;
     }
 
@@ -545,12 +496,10 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   return (
     <group ref={group}>
       <RiggedFigure config={config} height={1.7} clip={clip} loop={loop} timeScale={0.9} onReady={setRig} />
-      {rig && villager.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
-      {/* Wave 9 · whichever plate tier they're actually wearing (data/armor.ts) */}
-      {rig && chestplateTierOf(villager.gear) && createPortal(<Chestplate tier={chestplateTierOf(villager.gear)!} />, rig.joints.body)}
-      {/* Wave 9 · hips, the only joint nothing else claims — so a hauler can
-          wear their basket AND carry the load in hand at the same time */}
-      {rig && villager.gear?.carrier && createPortal(<WornCarrier tier={villager.gear.carrier} />, rig.joints.hips)}
+      {/* worn armor and a carrier, no weapon. Wave 9 put the carrier on the
+          hips, the only joint nothing else claims — so a hauler can wear
+          their basket AND carry the load in hand at the same time */}
+      <LoadoutGear rig={rig} gear={villager.gear} />
       {rig && carrying && createPortal(<ResourceProp resource={carrying.resource} />, rig.joints.rightarm)}
     </group>
   );

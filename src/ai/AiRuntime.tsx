@@ -119,11 +119,12 @@ export default function AiRuntime() {
     }
     agentManager.update(dt, camera, st.destination ?? null, windowBounds);
     // Phase 8, §8 — "tier D agents ... jump along their path in coarse steps."
-    // Every other tier is actuated by a renderer (Villagers.tsx/Npc.tsx call
-    // stepLocomotion from their own useFrame), but a renderer only mounts a
-    // figure for the region the player is standing in — which is precisely the
-    // set tier D excludes. Without this call an off-region villager holds
-    // whatever Intent it had, motionless, until the player comes back.
+    // Every other tier is actuated by a renderer (Villagers.tsx/Npc.tsx step
+    // it from their own useFrame, through intentDrive.ts), but a renderer
+    // only mounts a figure for the region the player is standing in — which
+    // is precisely the set tier D excludes. Without this call an off-region
+    // villager holds whatever Intent it had, motionless, until the player
+    // comes back.
     // AFTER agentManager.update on purpose: refreshTiers runs in there, so
     // this sweep acts on this frame's tiers rather than the last one's, and a
     // D->A transition has already fired its re-entry snap by the time we get

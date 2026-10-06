@@ -5,17 +5,18 @@
 // (which explicitly filters defenders out) since their behavior is a real
 // combat AI, not a wander/flee/bed-seek loop.
 import { Suspense, useMemo, useRef, useState } from 'react';
-import { createPortal, useFrame } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, resolveEnemyKill, KIND_LABEL, type EnemyData } from '@/game/combat';
 import { registerDefender, orderFor, defenderStrike, scoutReported, defenderState, type DefenderState } from '@/game/defenders';
+import { applyDownedGate } from '@/game/actorDowned';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
-import { chestplateHp, chestplateTierOf } from '@/game/data/armor';
+import { chestplateHp } from '@/game/data/armor';
 import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
-import { HeldSword, ArmShield, HeldHalberd, HeldCrossbow, HeldHelmet, Chestplate, WornCarrier } from '../character/Equipment';
+import LoadoutGear from '../character/LoadoutGear';
 import { villagerConfig } from '@/game/data/villagerLooks';
 import { HOME_X, HOME_Z, isWatchHours, isWorkingHours } from '@/game/data/villagers';
 import { worldEnv } from '@/game/env';
@@ -156,11 +157,9 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     const want = moved > 0.4 ? Math.min(moved, 4.2) : 0;
     if (Math.abs(want - pc.v) > 0.55) { pc.v = want; setRidePace(want); }
 
-    if (ds.state === 'downed') {
-      if (now >= ds.downedUntil) { ds.state = 'ok'; ds.hp = ds.maxHp; }
-      else { g.visible = false; return; }
-    }
-    g.visible = true;
+    // downed (game/actorDowned.ts): hidden and frozen where they fell until
+    // the recovery time, then back on their feet at full health
+    if (applyDownedGate(ds, g, now)) return;
 
     ds.attackCd = Math.max(0, ds.attackCd - dt);
     ds.hurtCd = Math.max(0, ds.hurtCd - dt);
@@ -451,15 +450,11 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       )}
       <group position-y={mountAsset ? SADDLE_Y : 0}>
       <RiggedFigure config={config} height={1.7} clip={clip} timeScale={clip === 'anim_g_swordswish' ? 1.6 : 1} onReady={setRig} onClipEnd={() => setClip('anim_r_restpose')} seatedLegPose={!!mountAsset} />
-      {rig && loadout === 'sword_shield' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
-      {rig && loadout === 'sword_shield' && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
-      {rig && loadout === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
-      {rig && loadout === 'bow' && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
-      {rig && villager.gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
-      {rig && chestplateTierOf(villager.gear) && createPortal(<Chestplate tier={chestplateTierOf(villager.gear)!} />, rig.joints.body)}
-      {/* Wave 9 · a defender may wear a carrier too (any job may) — same free
-          hips joint, so it never fights the weapon in their hand */}
-      {rig && villager.gear?.carrier && createPortal(<WornCarrier tier={villager.gear.carrier} />, rig.joints.hips)}
+      {/* the weapon the Armory armed them with (none while `loadout` is
+          undefined), worn armor, and — Wave 9 — a carrier too (any job may
+          wear one): same free hips joint, so it never fights the weapon in
+          their hand */}
+      <LoadoutGear rig={rig} loadout={loadout} gear={villager.gear} />
       </group>
     </group>
   );
