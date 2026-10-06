@@ -319,8 +319,8 @@ interface GameState extends PersistedState {
   harvestPlot: (buildingId: string) => void;
   tickPlots: (dt: number) => void;
   toggleGate: (buildingId: string) => void;
-  /** Wave 57 (F5): trailing `leaveRuin` — true only from the two dragon
-   *  sieges (DragonSiegeController.tsx). Every other caller
+  /** Wave 57 (F5): trailing `leaveRuin` — true only from a dragon's
+   *  breath (game/dragonfire.ts). Every other caller
    *  (siege.ts, CedricSiege.tsx, Enemies.tsx) omits it and keeps today's
    *  delete+half-refund behavior exactly. */
   damageBuilding: (id: string, amount: number, cause?: string, leaveRuin?: boolean) => void;
@@ -4526,7 +4526,17 @@ function createGameStore() {
           // ruin state (see damageBuilding's own leaveRuin comment) would
           // otherwise let a player farm both for free by having the dragon
           // repeatedly torch and rebuild the same cheap hut.
-          set({ buildings: get().buildings.map((x) => (x.id === id ? { ...x, ruin: false } : x)), dirty: true });
+          //
+          // The rebuilt piece is whole ("Rebuild it to restore it"): whatever
+          // hit points are on record for the ruin go with the flag. A ruin
+          // is made without any (damageBuilding deletes them), but a save
+          // from before 2026-10-06 can hold some — a dragon's next breath
+          // used to land on the ruin it had just made (ROADMAP.md, "a dragon
+          // went on burning a building its first breath had already ruined")
+          // — and so can a ruin battered again while it was being rebuilt.
+          const hpRest = { ...get().buildingHp };
+          delete hpRest[id];
+          set({ buildings: get().buildings.map((x) => (x.id === id ? { ...x, ruin: false } : x)), buildingHp: hpRest, dirty: true });
           audio.play('brick_connect', 0.85);
           st.notify(`${def.name} rebuilt from the ashes!`, true);
         } else {
