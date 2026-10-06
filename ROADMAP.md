@@ -7249,35 +7249,98 @@ Torvald and Garrick at their 0. Alric and Beda, at home, read 0 under all three 
 taken mid-fidget at The King's Approach shows an empty dais on `main` and the King and Queen standing by the throne on
 the fix. The same under `next dev` (home and The King's Approach); 0 console errors in every run.
 
-## Bug: a dragon goes on burning a building its first breath has already ruined — FOUND 2026-10-04 (during CLN-18), not yet fixed
+## Bugfix: a dragon went on burning a building its first breath had already ruined — FOUND 2026-10-04 (during CLN-18), FIXED 2026-10-06
 
 **Found by** CLN-18's live siege probe, which records every store call a siege makes: in the black dragon's siege the
-line "Stockpile scorched by the black dragon's flame to a smoking ruin! Rebuild it to restore it." comes twice for the
+line "Stockpile scorched by the black dragon's flame to a smoking ruin! Rebuild it to restore it." came twice for the
 same stockpile, one breath apart.
 
-**The bug** (`components/world/DragonSiegeController.tsx`; before CLN-18, the same lines in both dragon files): when
-nothing is burning, a breath picks a wooden building, damages it and adds it to the burning set — whether or not that
-very breath has just reduced it to a ruin. The next breath then scorches the ruin, and only after that is the piece
-dropped from the set. What that second breath does depends on the piece, because `damageBuilding` counts a ruin from
-its full hit points again (the ruin's own entry is gone):
+**The bug** (the breath block of `components/world/DragonSiegeController.tsx`; before CLN-18, the same lines in both
+dragon files): when nothing is burning, a breath picks a wooden building, damages it and adds it to the burning set —
+whether or not that very breath has just reduced it to a ruin. The next breath then scorched the ruin, and only after
+that was the piece dropped from the set. What that second breath did depended on the piece, because `damageBuilding`
+counts a ruin from its full hit points again (the ruin's own entry is gone):
 
-- *A piece that, whole, has no more hit points than the breath does damage* takes the ruin branch a second time: the
+- *A piece that, whole, has no more hit points than the breath does damage* took the ruin branch a second time: the
   same line, the same crash of bricks, `built` set back to 0. That is the black dragon (18) against any piece of 18 or
   fewer, damaged or not, which is 122 of the catalogue's 142 flammable pieces — stockpiles, workbenches, fences,
-  palisades, campfires, beds, barrels, torches and nearly every wooden brick among them; the frailest piece to outlast
-  a black breath is the Battering Cart (21). The green dragon (14) never does this: no piece has fewer than 15.
+  palisades, campfires, beds, barrels, torches and every wooden brick among them; the frailest piece to outlast a
+  black breath is the Battering Cart (21). The green dragon (14) never did this: no piece has fewer than 15.
 - *A sturdier piece that was already damaged* — hurt in an earlier siege or a raid, low enough for the first breath to
-  finish it — is damaged as a ruin: no line, but the sounds of a hit, and a hit-point entry written onto the ruin (its
-  full points less one breath) that the rebuilt piece then comes back with. Either dragon can do this.
+  finish it — was damaged as a ruin: no line, but the sound of a hit, and a hit-point entry written onto the ruin (its
+  full points less one breath) that the rebuilt piece then came back with. Either dragon could do this.
 
-**What it costs:** the repeated line; a breath, five or six seconds, spent on a ruin instead of a fresh target;
-rebuilding done on the ruin in that time undone (the first case); a piece that comes back from its rebuilding already
+**What it cost:** the repeated line; a breath, five or six seconds, spent on a ruin instead of a fresh target;
+rebuilding done on the ruin in that time undone (the first case); a piece that came back from its rebuilding already
 wounded (the second).
 
-**Observed** (the first case; production build of `main`, deterministic frames, the black dragon over three
-storehouses, a stockpile and a workbench): with the fire kept from spreading, the stockpile is scorched at siege frame
-179 and again at 479, with the ruin line both times; in the full siege the same happens to the workbench at frames
-1982 and 2283. The green dragon over the same untouched buildings never repeats a ruin line. The second case follows
-from the code and has not been run.
+**Observed** (production build of `main` at 3fa0fcf, deterministic frames; three storehouses, a stockpile, a workbench
+and a stone tower). *The first case*, the black dragon with the fire kept from spreading: the stockpile is scorched to
+a ruin at 3 s and scorched again at 8 s, with the ruin line and the crash both times, and the first storehouse is not
+lit until 13 s. In the full 55-second siege the same happens to the workbench at 33 s and 38 s. *The second case*, a
+storehouse down to 10 of its 48 hit points: the green dragon ruins it at 3.5 s and at 9.5 s damages the ruin — the
+sound of a hit, no line — leaving 34 hit points on record for it; the black dragon does the same at 3 s and 8 s and
+leaves 30. The green dragon over undamaged buildings does neither.
 
-**Fix, to follow in its own change:** a building its first breath has ruined is not added to the burning set.
+**Fix.** The breath — which building it sets alight, what goes on burning, where the fire leaps — moved out of the
+siege's frame loop into `game/dragonfire.ts` (`breathe(fire, dragon)`), so that it can be driven and tested without a
+renderer, and gained one line: at the start of a breath, whatever is alight but no longer standing is dropped from the
+set, before anything is scorched. This entry first proposed not adding such a building to the set at all. It is still
+added, because the fireball and the light over a burning building are drawn from its entry in the set, and the breath
+that brings a building down at one stroke would otherwise have lost its flare; so the flare plays out as it did, and
+the next breath goes to a building that is standing. The same line covers a burning building that something else
+brought down, or that the player pulled down, between two breaths — that breath used to be spent on it as well. Not
+changed: a building that falls to a later breath than the one that lit it is dropped in that same breath, as before.
+
+*And what the second case left behind:* `constructBuilding` (`game/store/gameStore.ts`) now drops the hit points on
+record for a ruin as it clears the `ruin` flag, so a rebuilt ruin is whole — "Rebuild it to restore it", as the ruin
+line has always said. On the fixed build no breath leaves any on a ruin; a save made before it can hold the ones the
+second case wrote, and those now go when the piece is rebuilt. So does damage a ruin takes while it lies in ruins —
+a cannonball, a charge and a ram hit whatever is in reach, a ruin included (siege engines pick standing buildings
+only) — which the rebuilt piece used to come back short by. One residue stays: a piece that had already been rebuilt
+from such a ruin before the fix keeps its wound, since nothing tells it from honest damage and nothing in the game
+repairs a building; it lasts until the piece next falls.
+
+**What changes in play:** a dragon no longer loses a breath for each building it fells at one stroke (the black dragon
+against most wooden pieces, either dragon against a badly damaged one), so those breaths now land on buildings that
+are standing; the ruin line comes once; a ruin being rebuilt during the siege keeps its progress; no breath leaves hit
+points on a ruin; and a ruin, once rebuilt, is whole.
+
+**Verified.** *The move, through the parser* (`dragonfire_static`): with what was renamed put back, the old breath
+block (467 tokens) and the body of `breathe` (477) are the same, token for token, except that the store is read at the
+top of `breathe` instead of at the top of the frame loop, the new line, an `else` that became an early return, and the
+"is it still standing" test, which got a name (`standing`). `flammable` and the three constants are identical, and the
+rest of the controller (1,697 tokens: its imports, the declarations that moved and the fire's refs aside) is unchanged
+but for two renames. *Unit tests:* `game/dragonfire.test.ts` (11 tests; 162 in total) — what burns, the first breath,
+"stone holds" once a siege, a building burning until it falls, the fire leaping (never to stone or a ruin, never to
+more than three at once), its reach of 8 m, a roll of exactly 0.18 failing, both cases of the bug, a ruin rebuilt
+whole, and a burning building that is gone by the next breath. Of 40 single edits — 36 to `dragonfire.ts`, four to
+the lines in `constructBuilding` — the tests catch 39, the removal of either fix among them; the one they let through
+(the guard against one building catching twice in a breath) cannot matter while the cap is three. *Live, frame for
+frame* (production builds of `main` and of the fix; `cln18_dragon_live` and `kk_det`): five scenarios for each dragon,
+each run twice on each build — 40 runs. A build's two runs agree in everything that is compared, up to the frame the
+siege ends: the flight path frame for frame, every store call, the siege's lines and sounds and what follows from
+them, and the state it leaves behind. Left out is what runs on a clock of its own: owls, wind and the like, which
+fall on other frames from run to run, and one payout — the gold of the black dragon's rout completes a challenge that
+a four-second wall-clock timer pays a moment after the siege, so the purse is compared as it stood at the end.
+Between `main` and the fix the flight path is the same in all ten scenarios, and so is all the rest in the six the
+bug does not touch: nothing wooden to burn and a rout, for both dragons, and for the green dragon 23 seconds without
+spreading and the full siege.
+The other four differ where the bug was, and nowhere else. *Green, the wounded storehouse:* the 9.5 s breath lights
+the next storehouse (48 → 34) instead of hitting the ruin, and the ruin has no hit points on record. *Black, without
+spreading:* the 8 s breath lights a storehouse instead of scorching the stockpile's ruin, the ruin line comes once,
+that storehouse falls at 18 s instead of 23 s, and the next one is alight by the end. *Black, the full siege:*
+identical up to 38 s, where `main` scorches the workbench's ruin again and the fix, with nothing wooden left standing,
+says "stone holds" (which `main` says a breath later); the same five ruins at the end. *Black, the wounded
+storehouse:* the 8 s breath lights the next storehouse instead of hitting the ruin, it takes its second hit at 13 s
+and the fire leaps from it; the ruin has no hit points on record. Four of the scenarios under `next dev` are identical
+to the fix's production runs; 0 console errors anywhere.
+
+**The probe itself** was made sturdier on the way, because under load it sometimes armed a siege that then came late
+or not at all. Its clock now steps 1/64 s, which is exact in binary (the same 55 seconds are 3,519 frames where
+CLN-18's entry in `CLEANUP_PLAN.md` counts 3,299 at 1/60). It waits until the homestead's frame loops are running:
+everything that drives a siege sits in one Suspense boundary in `GameWorld.tsx`, which reveals only once every model
+in it has loaded — 1 to 4 seconds after the game starts in the measurements made for this (one browser or four at
+once), but under load it has taken far longer: once, with four browsers, it had still not happened 2,000 frames after
+the usual five-second wait, and a siege armed before it cannot roll. And night falls, with the roll held back, before
+the measurement starts, so that the siege rolls in the very next frame; it did in all 40 runs.

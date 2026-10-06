@@ -20,38 +20,16 @@ import { useGameStore } from '@/game/store/gameStore';
 import { useBoltStore } from '@/game/combat';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
-import { BUILDABLE_BY_ID } from '@/game/data/buildables';
-import { isBuilt } from '@/game/types';
 import { bossTierScale, BOSS_VICTORY_REWARD, rollBossLegendaryDrop } from '@/game/bossEncounter';
 import { ITEMS } from '@/game/data/items';
 import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
 import type { DragonSiegeConfig } from '@/game/dragonSiegeConfig';
+import { breathe, FLARE_SECONDS, MAX_BURNING, newDragonfire } from '@/game/dragonfire';
 import { loadDragonRig, type DragonRig } from './DragonOmen';
 import { pick } from '@/lib/rng';
 import { exposeDebug } from '@/lib/debugHooks';
 
 const SIEGE_SECONDS = 55;
-// Wave 57 (F5): a bounded chain reaction, folded into the same breath tick
-// rather than a new timer. Numbers chosen so a dense base visibly catches
-// without a siege routinely razing the whole thing: ~9-11 ticks per 55s siege
-// * 0.18 spread chance per burning building ~= 1-2 expected extra ignitions in
-// a base with real neighbors, hard-capped at 3 simultaneous fires total.
-// SPREAD_RADIUS=8m (center-to-center) catches a piece placed right next to
-// another (typical footprints run 2-8m; walls in a run touch at ~0m gap)
-// without reaching across a spread-out base — an isolated flammable building
-// with nothing flammable within 8m never spreads at all, which is the intended
-// "build densely at your own risk" read, not "never build wood."
-const MAX_BURNING = 3;
-const SPREAD_RADIUS = 8;
-const SPREAD_CHANCE = 0.18;
-
-/** wood burns, stone holds — judged by what the piece is mostly built from */
-function flammable(type: string): boolean {
-  const def = BUILDABLE_BY_ID[type];
-  if (!def) return false;
-  const wood = (def.cost.wood ?? 0) + (def.cost.plank ?? 0);
-  return wood > (def.cost.stone ?? 0);
-}
 
 function SiegeFlight({ cfg, hitsToRout, onDone }: { cfg: DragonSiegeConfig; hitsToRout: number; onDone: (routed: boolean) => void }) {
   const [rig, setRig] = useState<DragonRig | null>(null);
@@ -66,11 +44,10 @@ function SiegeFlight({ cfg, hitsToRout, onDone }: { cfg: DragonSiegeConfig; hits
   // a dynamic list of hooks) and its own decaying fireT for the visual pulse.
   const fireLights = useRef<(THREE.PointLight | null)[]>([null, null, null]);
   const fireBalls = useRef<(THREE.Mesh | null)[]>([null, null, null]);
-  const burning = useRef<{ id: string; x: number; z: number; fireT: number }[]>([]);
+  const fire = useRef(newDragonfire());
   const t = useRef(0);
   const breathCd = useRef(cfg.firstBreath);
   const hits = useRef(0);
-  const stoneNote = useRef(false);
   const done = useRef(false);
 
   const finish = (routed: boolean) => {
@@ -106,63 +83,22 @@ function SiegeFlight({ cfg, hitsToRout, onDone }: { cfg: DragonSiegeConfig; hits
     rig.tail.rotation.x = Math.sin(t.current * cfg.wingRate - 0.9) * 0.16;
     rig.head.rotation.y = Math.sin(t.current * cfg.headRate) * 0.35;
 
-    // dragonfire: a bounded chain reaction (Wave 57/F5) — every currently-
-    // burning building takes another hit and is dropped from the set the
-    // instant it's no longer isBuilt (destroyed, or turned to a ruin —
-    // leaveRuin:true below means ruin is the only outcome a dragon ever
-    // causes); each survivor then rolls a chance to leap to a fresh
-    // flammable neighbor, capped at MAX_BURNING total. If nothing is
-    // burning at all (siege start, or the last blaze already died out),
-    // seed one fresh random target exactly as before this wave.
+    // dragonfire (game/dragonfire.ts): what is alight takes another hit, and may
+    // leap to a neighbour; with nothing alight the breath finds a fresh target
     breathCd.current -= dt;
     if (breathCd.current <= 0) {
       breathCd.current = cfg.breathEvery;
-      if (burning.current.length === 0) {
-        const targets = st.buildings.filter((b) => isBuilt(b) && flammable(b.type));
-        if (targets.length) {
-          const b = pick(targets);
-          st.damageBuilding(b.id, cfg.breathDamage, cfg.lines.scorched, true);
-          audio.playAt('flame', b.x, b.z, 0.9);
-          burning.current.push({ id: b.id, x: b.x, z: b.z, fireT: 1.4 });
-        } else if (!stoneNote.current) {
-          stoneNote.current = true;
-          st.notify(cfg.lines.stoneHolds);
-        }
-      } else {
-        for (const entry of burning.current) {
-          st.damageBuilding(entry.id, cfg.breathDamage, cfg.lines.scorched, true);
-          audio.playAt('flame', entry.x, entry.z, 0.9);
-          entry.fireT = 1.4;
-        }
-        const live = useGameStore.getState().buildings;
-        burning.current = burning.current.filter((entry) => {
-          const b = live.find((x) => x.id === entry.id);
-          return !!b && isBuilt(b);
-        });
-        const burningIds = new Set(burning.current.map((e) => e.id));
-        for (const entry of [...burning.current]) {
-          if (burning.current.length >= MAX_BURNING) break;
-          if (Math.random() >= SPREAD_CHANCE) continue;
-          const candidates = live.filter((o) => !burningIds.has(o.id) && isBuilt(o) && flammable(o.type)
-            && Math.hypot(o.x - entry.x, o.z - entry.z) <= SPREAD_RADIUS);
-          if (!candidates.length) continue;
-          const next = pick(candidates);
-          burning.current.push({ id: next.id, x: next.x, z: next.z, fireT: 1.4 });
-          burningIds.add(next.id);
-          audio.playAt('flame', next.x, next.z, 0.8);
-          st.notify('🔥 The fire leaps to a neighboring structure!', true);
-        }
-      }
+      breathe(fire.current, cfg);
     }
     // per-slot fire visuals — decays every frame regardless of the tick
     // above, same k-curve the old single-fire version used
     for (let i = 0; i < MAX_BURNING; i++) {
-      const entry = burning.current[i];
+      const entry = fire.current.burning[i];
       const light = fireLights.current[i];
       const ball = fireBalls.current[i];
       if (entry) {
         entry.fireT = Math.max(0, entry.fireT - dt);
-        const k = entry.fireT / 1.4;
+        const k = entry.fireT / FLARE_SECONDS;
         if (light) { light.position.set(entry.x, 2.2, entry.z); light.intensity = k * 30; }
         if (ball) {
           ball.position.set(entry.x, 1.2, entry.z);
