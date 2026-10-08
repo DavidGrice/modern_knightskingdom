@@ -12,7 +12,9 @@ import { exposeDebug } from '@/lib/debugHooks';
 //
 // It can be STOPPED: the ram carries its own HP and takes melee and ranged
 // damage like anything else, so a defended homestead can break the thing
-// before it reaches the gate instead of only watching it arrive.
+// before it reaches the gate instead of only watching it arrive. Taking a
+// blow and lying wrecked are what it shares with the siege ladder
+// (game/raiderProps.ts; what it is worth broken is combat/structures.ts).
 const RAM_MAX_HP = 30;
 /** how close a swing or a shaft has to come to count as a hit */
 export const RAM_RADIUS = 1.1;
@@ -37,17 +39,6 @@ export function resetRaiderRam(x: number, z: number) {
   raiderRamState.travel = 0;
   raiderRamState.wrecked = false;
   raiderRamState.wreckT = 0;
-}
-
-/** returns true if this blow finished it off */
-export function damageRaiderRam(amount: number): boolean {
-  if (!raiderRamState.active || raiderRamState.wrecked) return false;
-  raiderRamState.hp -= amount;
-  if (raiderRamState.hp > 0) return false;
-  raiderRamState.hp = 0;
-  raiderRamState.wrecked = true;
-  raiderRamState.wreckT = 0;
-  return true;
 }
 
 exposeDebug('__kkRam', raiderRamState);

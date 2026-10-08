@@ -16,25 +16,13 @@ import type { CharacterConfig } from '@/game/types';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import PropModel from './PropModel';
 import { wrapAngle } from '@/lib/math';
+import { ringAngles } from '@/lib/geometry';
 
 const CYL = '/assets/props/cylindrical';
 const B = '/assets/props/buildings';
 
 const SEG_COUNT = 22;
 const GAP_HALF = 0.35; // radians left open on the north side as the entrance
-
-function useRingAngles() {
-  return useMemo(() => {
-    const angles: number[] = [];
-    for (let i = 0; i < SEG_COUNT; i++) {
-      const angle = (i / SEG_COUNT) * Math.PI * 2;
-      const distFromNorth = Math.min(angle, Math.PI * 2 - angle);
-      if (distFromNorth < GAP_HALF) continue;
-      angles.push(angle);
-    }
-    return angles;
-  }, []);
-}
 
 /** Wave 57 (F6) · a small, non-interactive figure standing at the honor
  *  stand (oc6095b4, placed just below) — no NpcDef/roster entry, no
@@ -86,7 +74,7 @@ function DuelSpectator({ x, z }: { x: number; z: number }) {
 }
 
 export default function BattleDome() {
-  const angles = useRingAngles();
+  const angles = useMemo(() => ringAngles(SEG_COUNT, GAP_HALF), []);
   const R = BATTLE_DOME.radius;
   // Phase 20: the dome lives at The Sister Keep — mounted only while
   // visiting, riding the bake's real terrain height (sampled per frame via

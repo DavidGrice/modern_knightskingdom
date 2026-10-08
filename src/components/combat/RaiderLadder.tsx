@@ -11,10 +11,11 @@
 // has no wheel/throw/fire role of its own for the rig lab to drive — it's a
 // straight walk-in and a static plant, not a rolling approach.
 //
-// It can be broken before or during a climb — game/combat.ts routes melee
-// swings and bolts into damageRaiderLadder, and a wrecked ladder tips over
-// and burns out instead of vanishing on the frame its HP hit zero, same as
-// the ram. Enemies.tsx's own 'climbing' handler drops any raider still on it
+// It can be broken before or during a climb — combat/structures.ts's
+// hitRaiderProp takes melee swings and bolts (game/raiderProps.ts's
+// damageRaiderProp), and a wrecked ladder tips over and burns out instead of
+// vanishing on the frame its HP hit zero, same as the ram. Enemies.tsx's own
+// 'climbing' handler drops any raider still on it
 // the instant `wrecked` goes true (or the wall itself comes down under it) —
 // see that handler's own comment.
 import { Suspense, useRef } from 'react';
@@ -22,6 +23,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { raiderLadderState } from '@/game/raiderLadder';
+import { settleWreck } from '@/game/raiderProps';
 import RiggedProp from '../world/RiggedProp';
 import { homeGroundY } from '../world/TemplateWorld';
 
@@ -29,8 +31,6 @@ import { homeGroundY } from '../world/TemplateWorld';
 // stone-and-timber stair moves more deliberately than a ram team rolling
 // their engine on its own wheels
 const LADDER_SPEED = 1.1;
-/** how long the wreck lies there before the field is cleared — same as the ram */
-const WRECK_SECONDS = 6;
 
 export default function RaiderLadder() {
   const group = useRef<THREE.Group>(null);
@@ -46,14 +46,12 @@ export default function RaiderLadder() {
     const dt = Math.min(rawDt, 0.05);
 
     if (raiderLadderState.wrecked) {
-      // tipped over, settling — then gone (same shape as RaiderRam.tsx)
-      raiderLadderState.wreckT += dt;
-      if (raiderLadderState.wreckT > WRECK_SECONDS) {
-        raiderLadderState.active = false;
+      // tipped over, settling — then gone (the ram's wreck, a little further over)
+      const tip = settleWreck(raiderLadderState, dt);
+      if (tip === null) {
         g.visible = false;
         return;
       }
-      const tip = Math.min(1, raiderLadderState.wreckT / 0.9);
       g.visible = true;
       g.position.set(
         raiderLadderState.x,

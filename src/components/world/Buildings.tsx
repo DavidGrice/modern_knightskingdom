@@ -3,7 +3,7 @@ import { Suspense, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PositionalAudio } from '@react-three/drei';
-import { quintainSpins } from '@/game/siege';
+import { quintainSpins } from '@/game/quintain';
 import { cartLivePos } from '@/game/carts';
 import { GROW_TIME } from '@/game/store/gameStore';
 import { useGameStore } from '@/game/store/gameStore';

@@ -9,15 +9,17 @@
 // wheel role by distance travelled (not by a spin rate picked by eye), which
 // is what makes it read as rolling instead of skating.
 //
-// It can be broken before it arrives — combat.ts routes melee swings and
-// bolts into damageRaiderRam, and a wrecked ram tips over and burns out
-// instead of vanishing on the frame its HP hit zero.
+// It can be broken before it arrives — combat/structures.ts's hitRaiderProp
+// takes melee swings and bolts (game/raiderProps.ts's damageRaiderProp), and
+// a wrecked ram tips over and burns out instead of vanishing on the frame
+// its HP hit zero.
 import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { ramCheck } from '@/game/siege';
 import { raiderRamState } from '@/game/raiderRam';
+import { settleWreck } from '@/game/raiderProps';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { isDoorLike } from '@/game/types';
 import RiggedProp, { setPropTravel } from '../world/RiggedProp';
@@ -26,8 +28,6 @@ import { homeGroundY } from '../world/TemplateWorld';
 const RAM_SPEED = 1.3; // roughly a slow determined trudge, matching the player's own push pace
 /** id RiggedProp keys its per-instance animation state on */
 const RAM_ID = 'raider_ram';
-/** how long the wreck lies there before the field is cleared */
-const WRECK_SECONDS = 6;
 
 export default function RaiderRam() {
   const group = useRef<THREE.Group>(null);
@@ -45,13 +45,11 @@ export default function RaiderRam() {
 
     if (raiderRamState.wrecked) {
       // tipped on its axle, settling — then gone
-      raiderRamState.wreckT += dt;
-      if (raiderRamState.wreckT > WRECK_SECONDS) {
-        raiderRamState.active = false;
+      const tip = settleWreck(raiderRamState, dt);
+      if (tip === null) {
         g.visible = false;
         return;
       }
-      const tip = Math.min(1, raiderRamState.wreckT / 0.9);
       g.visible = true;
       // Wave 31 · homeGroundY — this is a home-only raid mechanic — with the
       // tip-and-settle sink (-0.15*tip) staying a relative offset on top.

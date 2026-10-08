@@ -6,8 +6,6 @@ import { atGuildMaxRank, useGameStore } from '../store/gameStore';
 import { callingSignature } from '../data/classes';
 import { playerState } from '../playerState';
 import { ridingState } from '../riding';
-import { raiderRamState, RAM_RADIUS } from '../raiderRam';
-import { raiderLadderState, LADDER_RADIUS } from '../raiderLadder';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { enemyBeliefId } from '@/ai/perception/Belief';
 import { WEAPON_SLOTS, isMeleeSlot, type MeleeWeaponId, type WeaponSlot } from '../data/weapons';
@@ -19,7 +17,7 @@ import { combatState } from './state';
 import { useEnemyStore, type EnemyData } from './enemyStore';
 import { resolveEnemyKill } from './kill';
 import { SHIELD_REDUCTION, isFrontalHit } from './shield';
-import { hitRaiderLadder, hitRaiderRam } from './structures';
+import { hitRaiderProp, RAIDER_PROPS } from './structures';
 
 /**
  * One stamina-costed burst of displacement + i-frames. Decides WHETHER a
@@ -216,25 +214,19 @@ export function playerAttack(): boolean {
   // defenders on the wall
   if (!landed.length) {
     combatState.comboCount = 0; // Wave 40 (A6) · a whiff breaks the chain
-    if (raiderRamState.active && !raiderRamState.wrecked) {
-      const rdx = raiderRamState.x - playerState.x;
-      const rdz = raiderRamState.z - playerState.z;
+    // Wave 58 (H4) · their siege ladder is the same kind of legitimate
+    // no-living-target fallback — breaking it before anyone finishes the
+    // climb is a real counter, not something only bolts can do. Each prop
+    // is tested on its own (not first-hit-wins): a swing out of the ram's
+    // range can still land on the ladder.
+    for (const prop of RAIDER_PROPS) {
+      const s = prop.state;
+      if (!s.active || s.wrecked) continue;
+      const rdx = s.x - playerState.x;
+      const rdz = s.z - playerState.z;
       const rd = Math.hypot(rdx, rdz);
-      if (rd < wp.reach + RAM_RADIUS && (rdx * fx + rdz * fz) / (rd || 1) > wp.cone) {
-        hitRaiderRam(dmg);
-      }
-    }
-    // Wave 58 (H4) · the raiders' own siege ladder is the same kind of
-    // legitimate no-living-target fallback the ram is just above — breaking
-    // it before anyone finishes the climb is a real counter, not something
-    // only bolts can do. Independent of the ram check (not `else if`): a
-    // swing out of the ram's own range can still land on the ladder.
-    if (raiderLadderState.active && !raiderLadderState.wrecked) {
-      const ldx = raiderLadderState.x - playerState.x;
-      const ldz = raiderLadderState.z - playerState.z;
-      const ld = Math.hypot(ldx, ldz);
-      if (ld < wp.reach + LADDER_RADIUS && (ldx * fx + ldz * fz) / (ld || 1) > wp.cone) {
-        hitRaiderLadder(dmg);
+      if (rd < wp.reach + prop.radius && (rdx * fx + rdz * fz) / (rd || 1) > wp.cone) {
+        hitRaiderProp(prop, dmg);
       }
     }
     return true;

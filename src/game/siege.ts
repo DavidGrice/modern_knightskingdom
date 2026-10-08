@@ -1,6 +1,7 @@
 'use client';
-// Siege & training: cannon projectiles (real arcs, splash damage vs raiders)
-// and quintain training hits.
+// Siege: cannon projectiles (real arcs, splash damage vs raiders), placed
+// charges and the battering ram. (The quintain — training, not siege — is
+// game/quintain.ts.)
 import { create } from 'zustand';
 import { audio } from '@/lib/audio';
 import { useGameStore } from './store/gameStore';
@@ -49,18 +50,6 @@ export const useSiegeStore = create<SiegeStore>((set, get) => ({
   addBall: (b) => set({ balls: [...get().balls, b] }),
   removeBall: (id) => set({ balls: get().balls.filter((x) => x.id !== id) }),
 }));
-
-/** quintain spin impulses, keyed by building id (renderer animates toward it) */
-export const quintainSpins: Record<string, number> = {};
-
-export function quintainHit(buildingId: string, mounted: boolean) {
-  const st = useGameStore.getState();
-  quintainSpins[buildingId] = (quintainSpins[buildingId] ?? 0) + Math.PI * (2 + Math.random() * 2);
-  st.addXp('combat', mounted ? 16 : 8);
-  audio.play('sword_swish', 0.8);
-  audio.play('thud', 0.5);
-  if (mounted) st.notify('Mounted strike! Double training XP.');
-}
 
 /**
  * Wave 8 · what an engine SOUNDS like when it looses.

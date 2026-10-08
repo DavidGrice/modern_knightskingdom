@@ -7,8 +7,6 @@ import type { RigJoint } from '@/lib/minifigRig';
 import { useGameStore } from '../store/gameStore';
 import { playerState } from '../playerState';
 import { ridingState } from '../riding';
-import { raiderRamState, RAM_RADIUS } from '../raiderRam';
-import { raiderLadderState, LADDER_RADIUS } from '../raiderLadder';
 import { hitTestCharacter, PART_DAMAGE, PART_LABEL, type PartHit } from '../hitbox';
 import { hasLineOfSight, GROUND_LOS_Y } from '../navgrid';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
@@ -19,7 +17,7 @@ import { useEnemyStore, type EnemyData } from './enemyStore';
 import { damagePlayer } from './playerDamage';
 import { resolveEnemyKill } from './kill';
 import { SHIELD_REDUCTION, isFrontalHit } from './shield';
-import { hitRaiderLadder, hitRaiderRam } from './structures';
+import { hitRaiderProp, RAIDER_PROPS } from './structures';
 
 // ---- crossbow bolts ----
 
@@ -166,7 +164,7 @@ export function fireArrow(power: number): boolean {
  *  has no per-part hitbox registry (game/hitbox.ts only ever covers ENEMY
  *  donors; every other attack on the player so far has been a melee swing or
  *  a silent hit-scan, neither of which needed one), so a simple point radius
- *  stands in, same shape as raiderRam's own RAM_RADIUS just below. */
+ *  stands in, same shape as a raider prop's own radius just below. */
 const HOSTILE_BOLT_HIT_RADIUS = 0.6;
 
 /**
@@ -327,38 +325,23 @@ export function stepBolt(b: Bolt, dt: number): boolean {
       return false;
     }
   }
-  // the raiders' ram, tested after the mobs so a raider standing in front of
-  // it still soaks the shaft first
-  if (raiderRamState.active && !raiderRamState.wrecked) {
+  // the raiders' ram and then (Wave 58, H4) their siege ladder, tested after
+  // the mobs so a raider standing in front of either still soaks the shaft
+  // first: the closest the shaft's flight this step comes to the prop's own
+  // centre line, at the height combat/structures.ts gives it
+  for (const prop of RAIDER_PROPS) {
+    const s = prop.state;
+    if (!s.active || s.wrecked) continue;
     const dx = nx - b.pos.x, dy = ny - b.pos.y, dz = nz - b.pos.z;
     const len2 = dx * dx + dy * dy + dz * dz || 1;
-    let t = ((raiderRamState.x - b.pos.x) * dx + (0.9 - b.pos.y) * dy + (raiderRamState.z - b.pos.z) * dz) / len2;
+    let t = ((s.x - b.pos.x) * dx + (prop.midY - b.pos.y) * dy + (s.z - b.pos.z) * dz) / len2;
     t = Math.max(0, Math.min(1, t));
     const px = b.pos.x + dx * t, py = b.pos.y + dy * t, pz = b.pos.z + dz * t;
-    const d2 = (px - raiderRamState.x) ** 2 + (py - 0.9) ** 2 + (pz - raiderRamState.z) ** 2;
-    if (d2 < RAM_RADIUS * RAM_RADIUS) {
-      hitRaiderRam(b.damage);
+    const d2 = (px - s.x) ** 2 + (py - prop.midY) ** 2 + (pz - s.z) ** 2;
+    if (d2 < prop.radius * prop.radius) {
+      hitRaiderProp(prop, b.damage);
       audio.play('thud', 0.7);
       return true;   // a shaft in timber does not ride along, it drops
-    }
-  }
-  // Wave 58 (H4) · the siege ladder, tested the same way — after the ram so a
-  // raider standing in front of it still soaks the shaft first, same reasoning
-  // as the ram's own comment above. Centred at half its own 3.2m height
-  // rather than the ram's low 0.9m: this is a tall standing structure, not a
-  // waist-high engine.
-  if (raiderLadderState.active && !raiderLadderState.wrecked) {
-    const dx = nx - b.pos.x, dy = ny - b.pos.y, dz = nz - b.pos.z;
-    const len2 = dx * dx + dy * dy + dz * dz || 1;
-    const ladderMidY = 1.6;
-    let t = ((raiderLadderState.x - b.pos.x) * dx + (ladderMidY - b.pos.y) * dy + (raiderLadderState.z - b.pos.z) * dz) / len2;
-    t = Math.max(0, Math.min(1, t));
-    const px = b.pos.x + dx * t, py = b.pos.y + dy * t, pz = b.pos.z + dz * t;
-    const d2l = (px - raiderLadderState.x) ** 2 + (py - ladderMidY) ** 2 + (pz - raiderLadderState.z) ** 2;
-    if (d2l < LADDER_RADIUS * LADDER_RADIUS) {
-      hitRaiderLadder(b.damage);
-      audio.play('thud', 0.7);
-      return true;
     }
   }
   b.pos.x = nx; b.pos.y = ny; b.pos.z = nz;
