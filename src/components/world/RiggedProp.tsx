@@ -5,7 +5,16 @@
 // each role DOES. Everything is driven off one useFrame with no per-frame
 // allocation and no React state, so a field full of siege engines costs the
 // same as the static PropModel it replaces plus a few quaternion writes.
-import { useEffect, useRef, useState } from 'react';
+//
+// An asset can turn out to have NO rig to load — the lab charted no parts for
+// it, or charted them for an OBJ that is not there or holds no mesh
+// (lib/propRig.ts resolves null and, in development, says why). Then this
+// draws the `fallback` it was handed, if any: a placed piece hands in its
+// plain model, so that it stands still rather than not at all. Handed none,
+// it draws nothing — which in development is said in the console, since an
+// invisible prop is easy to ship (the raiders' siege ladder was one, and two
+// placeable ornaments were).
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { loadRiggedProp, type RiggedProp as Rig } from '@/lib/propRig';
@@ -46,6 +55,8 @@ const WHEEL_RADIUS = 0.34;
 const WHEEL_FALLBACK_AXLE = new THREE.Vector3(1, 0, 0);
 /** module-level scratch — a field of carts should not allocate per frame */
 const spinQuat = new THREE.Quaternion();
+/** assets already reported as not drawn (development only) — once each is enough */
+const reportedUndrawn = new Set<string>();
 
 export default function RiggedProp({
   assetId,
@@ -55,6 +66,7 @@ export default function RiggedProp({
   buildingId,
   gaitSpeed = 0,
   scale = 1,
+  fallback,
 }: {
   assetId: string;
   height: number;
@@ -72,8 +84,19 @@ export default function RiggedProp({
    *  objects, none of it by writing new world-space geometry, so a parent
    *  scale is free to apply on top with nothing to reconcile). */
   scale?: number;
+  /** what to draw instead if this asset has no rig to load (see the header) —
+   *  placed by the caller: `position`, `yaw` and `scale` above are not applied
+   *  to it. Leaving it out is what gets reported; an explicit `null` is a
+   *  caller saying "nothing, on purpose". */
+  fallback?: ReactNode;
 }) {
   const [rig, setRig] = useState<Rig | null>(null);
+  /** the load that came back with no rig — as opposed to one not back yet.
+   *  The load's key rather than a flag, so that it cannot outlive a change of
+   *  asset on a mounted instance (the player's own mount changes horse). */
+  const [riglessLoad, setRiglessLoad] = useState<string | null>(null);
+  const loadKey = `${assetId}@${height}`;
+  const rigless = riglessLoad === loadKey;
   const root = useRef<THREE.Group>(null);
   const t = useRef(Math.random() * 100); // desync identical props
   const rest = useRef<Map<THREE.Group, number>>(new Map());
@@ -83,7 +106,11 @@ export default function RiggedProp({
   useEffect(() => {
     let alive = true;
     loadRiggedProp(assetId, height).then((r) => {
-      if (!alive || !r) return;
+      if (!alive) return;
+      if (!r) {
+        setRiglessLoad(`${assetId}@${height}`);
+        return;
+      }
       // each instance needs its own copy — parts are mutated per frame
       const clone = r.group.clone(true);
       const parts: Record<string, THREE.Group> = {};
@@ -95,6 +122,14 @@ export default function RiggedProp({
     });
     return () => { alive = false; };
   }, [assetId, height]);
+
+  // no rig and nothing to draw in its place: say so, in development, once per asset
+  const undrawn = rigless && fallback === undefined;
+  useEffect(() => {
+    if (!undrawn || process.env.NODE_ENV === 'production' || reportedUndrawn.has(assetId)) return;
+    reportedUndrawn.add(assetId);
+    console.warn(`[RiggedProp] "${assetId}" is NOT DRAWN: it has no rig to load, and was given no fallback to draw instead`);
+  }, [undrawn, assetId]);
 
   useFrame((_, dt) => {
     if (!rig) return;
@@ -252,6 +287,7 @@ export default function RiggedProp({
     }
   });
 
+  if (rigless) return fallback ?? null;
   if (!rig) return null;
   return (
     <group ref={root} position={position} rotation-y={yaw} scale={scale}>

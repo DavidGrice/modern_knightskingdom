@@ -480,9 +480,26 @@ function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; or
   if (b.type === 'market_stall') {
     return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><MarketStall /></group>;
   }
+  // The piece's own GLB, standing still. L65 · shifted so the piece's SOLID
+  // mass is centred on its cell — otherwise a wall's stone sits at the back
+  // of the cell one way round and at the front the other, and a rotated run
+  // no longer meets its neighbour on the grid line. collisionBoxesFor applies
+  // the same shift, so what stops you is still exactly what is drawn.
+  const still = (
+    <PropModel
+      url={def.model!}
+      height={def.size[1]}
+      position={[px - solidWorld[0], y, pz - solidWorld[1]]}
+      yaw={yaw}
+      scale={scale}
+    />
+  );
   // pieces the rig lab charted moving parts for (catapult arms, flag cloth,
   // flames) render through the OBJ-based rig so those parts actually move;
-  // everything else stays on the cheaper static GLB path
+  // everything else stays on the cheaper static GLB path. A chart is no
+  // promise of a rig, though — two ornaments have a `flag` charted and no OBJ
+  // to load it from — so the still model goes along as what to draw if the
+  // rig cannot be had (they were invisible until 2026-10-08).
   const labId = labAssetId(b.type);
   if (hasAnimatedRig(labId)) {
     return (
@@ -494,6 +511,7 @@ function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; or
           yaw={yaw}
           buildingId={b.id}
           scale={scale}
+          fallback={def.model ? still : undefined}
         />
       </Suspense>
     );
@@ -507,18 +525,7 @@ function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; or
         </mesh>
       }
     >
-      {/* L65 · shifted so the piece's SOLID mass is centred on its cell —
-          otherwise a wall's stone sits at the back of the cell one way round
-          and at the front the other, and a rotated run no longer meets its
-          neighbour on the grid line. collisionBoxesFor applies the same
-          shift, so what stops you is still exactly what is drawn. */}
-      <PropModel
-        url={def.model!}
-        height={def.size[1]}
-        position={[px - solidWorld[0], y, pz - solidWorld[1]]}
-        yaw={yaw}
-        scale={scale}
-      />
+      {still}
     </Suspense>
   );
 }

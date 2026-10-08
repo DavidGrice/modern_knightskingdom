@@ -7381,7 +7381,8 @@ height, centred, on the ground). The stair's wooden rungs are on its +Z face and
 face to the wall, so the stone frame stands to the wall and the rungs face the raiders coming up to it — as the
 heading was written to do, by an author who could not see it. *And so that the next one is seen:* `loadRiggedProp`
 now says in the console, in development, which asset will not be drawn and why — no parts chart, an OBJ that did not
-load, an OBJ with no mesh in it — once per asset and height. `AmbientWildlife.tsx`'s header records the same trap from
+load, an OBJ with no mesh in it — once per asset and height (reworded by the next entry: it now says the asset "has no
+rig to load"). `AmbientWildlife.tsx`'s header records the same trap from
 an earlier wave — a bird that a draft would have drawn through `RiggedProp`, and that would not have shown — caught
 then because someone checked live.
 
@@ -7427,32 +7428,78 @@ the siege crew's catapult turret, Cedric's catapult and stone-thrower, the merch
 A placed piece goes that way whenever `hasAnimatedRig` finds a moving part in its chart — which says nothing of its
 OBJ: two charts with a `flag` have no OBJ to load, and both belong to pieces the player can place. Logged below.
 
-**Not changed, and logged below:** two ornaments that are not drawn, and where the raiders climb.
+**Not changed, and logged below:** two ornaments that are not drawn (since fixed: the next entry), and where the
+raiders climb.
 
-## Bug: two placeable ornaments are not drawn — FOUND 2026-10-08 (in the review of the ladder fix), not yet fixed
+## Bugfix: two placeable ornaments were not drawn — FOUND AND FIXED 2026-10-08
 
-**Found by** the independent review of the fix above, which checked its claim that no buildable used the two charts
-without an OBJ, and found two that do; then confirmed by placing them.
+**Found by** the independent review of the ladder fix above, which checked its claim that no buildable used the two
+charts without an OBJ, and found two that do; then confirmed by placing them.
 
 **The bug** (`components/world/Buildings.tsx`, the last branch of `BuildingMesh`): a placed piece is drawn through
 `RiggedProp` when `hasAnimatedRig` finds a moving part in the lab's chart for it, and through `PropModel` from its GLB
 otherwise. For "Ornament 4×1" (`gen_06_l449500`) and "Ornament 9×1" (`gen_08_l7253400`) — two of the generated decor
-pieces — the chart names a `flag`, so they go to `RiggedProp`; but a rig is loaded from the asset's OBJ, and
-`public/assets/props/objrig` has no `06_l449500` or `08_l7253400` (neither `.obj` nor `.mtl`). The load fails,
-`loadRiggedProp` resolves `null`, and nothing is drawn. Of the 17 charts with a moving part these are the only two
+pieces — the chart names a `flag`, so they went to `RiggedProp`; but a rig is loaded from the asset's OBJ, and
+`public/assets/props/objrig` has no `06_l449500` or `08_l7253400` (neither `.obj` nor `.mtl`). The load failed,
+`loadRiggedProp` resolved `null`, and nothing was drawn. Of the 17 charts with a moving part these are the only two
 without an OBJ, and nothing else in `src` names either asset.
 
-**Observed** (production build of `main` at 80532ef): five finished pieces set in a row — the two ornaments, and for
+**Observed** (production build of `main` at 6f79283): five finished pieces set in a row — the two ornaments, and for
 comparison a generated castle piece with a rig (`gen_oc6098b3`), a Siege Stair and a catapult. No mesh stands where
 either ornament was placed, and the picture shows bare grass there; the other three are drawn (15, 8 and 9 meshes).
-The browser reports two requests that failed with a 404 — by the loader's order, the two missing `.mtl` files. On the
-fix above, under `next dev`, the same row brings the new warning for each: `[propRig] "06_l449500" will not be drawn:
-its OBJ did not load (/assets/props/objrig/06_l449500.obj)`, and the same for `08_l7253400`.
+The browser reports two requests that failed with a 404 — by the loader's order, the two missing `.mtl` files.
 
-**What it costs:** the player pays for the piece (1 stone, 4 stone) and gets nothing to see.
+**What it cost:** the player paid for the piece (1 stone, 4 stone) and got nothing to see.
 
-**Fix, to follow in its own change:** a piece whose rig cannot be loaded is drawn from its GLB, standing still, rather
-than not at all.
+**Fix.** `RiggedProp` takes a `fallback` — what to draw if its asset turns out to have no rig to load — and draws it
+once the load has come back empty; not before, since a rig may still be coming. `Buildings.tsx` hands in the piece's
+own still model: the very element its other branch draws, so the piece stands exactly where a piece without a chart
+would. A chart with no OBJ behind it now gives a piece that stands still, instead of none. What is said in
+development was put straight with it. The loader's report was reworded: it now reads `[propRig] "<asset>" has no rig
+to load: <why>` — it no longer says the asset "will not be drawn", which is for its caller to know — and where a file
+did not load it names both, the MTL being the one asked for first. And `RiggedProp` gained a report of its own, once
+per asset: `[RiggedProp] "<asset>" is NOT DRAWN: …`, when the load came back empty and it was handed no fallback (an
+explicit `null` is a caller meaning it, and is not reported). *Not changed:* the rig is still asked for first, so one
+failed request — its `.mtl` — is still made for each of the two, once a session, when it is in the world; while its
+GLB loads an ornament shows nothing, where a piece on the other branch shows a translucent box, because it loads
+under the rigged branch's own boundary; and the other users of `RiggedProp` — the ram, the engines, the horses, the
+merchant's cart — hand in no fallback: their assets have rigs, and the report is what would say so if one ever did
+not.
+
+**What changes in play:** the two ornaments are drawn — a pennant on a short pole and a banner on a tall one. By the
+code, not by a run, two things more: they stand still (the cloth the lab charted does not wave, there being no rig to
+wave it); and those a player placed while they could not be seen appear, a placed piece being an entry in the save's
+list of buildings and what is drawn following from that entry — no save made before the fix was loaded to see it.
+
+**Verified.** *By looking* (real GPU, headless; `ornament_look`, the row above on `main` and on the fix): where `main`
+has bare grass the fix has the two ornaments, at their catalogue heights — 3 meshes, 1.40 m wide and 1.68 high; 2
+meshes, 3.04 wide and 3.22 high — and the three pieces beside them are drawn as before (15, 8 and 9 meshes, the same
+sizes to the centimetre). *Under `next dev`* the same row brings the loader's report for each ornament
+(`[propRig] "06_l449500" has no rig to load: its MTL or its OBJ did not load (/assets/props/objrig/06_l449500.mtl,
+.obj)`) and no line from `RiggedProp`; a session with none placed brings neither. *A control:* with the fallback not
+handed in, under `next dev`, neither ornament is drawn and `RiggedProp` says so for each. *Everything else that is
+drawn through `RiggedProp`* was left alone, and CLN-19's frame-by-frame probe (`cln19_live`) finds `main` and the fix
+identical over its 1,900 frames, the ram's rig and its 19 meshes included. *Unit tests* (9 new, 227 in total):
+`RiggedProp.test.ts` calls the component as a plain function on just enough of React to hold its state — nothing is
+drawn until the load is back; a rig that loads is drawn as its own copy, placed as asked, and never the fallback; an
+empty load draws the fallback as handed in; handed none, nothing is drawn, said once per asset in development and not
+at all in a production build; a mounted one given another asset forgets the empty load at once; and one unmounted
+before its load is back sets nothing afterwards. Of 22 edits (`ornamentfix_mutate`), the 20 in `RiggedProp.tsx`
+and `lib/propRig.ts` are all caught by the tests. The two in `Buildings.tsx` no unit test reaches: the control above
+is for the first (no fallback handed in), and the second — the fallback set at the cell instead of at the piece's
+solid mass — changes nothing for these two pieces, whose shift is nought. *Independent review* (two read-only
+reviewers, each finding put to a sceptic) confirmed the diagnosis from the data — of the 18 pieces in the catalogue
+whose chart has a moving part, these two alone lack the files — and that pieces with a rig are drawn as before.
+One finding was a real risk: the flag for "the load came back empty" could outlive a change of asset on a mounted
+instance (the player's mount changes horse; every horse has a rig, so nothing could show today) — it is the load's key
+now, and tested. The unmount guard and that change of asset had no test. The rest were loose ends of wording, or of
+what a claim rested on — in this entry and the one above, the commit message, the mutation harness's note, three
+comments and the loader's own message, which named the OBJ where it is the MTL that fails first. All put right, and
+every run above repeated on the sources as committed. One more the sceptic held to be no defect — an explicit `null`
+handed in draws nothing, unreported — and that is documented on the prop and tested now; and one is only recorded: an
+ornament is missing for a frame or so each time it mounts, until the empty load is back — as a piece with a rig is,
+until its rig is. A recheck then found the height in that key unguarded by its test, and a count in this summary that
+did not add up; the test asserts it now, and the count is gone.
 
 ## Bug: raiders climb through the middle of the siege stair, not up its rungs — FOUND 2026-10-07 (while fixing the invisible ladder), not yet fixed
 

@@ -97,13 +97,13 @@ function roleForMesh(name: string, roles: Record<string, string>): string | null
   return null;
 }
 
-/** No rig, so nothing will be drawn: RiggedProp renders nothing at all for a
- *  `null`, and nothing else reports it. In development this says so, once per
- *  asset and height (the load is cached) — the raiders' siege ladder asked for
- *  a rig that does not exist, and was invisible until 2026-10-08. An asset
- *  with no moving part belongs on PropModel, not here. */
+/** No rig to load. RiggedProp then draws the fallback it was handed, or
+ *  nothing at all (and, handed none, says so itself). In development this
+ *  says why, once per asset and height (the load is cached) — the raiders'
+ *  siege ladder asked for a rig that does not exist, and was invisible until
+ *  2026-10-08. An asset with no moving part belongs on PropModel, not here. */
 function noRig(id: string, why: string): null {
-  if (process.env.NODE_ENV !== 'production') console.warn(`[propRig] "${id}" will not be drawn: ${why}`);
+  if (process.env.NODE_ENV !== 'production') console.warn(`[propRig] "${id}" has no rig to load: ${why}`);
   return null;
 }
 
@@ -123,7 +123,8 @@ export function loadRiggedProp(id: string, targetHeight: number): Promise<Rigged
       const roles = partRolesFor(id);
       if (!roles) return noRig(id, 'the rig lab charted no parts for it (/assets/rigs/part_roles.json)');
       let src: THREE.Group;
-      try { src = await loadObj(id); } catch { return noRig(id, `its OBJ did not load (${BASE}${id}.obj)`); }
+      // (the MTL is asked for first, and the OBJ only once that has come)
+      try { src = await loadObj(id); } catch { return noRig(id, `its MTL or its OBJ did not load (${BASE}${id}.mtl, .obj)`); }
 
       // bucket meshes by role, in raw OBJ space
       const byRole = new Map<string, THREE.Mesh[]>();
