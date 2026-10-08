@@ -15,7 +15,7 @@
 //   ladder/breach point can be active per raid, however many finished
 //   wall-walk sockets the keep has. Deliberate, not an oversight.
 // - ENEMY-ONLY SET DRESSING (addendum #9): rendered directly from this state
-//   via RiggedProp (RaiderLadder.tsx), never registered as a PlacedBuilding —
+//   via PropModel (RaiderLadder.tsx), never registered as a PlacedBuilding —
 //   the player's own `climbTargetFor` (which only scans `st.buildings`) will
 //   never recognize or offer to climb this ladder, even though it renders
 //   the very same `isLadder`-flagged `oc6096-5` asset the player can climb
