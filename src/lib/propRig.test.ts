@@ -52,7 +52,7 @@ describe('loadRiggedProp, when there is no rig to load', () => {
   it('for an asset the lab has not charted: resolves null and, in development, says which asset and why — once', async () => {
     const warn = warnings();
     expect(await loadRiggedProp('zz-uncharted', 3.2)).toBeNull();
-    expect(warn.mock.calls).toEqual([['[propRig] "zz-uncharted" will not be drawn: the rig lab charted no parts for it (/assets/rigs/part_roles.json)']]);
+    expect(warn.mock.calls).toEqual([['[propRig] "zz-uncharted" has no rig to load: the rig lab charted no parts for it (/assets/rigs/part_roles.json)']]);
     // the same asset at the same height is one cached load: asked again, it is not reported again
     expect(await loadRiggedProp('zz-uncharted', 3.2)).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
@@ -65,8 +65,8 @@ describe('loadRiggedProp, when there is no rig to load', () => {
     NEXT.files = 'no-obj';
     expect(await loadRiggedProp('zz-charted-no-obj', 2)).toBeNull();
     expect(warn.mock.calls).toEqual([
-      ['[propRig] "zz-charted-no-mtl" will not be drawn: its OBJ did not load (/assets/props/objrig/zz-charted-no-mtl.obj)'],
-      ['[propRig] "zz-charted-no-obj" will not be drawn: its OBJ did not load (/assets/props/objrig/zz-charted-no-obj.obj)'],
+      ['[propRig] "zz-charted-no-mtl" has no rig to load: its MTL or its OBJ did not load (/assets/props/objrig/zz-charted-no-mtl.mtl, .obj)'],
+      ['[propRig] "zz-charted-no-obj" has no rig to load: its MTL or its OBJ did not load (/assets/props/objrig/zz-charted-no-obj.mtl, .obj)'],
     ]);
   });
 
@@ -74,7 +74,7 @@ describe('loadRiggedProp, when there is no rig to load', () => {
     NEXT.files = 'empty';
     const warn = warnings();
     expect(await loadRiggedProp('zz-charted-empty', 2)).toBeNull();
-    expect(warn.mock.calls).toEqual([['[propRig] "zz-charted-empty" will not be drawn: its OBJ holds no mesh']]);
+    expect(warn.mock.calls).toEqual([['[propRig] "zz-charted-empty" has no rig to load: its OBJ holds no mesh']]);
   });
 
   it('keeps quiet in a production build', async () => {
