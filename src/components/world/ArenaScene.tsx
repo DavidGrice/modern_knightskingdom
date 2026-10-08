@@ -17,22 +17,10 @@ import { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { arenaState, ARENA_ENV_BY_ID, type ArenaEnvId } from '@/game/arena';
 import { ARENA_RADIUS } from '@/game/data/worlds';
+import { ringAngles } from '@/lib/geometry';
 
 const SEG_COUNT = 28;
 const GAP_HALF = 0.4; // radians left open on the north side as the entrance
-
-function useRingAngles() {
-  return useMemo(() => {
-    const angles: number[] = [];
-    for (let i = 0; i < SEG_COUNT; i++) {
-      const angle = (i / SEG_COUNT) * Math.PI * 2;
-      const distFromNorth = Math.min(angle, Math.PI * 2 - angle);
-      if (distFromNorth < GAP_HALF) continue;
-      angles.push(angle);
-    }
-    return angles;
-  }, []);
-}
 
 /** a few static emissive floor patches — lava's own cheap "pool" read, no
  *  shader work, just a handful of fixed placements inside the ring */
@@ -82,7 +70,7 @@ export default function ArenaScene({ envId: initialEnvId }: { envId: ArenaEnvId 
     if (arenaState.env !== envId) setEnvId(arenaState.env);
   });
   const env = ARENA_ENV_BY_ID[envId ?? 'earth'];
-  const angles = useRingAngles();
+  const angles = useMemo(() => ringAngles(SEG_COUNT, GAP_HALF), []);
   const R = ARENA_RADIUS;
 
   return (

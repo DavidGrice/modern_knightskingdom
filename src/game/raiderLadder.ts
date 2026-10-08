@@ -29,8 +29,9 @@
 //   permanently lost.
 //
 // Can be STOPPED like the ram: real HP, takes melee/bolt damage
-// (game/combat.ts's `hitRaiderLadder`), and tips over and burns out instead
-// of vanishing the instant its HP hits zero.
+// (combat/structures.ts's `hitRaiderProp`), and tips over and burns out
+// instead of vanishing the instant its HP hits zero — the part the two
+// share is game/raiderProps.ts.
 import { useGameStore } from './store/gameStore';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID, WALK_CORNER_HALF, WALK_DEEP_HALF } from './data/keep';
 import { exposeDebug } from '@/lib/debugHooks';
@@ -120,17 +121,6 @@ export function resetRaiderLadder(socketId: string) {
   raiderLadderState.wreckT = 0;
   raiderLadderState.planted = false;
   raiderLadderState.climbers = [];
-}
-
-/** returns true if this blow finished it off */
-export function damageRaiderLadder(amount: number): boolean {
-  if (!raiderLadderState.active || raiderLadderState.wrecked) return false;
-  raiderLadderState.hp -= amount;
-  if (raiderLadderState.hp > 0) return false;
-  raiderLadderState.hp = 0;
-  raiderLadderState.wrecked = true;
-  raiderLadderState.wreckT = 0;
-  return true;
 }
 
 exposeDebug('__kkLadder', raiderLadderState);

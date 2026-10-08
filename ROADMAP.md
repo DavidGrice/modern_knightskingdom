@@ -7344,3 +7344,28 @@ in it has loaded — 1 to 4 seconds after the game starts in the measurements ma
 once), but under load it has taken far longer: once, with four browsers, it had still not happened 2,000 frames after
 the usual five-second wait, and a siege armed before it cannot roll. And night falls, with the roll held back, before
 the measurement starts, so that the siege rolls in the very next frame; it did in all 40 runs.
+
+## Bug: the raiders' siege ladder is invisible — FOUND 2026-10-07 (during CLN-19), not yet fixed
+
+**Found by** CLN-19's live probe, which looks in the scene for the root of each of the raiders' two props so as to
+follow its position and tilt frame by frame: the ram's group holds its model; the ladder's group is empty.
+
+**The bug** (`components/combat/RaiderLadder.tsx`): the ladder is drawn with
+`<RiggedProp assetId="oc6096-5" height={3.2} />`. `RiggedProp` draws what `lib/propRig.ts`'s `loadRiggedProp` gives it,
+and that is `null` for any asset the rig lab has charted no parts for. `public/assets/rigs/part_roles.json` has 221
+entries — the ram's `oc4806` among them, and `oc6096-1` to `-4`, `oc6096b3` and `oc6096b4` — and none for `oc6096-5`.
+So nothing is drawn, and nothing reports it: a missing rig is not an error to `RiggedProp` — it renders nothing, and
+the ladder's own group stays empty. Everything else about the ladder goes on working unseen: it walks in from outside
+the wall, plants itself, takes hits, pays its salvage, tips over and is cleared.
+
+**Observed** (production build of `main` at fe30e32, deterministic frames): over a run of 1,900 frames the ladder's
+record goes through rolling in, planted, three shafts, wrecked and cleared, and in every one from the second (1,899
+frames: the roots are first found the frame after the props are set rolling) its group in the scene has no child and no
+mesh anywhere below it, while the ram's group holds its rig — one child, 19 meshes — throughout. By the code, a Siege Stair the player places — the same `oc6096-5` — is drawn: `Buildings.tsx` uses
+`RiggedProp` only for a piece with an animated rig (`hasAnimatedRig`) and draws the piece's own GLB otherwise.
+
+**What it costs:** a raid's ladder cannot be seen coming, nor seen to be broken; and by the code the raiders who climb
+it go from its foot up to the wall-walk whether it is drawn or not — with nothing under them, then (not watched: this
+run staged no climbers).
+
+**Fix, to follow in its own change:** draw the ladder from its GLB, as a placed piece without a rig is drawn.
