@@ -6,31 +6,41 @@
 // itself, mirroring RaiderRam.tsx's own split (that file owns the ram prop,
 // Enemies.tsx's raider AI does the actual fighting).
 //
-// Rendered through RiggedProp for the same reason every other siege prop in
-// this file's own family is (RaiderRam.tsx), though `oc6096-5` (Siege Stair)
-// has no wheel/throw/fire role of its own for the rig lab to drive — it's a
-// straight walk-in and a static plant, not a rolling approach.
+// Drawn from the Siege Stair's own GLB through PropModel: the very piece the
+// player can place (`oc6096-5`, data/buildables), drawn the way Buildings.tsx
+// draws one. NOT through RiggedProp, as the ram is — the stair has no wheel,
+// arm or flag for the rig lab to drive, the lab charted no parts for it, and
+// RiggedProp draws nothing at all for an asset without a parts chart. That is
+// how this ladder was invisible until 2026-10-08: it walked in, planted, was
+// climbed and was broken unseen (ROADMAP.md, "the raiders' siege ladder was
+// invisible"). The model carries its wooden rungs on its +Z face and
+// `baseYaw` turns its -Z face to the wall, so the rungs face the raiders
+// coming up to it.
 //
 // It can be broken before or during a climb — combat/structures.ts's
 // hitRaiderProp takes melee swings and bolts (game/raiderProps.ts's
 // damageRaiderProp), and a wrecked ladder tips over and burns out instead of
 // vanishing on the frame its HP hit zero, same as the ram. Enemies.tsx's own
-// 'climbing' handler drops any raider still on it
-// the instant `wrecked` goes true (or the wall itself comes down under it) —
-// see that handler's own comment.
+// 'climbing' handler drops any raider still on it the instant `wrecked` goes
+// true (or the wall itself comes down under it) — see that handler's own
+// comment.
 import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { raiderLadderState } from '@/game/raiderLadder';
 import { settleWreck } from '@/game/raiderProps';
-import RiggedProp from '../world/RiggedProp';
+import { BUILDABLE_BY_ID } from '@/game/data/buildables';
+import PropModel from '../world/PropModel';
 import { homeGroundY } from '../world/TemplateWorld';
 
 // a touch slower than the ram (RAM_SPEED=1.3) — a ladder crew manhandling a
 // stone-and-timber stair moves more deliberately than a ram team rolling
 // their engine on its own wheels
 const LADDER_SPEED = 1.1;
+/** what the raiders bring is the player's own Siege Stair: its model, and its
+ *  height (3.2 m — combat/structures.ts tests a shaft at half of it) */
+const STAIR = BUILDABLE_BY_ID['oc6096-5'];
 
 export default function RaiderLadder() {
   const group = useRef<THREE.Group>(null);
@@ -86,7 +96,7 @@ export default function RaiderLadder() {
   return (
     <group ref={group} visible={false}>
       <Suspense fallback={null}>
-        <RiggedProp assetId="oc6096-5" height={3.2} />
+        <PropModel url={STAIR.model!} height={STAIR.size[1]} />
       </Suspense>
     </group>
   );

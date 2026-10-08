@@ -7345,27 +7345,138 @@ once), but under load it has taken far longer: once, with four browsers, it had 
 the usual five-second wait, and a siege armed before it cannot roll. And night falls, with the roll held back, before
 the measurement starts, so that the siege rolls in the very next frame; it did in all 40 runs.
 
-## Bug: the raiders' siege ladder is invisible — FOUND 2026-10-07 (during CLN-19), not yet fixed
+## Bugfix: the raiders' siege ladder was invisible — FOUND 2026-10-07 (during CLN-19), FIXED 2026-10-08
 
 **Found by** CLN-19's live probe, which looks in the scene for the root of each of the raiders' two props so as to
-follow its position and tilt frame by frame: the ram's group holds its model; the ladder's group is empty.
+follow its position and tilt frame by frame: the ram's group holds its model; the ladder's group was empty.
 
-**The bug** (`components/combat/RaiderLadder.tsx`): the ladder is drawn with
+**The bug** (`components/combat/RaiderLadder.tsx`, as it was written when the ladder was added in Wave 58 — #216, whose
+verification, by its entry above, measured the ladder's numbers and the raiders' positions and records no look at the
+ladder itself): the ladder was drawn with
 `<RiggedProp assetId="oc6096-5" height={3.2} />`. `RiggedProp` draws what `lib/propRig.ts`'s `loadRiggedProp` gives it,
 and that is `null` for any asset the rig lab has charted no parts for. `public/assets/rigs/part_roles.json` has 221
 entries — the ram's `oc4806` among them, and `oc6096-1` to `-4`, `oc6096b3` and `oc6096b4` — and none for `oc6096-5`.
-So nothing is drawn, and nothing reports it: a missing rig is not an error to `RiggedProp` — it renders nothing, and
-the ladder's own group stays empty. Everything else about the ladder goes on working unseen: it walks in from outside
-the wall, plants itself, takes hits, pays its salvage, tips over and is cleared.
+So nothing was drawn, and nothing reported it: a missing rig was not an error to `RiggedProp` — it renders nothing, and
+the ladder's own group stayed empty. Everything else about the ladder went on working unseen: it walked in from outside
+the wall, planted itself, was climbed, took hits, paid its salvage, tipped over and was cleared.
 
 **Observed** (production build of `main` at fe30e32, deterministic frames): over a run of 1,900 frames the ladder's
 record goes through rolling in, planted, three shafts, wrecked and cleared, and in every one from the second (1,899
 frames: the roots are first found the frame after the props are set rolling) its group in the scene has no child and no
-mesh anywhere below it, while the ram's group holds its rig — one child, 19 meshes — throughout. By the code, a Siege Stair the player places — the same `oc6096-5` — is drawn: `Buildings.tsx` uses
-`RiggedProp` only for a piece with an animated rig (`hasAnimatedRig`) and draws the piece's own GLB otherwise.
+mesh anywhere below it, while the ram's group holds its rig — one child, 19 meshes — throughout. A Siege Stair the
+player places — the same `oc6096-5` — is drawn (seen, on `main` at 80532ef: it stands there with its 8 meshes):
+`Buildings.tsx` uses `RiggedProp` only for a piece with an animated rig (`hasAnimatedRig`) and draws the piece's own GLB
+otherwise.
 
-**What it costs:** a raid's ladder cannot be seen coming, nor seen to be broken; and by the code the raiders who climb
-it go from its foot up to the wall-walk whether it is drawn or not — with nothing under them, then (not watched: this
-run staged no climbers).
+**What it cost:** a raid's ladder could not be seen coming, nor seen to be broken, though it could be broken by anyone
+who happened to strike the empty air where it stood; and the raiders who climbed it rose from bare ground to the
+wall-walk with nothing under them (staged on `main` for this fix, and looked at: one raider hangs in the air before the
+wall while the next waits beneath him).
 
-**Fix, to follow in its own change:** draw the ladder from its GLB, as a placed piece without a rig is drawn.
+**Fix.** The ladder is drawn from the Siege Stair's own GLB through `PropModel` — the model and the height taken from
+the catalogue entry of the piece the player places (`BUILDABLE_BY_ID['oc6096-5']`), so the raiders' ladder is that
+piece and stays it. Nothing else in `RaiderLadder.tsx` changed: where it stands, how it walks in, plants and lies
+wrecked are the frame loop's as before, and `PropModel` and the rig loader set a model down the same way (upright, to
+height, centred, on the ground). The stair's wooden rungs are on its +Z face and the ladder's heading turns its -Z
+face to the wall, so the stone frame stands to the wall and the rungs face the raiders coming up to it — as the
+heading was written to do, by an author who could not see it. *And so that the next one is seen:* `loadRiggedProp`
+now says in the console, in development, which asset will not be drawn and why — no parts chart, an OBJ that did not
+load, an OBJ with no mesh in it — once per asset and height. `AmbientWildlife.tsx`'s header records the same trap from
+an earlier wave — a bird that a draft would have drawn through `RiggedProp`, and that would not have shown — caught
+then because someone checked live.
+
+**What changes in play:** a raid's ladder can be seen walking in, standing against the wall and lying wrecked, and it
+casts a shadow. Nothing new is downloaded for it: the stair's model is one of the buildables the game already warms when
+the game screen mounts (`preloadCommonAssets`). Nothing was left in saves: the ladder is not saved.
+
+**Verified.** *By looking* (real GPU, headless; `ladder_look`): a keep with a finished north wall-walk, the ladder
+staged where `resetRaiderLadder` plants it. On `main` the wall stands alone in all three poses — planted, walking in,
+wrecked — and the ladder's group holds nothing; on the fix the stair is there: its stone frame to the wall, 0.3 m off
+the walk's edge, its rungs outward, 2.46 m wide, 3.2 high, 2.0 deep, one child and 8 meshes under its group; tipped
+over when wrecked. Two raid bandits set down outside it (`ladder_climb`) climb it one after the other and end on the
+walk — as they do on `main`, where the first hangs in the air before the wall. *In a raid of the game's own making*
+(`ladder_raid`: an established homestead at dusk, the dice held at 0.2 for the one roll, so that a ram and a ladder
+come, and the keep standing where the raiders pass): the game plants the ladder where that arithmetic says, to the
+millimetre — 2.5 m outside the wall's socket, facing it — and it is drawn walking in and planted; a bandit makes for
+it, climbs it and ends on the wall-walk, and Gilbert and the other bandit follow him up. So it went in a production
+build and under `next dev`. *Frame for frame* (`cln19_live`, CLN-19's probe, on deterministic frames): `main` and the
+fix are identical over 1,900 frames in everything it records — both props' records, both roots' positions and tilts,
+the gate, the purse, experience, the 28 store calls, lines and sounds, both rings — and differ in the one thing it now
+also records: under the ladder's root there is nothing on `main` and one child with 8 meshes on the fix, in each of the
+1,899 frames it has the root for. *The warning, seen:* with the old way of drawing put back under `next dev`, the
+console says, once, `[propRig] "oc6096-5" will not be drawn: the rig lab charted no parts for it
+(/assets/rigs/part_roles.json)`; on the fix a session with a raid says nothing of the kind. *Unit tests* (12 new, 218
+in total): `RaiderLadder.test.ts` (6) calls the component as a plain function — what it draws and from which model,
+its own loading boundary, and its frame loop (hidden out of play, standing where its record says, walking straight for
+its base and planting, held by the pause menu, wrecked on the way in, tipping and lying its six seconds);
+`propRig.test.ts` (6) runs the loader over a stood-in chart and stood-in file loaders — each of the three ways there
+can be no rig is reported in development, by asset and reason, and a production build is silent; a rig that does load
+is handed back upright, at the height asked for, each charted part pivoted at its own middle, without a word; and
+`hasAnimatedRig` is seen to say nothing about the OBJ. Of 33 single edits to the two files (`ladderfix_mutate`) the
+tests catch 33. *Independent review* (two read-only
+reviewers, each finding put to a sceptic) confirmed the diagnosis, the placement and the orientation — from the code
+and from the pictures — and that nothing else changes. Eight findings stood: this entry was wrong on one point (it
+said no buildable used the two charts that have no OBJ; two do — the next entry); a comment in `game/raiderLadder.ts`
+still named `RiggedProp`; two of the three warnings, and three points of the walk, had no test; the commit message and
+the last entry below were each loose in a phrase; that entry left out two things that can now be seen; and one run had
+been recorded by an older version of its probe. All put right, and every run above repeated on the sources as
+committed. A recheck found the eight in place and three loose ends more — two test titles that promised more than the
+tests asserted, and a sentence of the last entry below — since tied off (the tests now assert what their titles say).
+*The same trap elsewhere:* every other asset this code names for `RiggedProp` has both a chart and an OBJ — the ram,
+the siege crew's catapult turret, Cedric's catapult and stone-thrower, the merchant's cart and team, the six horses.
+A placed piece goes that way whenever `hasAnimatedRig` finds a moving part in its chart — which says nothing of its
+OBJ: two charts with a `flag` have no OBJ to load, and both belong to pieces the player can place. Logged below.
+
+**Not changed, and logged below:** two ornaments that are not drawn, and where the raiders climb.
+
+## Bug: two placeable ornaments are not drawn — FOUND 2026-10-08 (in the review of the ladder fix), not yet fixed
+
+**Found by** the independent review of the fix above, which checked its claim that no buildable used the two charts
+without an OBJ, and found two that do; then confirmed by placing them.
+
+**The bug** (`components/world/Buildings.tsx`, the last branch of `BuildingMesh`): a placed piece is drawn through
+`RiggedProp` when `hasAnimatedRig` finds a moving part in the lab's chart for it, and through `PropModel` from its GLB
+otherwise. For "Ornament 4×1" (`gen_06_l449500`) and "Ornament 9×1" (`gen_08_l7253400`) — two of the generated decor
+pieces — the chart names a `flag`, so they go to `RiggedProp`; but a rig is loaded from the asset's OBJ, and
+`public/assets/props/objrig` has no `06_l449500` or `08_l7253400` (neither `.obj` nor `.mtl`). The load fails,
+`loadRiggedProp` resolves `null`, and nothing is drawn. Of the 17 charts with a moving part these are the only two
+without an OBJ, and nothing else in `src` names either asset.
+
+**Observed** (production build of `main` at 80532ef): five finished pieces set in a row — the two ornaments, and for
+comparison a generated castle piece with a rig (`gen_oc6098b3`), a Siege Stair and a catapult. No mesh stands where
+either ornament was placed, and the picture shows bare grass there; the other three are drawn (15, 8 and 9 meshes).
+The browser reports two requests that failed with a 404 — by the loader's order, the two missing `.mtl` files. On the
+fix above, under `next dev`, the same row brings the new warning for each: `[propRig] "06_l449500" will not be drawn:
+its OBJ did not load (/assets/props/objrig/06_l449500.obj)`, and the same for `08_l7253400`.
+
+**What it costs:** the player pays for the piece (1 stone, 4 stone) and gets nothing to see.
+
+**Fix, to follow in its own change:** a piece whose rig cannot be loaded is drawn from its GLB, standing still, rather
+than not at all.
+
+## Bug: raiders climb through the middle of the siege stair, not up its rungs — FOUND 2026-10-07 (while fixing the invisible ladder), not yet fixed
+
+**Found by** looking, once the ladder could be seen (the pictures taken for the fix above).
+
+**The bug** (`components/combat/Enemies.tsx`, the `climbing` state): a raider who reaches the ladder is put at its
+base — `baseX`/`baseZ`, the middle of the prop — and rises there, "up the rungs" by the comment; a second raider waits
+his turn on the same spot. But the middle of the Siege Stair is the inside of its stone frame, and the rungs are on
+its outer face, a metre from the middle. So a climbing raider stands inside the frame and rises through its two
+cross-beams, and the one waiting stands inside him. Written when the ladder could not be seen, and it could not have
+been noticed since.
+
+**Observed** (the fix build above, a raid of the game's own making and a staged one): at a third and at two thirds of
+the climb the raider is inside the frame, behind the rungs; the raider waiting below is inside it too. The last half
+second — the haul from 2.2 m up, still inside the stair, onto the walk — passes through the wall's parapet (the walk is
+at 3.6 m, the battlements above it reach 5.28): that is the abstraction the climb was designed with — "over the
+parapet" — and is not what this entry is about.
+
+**Also seen, now that it can be:** the ladder is not a placed building and, by the code, stops no one — nothing that
+moves the player or a mob reads it, and the raiders are seen standing inside its frame; and the stair is 3.2 m tall
+where the walks are at 3.6 m (a wall, a bastion) and 4.2 m (a Corner Turret, which the raid may pick), so the raiders
+step off 0.4 m or 1.0 m above its top.
+
+**What it costs:** it looks wrong; nothing else. Where a climbing raider can be struck moves with him.
+
+**Fix, to follow in its own change:** have a raider climb at the rungs — on the stair's outer face, facing the wall —
+and step from the top of the stair onto the walk from there.
