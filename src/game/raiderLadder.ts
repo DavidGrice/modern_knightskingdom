@@ -42,8 +42,10 @@ const LADDER_MAX_HP = 22;
 export const LADDER_RADIUS = 1.1;
 /** addendum #8: at most this many raiders climbing at once */
 export const MAX_CLIMBERS = 2;
-/** addendum #8: a second, queued climber starts this many seconds after the
- *  first so they don't visually overlap on the same climb path */
+/** addendum #8: a second, queued climber waits this many seconds at the foot
+ *  of the rungs before he starts, so the two are not at the same height on
+ *  them. (They do still overlap: the first is then under a metre up, on the
+ *  very spot — see ROADMAP.md's entry on the raiders' climb.) */
 export const CLIMBER_STAGGER = 0.6;
 /** how far outside a wall-walk's own real footprint (WALK_CORNER_HALF /
  *  WALK_DEEP_HALF, keep.ts) the ladder plants itself — a little clearance
@@ -121,6 +123,74 @@ export function resetRaiderLadder(socketId: string) {
   raiderLadderState.wreckT = 0;
   raiderLadderState.planted = false;
   raiderLadderState.climbers = [];
+}
+
+// ---- the climb: where a raider on the ladder is (Enemies.tsx's 'climbing'
+// state moves him by this; who climbs, and what becomes of him, is its) ----
+
+/** stage one: up the rungs — x/z hold at the foot of the rungs, only y rises */
+export const CLIMB_STAGE1_S = 1.4;
+/** stage two: the final haul over the parapet (addendum #5) — x/z moves from
+ *  the rungs onto the walkway itself while y finishes the last PULL_UP metres */
+export const CLIMB_STAGE2_S = 0.5;
+/** mirrors PlayerController's own PULL_UP constant (kept independent rather
+ *  than imported, so this isn't coupled to a component's internal constant)
+ *  — the same real number, so a raider clears the SAME 3.6m/4.2m wall-walk
+ *  heights a single Siege Stair already lets the player clear (see that
+ *  file's own climbTargetFor). */
+export const CLIMB_PULL_UP = 1.4;
+/** How far out from the ladder's middle a raider stands to climb it. The
+ *  Siege Stair is a stone frame 2 m deep with its wooden rungs on the face
+ *  turned away from the wall — a metre from the middle — and he stands a
+ *  body's half-depth clear of them. Until the ladder was drawn (2026-10-08)
+ *  nobody could see that he climbed at its middle: inside the frame, up
+ *  through its cross-beams. */
+export const LADDER_RUNG_REACH = 1.25;
+
+/** The foot of the rungs: where a raider waits his turn, and where he goes
+ *  up. `baseYaw` faces the wall and yaw 0 looks down -Z, so (sin, cos) of it
+ *  points back out from the wall. */
+export function ladderFoot(out: { x: number; z: number }, reach = LADDER_RUNG_REACH): { x: number; z: number } {
+  out.x = raiderLadderState.baseX + Math.sin(raiderLadderState.baseYaw) * reach;
+  out.z = raiderLadderState.baseZ + Math.cos(raiderLadderState.baseYaw) * reach;
+  return out;
+}
+
+export interface ClimbPose {
+  x: number;
+  y: number;
+  z: number;
+  /** over the top: he stands on the wall-walk, and the climb is done */
+  over: boolean;
+}
+
+/** climbPose's own scratch for the foot of the rungs */
+const _foot = { x: 0, z: 0 };
+
+/** Where a raider is `climbT` seconds into his climb, from the ground height
+ *  at the foot of the rungs: waiting his turn there while `climbT` is still
+ *  negative (addendum #8's staggered queue), then up the rungs, then hauled
+ *  over onto the walk. Written into `out`, which is handed back. */
+export function climbPose(climbT: number, groundY: number, out: ClimbPose, reach = LADDER_RUNG_REACH): ClimbPose {
+  const l = raiderLadderState;
+  const { x: footX, z: footZ } = ladderFoot(_foot, reach);
+  const riseTopY = l.topY - CLIMB_PULL_UP;
+  out.over = false;
+  if (climbT < 0) {
+    out.x = footX; out.y = groundY; out.z = footZ;
+  } else if (climbT < CLIMB_STAGE1_S) {
+    const t = climbT / CLIMB_STAGE1_S;
+    out.x = footX; out.y = (1 - t) * groundY + t * riseTopY; out.z = footZ;
+  } else if (climbT < CLIMB_STAGE1_S + CLIMB_STAGE2_S) {
+    const t = (climbT - CLIMB_STAGE1_S) / CLIMB_STAGE2_S;
+    out.x = (1 - t) * footX + t * l.topX;
+    out.y = (1 - t) * riseTopY + t * l.topY;
+    out.z = (1 - t) * footZ + t * l.topZ;
+  } else {
+    out.x = l.topX; out.y = l.topY; out.z = l.topZ;
+    out.over = true;
+  }
+  return out;
 }
 
 exposeDebug('__kkLadder', raiderLadderState);

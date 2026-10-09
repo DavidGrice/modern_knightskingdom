@@ -29,9 +29,9 @@ interface EnemyMob {
   /** Wave 58 (H4): mid-ascent progress on a siege ladder, seconds since this
    *  raider claimed a climb slot — negative while staggered-queued behind
    *  another climber (game/raiderLadder.ts's own CLIMBER_STAGGER), then
-   *  counts up through the two-stage climb (Enemies.tsx's own
-   *  CLIMB_STAGE1_S/CLIMB_STAGE2_S). Meaningless once `state` leaves
-   *  'climbing'. */
+   *  counts up through the two-stage climb (game/raiderLadder.ts's own
+   *  CLIMB_STAGE1_S/CLIMB_STAGE2_S, by its climbPose). Meaningless once
+   *  `state` leaves 'climbing'. */
   climbT?: number;
   /** Wave 58 (H4): true once this raider has hauled itself onto a keep
    *  wall-walk via the siege ladder. Recomputed live every frame from
