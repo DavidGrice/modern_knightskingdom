@@ -7429,7 +7429,7 @@ A placed piece goes that way whenever `hasAnimatedRig` finds a moving part in it
 OBJ: two charts with a `flag` have no OBJ to load, and both belong to pieces the player can place. Logged below.
 
 **Not changed, and logged below:** two ornaments that are not drawn (since fixed: the next entry), and where the
-raiders climb.
+raiders climb (since fixed: the entry after that).
 
 ## Bugfix: two placeable ornaments were not drawn — FOUND AND FIXED 2026-10-08
 
@@ -7501,29 +7501,194 @@ ornament is missing for a frame or so each time it mounts, until the empty load 
 until its rig is. A recheck then found the height in that key unguarded by its test, and a count in this summary that
 did not add up; the test asserts it now, and the count is gone.
 
-## Bug: raiders climb through the middle of the siege stair, not up its rungs — FOUND 2026-10-07 (while fixing the invisible ladder), not yet fixed
+## Bugfix: raiders climbed through the middle of the siege stair, not up its rungs — FOUND 2026-10-07 (while fixing the invisible ladder), FIXED 2026-10-08
 
-**Found by** looking, once the ladder could be seen (the pictures taken for the fix above).
+**Found by** looking, once the ladder could be seen (the pictures taken for the ladder fix above).
 
-**The bug** (`components/combat/Enemies.tsx`, the `climbing` state): a raider who reaches the ladder is put at its
-base — `baseX`/`baseZ`, the middle of the prop — and rises there, "up the rungs" by the comment; a second raider waits
+**The bug** (`components/combat/Enemies.tsx`, the `climbing` state): a raider who reached the ladder was put at its
+base — `baseX`/`baseZ`, the middle of the prop — and rose there, "up the rungs" by the comment; a second raider waited
 his turn on the same spot. But the middle of the Siege Stair is the inside of its stone frame, and the rungs are on
-its outer face, a metre from the middle. So a climbing raider stands inside the frame and rises through its two
-cross-beams, and the one waiting stands inside him. Written when the ladder could not be seen, and it could not have
-been noticed since.
+its outer face, a metre from the middle. So a climbing raider stood inside the frame and rose through its two
+cross-beams, and the one waiting stood inside him. Written when the ladder could not be seen, and it could not have
+been noticed until it could.
 
-**Observed** (the fix build above, a raid of the game's own making and a staged one): at a third and at two thirds of
-the climb the raider is inside the frame, behind the rungs; the raider waiting below is inside it too. The last half
-second — the haul from 2.2 m up, still inside the stair, onto the walk — passes through the wall's parapet (the walk is
-at 3.6 m, the battlements above it reach 5.28): that is the abstraction the climb was designed with — "over the
-parapet" — and is not what this entry is about.
+**Observed** (production build of `main` at 0bed81b; two raid bandits set down outside a ladder staged against a
+keep's north wall; at chosen moments of the first one's climb the game's clock is held — the game stands still
+without being paused — a picture is taken, and every raider's place and the height his figure is drawn at are
+read): as he takes his place, a third of the way up and two thirds of the way up, the climber is at the ladder's very
+middle — no distance out from it at all — and in profile he is inside the stone frame, between the wall and the
+rungs. The second raider takes his place 0.8 s after the first, on the same spot, beneath him.
 
-**Also seen, now that it can be:** the ladder is not a placed building and, by the code, stops no one — nothing that
-moves the player or a mob reads it, and the raiders are seen standing inside its frame; and the stair is 3.2 m tall
-where the walks are at 3.6 m (a wall, a bastion) and 4.2 m (a Corner Turret, which the raid may pick), so the raiders
-step off 0.4 m or 1.0 m above its top.
+**Fix.** The climb's path — where a raider is so many seconds into his climb — came out of the raiders' frame loop
+and into `game/raiderLadder.ts` as `climbPose`, with the stage timings beside it; and it starts from the foot of the
+rungs (`ladderFoot`): 1.25 m out from the ladder's middle on the face turned away from the wall — the metre to the
+rungs, and a body's half-depth clear of them. There he waits his turn, there he goes up, and from there he is hauled
+onto the walk. In `Enemies.tsx` a raider now makes for that spot, takes his place on it, and has his ground taken
+there. With the reach set to nought `climbPose` is the old path bit for bit, which is how the move is known to have
+changed nothing else: from the same ground, the heights he climbs through and the time each stage takes are as they
+were.
 
-**What it costs:** it looks wrong; nothing else. Where a climbing raider can be struck moves with him.
+**What changes in play:**
+- a raider climbs on the rungs, outside the stair and facing the wall, with the next one waiting at their foot;
+- where he can be struck moves with him, 1.25 m further out (by the code);
+- raiders making for a ladder aim that much further out — 2.55 m outside the wall-walk's edge, where the stair's
+  middle is 1.3 m outside it — and it is to within 1.3 m of there, not of the stair's middle, that a raider must now
+  get to start a climb (measured: the staged raiders take their places from 2.5 m out, where on `main` they came on
+  to 1.3 m out). So water or a shut gate that keeps him further off than that keeps him off the ladder, and the 24 m
+  at which a raider notices a ladder is measured from there too (both by the code; no run had water or a gate near a
+  ladder);
+- the haul over the top covers more ground in its half second: 3.75 m where it covered 2.5 against a wall, and 4.55 m
+  where it covered 3.3 against a corner (the corner by the arithmetic and the unit tests: every live run was against
+  a wall) — across the whole 2 m depth of the stair, through the top of its frame (against a wall he is between 2.3
+  and 3.0 m up as he crosses it, and the stair is 3.2 m tall), where it crossed the half nearer the wall;
+- on a slope he starts from the ground under the foot of the rungs, which is where he stands, and not from the
+  ground under the stair's middle (measured on a site where the two differ by 0.31 m).
 
-**Fix, to follow in its own change:** have a raider climb at the rungs — on the stair's outer face, facing the wall —
-and step from the top of the stair onto the walk from there.
+*Not changed:*
+- the haul still passes through the wall's parapet (the walk is at 3.6 m, the battlements above it reach 5.28) — the
+  abstraction the climb was designed with;
+- the ladder is still not a placed building and, by the code, stops no one: nothing that moves the player or a mob
+  reads it;
+- a raider still walks a straight line to where he will climb, through whatever stands on that line. In the raid the
+  probe has the game make — one geometry: the keep sited so that its ladder stands 10 to 20 m from where the raiders
+  gather, the player standing inside it — that is the keep's own wall: the road is south of the keep, the one
+  wall-walk is on its north side, and all three raiders come at the ladder from behind, across the keep's floor and
+  through the wall. On `main` that line ended at the wall's outer face, 1.3 m short of the stair's middle, and the
+  raider was put into the stair; now it runs on through the stair's frame to about its middle, 1.3 m short of the
+  foot of the rungs, and he is put out at the rungs. A raider who comes from outside, as the two staged ones do, is
+  now outside the frame until the haul. Logged below as an open decision;
+- the stair is still 3.2 m tall where the walks are at 3.6 m (a wall, a bastion) and 4.2 m (a Corner Turret, which the
+  raid may pick), so the raiders step off 0.4 m or 1.0 m above its top;
+- a second climber still waits at the same foot and starts as little as 0.6 s behind the first, which is not long
+  enough to clear him: the first is then 0.94 m up, and a figure is 1.72 m tall (about 1.1 s would clear). They
+  overlap on the rungs as they overlapped inside the frame;
+- the game's pause still draws a raider who is being hauled over, or is on the walk, at ground level (measured on
+  both builds; logged below).
+
+**Verified**, all of it on the sources as merged.
+
+*Unit tests* (8 new, 235 in total; `raiderLadder.test.ts`): with no reach `climbPose` is compared, bit for bit, with
+the climb as the frame loop had it written out — three ladders (against a wall's walk, against a corner turret's, and
+one at an angle no keep has), three ground heights, 254 moments each from before the wait to after the top: 2,286
+comparisons; the foot of the rungs is checked at each of a keep's eight wall and corner sockets, as the game itself
+plants a ladder there (`resetRaiderLadder`): on the line from the walk through the ladder, 1.25 m further out; and
+with the reach, he waits and climbs at that foot, is hauled from it onto the walk, and his heights and the moment he
+is over the top are those of the old climb at every one of those moments. Of 22 edits made one at a time
+(`climbfix_mutate`), the tests catch all 19 that are in `raiderLadder.ts`. The other three are in `Enemies.tsx`, which
+no unit test reaches; each was run live as a control instead (below).
+
+*By looking and by measure* (real GPU, headless; production builds of `main` and of the fix; `ladder_climb`, the
+staging above, from the north-east and in profile, the clock held at five moments of the first raider's climb):
+
+| the first raider | `main`: out from the ladder's middle, drawn height | the fix |
+|---|---|---|
+| takes his place | 0 m, 0 m | 1.25 m, 0 m |
+| a third of the way up the rungs | 0 m, 0.737 m | 1.25 m, 0.737 m |
+| two thirds of the way up | 0 m, 1.473 m | 1.25 m, 1.473 m |
+| mid-haul, 0.16 s into it | 0.812 m to the wall's side, 2.655 m | 0.031 m, 2.655 m |
+| on the walk | 2.5 m to the wall's side (the walk), 3.6 m | the same |
+
+On both builds the second raider takes his place 51 frames (of 1/64 s) after the first, and the first is on the walk
+122 frames after taking his — the 1.9 s of the climb; both camera positions give the same numbers. The frame before
+he takes his place the first raider stands 1.29 m out from the ladder's middle on `main` and 2.52 m out on the fix,
+the second 1.24 m and 2.48 m. In the pictures the climber is inside the stone frame on `main`, and on the wooden
+rungs outside it on the fix, the next raider at their foot.
+
+*On a slope* (the same staging on a hillside: the ground under the stair's middle at 4.606 m, under the foot of the
+rungs at 4.3 m; both builds): on the fix the raider takes his place, and the next one waits, at 4.3 m — the height
+of the ground he stands on; on `main`, at the middle, at 4.606 m, the ground's height there. Both are hauled onto
+the same walk, 122 frames after the first takes his place.
+
+*In a raid of the game's own making* (`ladder_raid`, on both builds, the clock held for each picture; the raid, the
+raiders and the ladder's planting are the game's, the keep's site and the player's place inside it the probe's): the
+two bandits and Gilbert climb one after another — at the stair's middle on `main`, 1.25 m out from it on the fix. The
+first of them is drawn at the same heights at the same moments of his climb on both (1.105 m at 0.703 s, 2.655 m
+mid-haul, 3.6 m on the walk), and is on the walk 122 frames after taking his place; the record ends with both
+bandits on the walk and Gilbert on the rungs.
+
+*Under `next dev`* the staged climb gives the fix's numbers again, on the level and on the slope, and a session with
+the ladder staged logs no `[propRig]` or `[RiggedProp]` line and no console error. *Three controls*, each under
+`next dev` with one line of `Enemies.tsx` put back wrong: with the frame loop handing `climbPose` a reach of nought,
+the staged climb gives `main`'s numbers on the rungs and in the haul (0, 0, 0, then 0.812 m to the wall's side),
+though he still takes his place from 2.52 m out; with a raider making for the stair's middle, he climbs at the rungs
+all the same but takes his place from 1.29 m out, and the second from inside the frame (0.96 m out, 0.85 m to one
+side) 101 frames after the first; with his ground read under the stair's middle, on the slope, he takes his place and
+waits at 4.606 m where the ground under him is at 4.3 m — 0.31 m in the air.
+
+*Everything else:* CLN-19's frame-by-frame probe of the ram and the ladder themselves (`cln19_live`) finds `main` and
+the fix identical over its 1,900 frames.
+
+*Reviewed* twice by independent read-only reviewers, each checked by a sceptic. The first review confirmed the fix
+and faulted its pictures and its write-up: the pictures had been taken with the game paused, which — it turned out —
+draws a raider on the ground in the haul and on the walk, so every one was taken again on a held clock; the foot's
+arithmetic was written twice and is now written once. The recheck confirmed the code and every number, and asked for
+what was still unmarked or not run: that is now marked "by the code" above, or run — the slope, the two further
+controls, the pause read for every raider. After it three comments were reworded and one test's ladder turned to
+face its wall, and every check above was run again on those sources.
+
+## Bug: while the game is paused, a raider on a wall-walk is drawn on the ground, and one on a hill inside it — FOUND 2026-10-08 (while fixing the raiders' climb), not yet fixed
+
+**Found by** the review of the climb fix above. Its first pictures were taken with the game paused at chosen moments
+of a climb, and in them a raider who was mid-haul by the numbers stood on the grass.
+
+**The bug** (`components/combat/Enemies.tsx`): a raider's group is given its place from two sides. The frame loop
+sets it every frame, height and all — the ground under him, the rung he is on, the wall-walk he stands on. And the
+component's own JSX says `position={[data.mob.x, 0, data.mob.z]}`: height 0, applied again whenever the component
+renders with a raider who has moved since it last rendered. In play the frame loop has the last word before every
+frame is drawn. Paused, the frame loop returns at once, and a height the JSX has set stays on the screen until the
+game goes on.
+
+**Observed** (production builds of `main` at 0bed81b and of the climb fix, the same on both; the height of his group
+read from the scene before the pause, while the game is paused, and once it goes on):
+
+| a raider | before | paused | after |
+|---|---|---|---|
+| who has just stepped onto a wall-walk 3.6 m up (`ladder_climb`) | 3.6 m | 0 m | 3.6 m |
+| mid-haul, 2.655 m up (`ladder_climb`, `KK_PAUSE_AT=4_hauling_over`) | 2.655 m | 0 m | 2.655 m |
+| on the rungs, where he has stood since he took his place (the same two runs) | 0.8 m, 0.26 m | the same | the same |
+| chasing the player over a hill at home, the ground 5.2 m up under him (`pause_look`) | 5.202 m | 0 m | 5.202 m |
+
+While the game is paused the raider on the hill is inside it, and the one on the walk is on the ground beneath it,
+inside the wall. His own place, his climb clock and whether he counts as on the walk are the same before, during and
+after: it is the drawing only.
+
+**By the code, and not measured:** the pause itself renders him again — `GameScreen` reads `paused` and holds the
+`<Canvas>`, so pausing renders every component under it, the raiders among them. The terrain of a destination would
+do what the hill does. Nothing else has it: by a search of the components, the raiders' is the only group whose JSX
+places it from a record its frame loop moves and says a height of its own (a shaft's and a cannonball's pass their
+record's height along). **Not looked at:** build mode, a second way to the same sight — by the code the frame loop
+skips the whole climb there, and its last lines set a raider who is on the ladder to the height of the ground under
+him; not run.
+
+**What it costs:** the pause menu dims the view and does not hide it, so it can be seen; nothing else.
+
+**Fix, to follow in its own change:** the JSX should not say a height that the frame loop owns.
+
+## Open decision: should the keep's walls stop a raider? — logged 2026-10-08 (while fixing the raiders' climb)
+
+The raiders' ladder is their way onto a wall-walk. Nothing keeps a raider from walking through the wall beneath it.
+
+**By the code** (`components/combat/Enemies.tsx`): a raider making for a planted ladder goes in a straight line to
+where he will climb. What can turn him aside is the pond, the player's own waterways, a shut gate or a barred door —
+"the one building type enemies collide with", by its comment; that loop reads the placed buildings, and the keep's
+pieces are not among them — the world's edge, and his own packmates shouldering him. While both places on the
+ladder are taken he is not making for it at all, and does what a raider does otherwise. And the ladder goes against
+a wall-walk picked at random among the finished ones (`pick(walkwaySockets)`), whichever way the raiders are coming
+from.
+
+**Observed** (`ladder_raid` with `KK_NEAR=1`; production builds of `main` at 0bed81b and of the climb fix. One
+geometry, and the probe's own: a keep with its north wall alone, sited so that its ladder stands 10 to 20 m from
+where the raiders gather on their way in from the road to the south, the player standing inside the keep): all
+three — two bandits and Gilbert — reach the ladder from behind. The way each is recorded taking is a straight line
+from eight to eleven metres on the wall's side of the ladder, across the keep's floor, through the 8 m wall run
+within two and a half metres of its middle, and out to the ladder. On `main` it ended at the wall's outer face,
+1.3 m short of the stair's middle, and the raider was put into the stair. Since the climb fix it runs on through the
+stair's own frame to about its middle, 1.3 m short of the foot of the rungs, and he is put out at the rungs. Gilbert,
+coming up while both places on the ladder were taken, stood striking at something for half a second or so on that
+line, inside the wall's own footprint (what he struck at was not recorded), and went on when a place came free.
+Either way each then climbs the ladder onto the wall he has just walked through.
+
+**To decide:** whether the keep's walls should stop raiders — a gate battered open or a ladder then being their way
+in, which is what the ram and the ladder are for, and what a raider does who finds neither to be decided with it.
+And, short of that: whether the ladder should go to a wall-walk on the side the raiders come from, and a raider who
+is on the wrong side of it should walk round the stair to its rungs.

@@ -31,7 +31,7 @@ import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
-import { raiderLadderState, resetRaiderLadder, MAX_CLIMBERS, CLIMBER_STAGGER } from '@/game/raiderLadder';
+import { raiderLadderState, resetRaiderLadder, MAX_CLIMBERS, CLIMBER_STAGGER, climbPose, ladderFoot, type ClimbPose } from '@/game/raiderLadder';
 import { defenderState, DOWNED_RECOVER_MS } from '@/game/defenders';
 import { villagerCombatState } from '@/game/villagerCombat';
 import { companionCombatState } from '@/game/companion';
@@ -165,18 +165,13 @@ const RAID_SIEGE_DMG: Record<string, number> = {
  *  see game/raiderLadder.ts for the ladder object itself, and this file's
  *  own 'climbing' EnemyMob.state handling below for where these are used. */
 const LADDER_NOTICE_RADIUS = 24; // how far a raid mob will beeline for a planted ladder
-const CLIMB_RANGE = 1.3;         // close enough to the base to start climbing
-/** stage one: up the rungs — x/z hold at the ladder's own base, only y rises */
-const CLIMB_STAGE1_S = 1.4;
-/** stage two: the final haul over the parapet (addendum #5) — x/z moves from
- *  the base onto the walkway itself while y finishes the last PULL_UP metres */
-const CLIMB_STAGE2_S = 0.5;
-/** mirrors PlayerController's own PULL_UP constant (kept independent rather
- *  than imported, so this AI file isn't coupled to a component's internal
- *  constant) — the same real number, so a raider clears the SAME 3.6m/4.2m
- *  wall-walk heights a single Siege Stair already lets the player clear
- *  (see that file's own climbTargetFor). */
-const CLIMB_PULL_UP = 1.4;
+const CLIMB_RANGE = 1.3;         // close enough to the foot of its rungs to start climbing
+// (how the climb itself goes — its two stages, the pull-up — is
+// game/raiderLadder.ts's climbPose, and where the foot of the rungs is, its
+// ladderFoot)
+// scratch for both, so a raid's climbers allocate nothing per frame
+const _ladderFoot = { x: 0, z: 0 };
+const _climbPose: ClimbPose = { x: 0, y: 0, z: 0, over: false };
 /** kinds excluded from ever climbing: named leaders/specialists and anything
  *  that can't plausibly scale a ladder (a mount, a manned siege engine) —
  *  "a small number of RAIDERS", not the whole raid roster. */
@@ -383,38 +378,26 @@ function Enemy({ data }: { data: EnemyData }) {
           return;
         }
         m.climbT = (m.climbT ?? 0) + dt;
-        // home-only mechanic, same as raiderRam/raiderLadder themselves
-        const groundY = homeGroundY(rl.baseX, rl.baseZ);
-        const riseTopY = rl.topY - CLIMB_PULL_UP;
-        if (m.climbT < 0) {
-          // addendum #8: staggered queue — standing at the foot, waiting a turn
-          m.x = rl.baseX; m.z = rl.baseZ;
-          g.position.set(m.x, groundY, m.z);
-        } else if (m.climbT < CLIMB_STAGE1_S) {
-          // stage one: up the rungs — x/z hold at the base, only y rises
-          const t = m.climbT / CLIMB_STAGE1_S;
-          m.x = rl.baseX; m.z = rl.baseZ;
-          g.position.set(m.x, THREE.MathUtils.lerp(groundY, riseTopY, t), m.z);
-        } else if (m.climbT < CLIMB_STAGE1_S + CLIMB_STAGE2_S) {
-          // stage two: haul over the parapet — x/z moves onto the walkway
-          // itself while y finishes the last PULL_UP metres (addendum #5)
-          const t = (m.climbT - CLIMB_STAGE1_S) / CLIMB_STAGE2_S;
-          m.x = THREE.MathUtils.lerp(rl.baseX, rl.topX, t);
-          m.z = THREE.MathUtils.lerp(rl.baseZ, rl.topZ, t);
-          g.position.set(m.x, THREE.MathUtils.lerp(riseTopY, rl.topY, t), m.z);
-        } else {
+        // Where he is on it: waiting his turn at the foot of the rungs
+        // (addendum #8's staggered queue), up the rungs, hauled over onto the
+        // walk (addendum #5) — game/raiderLadder.ts's climbPose. The ground
+        // is taken where he stands, at the foot of the rungs; a home-only
+        // mechanic, same as raiderRam/raiderLadder themselves.
+        ladderFoot(_ladderFoot);
+        const pose = climbPose(m.climbT, homeGroundY(_ladderFoot.x, _ladderFoot.z), _climbPose);
+        m.x = pose.x; m.z = pose.z;
+        if (pose.over) {
           // over the top — a real combatant now, on the SAME wall-walk the
           // ladder climbed (m.ladderSocketId was set the moment this raider
           // claimed its climb slot, below) — the ordinary FSM (now elevated)
           // takes over next frame, same "clears itself, FSM takes over"
           // handoff `approaching` uses just below.
           rl.climbers = rl.climbers.filter((id) => id !== String(data.id));
-          m.x = rl.topX; m.z = rl.topZ;
           m.elevated = true;
           m.postY = rl.topY;
           m.state = 'chase';
-          g.position.set(m.x, m.postY, m.z);
         }
+        g.position.set(pose.x, pose.y, pose.z);
         g.rotation.y = m.yaw + Math.PI;
         // addendum #5: no dedicated climb clip exists in this extraction —
         // reuse anim_c_walk throughout, this file's own established
@@ -651,6 +634,10 @@ function Enemy({ data }: { data: EnemyData }) {
       // wrecked, a free climb slot) and canClimbLadder's own kind exclusions.
       let ladderEligible = false;
       let ladderD = Infinity;
+      // what he makes for is the foot of its rungs, on the face turned away
+      // from the wall (game/raiderLadder.ts) — not the middle of the prop
+      let ladderFootX = 0;
+      let ladderFootZ = 0;
       if (
         // (m.state === 'climbing' already returned early above, at the top
         // of this useFrame — this point in the FSM is never reached for it)
@@ -658,7 +645,10 @@ function Enemy({ data }: { data: EnemyData }) {
         && raiderLadderState.active && raiderLadderState.planted && !raiderLadderState.wrecked
         && raiderLadderState.climbers.length < MAX_CLIMBERS
       ) {
-        const dd = Math.hypot(raiderLadderState.baseX - m.x, raiderLadderState.baseZ - m.z);
+        ladderFoot(_ladderFoot);
+        ladderFootX = _ladderFoot.x;
+        ladderFootZ = _ladderFoot.z;
+        const dd = Math.hypot(ladderFootX - m.x, ladderFootZ - m.z);
         if (dd < LADDER_NOTICE_RADIUS) { ladderEligible = true; ladderD = dd; }
       }
 
@@ -740,16 +730,16 @@ function Enemy({ data }: { data: EnemyData }) {
         m.state = 'climbing';
         m.ladderSocketId = raiderLadderState.targetSocketId;
         m.climbT = -CLIMBER_STAGGER * slot; // addendum #8: staggered queue
-        m.x = raiderLadderState.baseX;
-        m.z = raiderLadderState.baseZ;
+        m.x = ladderFootX;
+        m.z = ladderFootZ;
         m.yaw = raiderLadderState.baseYaw;
       } else if (ladderEligible) {
         // beeline for the ladder's own foot, same chase shape as every other
         // priority target in this chain
         m.state = 'chase';
         m.attackCd = Math.max(0.4, m.attackCd - dt);
-        const nx = (raiderLadderState.baseX - m.x) / ladderD;
-        const nz = (raiderLadderState.baseZ - m.z) / ladderD;
+        const nx = (ladderFootX - m.x) / ladderD;
+        const nz = (ladderFootZ - m.z) / ladderD;
         m.x += nx * speed * dt;
         m.z += nz * speed * dt;
         m.yaw = Math.atan2(-nx, -nz);
