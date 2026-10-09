@@ -172,6 +172,15 @@ const CLIMB_RANGE = 1.3;         // close enough to the foot of its rungs to sta
 // scratch for both, so a raid's climbers allocate nothing per frame
 const _ladderFoot = { x: 0, z: 0 };
 const _climbPose: ClimbPose = { x: 0, y: 0, z: 0, over: false };
+/** Where a raider is, `climbT` seconds into his climb of the raiders' ladder:
+ *  waiting his turn at the foot of the rungs (addendum #8's staggered queue),
+ *  up the rungs, hauled over onto the walk (addendum #5). The ground is taken
+ *  where he stands, at the foot of the rungs; a home-only mechanic, same as
+ *  raiderRam/raiderLadder themselves. Handed back in the shared scratch. */
+function poseOnLadder(climbT: number): ClimbPose {
+  ladderFoot(_ladderFoot);
+  return climbPose(climbT, homeGroundY(_ladderFoot.x, _ladderFoot.z), _climbPose);
+}
 /** kinds excluded from ever climbing: named leaders/specialists and anything
  *  that can't plausibly scale a ladder (a mount, a manned siege engine) —
  *  "a small number of RAIDERS", not the whole raid roster. */
@@ -235,6 +244,19 @@ function fireAtPlayer(data: EnemyData, rangedProfile: { range: number; cd: numbe
 
 function Enemy({ data }: { data: EnemyData }) {
   const group = useRef<THREE.Group>(null);
+  // Where the group is first put: where he stands when his figure is mounted
+  // (his spawn point, as a rule). From the first frame on, the frame loop
+  // below places him, height and all — so this is handed over as the SAME
+  // array on every render. react-three-fiber applies a prop again whenever
+  // its array differs, element by element, from the last render's, so a
+  // fresh `[data.mob.x, 0, data.mob.z]` said "height 0" to any raider who had
+  // moved since he was last rendered. While the frame loop places him that
+  // never shows: it has the last word before a frame is drawn. It showed
+  // whenever the loop stood down. Pausing renders every raider and stops his
+  // loop — one on a wall-walk was drawn on the ground beneath it, one on a
+  // hill inside it. And a dying raider is no longer placed while he flies
+  // apart, so a render in that second dropped him to height 0 where he fell.
+  const mountedAt = useRef<[number, number, number]>([data.mob.x, 0, data.mob.z]).current;
   const rigRef = useRef<RiggedMinifig | null>(null);
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
   const scatter = useRef<Map<string, THREE.Vector3> | null>(null);
@@ -378,13 +400,7 @@ function Enemy({ data }: { data: EnemyData }) {
           return;
         }
         m.climbT = (m.climbT ?? 0) + dt;
-        // Where he is on it: waiting his turn at the foot of the rungs
-        // (addendum #8's staggered queue), up the rungs, hauled over onto the
-        // walk (addendum #5) — game/raiderLadder.ts's climbPose. The ground
-        // is taken where he stands, at the foot of the rungs; a home-only
-        // mechanic, same as raiderRam/raiderLadder themselves.
-        ladderFoot(_ladderFoot);
-        const pose = climbPose(m.climbT, homeGroundY(_ladderFoot.x, _ladderFoot.z), _climbPose);
+        const pose = poseOnLadder(m.climbT);
         m.x = pose.x; m.z = pose.z;
         if (pose.over) {
           // over the top — a real combatant now, on the SAME wall-walk the
@@ -1097,7 +1113,21 @@ function Enemy({ data }: { data: EnemyData }) {
     // below, elevation would snap back to ground height the instant real
     // combat starts, since `enemyAtHome`/`destinationGroundY` know nothing
     // about a wall-walk.
-    g.position.set(m.x, m.elevated ? (m.postY ?? 0) : (enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z)), m.z);
+    //
+    // And a raider who is ON THE LADDER gets here too: in build mode, where
+    // the 'climbing' branch above — which owns his place and returns early —
+    // is skipped with the rest of what he decides (and on the one frame in
+    // which he takes his place at the foot of the rungs). His climb's clock
+    // stands still while the player builds, so he stays at the height it has
+    // reached — not on the ground under him, which is where this line used
+    // to put him for as long as build mode lasted.
+    g.position.set(
+      m.x,
+      m.elevated ? (m.postY ?? 0)
+        : m.state === 'climbing' ? poseOnLadder(m.climbT ?? 0).y
+        : (enemyAtHome ? homeGroundY(m.x, m.z) : destinationGroundY(m.x, m.z)),
+      m.z,
+    );
     g.rotation.y = m.yaw + Math.PI;
 
     const want =
@@ -1108,7 +1138,7 @@ function Enemy({ data }: { data: EnemyData }) {
   });
 
   return (
-    <group ref={group} position={[data.mob.x, 0, data.mob.z]}>
+    <group ref={group} position={mountedAt}>
       {/* Wave 36 (A3): one of Cedric's own tethered chargers — the same
           RiggedProp + gaitSpeed pattern Defenders.tsx already uses for a
           mounted defender's own horse, so this reuses a shipped rig rather

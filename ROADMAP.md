@@ -7563,7 +7563,7 @@ were.
   enough to clear him: the first is then 0.94 m up, and a figure is 1.72 m tall (about 1.1 s would clear). They
   overlap on the rungs as they overlapped inside the frame;
 - the game's pause still draws a raider who is being hauled over, or is on the walk, at ground level (measured on
-  both builds; logged below).
+  both builds; logged below, and since fixed: the next entry).
 
 **Verified**, all of it on the sources as merged.
 
@@ -7626,43 +7626,114 @@ what was still unmarked or not run: that is now marked "by the code" above, or r
 controls, the pause read for every raider. After it three comments were reworded and one test's ladder turned to
 face its wall, and every check above was run again on those sources.
 
-## Bug: while the game is paused, a raider on a wall-walk is drawn on the ground, and one on a hill inside it — FOUND 2026-10-08 (while fixing the raiders' climb), not yet fixed
+## Bugfix: a raider his frame loop was not placing was drawn at height 0 (paused; dying), and build mode drew a raider on the ladder on the ground — FOUND 2026-10-08 (while fixing the raiders' climb), FIXED 2026-10-09
 
 **Found by** the review of the climb fix above. Its first pictures were taken with the game paused at chosen moments
-of a climb, and in them a raider who was mid-haul by the numbers stood on the grass.
+of a climb, and in them a raider who was mid-haul by the numbers stood on the grass. Looking for what else stands a
+raider's frame loop down found a second way to the same sight, build mode; and the review of this fix found a third
+by reading, a raider who is dying.
 
-**The bug** (`components/combat/Enemies.tsx`): a raider's group is given its place from two sides. The frame loop
-sets it every frame, height and all — the ground under him, the rung he is on, the wall-walk he stands on. And the
-component's own JSX says `position={[data.mob.x, 0, data.mob.z]}`: height 0, applied again whenever the component
-renders with a raider who has moved since it last rendered. In play the frame loop has the last word before every
-frame is drawn. Paused, the frame loop returns at once, and a height the JSX has set stays on the screen until the
-game goes on.
+**The bugs** (`components/combat/Enemies.tsx`): two, with one look.
 
-**Observed** (production builds of `main` at 0bed81b and of the climb fix, the same on both; the height of his group
-read from the scene before the pause, while the game is paused, and once it goes on):
+*Not placed by his frame loop.* A raider's group was given its place from two sides. The frame loop sets it every
+frame, height and all — the ground under him, the rung he is on, the wall-walk he stands on. And the component's own
+JSX said `position={[data.mob.x, 0, data.mob.z]}`: a fresh array on every render, which react-three-fiber applies
+again whenever it differs, element by element, from the last render's — height 0, for any raider who had moved since
+he was last rendered. While the frame loop places him that never shows: it has the last word before every frame is
+drawn. It showed whenever the loop stood down. *Paused:* pausing renders every raider (`GameScreen` reads `paused`
+and holds the `<Canvas>`) and stops his frame loop, and the height the JSX had set stayed on the screen until the
+game went on. *Dying:* a dying raider is no longer placed while he flies apart, and the coming or going of any other
+raider renders every one of them — so, in ordinary play, a raider felled on a hill or a wall-walk could drop to
+height 0 for the rest of that second.
 
-| a raider | before | paused | after |
+*In build mode.* The frame loop does not stop for build mode. It skips what a raider decides — chase, attack, the
+climb, and with the climb the branch that owns a climbing raider's place — and goes on to its last lines, which put
+a raider on the ground under him unless he stands on a wall-walk. So for as long as the player built, a raider on
+the ladder was drawn on the ground: at the foot of the rungs, or, in the haul, inside the stair.
+
+**Observed** (production build of `main` at 05cf55d, beside the fix's; the height of his group read from the scene
+before the game is stopped, while it is, and after — the game's clock held for the first and the last, and let run
+while the game is stopped; `ladder_climb`, and `pause_look` for the hill):
+
+| the game stopped by | a raider | `main`: before, stopped, after | the fix |
 |---|---|---|---|
-| who has just stepped onto a wall-walk 3.6 m up (`ladder_climb`) | 3.6 m | 0 m | 3.6 m |
-| mid-haul, 2.655 m up (`ladder_climb`, `KK_PAUSE_AT=4_hauling_over`) | 2.655 m | 0 m | 2.655 m |
-| on the rungs, where he has stood since he took his place (the same two runs) | 0.8 m, 0.26 m | the same | the same |
-| chasing the player over a hill at home, the ground 5.2 m up under him (`pause_look`) | 5.202 m | 0 m | 5.202 m |
+| the pause | who has just stepped onto a wall-walk | 3.6 m, 0 m, 3.6 m | 3.6 m throughout |
+| the pause | in the haul | 2.655 m, 0 m, 2.655 m | 2.655 m throughout |
+| the pause | in the haul, on a hillside | 8.077 m, 0 m, 8.077 m | 8.077 m throughout |
+| the pause | chasing the player down a hillside, the ground 4.9 m up under him | 4.874 m, 0 m, 4.874 m | 4.874 m throughout |
+| the pause | on the rungs, where (by the code) he has stood since he was last rendered | 0.8 m throughout | the same |
+| build mode | in the haul | 2.655 m, 0 m, 2.655 m | 2.655 m throughout |
+| build mode | on the rungs | 0.26 m, 0 m, 0.26 m | 0.26 m throughout |
+| build mode | on the rungs, on a hillside, the ground 4.3 m up under him | 6.524 m, 4.3 m, 6.524 m | 6.524 m throughout |
+| build mode | on a wall-walk; waiting his turn at the foot of the rungs | where he was, throughout | the same |
 
-While the game is paused the raider on the hill is inside it, and the one on the walk is on the ground beneath it,
-inside the wall. His own place, his climb clock and whether he counts as on the walk are the same before, during and
-after: it is the drawing only.
+And in ordinary play, neither paused nor building: a bandit felled on that hillside (by the probe, which marks him
+dying), and another raider coming while he is dying (the probe's clock held, so that he goes on dying) — on `main`
+he is drawn at 4.874 m when felled and at 0 m once the other has come; on the fix at 4.874 m still.
 
-**By the code, and not measured:** the pause itself renders him again — `GameScreen` reads `paused` and holds the
-`<Canvas>`, so pausing renders every component under it, the raiders among them. The terrain of a destination would
-do what the hill does. Nothing else has it: by a search of the components, the raiders' is the only group whose JSX
-places it from a record its frame loop moves and says a height of its own (a shaft's and a cannonball's pass their
-record's height along). **Not looked at:** build mode, a second way to the same sight — by the code the frame loop
-skips the whole climb there, and its last lines set a raider who is on the ladder to the height of the ground under
-him; not run.
+On `main` the paused raider on the hill is inside it, and the one on the walk stands on the ground beneath it. In
+every staged run, on both builds, the raider's own place, his climb clock and whether he counts as on the walk are
+the same before, during and after, and on the hill his place and what he is doing: it was the drawing only.
 
-**What it costs:** the pause menu dims the view and does not hide it, so it can be seen; nothing else.
+**Fix.** *The place:* what is handed to the renderer is one array, made when the raider's figure is mounted and
+handed over again, the same one, on every render — so there is nothing to apply a second time, and from the first
+frame on the frame loop alone places him; where it stops placing him he stays where it last put him. *Build mode:*
+the frame loop's last lines keep a raider who is on the ladder at the height his climb has reached (`poseOnLadder` —
+which the climbing branch now draws him by too, so "the ground is taken under the foot of the rungs" is written
+once). His climb's clock stands still while the player builds, as it did.
 
-**Fix, to follow in its own change:** the JSX should not say a height that the frame loop owns.
+**What changes in play:** those three sights, and nothing a raider does. *Not changed:* raiders still stand still
+while the player builds — what they decide is skipped there, though a dying raider still falls apart and one whose
+wall-walk is gone still falls; and a figure is still first put at height 0, so one first mounted while the game is
+paused — not known to happen, and not looked for — would stand there until it goes on. *Not run or not looked at:*
+the terrain of a destination, which by the code did what the hill did and is mended by the same line; a ladder
+wrecked, or its wall taken down, while the player builds (the climber would hang at his climb's height until the
+player is done, where on `main` he stood on the ground); a figure the renderer takes out of the scene and puts back
+(it applies the stored place again when it does: now the one from his mounting, and nothing was found that does
+this to a raider); and Fast Refresh or StrictMode under `next dev`.
+
+**Verified**, all of it on the sources as merged.
+
+*Unit tests* (7 new, 242 in total; `Enemies.test.ts`, the raiders' components called as plain functions on a
+stand-in for React's refs and state, the stores' hooks read without React, the frame loop run by hand against a
+real group placed the way react-three-fiber places one): the place a raider's component hands over is one and the
+same array however far he has gone; paused, a raider who has just stepped onto a wall-walk, one in the haul and one
+on a hillside are each drawn where the frame loop last put them; a dying raider is not dropped by a render; in build
+mode a raider waiting his turn, on the rungs or in the haul keeps the height of his climb and his clock stands
+still, and goes on climbing when the player is done, while one on the ground stays on the ground and one on a
+wall-walk on the walk. The ground in these tests is a slope, so they also hold `Enemies.tsx` to what the climb fix
+could only show live — that a climber's ground is taken under the foot of the rungs, and that he climbs there. Of 14
+edits made one at a time (`pausefix_mutate`) the tests catch every one; with the JSX put back as it was five of the
+seven fail, with the frame loop's last lines put back, one.
+
+*Live* (real GPU, headless; production builds of `main` and of the fix): the table and the felled bandit above — the
+staged climb stopped by the pause and by build mode at chosen moments, on the level and on a hillside, and a bandit
+chased down a hillside and paused, or felled. In all seven staged runs (the six of the table and the one sited for
+the build camera) the climb itself is the same on both builds at every held moment, the second raider takes his
+place 51 frames after the first, and in the two runs that are not stopped before the last moment the first is on the
+walk 122 frames after taking his. *In the pictures:* paused on the walk, seen from inside the keep, the raider stands
+on the ground under the walk on `main` and on the walk on the fix; paused in the haul, he is on the ground inside the
+stair on `main` and at the top of the stair on the fix; paused or felled on the hillside, the hillside is empty on
+`main` and he stands on it on the fix; in build mode (the keep sited by the homestead's middle, where the build
+camera can look), `main` shows no raider above the wall and the fix shows him in the haul over its battlements. *A
+raid of the game's own making* (`ladder_raid`, both builds; each run a raid of its own, not the same one frame for
+frame) climbs as before: the first raider at the same heights at the same moments of his climb on both, and on the
+walk 122 frames after taking his place.
+
+*Under `next dev`* the fix gives its numbers again in four of the runs (paused on the walk, build mode in the haul,
+paused on the hillside, felled on it), and a session with the ladder staged logs no `[propRig]` or `[RiggedProp]`
+line and no console error. *Two controls*, under `next dev`: with the JSX put back as it was, the paused raider on
+the walk, the paused one on the hillside and the felled one are at 0 m again and build mode is still right; with the
+frame loop's last lines put back, both raiders on the ladder are at 0 m in build mode again and the other three are
+still right. *Everything else:* CLN-19's frame-by-frame probe of the ram and the ladder themselves (`cln19_live`)
+finds `main` and the fix identical over its 1,900 frames.
+
+*Reviewed* by two independent read-only reviewers, each checked by a sceptic. They confirmed both mends against
+react-three-fiber's own code, and every number then recorded but the mutation run's, of which there was no record
+(it was run again and kept); and they found what is now in this entry: the dying raider, by reading — since
+measured, pictured and tested — and wording that claimed more than the records held. After it two comments were
+reworded, the seventh test added, and every record above taken again on those sources; a recheck, with a sceptic of
+its own, confirmed the result and the numbers as they now stand.
 
 ## Open decision: should the keep's walls stop a raider? — logged 2026-10-08 (while fixing the raiders' climb)
 
