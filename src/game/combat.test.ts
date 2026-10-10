@@ -142,6 +142,26 @@ describe('damagePlayer', () => {
     damagePlayer(999);
     expect(game().destination).toBeNull();
   });
+
+  it('a knockout shuts whatever panel was open — at home, away, and in the arena — and a blow that does not fell the player leaves it', () => {
+    for (const panel of ['inventory', 'crafting', 'stationMenu', 'quests'] as const) {
+      game().setPanel(panel);
+      damagePlayer(1); // 10 hit points: he stands
+      expect(game().panel).toBe(panel);
+      damagePlayer(999);
+      expect(game().panel).toBe('none');
+    }
+    useGameStore.setState({ destination: 'template-01', panel: 'inventory' } as never);
+    damagePlayer(999);
+    expect([game().panel, game().destination]).toEqual(['none', null]);
+    // the arena puts him down outside and returns before the rest of the knock-out: the panel is shut there too
+    useGameStore.setState({ destination: 'arena', panel: 'crafting' } as never);
+    arenaState.active = true;
+    combatState.teleportTo = null;
+    damagePlayer(999);
+    expect([game().panel, game().destination]).toEqual(['none', null]);
+    expect(combatState.teleportTo).toBeNull(); // not the meadow: leaveArena's own way out
+  });
 });
 
 describe('melee', () => {
