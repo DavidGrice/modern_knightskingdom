@@ -78,6 +78,7 @@ import { levelFromXp, perkSlotsEarned, rankFromTotalLevel, RANKS, SKILLS, totalS
 import { audio } from '@/lib/audio';
 import { worldEnv, seasonOf } from '../env';
 import { playerState } from '../playerState';
+import { stationsInReach } from '../stations';
 import { aimState } from '../targeting';
 import { ALLEGIANCE_MAX, ALLEGIANCE_MIN, allegianceTier } from '../data/allegiance';
 import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '../data/world';
@@ -816,6 +817,15 @@ export function activeQuestOf(completed: string[]): Quest | null {
 
 export const useGameStore = createGameStore();
 
+// While a crafting panel is up, the list of stations in reach follows the buildings. Nothing else renews it then —
+// the player controller's sweep stops for a panel — but the world does not stop: a dragon can leave the campfire in
+// ruins, and a siege crew can knock the forge down, while the book lies open; and a ruin is no place to craft.
+useGameStore.subscribe((s, prev) => {
+  if (s.buildings !== prev.buildings && (s.panel === 'crafting' || s.panel === 'stationMenu')) {
+    s.setNearStations(stationsInReach(s.buildings, playerState.x, playerState.z));
+  }
+});
+
 // debug/testing handle
 exposeDebug('__kk', useGameStore);
 
@@ -826,7 +836,9 @@ exposeDebug('__kk', useGameStore);
  *  call hands out fresh containers.
  *
  *  Deliberately NOT here: `activeInputDevice` (a live fact about the player's
- *  hands), `cameraMode`, `nearStations`/`targetKind` (rewritten every frame),
+ *  hands), `cameraMode`, `targetKind` (rewritten every frame), `nearStations`
+ *  (renewed by the half-second sweep, whenever a crafting panel opens, and as
+ *  the buildings change under one),
  *  `emote`/`npcGreet*` (one-shot triggers), `keepSocket`/`menuBuilding`
  *  (read only while their panel is open, and `panel` resets to 'none'),
  *  `ceremony` (its own timer ends it). */
@@ -1206,7 +1218,15 @@ function createGameStore() {
       set({ nodes });
     },
 
-    setPanel: (panel) => set({ panel }),
+    // The Crafting book shows what is in reach AS IT OPENS (so does a station's own menu, openStationMenu below).
+    // Both used to go by whatever the player controller's half-second sweep had last found — and the sweep stops
+    // while a panel is up, so a list that was stale at that moment stayed stale until the panel was shut: walk up
+    // to a forge with the key held and its menu opened, as often as not, to "You've stepped away". (While either
+    // is open the list goes on following the buildings: the subscription under the store's creation.)
+    setPanel: (panel) => {
+      if (panel === 'crafting') get().setNearStations(stationsInReach(get().buildings, playerState.x, playerState.z));
+      set({ panel });
+    },
     setCharacter: (character) => set({ character, dirty: true }),
 
     buyLand: () => {
@@ -2938,6 +2958,9 @@ function createGameStore() {
     // StationMenuPanel.tsx, which links back to the full book if the player
     // wants to browse everything anyway
     openStationMenu: (station) => {
+      // …and it says whether the player is AT that station from where he stands now, not from the sweep's last
+      // look (see setPanel): a station he came up to, or finished, less than half a second ago is one he is at.
+      get().setNearStations(stationsInReach(get().buildings, playerState.x, playerState.z));
       set({ activeStation: station, panel: 'stationMenu' });
     },
 
