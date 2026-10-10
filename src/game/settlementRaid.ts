@@ -23,8 +23,18 @@
 // at a settlement raid — that flavor stays exclusive to his own home arc;
 // a settlement raid reads as anonymous "rival pressure" from whichever
 // house the player has NOT been leaning toward.
-import { contestedPressure, leaningHouse } from './data/allegiance';
+//
+// CLN-20 · the raid's per-frame RULES — the trigger and the fight — live here
+// too now (tickSettlementRaid, at the foot of the file), moved out of
+// SettlementRaidRunner.tsx's frame loop. Still no store import, and none of
+// the enemy store: the game store imports this module, so the frame's store
+// snapshot is an argument and the enemy store comes in as `deps`.
+import type { EnemyKind } from './data/enemies';
+import { HOUSE_NAME, contestedPressure, leaningHouse } from './data/allegiance';
+import { WORLD_DESTINATION_BY_ID } from './data/worlds';
+import { worldEnv } from './env';
 import { exposeDebug } from '@/lib/debugHooks';
+import { tickWaveDefense, type EnemyDeps } from './waveDefense';
 
 const SETTLEMENT_RAID_BASE_COOLDOWN_MS = 15 * 60_000; // real minutes, no pressure
 const SETTLEMENT_RAID_MIN_COOLDOWN_MS = 6 * 60_000;   // floor at max contested pressure
@@ -84,6 +94,102 @@ export function startSettlementRaid(destId: string) {
   settlementRaidState.destId = destId;
   settlementRaidState.deadline = performance.now() + SETTLEMENT_RAID_TIME_MS;
   settlementRaidState.plotHp = SETTLEMENT_RAID_START_HP;
+}
+
+type Store = ReturnType<typeof import('./store/gameStore').useGameStore.getState>;
+/** what a frame of the raid reads of the game store: ONE snapshot, taken by the component at the top of its frame */
+export type SettlementRaidTickStore = Pick<
+  Store,
+  'destination' | 'settlements' | 'allegiance' | 'claimedWorlds' | 'notify' | 'resolveSettlementRaid'
+>;
+/** CLN-20 · the two values of a raid that belong to SettlementRaidRunner (one ref, for the component's lifetime) and
+ *  NOT to settlementRaidState: the wave countdown (initial SETTLEMENT_RAID_SPAWN_INTERVAL_S) and whether a raid was
+ *  active on the last unpaused frame (initial false). A remount while a raid is on therefore reads as a rising edge
+ *  and forces the countdown to 1.5 on its first frame. */
+export interface SettlementRaidRun { spawnTimer: number; wasActive: boolean }
+
+/** CLN-20 · one unpaused frame of the settlement raid: SettlementRaidRunner's frame loop from the edge test on (the
+ *  component keeps the paused return and the clock read ahead of it — while paused neither the edge nor the
+ *  countdown moves, though the wall-clock deadline does). `dt` is the RAW frame delta, `now` the frame's one
+ *  `performance.now()`; the trigger's cooldown reads `Date.now()` for itself, and `startSettlementRaid` its own
+ *  `performance.now()`.
+ *
+ *  The edge is tested, and `active` recorded, before anything else: a raid the trigger starts on this frame is
+ *  recorded as active only on the NEXT one, which is when its countdown is set to 1.5. The fight's core is
+ *  game/waveDefense.ts; what surrounds it is the raid's own — no destId stops the raid, leaving is a loss at the HP
+ *  the plot was left with, a missing claim stops the raid AND clears the ground, the kinds and the live cap are
+ *  re-read from the player's standing every frame (Unsworn mid-raid: no kinds, nothing spawns, the countdown still
+ *  runs down), and a loss notifies AFTER the store has resolved it. */
+export function tickSettlementRaid(
+  run: SettlementRaidRun,
+  st: SettlementRaidTickStore,
+  dt: number,
+  now: number,
+  deps: EnemyDeps,
+) {
+  const r = settlementRaidState;
+
+  if (r.active && !run.wasActive) run.spawnTimer = 1.5; // first wave arrives quickly
+  run.wasActive = r.active;
+
+  // ---------------------------------------------------------------------
+  // Trigger — only while standing at a founded settlement, at real dusk+,
+  // with a real contested standing, past the settlement's own cooldown.
+  if (!r.active) {
+    const destId = st.destination;
+    const settlement = destId ? st.settlements[destId] : undefined;
+    if (!destId || !settlement) return;
+    if (worldEnv.night <= 0.62) return;
+    const kinds = settlementRaiderKinds(st.allegiance);
+    if (!kinds) return; // genuinely Unsworn — no raid is possible, by design
+    const cooldownMs = settlementRaidCooldownMs(st.allegiance);
+    if (Date.now() - (settlement.lastRaidAt ?? settlement.since) < cooldownMs) return;
+    startSettlementRaid(destId);
+    // whichever house you have NOT been leaning toward is the one testing
+    // this claim — Cedric's men retaliate against a crown-leaning player,
+    // the crown's knights move on a traitor's
+    const attacker = leaningHouse(st.allegiance) === 'leo' ? 'cedric' : 'leo';
+    const destName = WORLD_DESTINATION_BY_ID[destId]?.name ?? 'your settlement';
+    st.notify(`${HOUSE_NAME[attacker]}'s riders test your claim at ${destName}!`, true);
+    return;
+  }
+
+  // ---------------------------------------------------------------------
+  // Active raid
+  const destId = r.destId;
+  if (!destId) { r.active = false; return; }
+  if (st.destination !== destId) {
+    // left mid-fight — clean up its hostiles immediately and count it a
+    // loss at whatever HP the plot was left at, same "can retry on the
+    // same ground without destination ever changing" reasoning
+    // challengeModes.ts's own Defend branch documents.
+    r.active = false;
+    deps.removeByWorld(destId);
+    st.resolveSettlementRaid(destId, false, r.plotHp / SETTLEMENT_RAID_START_HP);
+    return;
+  }
+  const claim = st.claimedWorlds[destId];
+  if (!claim) { r.active = false; deps.removeByWorld(destId); return; }
+
+  const kinds = settlementRaiderKinds(st.allegiance);
+  const outcome = tickWaveDefense(run, r, destId, claim, dt, now, {
+    kinds: kinds as EnemyKind[] | null,
+    maxLive: settlementRaidMaxLive(st.allegiance),
+    intervalS: SETTLEMENT_RAID_SPAWN_INTERVAL_S,
+    drainPerSec: SETTLEMENT_RAID_DRAIN_PER_SEC,
+    proximityRadius: SETTLEMENT_RAID_PROXIMITY_RADIUS,
+  }, deps);
+  if (outcome === 'lost') {
+    r.plotHp = 0;
+    r.active = false;
+    deps.removeByWorld(destId);
+    st.resolveSettlementRaid(destId, false, 0);
+    st.notify(`The raid overwhelms the watch — ${WORLD_DESTINATION_BY_ID[destId]?.name ?? 'the settlement'}'s next yield will be late.`);
+  } else if (outcome === 'won') {
+    r.active = false;
+    deps.removeByWorld(destId);
+    st.resolveSettlementRaid(destId, true, r.plotHp / SETTLEMENT_RAID_START_HP);
+  }
 }
 
 // mirrors challengeModes.ts's __kkchallenges — live verification doesn't

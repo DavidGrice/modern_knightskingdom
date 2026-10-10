@@ -10,7 +10,7 @@ import { LAND_TIERS, BUILDABLE_BY_ID, CLAIM_RADIUS, heightOf, labAssetId, sizeFo
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
   BROOK, EYE_HEIGHT, FISHING_DOCK, FISH_CAST_RANGE, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_INTERIOR, KEEP_THRONE_POS,
-  POND, RESIDENT_TALK_RANGE, SIGNPOST, SPAWN, STATION_RANGE, WORLD_HALF,
+  POND, RESIDENT_TALK_RANGE, SIGNPOST, SPAWN, WORLD_HALF,
 } from '@/game/data/world';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { NPCS, NPC_BY_ID, isNpcRevealed, isNpcPresent, INTERIOR_RESIDENTS } from '@/game/data/npcs';
@@ -23,8 +23,8 @@ import { touchState } from '@/game/touchInput';
 import { noteInputDevice, resolveInputDevice, interactLabel, clickHoldLabel } from '@/game/inputMode';
 import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer, tryDodge, DODGE_SPEED } from '@/game/combat';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
-import { fishingState, startFishing, tickFishing } from '@/game/fishing';
-import { tickBuildChallenge } from '@/game/buildChallenge';
+import { fishingState, startFishing } from '@/game/fishing';
+import { sweepWorld, tickWorldFrame, WORLD_SWEEP_S } from '@/game/worldTick';
 import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
 import { falconPos, FALCON_CALL_RANGE } from '@/game/falcon';
 import { agentManager } from '@/ai/core/AgentManager';
@@ -48,7 +48,6 @@ import { aimState, resolveAim } from '@/game/targeting';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS, keepWalkwayAt } from '@/game/data/keep';
-import { refreshFort } from '@/game/fort';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine, manEngine } from '@/game/crew';
@@ -2031,18 +2030,11 @@ export default function PlayerController() {
       }
       } // end photoMode / normal-movement branch
 
-      // fishing bite minigame: advance the wait/bite cycle regardless of
-      // where the player is currently looking (only proximity matters once
-      // a line is cast, not framing the pond dead-on every frame)
-      if (fishingState.nodeId) {
-        const fishNode = st.nodes.find((n) => n.id === fishingState.nodeId);
-        const dist = fishNode ? Math.hypot(fishNode.x - pos.current.x, fishNode.z - pos.current.z) : Infinity;
-        tickFishing(fishNode, dist, st.notify);
-      }
-      // Wave 13 · Timed Build Challenge countdown (game/buildChallenge.ts) —
-      // the loss/abandon path only; a WIN is resolved from gameStore.ts's
-      // constructBuilding, the moment a piece actually finishes.
-      tickBuildChallenge(st.destination, st.notify);
+      // CLN-20 · the world's per-frame ticks (the fishing bite cycle, the
+      // build challenge's countdown) — game/worldTick.ts, called from here
+      // because they must run after this frame's movement and BEFORE the
+      // targeting and performAction below, which read what they write
+      tickWorldFrame(st, pos.current.x, pos.current.z);
 
       // interaction targeting + hold-E (construction sites AND gathering —
       // 'tree'/'rock'/'fishing'/'herb', requested 2026-07-30 "for mechanical
@@ -2110,27 +2102,14 @@ export default function PlayerController() {
         }
       }
 
-      // nearby crafting stations (drives the crafting panel), respawns
+      // CLN-20 · the world's half-second sweep (nearby stations, the wall
+      // ring, respawns, plots, villagers) — game/worldTick.ts. The countdown
+      // stays this component's own ref: it restarts at 0 with every mount, so
+      // the first unfrozen frame after build mode sweeps at once.
       stationTimer.current -= dt;
       if (stationTimer.current <= 0) {
-        stationTimer.current = 0.5;
-        const near: string[] = [];
-        for (const b of st.buildings) {
-          const def = BUILDABLE_BY_ID[b.type];
-          if (!def?.station) continue;
-          if (Math.hypot(pos.current.x - b.x, pos.current.z - b.z) < STATION_RANGE && !near.includes(def.station)) {
-            near.push(def.station);
-          }
-        }
-        st.setNearStations(near.sort());
-        // Wave 8 · the wall ring. A no-op unless the buildings/gates/keep/land
-        // tier actually changed identity since the last look (game/fort.ts),
-        // so this rides the existing half-second sweep for free.
-        refreshFort();
-        st.tickRespawns();
-        st.tickPlots(0.5);
-        st.tickVillagers(0.5);
-        st.checkVillagerArrival();
+        stationTimer.current = WORLD_SWEEP_S;
+        sweepWorld(st, pos.current.x, pos.current.z);
       }
     } else {
       if (st.prompt) st.setPrompt(null);

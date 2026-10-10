@@ -53,11 +53,12 @@ export function startBuildChallenge() {
   buildChallengeState.built = 0;
 }
 
-/** Called every frame from PlayerController's frame loop (mirrors
- *  game/fishing.ts's tickFishing exactly: pure state + a notify callback,
- *  no store import needed here). Resolves a loss on timeout, and quietly
- *  abandons (no toast — the player made an active choice to leave) if the
- *  player travels away from the challenge ground mid-run. A WIN is resolved
+/** Called every frame from PlayerController's frame loop, through
+ *  game/worldTick.ts's tickWorldFrame (mirrors game/fishing.ts's tickFishing
+ *  exactly: pure state + a notify callback, no store import needed here).
+ *  Resolves a loss on timeout, and quietly abandons (no toast — the player
+ *  made an active choice to leave) if the player travels away from the
+ *  challenge ground mid-run. A WIN is resolved
  *  from gameStore.ts's constructBuilding instead, the one place that
  *  already knows a piece just finished and already has addItems/addXp/audio
  *  in hand — this function never sees "built" cross the target itself. */

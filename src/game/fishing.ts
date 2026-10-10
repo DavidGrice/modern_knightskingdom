@@ -50,9 +50,10 @@ function resetFishing() {
   fishingState.phase = 'idle';
 }
 
-/** advance the wait/bite cycle; call every frame from PlayerController with
- *  the live node (or undefined if it no longer exists/has respawned) and the
- *  player's distance to it. */
+/** advance the wait/bite cycle; called every frame from PlayerController
+ *  (through game/worldTick.ts's tickWorldFrame) with the live node (or
+ *  undefined if it no longer exists/has respawned) and the player's distance
+ *  to it. */
 export function tickFishing(
   node: { respawnAt: number | null } | undefined,
   dist: number,

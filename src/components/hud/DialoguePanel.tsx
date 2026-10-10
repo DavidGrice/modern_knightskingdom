@@ -293,7 +293,8 @@ export default function DialoguePanel() {
               // and caravan risk read, made visible here rather than a
               // second, disconnected rivalry concept — the house the player
               // has NOT been leaning toward is the one with reason to test
-              // this claim (see SettlementRaidRunner.tsx's own attacker pick).
+              // this claim (see the attacker pick in game/settlementRaid.ts's
+              // tickSettlementRaid).
               const pressure = contestedPressure(allegiance);
               const rival = pressure > 0 ? (leaningHouse(allegiance) === 'leo' ? 'cedric' : 'leo') : null;
               return (

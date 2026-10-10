@@ -50,8 +50,8 @@ export default function ArenaScene({ envId: initialEnvId }: { envId: ArenaEnvId 
   // Wave 43 (A5) — TemplateWorld.tsx passes `envId` as a plain prop, read
   // only whenever TemplateWorldRoot itself happens to re-render (its own
   // effect deps are `[destId]`/`claimedWorlds[destId]`, neither of which
-  // changes on a mid-run mutator swap — see ArenaSpawner.tsx's own new
-  // swap). arenaState.env is a plain mutable leaf-module field, not Zustand
+  // changes on a mid-run mutator swap — see the swap in game/arena.ts's
+  // tickArena). arenaState.env is a plain mutable leaf-module field, not Zustand
   // state, so nothing upstream re-renders on a bare reassignment of it.
   // Polling it here on a `useFrame` throttle is the in-Canvas equivalent of
   // the rAF-poll convention ArenaHud.tsx/BuildChallengePanel.tsx already use
