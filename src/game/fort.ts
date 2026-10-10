@@ -87,9 +87,9 @@ function stamp(blocked: Uint8Array, cx: number, cz: number, hx: number, hz: numb
 
 /**
  * Recompute the ring, at most once per real change. Cheap to call often — the
- * HUD badge polls it twice a second and PlayerController ticks it alongside
- * its own half-second station sweep, and both are no-ops until something
- * actually moves.
+ * HUD badge polls it twice a second and PlayerController ticks it in its
+ * half-second sweep (game/worldTick.ts's sweepWorld), and both are no-ops
+ * until something actually moves.
  */
 export function refreshFort(force = false) {
   const st = useGameStore.getState();

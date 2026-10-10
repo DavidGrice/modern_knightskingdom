@@ -7763,3 +7763,41 @@ Either way each then climbs the ladder onto the wall he has just walked through.
 in, which is what the ram and the ladder are for, and what a raider does who finds neither to be decided with it.
 And, short of that: whether the ladder should go to a wall-walk on the side the raiders come from, and a raider who
 is on the wrong side of it should walk round the stair to its rungs.
+
+## Bug: a crafting station counts as "in reach" before it is built — FOUND 2026-10-09 (in the review of CLN-20), not yet fixed
+
+**Found by** the review of CLN-20, which moved the player controller's half-second sweep into
+`game/worldTick.ts` unchanged. A comment written for the move said that a station "the player's own hammer finished
+this frame" was not yet in the sweep's list; the reviewer went to check, and found that a station does not have to be
+finished to be in it.
+
+**The bug** (`game/worldTick.ts`, `sweepWorld` — until CLN-20 the same lines in `components/fps/PlayerController.tsx`):
+the scan that names the stations within `STATION_RANGE` (4.5 m) of the player asks of each placed piece only whether
+its kind is a station and how far off it is. It does not ask whether the piece is built. A piece is in the list from
+the moment it is placed, as a site (`built: 0` — "placement marks the site", `placeBuilding`), and a piece a dragon has
+burnt down is put back to the same state (`ruin`). Everywhere else a site is nothing yet: the controller's own
+targeting offers it the hammer and nothing more ("an unbuilt site's only interaction is swinging the hammer at it —
+nothing else it 'is' exists yet"), villagers do not arrive for an unbuilt bed, nobody collides with it.
+
+`nearStations` is what the Crafting panel goes by: a recipe that wants a station can be made when its station is in
+the list (`stationOk`), the panel opens on the first station in it, and the store's `craft` asks nothing about
+stations itself.
+
+**Observed** (production build of `main` at 1fd3b26; the home pass of CLN-20's live probe, `cln20_live.mjs`): a forge
+set down as a site with nothing built, three paces from the player, is named in `nearStations` from the first sweep —
+`["forge"]`, then `["campfire", "forge"]` once a finished campfire stands beside it — and drops out at the sweep after
+the site is taken away. The same on the CLN-20 branch, which keeps the lines as they were.
+
+**Seen in the Crafting panel** (the same build of `main`, `station_site.mjs`, 2026-10-10; the materials and the
+`mining` unlock handed over): beside a forge that is only a site, and beside one in ruins, the panel opens on the
+Forge tab, marks it as where the player stands, and Smelt Iron Bar is made at a press — exactly as beside a built
+forge. With no forge there the tab carries its "Stand near a Forge" note and the button is dead.
+
+**By the code, and not run:** the same for the site of a workbench or of a campfire.
+
+**What it costs:** a station's materials are paid when its site is laid, so what is skipped is the building of it —
+the hammer work, or the builders' time. The forge, the workbench and the campfire can each be used the moment they
+are marked out.
+
+**Fix, to follow in its own change:** the scan should pass over a piece that is not built (`isBuilt`), as the
+targeting does.

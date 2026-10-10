@@ -78,7 +78,7 @@ export interface EnemyData {
    *  ticking) the moment the player leaves THAT world, same as before. */
   world: string | null;
   dungeonRoom?: number; // index of the dungeon room this enemy belongs to, if any
-  /** spawned by ArenaSpawner.tsx — lets the central kill-resolution paths
+  /** spawned by the arena's tick — lets the central kill-resolution paths
    *  (melee.ts, projectiles.ts) credit game/arena.ts's run-local counter without a second
    *  registry (mirrors dungeonRoom's "which special context spawned this"
    *  role) */
@@ -158,10 +158,10 @@ interface EnemyStore {
 export const useEnemyStore = create<EnemyStore>((set, get) => ({
   enemies: [],
   spawn: (kind, x, z, raid = false, dungeonRoom, approaching = false, finalStand = false, extraScale = 1, arena = false, worldOverride) => {
-    // requested 2026-08-03: ArenaSpawner.tsx's own run-local escalation
-    // (game/arena.ts's arenaSpawnScale()) layers on top of the existing
-    // game-progress curve rather than replacing it — extraScale defaults to
-    // 1 so every pre-existing call site is unaffected
+    // requested 2026-08-03: the arena's own run-local escalation
+    // (game/arena.ts's arenaSpawnScale(), passed in by its tickArena) layers
+    // on top of the existing game-progress curve rather than replacing it —
+    // extraScale defaults to 1 so every pre-existing call site is unaffected
     // Wave 38 (A1): Cedric now reads the shared boss curve instead of a flat
     // 1 — applies to every 'cedric' spawn (final stand, the pre-final-stand
     // camp duel, the raid-leader cameo), harmless for the latter two since he
@@ -180,7 +180,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
       // instance-separation doctrine: wherever the player actually is right
       // now IS this enemy's home world — true at every existing call site
       // (each already gates on the right destination before spawning: the
-      // dungeon-room loop on destination === 'dungeon', ArenaSpawner on
+      // dungeon-room loop on destination === 'dungeon', the arena's tick on
       // 'arena', Cedric's camp guards/duel/reinforcements on being at his
       // camp, Storm's duel on her own NPC panel being open, and every raid/
       // night-skeleton spawn on destination being null/home).
@@ -223,7 +223,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
 // (rooms are numbered from 0 every time, so a stale `dungeonRoom` index
 // collides) and permanently blocks that room from ever registering
 // `cleared`; arena survivors accumulate release-over-release since the mode
-// is explicitly endless, eventually starving ArenaSpawner.tsx's global
+// is explicitly endless, eventually starving game/arena.ts's global
 // MAX_TARGET cap for every future session. React to the store here (a
 // sibling to the maxStamina subscriber in vitals.ts) rather than gameStore
 // importing this module back, which would create a fresh cycle — gameStore
@@ -240,7 +240,7 @@ useGameStore.subscribe((s) => {
   // arena (EnemyData.world doctrine above) — an ordinary voluntary exit from
   // one needs the same scoped cleanup dungeon/arena already get, or a
   // Defend-the-Plot run left mid-fight would sit inert in the store and
-  // reappear alive next visit (ChallengeRunner.tsx's own Defend branch also
+  // reappear alive next visit (challengeModes.ts's own Defend branch also
   // does this cleanup immediately/explicitly on the same-ground-retry path
   // this subscriber alone can't catch, since `destination` never changes
   // there — this generic fix still matters for every OTHER way of leaving).
