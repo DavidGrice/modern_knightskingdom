@@ -7872,23 +7872,56 @@ a siege engine doing the damage themselves (the probe calls the store's `damageB
 asking for a ruin, as the dragon's breath does, and not asking, as the engines do).
 
 **Seen, and left:** the sweep's own scan is now belt and braces — the two panels are the list's only readers. And
-one more way for the list to be wrong under an open panel, the same on `main` and logged below for its own fix: a
+one more way for the list to be wrong under an open panel, the same on `main` and logged below for its own fix (since
+fixed: the next entry): a
 knock-out carries the player to the spawn meadow with the panel still up, and the list follows the buildings, not
 the player.
 
-## Bug: a knock-out leaves an open panel up — FOUND 2026-10-10 (in the second review of the station fix above), not yet fixed
+## Bugfix: a knock-out left an open panel up — FOUND 2026-10-10 (in the second review of the station fix above), FIXED 2026-10-10
 
 **Found by** the second review of the fix above, reading for ways the list of stations could still be wrong while
 a crafting panel is open.
 
-**The bug** (`game/combat/playerDamage.ts`, `damagePlayer`; by the code, and not run): a panel does not stop the
-world — the enemies' frame loop stands down only for `paused` — so the player can be struck with a panel open. At 0
-hit points he is carried to the spawn meadow (`combatState.teleportTo = [0, 26]`), the hour is set to just before
-sunrise and the enemies are cleared; nothing is written to `panel`. The controller applies that teleport even while
-a panel has it frozen. So he wakes in the meadow with whatever panel he had open still up.
+**The bug** (`game/combat/playerDamage.ts`, `damagePlayer`): a panel does not stop the world — the enemies' frame
+loop stands down only for `paused` — so the player can be struck with a panel open. At 0 hit points he is carried
+to the spawn meadow (`combatState.teleportTo = [0, 26]`), the hour is set to just before sunrise and the enemies
+are cleared; in the arena he is put down outside it instead (`leaveArena`). Nothing was written to `panel`, and the
+controller applies the teleport even while a panel has it frozen. So he came to with whatever panel he had open
+still up.
 
-**What it costs:** with the Crafting book or a station's menu open, the station he was carried away from goes on
-working until the panel is shut (or until a building changes, which makes the store look again — from the meadow).
-With any other panel, the oddity of coming to under an open menu.
+**Observed** (production builds, `main` at dee9074 and the fix; real GPU, headless; `knockout_panel.mjs`, run once
+per build in the recorded pass). The knock-out is the game's own — `damagePlayer` with more damage than the player has — landing while
+he stands 2.5 m from a built forge well away from the meadow. What is up half a second after the blow:
 
-**Fix, to follow in its own change:** shut the panel when the player is knocked out.
+| the panel open when the blow lands | `main` | the fix |
+|---|---|---|
+| none | none; the player in the spawn meadow | the same |
+| the Crafting book (its key, C) | the Crafting book, in the spawn meadow — the forge still listed as in reach, Smelt Iron Bar live, and a bar made at a press | none |
+| the forge's own menu | the forge's menu, in the spawn meadow | none |
+| the Satchel (its key, I) | the Satchel, in the spawn meadow | none |
+| the Satchel, in the arena | the Satchel, outside the arena | none |
+
+On the fix the player is where `main` puts him in every row, and no panel is up — the same under `next dev` as on
+its production build.
+
+**The fix.** The 0-hit-point branch shuts the panel (`setPanel('none')`), ahead of the arena's early return — being
+put down outside the ring is a knock-out too.
+
+**What changes in play.** A knocked-out player comes to with no panel open. **Not changed:** the rest of a
+knock-out (full vitals; the meadow, or the arena's doorstep; dawn and the raid called off outside the arena); a
+blow that does not fell the player leaves his panel alone.
+
+**Existing saves.** Nothing to heal: `panel` is never saved.
+
+**Verified** on the sources as committed. *Unit tests:* 1 new (314 in total), in `game/combat.test.ts` — a knock-out
+shuts the Satchel, the Crafting book, a station's menu and the quest log at home, the Satchel away from home and
+the Crafting book in the arena (where the knock-out returns early), and at home a blow that leaves the player
+standing does not. *Mutation:* 6 planted faults in and around the branch (the panel left as it was; shut everywhere
+but in the arena; shut at every blow; shut only when
+it is the Crafting book; shut only in the arena; another panel opened instead), all caught by that file. *Imports:*
+the same cycles as `main`. *Live:* the table above; and the frame-by-frame probe of CLN-20 (`cln20_live.mjs`, in
+which no knock-out happens), identical between two runs of `main`, between `main` and the fix, and between the fix's
+production build and `next dev`.
+
+**Not run:** a blow from an enemy's own hand (the probe calls the function every way of taking damage ends in); the
+dialogue and shop panels (the same `panel` field); a gamepad.

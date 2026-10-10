@@ -96,6 +96,12 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
   if (combatState.hp <= 0) {
     combatState.hp = combatState.maxHp;
     combatState.stamina = combatState.maxStamina;
+    // Whatever panel was open is shut. A panel does not stop the world — the enemies stand down only for a pause —
+    // so the blow that fells the player can land while the Satchel or the Crafting book lies open; he used to come
+    // to where he was carried with it still up, and the book went on working for the forge he had been carried away
+    // from (ROADMAP.md, "a knock-out left an open panel up"). Ahead of the arena's early return below: being put
+    // down outside the ring is a knock-out too.
+    st.setPanel('none');
     // requested 2026-08-03: the arena's own "respawn just outside, redo"
     // rule, checked and returned BEFORE the general path below — per this
     // function's own long-standing comment (just below) anticipating
