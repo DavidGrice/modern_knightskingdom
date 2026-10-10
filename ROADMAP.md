@@ -7764,40 +7764,131 @@ in, which is what the ram and the ladder are for, and what a raider does who fin
 And, short of that: whether the ladder should go to a wall-walk on the side the raiders come from, and a raider who
 is on the wrong side of it should walk round the stair to its rungs.
 
-## Bug: a crafting station counts as "in reach" before it is built — FOUND 2026-10-09 (in the review of CLN-20), not yet fixed
+## Bugfix: a crafting station counted as "in reach" before it was built, and a station's menu could open to "You've stepped away" — FOUND 2026-10-09 (in the review of CLN-20; the second fault 2026-10-10, while fixing the first), FIXED 2026-10-10
 
 **Found by** the review of CLN-20, which moved the player controller's half-second sweep into
 `game/worldTick.ts` unchanged. A comment written for the move said that a station "the player's own hammer finished
-this frame" was not yet in the sweep's list; the reviewer went to check, and found that a station does not have to be
+this frame" was not yet in the sweep's list; the reviewer went to check, and found that a station did not have to be
 finished to be in it.
 
 **The bug** (`game/worldTick.ts`, `sweepWorld` — until CLN-20 the same lines in `components/fps/PlayerController.tsx`):
-the scan that names the stations within `STATION_RANGE` (4.5 m) of the player asks of each placed piece only whether
-its kind is a station and how far off it is. It does not ask whether the piece is built. A piece is in the list from
-the moment it is placed, as a site (`built: 0` — "placement marks the site", `placeBuilding`), and a piece a dragon has
-burnt down is put back to the same state (`ruin`). Everywhere else a site is nothing yet: the controller's own
-targeting offers it the hammer and nothing more ("an unbuilt site's only interaction is swinging the hammer at it —
-nothing else it 'is' exists yet"), villagers do not arrive for an unbuilt bed, nobody collides with it.
+the scan that names the stations within `STATION_RANGE` (4.5 m) of the player asked of each placed piece only
+whether its kind is a station and how far off it is. It did not ask whether the piece is built. A piece is in the
+list from the moment it is placed, as a site (`built: 0` — "placement marks the site", `placeBuilding`), and a piece
+a dragon has burnt down is put back to the same state (`ruin`) — of the three stations that can befall the campfire
+and the workbench; the forge is stone, and what a siege engine does to a piece is knock it down altogether.
+Everywhere else a site is nothing yet: the controller's own targeting offers it the hammer and nothing more ("an
+unbuilt site's only interaction is swinging the hammer at it — nothing else it 'is' exists yet"), villagers do not
+arrive for an unbuilt bed, nobody collides with it.
 
-`nearStations` is what the Crafting panel goes by: a recipe that wants a station can be made when its station is in
-the list (`stationOk`), the panel opens on the first station in it, and the store's `craft` asks nothing about
-stations itself.
+`nearStations` is what the Crafting panels go by: in the Crafting book a recipe that wants a station can be made
+when its station is in the list (`stationOk`) and the book opens on the first station in it; a station's own menu
+says "You've stepped away — browsing only for now" and makes nothing when its station is not in it; the store's
+`craft` asks nothing about stations itself.
 
-**Observed** (production build of `main` at 1fd3b26; the home pass of CLN-20's live probe, `cln20_live.mjs`): a forge
-set down as a site with nothing built, three paces from the player, is named in `nearStations` from the first sweep —
-`["forge"]`, then `["campfire", "forge"]` once a finished campfire stands beside it — and drops out at the sweep after
-the site is taken away. The same on the CLN-20 branch, which keeps the lines as they were.
+**A second fault of the same list, found while fixing the first.** The list is kept by the controller's sweep,
+every half second, and the sweep stops while a panel is open — so a panel shows whatever the last sweep found, and
+goes on showing it until it is shut. The interact key reaches a station at 3.4 m and the sweep at 4.5 m: a player
+who comes up to a forge with the key held is through that 1.1 m in 0.28 s at a walk and 0.16 s at a sprint, against
+a sweep every 0.5 s. Whenever the sweep had not run in between, the forge's own menu opened to "You've stepped
+away" with the player standing at it. That was so on `main` before any of this. The built test by itself would have
+added a new case of it: finish a station with the hammer, open its menu before the next sweep (up to half a second
+later), and the station just built is not in the list — every time, when the two fall in the same instant. And it
+would have left a hole in the first fault's own mending: an open panel stops the player's controller, not the
+world, so a station can be burnt into a ruin, or knocked down, under its own open panel, and nothing renewed the
+list then.
 
-**Seen in the Crafting panel** (the same build of `main`, `station_site.mjs`, 2026-10-10; the materials and the
-`mining` unlock handed over): beside a forge that is only a site, and beside one in ruins, the panel opens on the
-Forge tab, marks it as where the player stands, and Smelt Iron Bar is made at a press — exactly as beside a built
-forge. With no forge there the tab carries its "Stand near a Forge" note and the button is dead.
+**Observed** (production builds: `main` at f65b8d7 and the fix; real GPU, headless; `station_site.mjs`,
+`station_approach.mjs`, each run once per build in the recorded pass).
 
-**By the code, and not run:** the same for the site of a workbench or of a campfire.
+*The Crafting book, the player standing three paces from one spot, the makings and the `mining` unlock handed over;
+each kind of station in turn — the forge with Smelt Iron Bar, the campfire with Bake Bread, the workbench with
+Pickaxe:*
 
-**What it costs:** a station's materials are paid when its site is laid, so what is skipped is the building of it —
-the hammer work, or the builders' time. The forge, the workbench and the campfire can each be used the moment they
-are marked out.
+| at that spot | `main` | the fix |
+|---|---|---|
+| nothing | not in reach; the book opens By Hand; the recipe dead | the same |
+| a site of the forge, the campfire, the workbench (`built: 0`) | in reach; the book opens on that station and marks it as here; the recipe live, and made at a press | not in reach; the book opens By Hand; the recipe dead, nothing made |
+| a ruin of the campfire, the workbench (`built: 0`, `ruin`) | as a site | as a site |
+| a built forge, campfire, workbench | in reach; the book opens on it; the recipe made at a press | the same |
 
-**Fix, to follow in its own change:** the scan should pass over a piece that is not built (`isBuilt`), as the
-targeting does.
+*A station's menu, and the book, against a list the sweep has not caught up with* — how often the panel was wrong:
+
+| | `main` | the built test alone (control) | the fix |
+|---|---|---|---|
+| walking up to a built forge with the interact key held (8 walks, 8 sprints): the menu says "You've stepped away" | 6 of 16 (no walk, 6 sprints) | 11 of 16 (5 walks, 6 sprints) | 0 of 16 |
+| a forge site finished (as the hammer's last blow does) and its menu opened in the same instant, 3 times: "You've stepped away", and Smelt Iron Bar dead | 0 of 3 (the site was in the list all along — the first fault) | 3 of 3 | 0 of 3 (and a bar made each time) |
+| put down 2.5 m from a built forge and the book's key (C) pressed at once, 6 times: the Forge not marked as here | 6 of 6 | 6 of 6 | 0 of 6 |
+| a built campfire left in ruins, as a dragon's breath leaves it, under its own open menu, 3 times: the menu goes on as at its station | 3 of 3 | 3 of 3 | 0 of 3 (it says "You've stepped away" at once) |
+| a built forge knocked down, as a siege engine does it, under its own open menu, 3 times: the menu goes on as at its station | 3 of 3 | 3 of 3 | 0 of 3 (the same) |
+
+In the last two rows nothing renews the list under a panel on `main` or on the control (and on `main` a ruin was a
+station besides). The control is the fix with the store's part taken out again (below), run under `next dev`; the
+fix gives the same figures under `next dev` as on its production build. How often a walk-up goes wrong is a matter
+of where the sweep is in its half second when the player crosses 4.5 m. The probe does not make that random, so
+its counts are instances and not a rate, and they move from run to run: three earlier runs of `main`, kept beside
+the record (`approach_main_run1.txt` to `…run3.txt`), gave 7 of 12, 10 of 16 and 7 of 16. With the key held all the
+way in and the sweep's phase taken as random, the arithmetic above makes it 45 walks in 100 and 69 sprints in 100.
+
+**The fix.** `game/stations.ts`, `stationsInReach(buildings, x, z)`: the scan, which now passes over a piece that is
+not built (`isBuilt`, the test the targeting uses). The sweep calls it as before. The store calls it too, from
+where the player stands: whenever the Crafting book or a station's menu opens (`setPanel('crafting')`,
+`openStationMenu`), and, for as long as either is open, whenever the buildings change. The built test alone would
+have been one line and a regression (the middle column).
+
+**What changes in play.** A station works once it stands, and not before: a site, or a ruin waiting to be rebuilt,
+is no longer a place to craft — and a station burnt or knocked down under its own open panel stops working there
+and then. A station's menu, and the book, are right about where the player stands at the moment they open: walking
+up with the key held, pressing the book's key on arrival, or opening the menu of a station straight after its last
+hammer blow.
+
+**Not changed.** The reach (4.5 m); the sweep, which still renews the list every half second — though nothing but
+the two panels reads it, and they now look for themselves; a piece from a save older than sites (no `built` at all)
+counts as built, as everywhere. The store takes the player's place as the controller last published it: a frame old
+at most (and, on the one frame a teleport lands, the place he left).
+
+**Existing saves.** Nothing to heal: `nearStations` is never saved, and whatever was made at a site is ordinary
+inventory.
+
+**Verified** on the sources as committed. *Unit tests:* 9 new (313 in total), `game/stations.test.ts` — the scan
+for all three kinds of station (a site, a ruin and a piece all but raised are passed over; a finished piece and one
+with no `built` are not; a site does not hide a finished station), and, on the real store, the two panels: as they
+open (a station walked up to since the last sweep, one walked away from, one finished a moment ago, one in ruins),
+while they are open (a station left in ruins by `damageBuilding`, or removed, under the open book and under its own
+menu; a change of buildings that leaves the list as it was does not replace it, and no other write is taken for a
+reason to look), and that under no other panel does either happen. *Mutation:* 27 planted faults in the scan, the
+sweep's call and the store's part (26 single edits, and the control, which is three), all caught by
+`game/stations.test.ts` together with the existing `game/worldTick.test.ts` (which is what catches the sweep's
+call). *Imports:* the same cycles as `main`. *Live:* the two tables above; and, frame by frame on deterministic
+frames (`cln20_live.mjs`, whose home pass stands a forge site three paces from the player), `main` and the fix each
+identical to themselves when run again, the fix identical on its production build and under `next dev`, and `main`
+against the fix identical in the arena, Defend and raid passes and, in the home pass, in everything but the
+stations named: `forge` from the first frame on `main`, joined by the campfire and dropped when the site is taken
+away; on the fix the campfire alone. The sweep hands its list over on the same twelve frames on both.
+
+**Not run:** a gamepad's or a touch screen's interact button (the same store action); a real hammer blow followed
+by a real key press (the probe finishes the site and opens the menu through the store, in one instant); a dragon or
+a siege engine doing the damage themselves (the probe calls the store's `damageBuilding` as each of them does —
+asking for a ruin, as the dragon's breath does, and not asking, as the engines do).
+
+**Seen, and left:** the sweep's own scan is now belt and braces — the two panels are the list's only readers. And
+one more way for the list to be wrong under an open panel, the same on `main` and logged below for its own fix: a
+knock-out carries the player to the spawn meadow with the panel still up, and the list follows the buildings, not
+the player.
+
+## Bug: a knock-out leaves an open panel up — FOUND 2026-10-10 (in the second review of the station fix above), not yet fixed
+
+**Found by** the second review of the fix above, reading for ways the list of stations could still be wrong while
+a crafting panel is open.
+
+**The bug** (`game/combat/playerDamage.ts`, `damagePlayer`; by the code, and not run): a panel does not stop the
+world — the enemies' frame loop stands down only for `paused` — so the player can be struck with a panel open. At 0
+hit points he is carried to the spawn meadow (`combatState.teleportTo = [0, 26]`), the hour is set to just before
+sunrise and the enemies are cleared; nothing is written to `panel`. The controller applies that teleport even while
+a panel has it frozen. So he wakes in the meadow with whatever panel he had open still up.
+
+**What it costs:** with the Crafting book or a station's menu open, the station he was carried away from goes on
+working until the panel is shut (or until a building changes, which makes the store look again — from the meadow).
+With any other panel, the oddity of coming to under an open menu.
+
+**Fix, to follow in its own change:** shut the panel when the player is knocked out.
