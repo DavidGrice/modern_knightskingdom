@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
 import { NPC_BY_ID, sideQuestOffers, sideQuestsOf } from '@/game/data/npcs';
-import { SETTLEMENT_FOUNDING } from '@/game/data/settlementQuests';
+import { SETTLEMENT_FOUNDING } from '@/game/data/settlements';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_MARKUP, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
   caravanPartnersOf, caravanQuoteGold, caravanRouteKey, caravanTradeableItems, effectiveCaravanRisk,
@@ -277,7 +277,7 @@ export default function DialoguePanel() {
               once earned, same shape as the Alric/Beda block above.
               Wave 26: generalized off the old `npc.id === 'fenwick'` check
               and the hardcoded `'settle_clear'`/`{gold:60}` literals to a
-              lookup into SETTLEMENT_FOUNDING (data/settlementQuests.ts) —
+              lookup into SETTLEMENT_FOUNDING (data/settlements.ts) —
               template-08 reads byte-identical values back out, and a second
               site's quest-giver now gets the same UI for free. */}
           {(() => {

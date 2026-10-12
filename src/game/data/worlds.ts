@@ -85,6 +85,7 @@
 // not a live bug.
 import type { ItemId } from '../types';
 import { DUNGEON_ORIGIN, REACH_LIMIT } from '../dungeon';
+import { WORLD_ANCHOR, type WorldAnchor } from './anchors';
 
 export interface WorldDestination {
   id: string;
@@ -342,6 +343,16 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
 const TEMPLATE_DEST_BY_ID: Record<string, WorldDestination> =
   Object.fromEntries(WORLD_DESTINATIONS.map((d) => [d.id, d]));
 
+/** A point two tables share (data/anchors.ts) as a world point. It is resolved by the same resolveDestPoint as
+ *  every other local point, against the destination the anchor names — so the tables that stand on one anchor
+ *  stand on the same numbers. Reads TEMPLATE_DEST_BY_ID, not WORLD_DESTINATION_BY_ID, for the reason given just
+ *  above: the arrival table below needs it before that lookup exists. An anchor names one of WORLD_DESTINATIONS —
+ *  in practice one of the eight away templates; one that names anything else (the crypt, the arena, a challenge
+ *  ground, a typo) throws when it is resolved, which for every site today is at load. */
+export function resolveWorldAnchor(a: WorldAnchor): { x: number; z: number } {
+  return resolveDestPoint(TEMPLATE_DEST_BY_ID[a.dest], a.x, a.z);
+}
+
 export const TEMPLATE_ARRIVAL_SPAWN: Record<string, { x: number; z: number; yaw: number }> = {
   'template-01': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-01'], 17.68, -340.647), yaw: Math.PI },
   'template-02': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-02'], 0, -428.333), yaw: Math.PI },
@@ -349,13 +360,14 @@ export const TEMPLATE_ARRIVAL_SPAWN: Record<string, { x: number; z: number; yaw:
   // 2026-08-25 comment above) — supersedes the old riverbank override, which
   // did not survive this cut.
   'template-03': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-03'], -737.867, -834.667), yaw: Math.PI },
-  // nearest-in-union derived, unchanged in substance since 2026-08-21
+  // nearest-in-union derived, unchanged in substance since 2026-08-21. A millimetre and a half from the Builders'
+  // hall (guilds.ts) and deliberately its own literal — see data/anchors.ts on close points.
   'template-04': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-04'], 2663.753, 10942.807), yaw: Math.PI },
-  // same point as CEDRIC_CAMP (world.ts) — see that constant's own comment
-  'template-05': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-05'], 3760, 5793.333), yaw: Math.PI },
+  // the same point as CEDRIC_CAMP (world.ts) — see that constant's own comment. One anchor, so it stays the same.
+  'template-05': { ...resolveWorldAnchor(WORLD_ANCHOR.cedricCamp), yaw: Math.PI },
   'template-06': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-06'], 12.84, -334.667), yaw: Math.PI },
-  // same point as the Woodsmen's Lodge hall (guilds.ts) — see its own comment
-  'template-07': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-07'], 3666.667, 7053.333), yaw: Math.PI },
+  // the same point as the Woodsmen's Lodge hall (guilds.ts) — see its own comment. One anchor, so it stays the same.
+  'template-07': { ...resolveWorldAnchor(WORLD_ANCHOR.woodsmenHall), yaw: Math.PI },
   'template-08': { ...resolveDestPoint(TEMPLATE_DEST_BY_ID['template-08'], 0, -246.653), yaw: Math.PI },
 };
 

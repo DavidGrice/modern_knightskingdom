@@ -15,7 +15,11 @@
 // rotation convention for how mc001's corner "point" aligns to a 90° join —
 // StarterVillage.tsx's own two corner yaws were hand-eyeballed for the same
 // reason, not computed).
+//
+// CLN-22 · WHERE each piece stands is data now: MERCHANT_CAMP_WALLS, beside
+// MERCHANT_SPOT in data/trade.ts. This file draws them, in that order.
 import PropModel from './PropModel';
+import { MERCHANT_CAMP_WALLS } from '@/game/data/trade';
 
 const B = '/assets/props/buildings';
 const WALL_HEIGHT = 3.84; // mc001/mc005's shared true height at k=0.05 (buildables.ts)
@@ -23,14 +27,9 @@ const WALL_HEIGHT = 3.84; // mc001/mc005's shared true height at k=0.05 (buildab
 export default function MerchantCamp() {
   return (
     <>
-      {/* back wall */}
-      <PropModel url={`${B}/mc005.glb`} height={WALL_HEIGHT} position={[-76.8, 0, 12]} yaw={0} />
-      {/* back-left / back-right corners */}
-      <PropModel url={`${B}/mc001.glb`} height={WALL_HEIGHT} position={[-82.8, 0, 12]} yaw={0} />
-      <PropModel url={`${B}/mc001.glb`} height={WALL_HEIGHT} position={[-70.8, 0, 12]} yaw={Math.PI / 2} />
-      {/* west / east wings, running north from the back corners */}
-      <PropModel url={`${B}/mc005.glb`} height={WALL_HEIGHT} position={[-82.8, 0, 18]} yaw={Math.PI / 2} />
-      <PropModel url={`${B}/mc005.glb`} height={WALL_HEIGHT} position={[-70.8, 0, 18]} yaw={Math.PI / 2} />
+      {MERCHANT_CAMP_WALLS.map((w, i) => (
+        <PropModel key={i} url={`${B}/${w.model}.glb`} height={WALL_HEIGHT} position={[w.x, 0, w.z]} yaw={w.yaw} />
+      ))}
     </>
   );
 }

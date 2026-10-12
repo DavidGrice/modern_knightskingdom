@@ -15,32 +15,37 @@
 // between — the arrival spawn to its resident's stand-point and its guild
 // hall — the same practical reasoning road.ts's own home network already
 // uses for which grounds get a leg.
+//
+// CLN-22 · WHICH legs a settlement has is its own record's `roadsTo`
+// (data/settlements.ts) — this file used to name the three givers by hand,
+// one more place a new settlement had to be written into. It still owns the
+// geometry: where each leg's two ends are, and what counts as on it.
 import { TEMPLATE_ARRIVAL_SPAWN } from './worlds';
 import { GUILD_BY_WORLD } from './guilds';
 import { NPC_BY_ID } from './npcs';
 import { ROAD_HALF_WIDTH } from './road';
+import { SETTLEMENTS, type SettlementDef, type SettlementRoadEnd } from './settlements';
 
 interface Point { x: number; z: number }
 interface Segment { x0: number; z0: number; x1: number; z1: number }
 
 const seg = (a: Point, b: Point): Segment => ({ x0: a.x, z0: a.z, x1: b.x, z1: b.z });
 
+/** where one leg of a settlement's road runs out to */
+function roadEnd(destId: string, site: SettlementDef, end: SettlementRoadEnd): Point {
+  if (end === 'giver') return NPC_BY_ID[site.giver];
+  const hall = GUILD_BY_WORLD[destId];
+  return { x: hall.hallX, z: hall.hallZ };
+}
+
 function buildPaths(): Record<string, Segment[]> {
-  return {
-    // template-04's arrival IS BUILDERS_HALL (within rounding — see
-    // worlds.ts's own TEMPLATE_ARRIVAL_SPAWN comment), so its one real
-    // connection is out to Garrick.
-    'template-04': [seg(TEMPLATE_ARRIVAL_SPAWN['template-04'], NPC_BY_ID['garrick'])],
-    // same pattern: template-07's arrival is WOODSMEN_HALL itself (guilds.ts).
-    'template-07': [seg(TEMPLATE_ARRIVAL_SPAWN['template-07'], NPC_BY_ID['torvald'])],
-    // template-08 is the one genuinely 3-distinct-point settlement: arrival,
-    // the Miners' hall, and Fenwick are all a few metres apart, not the same
-    // point — two real legs.
-    'template-08': [
-      seg(TEMPLATE_ARRIVAL_SPAWN['template-08'], NPC_BY_ID['fenwick']),
-      seg(TEMPLATE_ARRIVAL_SPAWN['template-08'], { x: GUILD_BY_WORLD['template-08'].hallX, z: GUILD_BY_WORLD['template-08'].hallZ }),
-    ],
-  };
+  const built: Record<string, Segment[]> = {};
+  for (const [destId, site] of Object.entries(SETTLEMENTS)) {
+    // a settlement with no leg gets no entry at all, not an empty one: hasSettlementRoad answers by key
+    if (site.roadsTo.length === 0) continue;
+    built[destId] = site.roadsTo.map((end) => seg(TEMPLATE_ARRIVAL_SPAWN[destId], roadEnd(destId, site, end)));
+  }
+  return built;
 }
 
 // built lazily (not at module scope) so this file's own import of

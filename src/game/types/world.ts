@@ -310,7 +310,7 @@ export interface Settlement {
   lastRaidAt?: number;
   /** Wave 47 (B7) · real, permanent yield-tier milestones earned by closing
    *  a settlement's own defend->expand quest link (see
-   *  data/settlementQuests.ts's SETTLEMENT_GROWTH_QUEST_DEST) — absent = 0.
+   *  data/settlements.ts's SETTLEMENT_GROWTH_QUEST_DEST) — absent = 0.
    *  Read by collectSettlementYield's own amount formula (gameStore.ts). */
   growthTier?: number;
 }

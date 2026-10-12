@@ -29,7 +29,7 @@ export interface Target {
    *  for nodes ("nodes are home-only, no destination has any of its own
    *  yet") — true when written, but `ResourceNodeState` gained a real
    *  `world` field in Wave 5 for exactly the opposite case, and Wave 26's
-   *  SETTLEMENT_NODES (data/settlementQuests.ts) is the first to actually
+   *  SETTLEMENT_NODES (data/settlements.ts) is the first to actually
    *  populate it. `nodeTarget()` below now threads it through the same way
    *  `buildingTarget()` already did for `PlacedBuilding.world` — the stale
    *  claim here was a real bug (see rosterSync.ts's own Wave 26 comment for

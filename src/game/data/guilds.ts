@@ -1,6 +1,7 @@
 import type { ItemId, LifetimeStats } from '../types';
 import { CHALLENGES, challengeProgress } from './challenges';
-import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
+import { WORLD_ANCHOR } from './anchors';
+import { resolveWorldAnchor, resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 
 // Guilds (Phase 21): five orders of the realm, each headquartered in a
 // different instance of the Kingdom (their halls are rendered by
@@ -87,10 +88,14 @@ export const SWITCH_TITHE = 25; // gold to change banners after first joining
 // One exception: Miners' Brotherhood's local Z came out to -249.667 in the
 // research spike that recommended this migration — re-derived directly here
 // as `(962.65 - 1000) / 0.15 = -249` exactly, and -249 is what's used below.
-const WOODSMEN_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-07'], 3666.667, 7053.333);
+//
+// CLN-22: three of the five halls are points another table stands on too — the Woodsmen's is where a traveller
+// to The Frozen Pass arrives, and Torvald, Garrick and Wyeth each stand due east of their destination's hall.
+// Those three local points live in data/anchors.ts (same numbers as before); the other two are used here alone.
+const WOODSMEN_HALL = resolveWorldAnchor(WORLD_ANCHOR.woodsmenHall);
 const MINERS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-08'], 70.6, -249);
-const ANGLERS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-03'], -93.333, -733.333);
-const BUILDERS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-04'], 2663.733, 10942.8);
+const ANGLERS_HALL = resolveWorldAnchor(WORLD_ANCHOR.anglersHall);
+const BUILDERS_HALL = resolveWorldAnchor(WORLD_ANCHOR.buildersHall);
 const KNIGHTS_HALL = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-02'], 66.867, -451.6);
 
 export const GUILDS: GuildDef[] = [

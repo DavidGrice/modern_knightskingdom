@@ -41,7 +41,7 @@ import { homeGroundY } from '@/game/homeGround';
 import { resetSessionModules } from './sessionReset';
 import { workSignals } from '../workSignal';
 import { GUILD_ARC_REP, NPC_BY_ID, NPCS, poisForDestination, sideQuestBlocker, sideQuestGiverName, sideQuestsOf } from '../data/npcs';
-import { SETTLEMENT_FOUNDING, SETTLEMENT_GROWTH_QUEST_DEST, SETTLEMENT_NODES } from '../data/settlementQuests';
+import { SETTLEMENT_FOUNDING, SETTLEMENT_GROWTH_QUEST_DEST, SETTLEMENT_NODES } from '../data/settlements';
 import {
   CARAVAN_CAP_PER_CART, CARAVAN_INSURANCE_RATE, CARAVAN_LOSS_SURVIVE_FRACTION, CARAVAN_MAX_CARTS, CARAVAN_ROUTES,
   caravanQuoteGold, caravanRouteKey, effectiveCaravanRisk,
@@ -255,7 +255,7 @@ interface GameState extends PersistedState {
    *  settlement (game/settlementRaid.ts + SettlementRaidRunner.tsx), the
    *  only place `st.settlements[destId]` mutates for a raid. A WIN pays a
    *  gold/xp bonus scaled by `hpFrac` and bumps that settlement's own
-   *  `kind:'defend'` errand (see data/settlementQuests.ts). A LOSS never
+   *  `kind:'defend'` errand (see data/settlements.ts). A LOSS never
    *  destroys anything — the real, reversible consequence is
    *  `lastCollectedAt` pushed forward by SETTLEMENT_RAID_YIELD_PENALTY_MS,
    *  delaying (never voiding) the next yield collection. Either way
@@ -1176,7 +1176,7 @@ function createGameStore() {
       nodes.push({ id: 'fishspot', kind: 'fishing', x: FISHING_DOCK.endX, z: FISHING_DOCK.endZ, scale: 1, yaw: 0, hitsLeft: 999, respawnAt: null });
 
       // Empire arc, Wave 26 · hand-placed destination resource nodes
-      // (SETTLEMENT_NODES, data/settlementQuests.ts) — The Frozen Pass's
+      // (SETTLEMENT_NODES, data/settlements.ts) — The Frozen Pass's
       // real ore/timber, stamped with `world` so ResourceNodes.tsx's
       // per-destination filter and villagerAtWork's node-kind check both
       // see them only while standing in (or working for) that instance.
@@ -1479,7 +1479,7 @@ function createGameStore() {
 
     // Empire arc, Wave 4 — see this action's own interface doc comment.
     // Wave 26: generalized off the single hardcoded Fenwick/template-08
-    // literal to a lookup into SETTLEMENT_FOUNDING (data/settlementQuests.ts)
+    // literal to a lookup into SETTLEMENT_FOUNDING (data/settlements.ts)
     // — template-08's entry there holds these exact old values, so this is
     // byte-identical behavior for Fenwick and real support for any other
     // destId with a table entry (The Frozen Pass, as of this wave).
