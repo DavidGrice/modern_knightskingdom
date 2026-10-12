@@ -1,5 +1,6 @@
 // CLN-21 · the royal court, moved verbatim out of data/npcs.ts's NPCS array (roster.ts reassembles it in order).
-import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from '../worlds';
+import { WORLD_ANCHOR } from '../anchors';
+import { resolveWorldAnchor, resolveDestPoint, WORLD_DESTINATION_BY_ID } from '../worlds';
 import type { NpcDef } from './types';
 
 export const COURT_NPCS: NpcDef[] = [
@@ -17,9 +18,10 @@ export const COURT_NPCS: NpcDef[] = [
     // the walk up really is the king's approach.
     // 2026-08-25: x/z converted to a durable LOCAL point via resolveDestPoint
     // (worlds.ts) — local (0, -253.333), derived from the pre-halving world
-    // position (1000, 962) via that function's own invariant. Must stay in
-    // sync with world.ts's NPC_KING, which uses this exact same call.
-    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 0, -253.333), yaw: Math.PI,
+    // position (1000, 962) via that function's own invariant. CLN-22: that
+    // local point is WORLD_ANCHOR.king (data/anchors.ts), the one world.ts's NPC_KING
+    // resolves too — the two used to be kept in sync by typing it twice.
+    ...resolveWorldAnchor(WORLD_ANCHOR.king), yaw: Math.PI,
     world: 'template-01',
     // Wave 53 (E5) · the court holds by day; see NpcDef.courtHours' own doc.
     courtHours: true,

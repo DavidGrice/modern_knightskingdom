@@ -26,7 +26,7 @@
 // Ruins) — Wave 4's empire-arc prototype, and per this wave's own research
 // the one real away-destination that already has resident villagers and a
 // yield loop but wasn't otherwise a delivery target. Gated behind
-// `settle_clear` (Fenwick's own founding errand, settlementQuests.ts) so the
+// `settle_clear` (Fenwick's own founding errand, settlements.ts) so the
 // order reads right: clear the ruins out before anyone trusts a cart to
 // come through them.
 //
@@ -34,7 +34,7 @@
 // npcs.ts's own note that their `EXTRA_SIDE_QUESTS` pool (allegianceQuests.ts)
 // was, until this same wave's DialoguePanel fix, dead code no one could ever
 // actually accept. These live directly in the NpcDef's own `sideQuests`
-// instead (spread in from here), matching settlementQuests.ts's own
+// instead (spread in from here), matching settlements.ts's own
 // precedent for "a new content module merged into a specific NPC" rather
 // than the EXTRA_SIDE_QUESTS merge path.
 import type { SideQuestDef } from './cast/types';

@@ -6,21 +6,26 @@
 // craft-only items (plank, bread, iron_bar), which the gather counter can never advance. Every rule below names the
 // runtime behaviour that makes it a real requirement (see gameStore's bumpSideQuest), not a style preference.
 //
+// CLN-22 · it also checks the links a settlement record (data/settlements.ts) makes to the rest of the data — its
+// giver's NpcDef, the guild hall its road runs to, the caravan roads between sites. Those are links between FILES,
+// which is exactly what one table per site cannot hold together by itself.
+//
 // `validateGameData()` returns one human-readable line per violation — an empty array means the data is sound.
 // It runs in `validate.test.ts` (npm run test:unit), logs loudly in development, and is on `window.__kkdata` for
 // browser smoke scripts.
 import type { SideQuestDef } from './cast/types';
 import { CEDRIC_WAR_QUESTS, GUILD_ARC_REP, GUILD_QUESTS, INTERIOR_RESIDENTS, NPCS, NPC_BY_ID, sideQuestsOf } from './npcs';
 import { EXISTING_QUEST_ALLEGIANCE, EXTRA_SIDE_QUESTS } from './allegianceQuests';
-import { SETTLEMENT_FOUNDING } from './settlementQuests';
+import { SETTLEMENTS } from './settlements';
+import { CARAVAN_ROUTES, caravanRouteKey } from './caravan';
 import { BESTIARY_LORE } from './bestiary';
 import { BUILDABLE_BY_ID } from './buildables';
-import { GUILD_BY_ID } from './guilds';
+import { GUILD_BY_ID, GUILD_BY_WORLD } from './guilds';
 import { ITEMS } from './items';
 import { QUESTS } from './quests';
 import { RANKS } from './ranks';
 import { RECIPES } from './recipes';
-import { WORLD_DESTINATION_BY_ID } from './worlds';
+import { TEMPLATE_ARRIVAL_SPAWN, WORLD_DESTINATION_BY_ID } from './worlds';
 import { exposeDebug } from '@/lib/debugHooks';
 
 /** Everyone a side quest can be accepted from: every NpcDef (interior residents included), Cedric, each guild. */
@@ -117,7 +122,7 @@ export function validateGameData(): string[] {
           if (target !== 'any' && !has(BESTIARY_LORE, target)) out.push(`${where}: kill target '${target}' is not an enemy kind`);
           break;
         case 'defend': // bumped with the settlement's destination id
-          if (target !== 'any' && !has(SETTLEMENT_FOUNDING, target)) out.push(`${where}: defend target '${target}' is not a settlement`);
+          if (target !== 'any' && !has(SETTLEMENTS, target)) out.push(`${where}: defend target '${target}' is not a settlement`);
           break;
         case 'joust':
         case 'duel':
@@ -148,6 +153,51 @@ export function validateGameData(): string[] {
   for (const id of Object.keys(GUILD_ARC_REP)) if (!guildQuestIds.has(id)) out.push(`GUILD_ARC_REP: '${id}' is not a guild quest`);
   // Cedric's pool is reached through sideQuestsOf('cedric') above; this only guards the table itself going unused
   if (CEDRIC_WAR_QUESTS.some((q) => !byId.has(q.id))) out.push('CEDRIC_WAR_QUESTS: an errand is unreachable through sideQuestsOf');
+
+  // ---- the settlements (data/settlements.ts) ----
+  const settlers = new Set<string>();
+  for (const [destId, site] of Object.entries(SETTLEMENTS)) {
+    const where = `settlement '${destId}'`;
+    // travelTo goes nowhere for an id that is no destination, and seedNodes passes over its nodes
+    if (!has(WORLD_DESTINATION_BY_ID, destId)) out.push(`${where}: is not a destination`);
+    // The giver's NpcDef is how a settlement is reached at all: its `sideQuests` are the errands on offer, the deed,
+    // the yield and the caravan desk are offered by whoever's NpcDef names this destination as its `world`
+    // (DialoguePanel), and the settlement's road runs out to where he stands (settlementRoads).
+    const giver = NPC_BY_ID[site.giver];
+    if (!giver) out.push(`${where}: giver '${site.giver}' is not an NPC`);
+    else {
+      if (giver.world !== destId) out.push(`${where}: giver '${site.giver}' lives in '${giver.world ?? 'the homestead'}', not here`);
+      if (giver.sideQuests !== site.quests) out.push(`${where}: giver '${site.giver}' does not hand out this settlement's errands`);
+    }
+    const errands = new Set(site.quests.map((q) => q.id));
+    // foundSettlement refuses the deed until this errand is done, and only the giver's own talk speaks of it
+    if (!errands.has(site.founding.requiredQuestId)) out.push(`${where}: the deed waits on '${site.founding.requiredQuestId}', which is not one of its errands`);
+    // turnInSideQuest raises the growth tier on this errand's turn-in and on no other
+    if (!errands.has(site.growthQuestId)) out.push(`${where}: grows on '${site.growthQuestId}', which is not one of its errands`);
+    // canAfford reads the cost's keys as item ids: a price in something that is no item can never be paid
+    for (const id of Object.keys(site.founding.cost)) if (!has(ITEMS, id)) out.push(`${where}: deed cost '${id}' is not an item`);
+    // foundSettlement leaves out a resident whose id a villager already carries
+    for (const r of site.founding.residents) {
+      if (settlers.has(r.id)) out.push(`${where}: resident '${r.id}' is named twice, so only one of them ever moves in`);
+      settlers.add(r.id);
+    }
+    // settlementRoads starts every leg at the destination's arrival point, and builds ALL the settlements' roads the
+    // first time any region asks for one — a leg it cannot lay throws there, for every destination
+    if (site.roadsTo.length > 0 && !has(TEMPLATE_ARRIVAL_SPAWN, destId)) out.push(`${where}: a road, but no arrival point to start it from`);
+    // ...and reads the hall of the guild housed at this destination
+    if (site.roadsTo.includes('guildHall') && !has(GUILD_BY_WORLD, destId)) out.push(`${where}: a road to a guild hall, but no guild is housed here`);
+  }
+
+  // ---- the caravan roads (data/caravan.ts) ----
+  for (const key of Object.keys(CARAVAN_ROUTES)) {
+    const ends = key.split('|');
+    // dispatchCaravan wants a founded settlement at each end, two different ones, and finds the road by caravanRouteKey
+    if (ends.length !== 2 || ends[0] === ends[1] || !ends.every((e) => has(SETTLEMENTS, e))) {
+      out.push(`caravan road '${key}': must join two different settlements`);
+    } else if (caravanRouteKey(ends[0], ends[1]) !== key) {
+      out.push(`caravan road '${key}': is looked up as '${caravanRouteKey(ends[0], ends[1])}', so this entry is never found`);
+    }
+  }
 
   return out;
 }

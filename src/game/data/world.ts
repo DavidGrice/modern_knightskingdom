@@ -8,7 +8,8 @@
 // for exactly this reason) — otherwise this line would complete the cycle
 // worlds.ts -> dungeon.ts -> buildables.ts -> world.ts -> worlds.ts and crash
 // on a TDZ access to WORLD_DESTINATION_BY_ID.
-import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
+import { WORLD_ANCHOR } from './anchors';
+import { resolveWorldAnchor, resolveDestPoint, WORLD_DESTINATION_BY_ID } from './worlds';
 import { BUILD_REGION } from './buildables';
 import { MERCHANT_SPOT } from './trade';
 
@@ -56,7 +57,9 @@ export const BROOK = {
 // research spike's own migration table, but it's the identical class of
 // bug — a hand-typed world x/z, only correct at one scale — found by
 // checking this file directly while implementing that table).
-export const NPC_KING = { ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], 0, -253.333), yaw: Math.PI };
+// CLN-22: "sharing the exact call" still meant the same two numbers typed in two files. The local point is now
+// WORLD_ANCHOR.king (data/anchors.ts), which his NpcDef resolves too.
+export const NPC_KING = { ...resolveWorldAnchor(WORLD_ANCHOR.king), yaw: Math.PI };
 
 export const INTERACT_RANGE = 3.4;
 export const STATION_RANGE = 4.5;
@@ -149,8 +152,8 @@ export const STARTER_VILLAGE_CLEAR: { x: number; z: number; r: number }[] = [
 // worlds.ts's 2026-08-25 comment) — local (3760, 5793.333), derived from
 // the 2026-08-21 world position above run backward through the same
 // invariant TEMPLATE_ARRIVAL_SPAWN's template-05 entry uses (it's the same
-// point).
-export const CEDRIC_CAMP = resolveDestPoint(WORLD_DESTINATION_BY_ID['template-05'], 3760, 5793.333);
+// point). CLN-22: and now the same WORLD_ANCHOR.cedricCamp (data/anchors.ts), rather than the same numbers typed twice.
+export const CEDRIC_CAMP = resolveWorldAnchor(WORLD_ANCHOR.cedricCamp);
 export const CEDRIC_WORLD = 'template-05';
 export const CEDRIC_REVEAL_QUEST = 'knights_arms';
 export const CEDRIC_INTERACT_RANGE = 5;

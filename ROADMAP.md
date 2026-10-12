@@ -7925,3 +7925,106 @@ production build and `next dev`.
 
 **Not run:** a blow from an enemy's own hand (the probe calls the function every way of taking damage ends in); the
 dialogue and shop panels (the same `panel` field); a gamepad.
+
+## Bug: Richard's tilt fence and his steed stand on a hillside no player can reach — FOUND 2026-10-12 (grounding CLN-22), not yet fixed
+
+**Found by** the readers set on the code before CLN-22 was designed. The cleanup plan asked CLN-22 to "Fix
+CourtDressing.tsx's TourneyLists to derive its fence position from NPC_BY_ID['richard']'s live position instead of
+a frozen literal" (it calls the fence Storm's; it is Richard's). That is not a tidy-up — it moves five things on
+screen by about eighty metres, on to ground nobody has looked at — so CLN-22 left the fence alone and this entry
+records what is wrong. It is to be fixed in a change of its own.
+
+**The fault.** `TourneyLists` (`components/world/CourtDressing.tsx`) draws a tilt barrier of three rail pieces with a
+pennant at each end, at x = 1292.5 and z = 893, 897, 902.5, 908 and 912 — hand-typed world points, under the comment
+"between Richard (1300, 888) and the steed (1285, 915)". Richard has not stood at (1300, 888) for a long time: his
+`NpcDef` was moved to (1300, 933) when the destinations were halved in scale and his old spot fell outside the
+ground a player can walk on (#171), and again three days later (#173), to the local point (0, −446.667) — the world
+point (1300, 966.5). That second change edited `CourtDressing.tsx` too, and left the fence as it was. The steed's home
+(`components/world/Wildlife.tsx`, `home={[1285, 915]}`, "Richard's jousting steed, stabled at the Tourney Grounds")
+is a literal of the same age and was not moved either.
+
+**Measured** (production build of `main` at cc30e97, `cln22_fence_look.mjs` and `cln22_steed_probe.mjs`, 2026-10-12;
+The Tourney Grounds with Richard revealed):
+
+- All five pieces are in the scene, each grounded on the terrain under it — at heights from 9.3 m (z 893) to
+  12.6 m (z 912). The ground where a traveller arrives is at 3.1 m: the fence runs up a hillside.
+- They are 55.0 to 73.9 m from Richard and 56.4 to 75.3 m from the arrival point.
+- A player cannot go there. The game puts a player back on walkable ground wherever he is sent: asked for
+  (1292.5, 902.5), the middle of the fence, he is put at (1292.5, 965) — 62.5 m away; asked for the steed's own
+  home, (1285, 915), he is put at (1290, 965) — 50.2 m away; (1270, 915) and (1310, 915) come back 53.9 m and 50 m
+  away. Along that side the walkable ground ends at about z 965, and the fence stops 53 m short of it.
+- The steed grazes round its home: each walk it takes ends 4 to 13 m from (1285, 915) (`Wildlife.tsx`), and both
+  probes found it within that reach — so it is never nearer than some 37 m to ground a player can stand on.
+- From the edge of the walkable ground, looking that way, the fence is at most a thin pale line on the far slope
+  (pictures `fence_from_richard.png`, `fence_south_of_fence.png`, kept with the tools in `out/cln22/ev`).
+
+**What it costs.** "Richard's lists" are not where Richard is: his post has no barrier and no pennants, and the ones
+that are drawn are scenery on a distant hill. The steed cannot be walked up to, so it cannot be mounted where it
+stands.
+
+**Not checked:** whether a player can come by a horse at the Tourney Grounds some other way (arriving mounted, or on
+a horse of his own) — the joust itself reads Richard's live position and was not looked at; what the fence and the
+steed look like from anywhere but the three points photographed; whether a save keeps anything of a horse's home.
+
+**To decide in the fix, with a live look — none of this follows from the code:** where the lists belong now. The
+old layout put the fence 7.5 m west of Richard, running from 5 to 24 m beyond him, and the steed 27 m beyond him and
+15 m to the west. The same offsets from where he stands today are not a safe answer: they put the fence at
+x 1292.5, z 971.5 to 990.5, and the two points measured out there, on Richard's own x — (1300, 990) and
+(1300, 1010) — are themselves off the walkable ground (the game puts the player at x 1306.1 for both). The fence's
+own line, 7.5 m west of those two, was not measured. Whichever spot is chosen, the fence and the steed's home should be
+written as offsets from Richard's `NpcDef`, the way `QuartermasterStores` already follows John, so that the next
+move of Richard takes them with him.
+
+## Bug: the walls of the merchant's camp stop nobody — FOUND 2026-10-12 (during CLN-22), not yet fixed
+
+**Found by** CLN-22's live probe, which looks for the camp's five wall pieces in the scene and, since it was standing
+there, walks at one.
+
+**The fault.** The merchant's camp (Wave 46: "a real defended enclosure of his own") is five pieces of castle wall
+drawn round his spot — three straights and two corners, 3.84 m high. They are drawn and nothing else: they have no
+collision box and no entry in the navigation grid. The one list that names the camp at all, the development-time
+guard that keeps fixed props out of the buildable region (`FIXED_WORLD_PROPS`, `data/world.ts`), holds the
+merchant's own spot and not the walls. Until CLN-22 the five placements were literals inside `MerchantCamp.tsx` that
+no data module could read; they are now `MERCHANT_CAMP_WALLS` in `data/trade.ts`, which is what a fix would read.
+
+**Measured** (production build of `main` at cc30e97, 2026-10-12):
+
+- *A walker* (`cln22_live.mjs`, two runs): the player is set down in the middle of the yard, at z 16, facing the
+  back wall, which stands across z 12 — 8 m wide and 2.4 m deep. Three seconds of the forward key end at z 4: twelve
+  metres at a walk, straight through the wall, without a check.
+- *The navigation grid* (`cln22_campnav_probe.mjs`): sampled every half metre, not one point of any piece's footprint
+  is blocked — 0 of 85 in the back wall, 0 of 49 in each corner, 0 of 85 in each wing. The control — a finished low
+  wall of the same model and facing, written into the store's buildings some 36 m off, and the grid rebuilt by the
+  probe — is blocked at 85 of 85.
+
+**What it costs.** The enclosure is a picture of one. A player walks through it; and by the code, not run, so does
+anything that finds its way by the grid — a raider making for the guard posted there, the guard himself, the
+merchant on his way in and out.
+
+**Not checked:** whether a raid ever comes near the camp; whether the merchant's own walk in and out passes through
+a wall today; the two huts of the starter village, which are drawn the same way from literals of their own
+(`StarterVillage.tsx`).
+
+**Fix, to follow in its own change:** give each piece of `MERCHANT_CAMP_WALLS` the collision its buildable has when
+a player places it (`collisionBoxesFor`, by model and quarter-turn — the table's facings are whole quarter turns) and
+stamp the same boxes into the home navigation grid, leaving the gate side — the +z side; the camp's own comments
+call it north, the HUD's compass south — open. It changes where a player and a
+walker can go, so it wants a live look at the gate and at the merchant's walk through it.
+
+## Seen, not looked into: trees drawn on opaque white cards at the Tourney Grounds — logged 2026-10-12 (during CLN-22)
+
+**Seen in** the pictures CLN-22's live probes take (production build of `main` at cc30e97; `main_template-02.png`,
+`fence_from_richard.png`, kept with the tools in `out/cln22/ev`): at The Tourney Grounds several flat "card" trees
+are drawn as a green tree on a solid white rectangle, where the card's background should be cut away.
+
+**What was measured** (`cln22_cards_probe.mjs`): the scene there holds 17 textured meshes whose world-axis bounds are
+thinner than 8 cm one way (some of them lie flat on the ground; a card standing at an angle would not be counted,
+and a mesh with two textured materials would be counted twice).
+14 have a material that is neither transparent nor alpha-tested (`transparent: false`, `alphaTest: 0`); 3 are
+`transparent: true`. Which model each belongs to was not recorded.
+
+**Not looked into:** which of the 17 are the trees, and which are meant to be opaque; whether their textures carry
+a cut-out in the alpha channel at all (every texture reports the same RGBA format whether or not it does); whether
+the other destinations show the same; why three materials differ; whether this is the fault
+`PropModel.tsx` already works round for three placed props (`ALPHA_MASK_ASSETS` / `fixAlphaMasks`), arriving by
+another loader.

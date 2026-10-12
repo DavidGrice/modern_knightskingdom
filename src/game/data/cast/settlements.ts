@@ -1,13 +1,14 @@
 // CLN-21 · the settlement and guild-hall residents, moved verbatim out of data/npcs.ts's NPCS array.
-import { resolveDestPoint, WORLD_DESTINATION_BY_ID } from '../worlds';
-import { SETTLEMENT_QUESTS } from '../settlementQuests';
+import { WORLD_ANCHOR } from '../anchors';
+import { resolveWorldAnchor, resolveDestPoint, WORLD_DESTINATION_BY_ID } from '../worlds';
+import { SETTLEMENT_QUESTS } from '../settlements';
 import type { NpcDef } from './types';
 
 export const SETTLEMENT_NPCS: NpcDef[] = [
   // Empire arc, Wave 4: the settlement prototype's own quest-giver, living
   // among The Old Ruins (template-08) — the one real away-destination with
-  // no resident NPC or guild-hall figure already there (see
-  // settlementQuests.ts's own header for why this one was picked). Reuses
+  // no resident NPC or guild-hall figure already there (see data/
+  // settlements.ts's note on template-08 for why this one was picked). Reuses
   // the same generic villager donor + greetSound + portrait Alric/Beda
   // already use — zero new asset dependency, same "village folk, not
   // court" visual register.
@@ -58,7 +59,9 @@ export const SETTLEMENT_NPCS: NpcDef[] = [
     // overlapping prompts stacked on top of each other. Local point captured
     // live via a teleport survey and resolveDestPoint's durable convention,
     // same as Fenwick's own NpcDef above; yaw faces back toward the hall.
-    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-07'], 3960, 7053.333), yaw: Math.PI / 2,
+    // CLN-22: "east of the hall" is the hall's own anchor (data/anchors.ts) at
+    // another x, where it used to be the hall's z typed a second time.
+    ...resolveWorldAnchor({ ...WORLD_ANCHOR.woodsmenHall, x: 3960 }), yaw: Math.PI / 2,
     keepProps: false,
     greetSound: 'villager',
     portrait: '/assets/minifigs/minifiggenericgood00.png',
@@ -97,7 +100,8 @@ export const SETTLEMENT_NPCS: NpcDef[] = [
     // Frozen Pass. Live-verified during this wave's own verify pass (a real
     // teleport + interact): reachable on real walkable ground, with a clean
     // "Talk to Garrick" prompt showing no overlap with the hall's own.
-    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-04'], 2930.73, 10942.8), yaw: Math.PI / 2,
+    // CLN-22: the hall's own anchor at another x, as for Torvald above.
+    ...resolveWorldAnchor({ ...WORLD_ANCHOR.buildersHall, x: 2930.73 }), yaw: Math.PI / 2,
     keepProps: false,
     greetSound: 'villager',
     portrait: '/assets/minifigs/minifiggenericgood00.png',
@@ -136,7 +140,8 @@ export const SETTLEMENT_NPCS: NpcDef[] = [
     // this wave: the resolved world point (1614, 945) falls inside all three
     // overlapping walkable rects on record for this destination, not just
     // the one big one — a real, if not fully live-rendered, confirmation.
-    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-03'], 186.667, -733.333), yaw: Math.PI / 2,
+    // CLN-22: the hall's own anchor at another x, as for Torvald above.
+    ...resolveWorldAnchor({ ...WORLD_ANCHOR.anglersHall, x: 186.667 }), yaw: Math.PI / 2,
     keepProps: false,
     greetSound: 'villager',
     portrait: '/assets/minifigs/minifiggenericgood00.png',

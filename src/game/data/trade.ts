@@ -41,6 +41,37 @@ export const MERCHANT_SPOT = { x: -76.8, z: 16, yaw: Math.PI };
  *  validation of the id it is given, so this needs no store changes. */
 export const MERCHANT_CAMP_STATION = 'merchant_camp';
 
+/** One piece of the merchant camp's wall: which mc-family piece it is (the buildable's id, which is also its model's
+ *  file name), where it stands in home-world metres, and which way it faces. */
+export interface CampWallPiece {
+  /** 'mc005' is "Castle Wall (Low)", the straight; 'mc001' is "Wall Corner (Small)" */
+  model: 'mc001' | 'mc005';
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** CLN-22 · the walls of the merchant's camp, drawn by components/world/MerchantCamp.tsx — which used to hold these
+ *  five placements as literals of its own, the one place the camp's layout was written that no data module could
+ *  see. Three sides only (back + two wings), open on the +z side, toward the gate the road spur (road.ts leg 6)
+ *  walks in through; MERCHANT_SPOT above sits in the yard, facing that gate. (The comment on MERCHANT_SPOT
+ *  above, MerchantCamp.tsx's header and road.ts call that side north; the HUD's compass calls +z south. The axis is
+ *  what is meant.)
+ *
+ *  They are absolute home-world points laid out round MERCHANT_SPOT by eye, not derived from it, and the corner yaws
+ *  and seams are still the placeholder MerchantCamp.tsx's own header describes — moved here as they stood, in the
+ *  order they are drawn. */
+export const MERCHANT_CAMP_WALLS: CampWallPiece[] = [
+  // back wall
+  { model: 'mc005', x: -76.8, z: 12, yaw: 0 },
+  // back-left / back-right corners
+  { model: 'mc001', x: -82.8, z: 12, yaw: 0 },
+  { model: 'mc001', x: -70.8, z: 12, yaw: Math.PI / 2 },
+  // west / east wings, running toward +z from the back corners
+  { model: 'mc005', x: -82.8, z: 18, yaw: Math.PI / 2 },
+  { model: 'mc005', x: -70.8, z: 18, yaw: Math.PI / 2 },
+];
+
 export const SELL_PRICES: Partial<Record<ItemId, number>> = {
   wood: 1,
   plank: 2,
