@@ -9,10 +9,11 @@ import RiggedProp from './RiggedProp';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { playerState } from '../fps/PlayerController';
-import { riddenByAlly, registerHorse } from '@/game/riding';
+import { horseIsHere, riddenByAlly, registerHorse } from '@/game/riding';
 import { falconPos, falconSpotLabel, FALCON_SPOT_RANGE } from '@/game/falcon';
 import { useGameStore } from '@/game/store/gameStore';
 import { GROUND_BY_ID, groundOpen } from '@/game/data/grounds';
+import { TOURNEY_STEED_HOME } from '@/game/data/tourney';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { wrapAngle } from '@/lib/math';
@@ -78,10 +79,13 @@ function Horse({ id, url, home, world }: { id: string; url: string; home: [numbe
   // the animated path loads from props/objrig — see lib/propRig
   const gaitRef = useRef(-1);
   const assetId = useMemo(() => url.split('/').pop()!.replace(/\.glb$/i, ''), [url]);
-  const mob = useMemo(() => registerHorse(id, url, home[0], home[1]), [id, url, home]);
+  const mob = useMemo(() => registerHorse(id, url, home[0], home[1], world ?? null), [id, url, home, world]);
   // Phase 20: a horse can be stabled at a destination (Richard's jousting
   // steed at the Tourney Grounds) — it renders only while visiting there,
-  // standing on the bake's real terrain
+  // standing on the bake's real terrain. Its record is told which scene that
+  // is, and the "Ride Horse" prompt asks it the same question this does
+  // (riding.ts's horseIsHere): a horse is offered only in the scene it is
+  // drawn in, the one it lives in.
   const destination = useGameStore((s) => s.destination);
 
   useFrame((_, dt) => {
@@ -133,7 +137,7 @@ function Horse({ id, url, home, world }: { id: string; url: string; home: [numbe
     g.rotation.y = s.yaw;
   });
 
-  if ((world ?? null) !== (destination ?? null)) return null;
+  if (!horseIsHere(mob, destination)) return null;
   return (
     <group ref={group}>
       <Suspense fallback={null}>
@@ -307,8 +311,12 @@ export default function Wildlife() {
       <Horse id="horse1" url={`${C}/l7339211.glb`} home={[-42, 20]} />
       <Horse id="horse3" url={`${L}/l7339212.glb`} home={[-58, 18]} />
       <Horse id="horse4" url={`${L}/l7339221.glb`} home={[-46, -4]} />
-      {/* Richard's jousting steed, stabled at the Tourney Grounds (Phase 20) */}
-      <Horse id="horse2" url={`${C}/l7339200.glb`} home={[1285, 915]} world="template-02" />
+      {/* Richard's jousting steed, stabled at the Tourney Grounds (Phase 20) —
+          at the foot of his lists: both are laid out from Richard's own post
+          in data/tourney.ts. Its home used to be a world point typed here,
+          which stayed on a hillside no player can reach when Richard and his
+          ground were moved. */}
+      <Horse id="horse2" url={`${C}/l7339200.glb`} home={TOURNEY_STEED_HOME} world="template-02" />
       <Falcon />
       <Bat seed={0} />
       <Bat seed={1} />

@@ -25,7 +25,7 @@ import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer, tryD
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { fishingState, startFishing } from '@/game/fishing';
 import { sweepWorld, tickWorldFrame, WORLD_SWEEP_S } from '@/game/worldTick';
-import { ridingState, horses, mountHorse, dismountHorse, stableHorse, stabledHorses } from '@/game/riding';
+import { ridingState, horses, horseOnOffer, mountHorse, dismountHorse, canStable, stableHorse } from '@/game/riding';
 import { falconPos, FALCON_CALL_RANGE } from '@/game/falcon';
 import { agentManager } from '@/ai/core/AgentManager';
 import { COMPANION_ID } from '@/game/data/companion';
@@ -707,8 +707,12 @@ export default function PlayerController() {
           return { id: n.id, kind: 'npc', duration: 0, actionable: true, label: `Talk to ${n.name}` };
         }
       }
+      // only a horse that lives HERE: every horse's record exists in every
+      // scene, and Richard's steed stands on ground The King's Approach has
+      // too (riding.ts's horseOnOffer) — the same residency test the NPC loop
+      // just above makes with `n.world`
       for (const h of Object.values(horses)) {
-        if (h.mounted) continue;
+        if (!horseOnOffer(h, st.destination)) continue;
         if (Math.hypot(h.x - pos.current.x, h.z - pos.current.z) < INTERACT_RANGE) {
           return { id: h.id, kind: 'horse', duration: 0, actionable: true, label: 'Ride Horse' };
         }
@@ -881,9 +885,10 @@ export default function PlayerController() {
         consider(edgeX, edgeZ, 0.9, target, FISH_CAST_RANGE);
       }
     }
-    // wild horses can be ridden
+    // wild horses can be ridden — the ones that live here (horseOnOffer, as
+    // in the destination branch above)
     for (const h of Object.values(horses)) {
-      if (h.mounted) continue;
+      if (!horseOnOffer(h, st.destination)) continue;
       consider(h.x, h.z, 1.1, {
         id: h.id, kind: 'horse', duration: 0, actionable: true, label: 'Ride Horse',
       });
@@ -1312,12 +1317,15 @@ export default function PlayerController() {
       // G27 · dismounting AT a built stable stables the horse: it stops
       // wandering the meadow and becomes homestead property, assignable to a
       // defender who then patrols mounted. Catching one is the ride itself —
-      // you have to find it, get on it, and walk it home.
+      // you have to find it, get on it, and walk it home. Only a horse of the
+      // homestead's own herd (riding.ts's canStable): a destination can be
+      // claimed and a Stable placed there (none is finished there by ordinary
+      // play today), and Richard's steed is not the player's to keep.
       const ridden = ridingState.horseId;
       const stable = st.buildings.find((b) => b.type === 'stable' && isBuilt(b)
         && Math.hypot(b.x - pos.current.x, b.z - pos.current.z) < 6);
       dismountHorse(pos.current.x - fx * 1.2, pos.current.z - fz * 1.2, yaw.current);
-      if (ridden && stable && !stabledHorses.ids.includes(ridden)) {
+      if (ridden && stable && canStable(ridden)) {
         stableHorse(ridden);
         st.notify('The horse is stabled — assign it to a defender in the Roster (N).', true);
       }
