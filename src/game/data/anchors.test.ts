@@ -28,6 +28,11 @@ describe('the shared anchors', () => {
     expect(NPC_BY_ID.king.world).toBe(WORLD_ANCHOR.king.dest);
   });
 
+  it("put Richard's post and his NpcDef on one point", () => {
+    expect(point(NPC_BY_ID.richard)).toEqual(resolveWorldAnchor(WORLD_ANCHOR.richard));
+    expect(NPC_BY_ID.richard.world).toBe(WORLD_ANCHOR.richard.dest);
+  });
+
   it("put Cedric's camp and the point a traveller arrives at on one point", () => {
     expect(CEDRIC_CAMP).toEqual(resolveWorldAnchor(WORLD_ANCHOR.cedricCamp));
     expect(point(TEMPLATE_ARRIVAL_SPAWN[WORLD_ANCHOR.cedricCamp.dest])).toEqual(CEDRIC_CAMP);

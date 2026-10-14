@@ -7926,54 +7926,173 @@ production build and `next dev`.
 **Not run:** a blow from an enemy's own hand (the probe calls the function every way of taking damage ends in); the
 dialogue and shop panels (the same `panel` field); a gamepad.
 
-## Bug: Richard's tilt fence and his steed stand on a hillside no player can reach — FOUND 2026-10-12 (grounding CLN-22), not yet fixed
+## Bugfix: Richard's lists and his steed stood on a hillside no player could reach, and his pass could not be ridden — FOUND 2026-10-12 (grounding CLN-22), FIXED 2026-10-13
 
 **Found by** the readers set on the code before CLN-22 was designed. The cleanup plan asked CLN-22 to "Fix
-CourtDressing.tsx's TourneyLists to derive its fence position from NPC_BY_ID['richard']'s live position instead of
-a frozen literal" (it calls the fence Storm's; it is Richard's). That is not a tidy-up — it moves five things on
-screen by about eighty metres, on to ground nobody has looked at — so CLN-22 left the fence alone and this entry
-records what is wrong. It is to be fixed in a change of its own.
+CourtDressing.tsx's TourneyLists to derive its fence position from NPC_BY_ID['richard']'s live position instead of a
+frozen literal" (it calls the fence Storm's; it is Richard's). That is not a tidy-up — it moves five things on screen
+by about eighty metres — so CLN-22 left the fence alone and logged it, and it is fixed here.
 
-**The fault.** `TourneyLists` (`components/world/CourtDressing.tsx`) draws a tilt barrier of three rail pieces with a
-pennant at each end, at x = 1292.5 and z = 893, 897, 902.5, 908 and 912 — hand-typed world points, under the comment
-"between Richard (1300, 888) and the steed (1285, 915)". Richard has not stood at (1300, 888) for a long time: his
-`NpcDef` was moved to (1300, 933) when the destinations were halved in scale and his old spot fell outside the
-ground a player can walk on (#171), and again three days later (#173), to the local point (0, −446.667) — the world
-point (1300, 966.5). That second change edited `CourtDressing.tsx` too, and left the fence as it was. The steed's home
-(`components/world/Wildlife.tsx`, `home={[1285, 915]}`, "Richard's jousting steed, stabled at the Tourney Grounds")
-is a literal of the same age and was not moved either.
+**The fault.** `TourneyLists` (`components/world/CourtDressing.tsx`) drew a tilt barrier of three rail pieces with a
+pennant at each end at x = 1292.5 and z = 893, 897, 902.5, 908 and 912 — hand-typed world points, under the comment
+"between Richard (1300, 888) and the steed (1285, 915)" — and `components/world/Wildlife.tsx` stabled "Richard's
+jousting steed" at the literal `[1285, 915]`. Richard has not stood at (1300, 888) for a long time: his `NpcDef` was
+moved to (1300, 933) when the destinations were halved in scale (#171), and three days later, when they were halved
+again (#173), to the local point (0, −446.667) — the world point (1300, 966.5). The fence and the steed's home were
+world metres and stayed where they were. The ground did not: the one patch round Richard that a player can walk on was
+measured round his first spot too, but as a rectangle in the bake's own units
+(`scripts/generate-walkable-footprint.mjs`, a local tool), so it shrank with the scale — 80 by 55 m then, 20 by 13.75
+m now — and it no longer reaches either of them.
 
-**Measured** (production build of `main` at cc30e97, `cln22_fence_look.mjs` and `cln22_steed_probe.mjs`, 2026-10-12;
-The Tourney Grounds with Richard revealed):
+**What it cost.** More than scenery. The steed is the only horse stabled at the Tourney Grounds, and by the code a
+player cannot arrive on one of his own: the travel board is not offered from the saddle. The pass Richard's lists are
+for is offered to a mounted, galloping player within 5.9 m of him — so it could not be ridden at all. Passes are
+credited to an errand in one place only (`joustRichard`), so neither of the two errands that ask for them could be
+finished: Richard's own "Land 3 solid passes at the lists" (`r_lists`), and the Knights' Order's `kn_drill`, with the
+three errands of the Order's chain that wait behind it (`kn_hunt`, `kn_command`, `kn_champion`).
 
-- All five pieces are in the scene, each grounded on the terrain under it — at heights from 9.3 m (z 893) to
-  12.6 m (z 912). The ground where a traveller arrives is at 3.1 m: the fence runs up a hillside.
-- They are 55.0 to 73.9 m from Richard and 56.4 to 75.3 m from the arrival point.
-- A player cannot go there. The game puts a player back on walkable ground wherever he is sent: asked for
-  (1292.5, 902.5), the middle of the fence, he is put at (1292.5, 965) — 62.5 m away; asked for the steed's own
-  home, (1285, 915), he is put at (1290, 965) — 50.2 m away; (1270, 915) and (1310, 915) come back 53.9 m and 50 m
-  away. Along that side the walkable ground ends at about z 965, and the fence stops 53 m short of it.
-- The steed grazes round its home: each walk it takes ends 4 to 13 m from (1285, 915) (`Wildlife.tsx`), and both
-  probes found it within that reach — so it is never nearer than some 37 m to ground a player can stand on.
-- From the edge of the walkable ground, looking that way, the fence is at most a thin pale line on the far slope
-  (pictures `fence_from_richard.png`, `fence_south_of_fence.png`, kept with the tools in `out/cln22/ev`).
+**Measured on `main`** (production build of fc1fc35, `tourney_live.mjs`, first 2026-10-12/13 and again in the final
+evidence pass, 2026-10-14 — the figures are that pass's, and every run agreed on them but the one marked; The Tourney
+Grounds with Richard revealed):
 
-**What it costs.** "Richard's lists" are not where Richard is: his post has no barrier and no pennants, and the ones
-that are drawn are scenery on a distant hill. The steed cannot be walked up to, so it cannot be mounted where it
-stands.
+- All five pieces were in the scene, each sitting on the terrain under it at heights from 9.3 to 12.6 m (the ground
+  where a traveller arrives is at 3.1 m, by the earlier probe at cc30e97), and 55.0 to 73.9 m from Richard. A player
+  sent to any of them was put back 53 to 72 m away, at the edge of the walkable ground (z 965).
+- The steed's home: a player sent there was put 50.25 m away. Of eight points round the 13 m circle the steed grazes
+  in, a player could stand at none (he was put 37 to 63 m from each).
+- Sent three paces from the steed, the player was put back 52.8 m from it (38.5 to 60.2 m in the earlier runs: how far
+  depends on where the steed has wandered to), where E offered "Return Home". No pass.
 
-**Not checked:** whether a player can come by a horse at the Tourney Grounds some other way (arriving mounted, or on
-a horse of his own) — the joust itself reads Richard's live position and was not looked at; what the fence and the
-steed look like from anywhere but the three points photographed; whether a save keeps anything of a horse's home.
+**The fix.** `data/tourney.ts` holds the lists — three rails, a pennant beyond each end — and the steed's home, each
+as an offset from Richard's own post in the destination's LOCAL units, resolved like every other local point; his post
+is `WORLD_ANCHOR.richard` (`data/anchors.ts`), which his `NpcDef` now resolves too. They go where he goes, and shrink
+or grow with the destination as he and the ground do. `TourneyLists` draws the table; the steed's line in
+`Wildlife.tsx` reads its home from it.
 
-**To decide in the fix, with a live look — none of this follows from the code:** where the lists belong now. The
-old layout put the fence 7.5 m west of Richard, running from 5 to 24 m beyond him, and the steed 27 m beyond him and
-15 m to the west. The same offsets from where he stands today are not a safe answer: they put the fence at
-x 1292.5, z 971.5 to 990.5, and the two points measured out there, on Richard's own x — (1300, 990) and
-(1300, 1010) — are themselves off the walkable ground (the game puts the player at x 1306.1 for both). The fence's
-own line, 7.5 m west of those two, was not measured. Whichever spot is chosen, the fence and the steed's home should be
-written as offsets from Richard's `NpcDef`, the way `QuartermasterStores` already follows John, so that the next
-move of Richard takes them with him.
+**Where they were put, and how that was decided.** Not by the code: where a bake's walkable ground lies is only known
+once its model has loaded. The Tourney Grounds were surveyed live (`fence_site.mjs`: the walkable rectangles in world
+coordinates, the terrain's height over them, what already stands near Richard): he stands on a small pad beside the
+Knights' hall, at the top of a slope; the pad's east side joins the wide brown tilt field below, and nothing to the
+pad's west or south-west can be walked on. Three layouts were then mocked in the running game by cloning the stale
+pieces on to candidate spots (`fence_mock.mjs`) and looked at. The one chosen — with its offsets then rounded to whole
+local units, which moved each piece a quarter of a metre or less from its mocked spot and the steed half a metre
+further east and a quarter further south — is the old layout turned about him: the barrier used to run 7.5 m to his
+west, from 5 to 24 m beyond him, with the steed past its far end; it now runs 9 m to his EAST, from 5.25 to 24 m to
+his south — down the slope from beside his post to the edge of the field — and the steed's home is on the field at its
+foot, 22.5 m east and 27.75 m south of him, far enough in that the whole circle it grazes in is ground a player can
+walk on. `tourney.test.ts` pins those six points, because nothing in the data can say whether a player can stand on
+them: move Richard, the scale or an offset and the test fails, and what it asks for is another look.
+
+**A horse and the scene it lives in.** The first review of this fix found that it opened a second fault, which was
+then measured before anything was changed. A horse's record (`game/riding.ts`) is made once and kept in every scene,
+and neither of the two loops that offer "Ride Horse" (`PlayerController.tsx`: one at home, one at a destination) asked
+which scene the horse lives in — only how near it is. The scenes lie over one another in the same world coordinates:
+the destinations' origins are 300 m apart, and The King's Approach lets a player walk more than 320 m east of the King
+— over the very ground the steed's field is on. On the fix as first written, and again on this change's control build
+A (`horse_scenes.mjs`), a player at The King's Approach, 2.55 m from the steed's record, had "Ride Horse" on screen
+for a horse that is not drawn there; E put him in the saddle; and when he got off thirty metres on, the steed's place
+and home went with him, so that back at the Tourney Grounds a player sent to it was put 13.7 m away: its new home is
+off the ground a player can walk on, and it could be mounted again only when it grazed back to the field's edge (that
+last by the code; the probe looked once, where the steed stood). On `main` the same survey, which holds each horse
+still where it stands, finds no horse within reach in a scene it does not live in — a player sent to the steed's
+record at The King's Approach is put 11.8 m from it (a steed that had grazed towards that ground might have come
+within reach). But `main` has the fault by another road, with any horse: the horse a carried rider leaves at The
+King's Approach (the bug logged at the end of this file) is on offer there with nothing drawn — measured, 2.8 m from
+its record and 6.4 m from the nearest resident, "Ride Horse" on screen (`horse_carried.mjs`). So a horse's record now
+carries the scene it lives in (`HorseMob.world`, told by `Wildlife.tsx` when the record is made), and the question is
+asked by the three places that draw a grazing horse or offer one: `Wildlife.tsx` draws it only there (`horseIsHere`;
+as it did before, by a comparison written out in the component), and both "Ride Horse" loops offer it only there
+(`horseOnOffer`: nobody is riding it, and it lives here). A horse is offered only in the scene it lives in. (Two other
+places draw a horse and do not ask, nor need to: the horse under the player, and the mount under a defender.)
+
+**And the stable — a guard for a state no ordinary play reaches yet.** The second review asked what else a rideable
+steed opens. Getting off a horse within 6 m of a built Stable stables it ("catch a horse and walk it home": it becomes
+the homestead's, is saved as such, and can be handed to a defender in the Roster), and on `main` that branch asked
+neither whose the horse is nor where the Stable stands. Beside a Stable FINISHED on a claimed Tourney Grounds, a build
+without the guard gives the steed away — so `horse_stable.mjs` found, first on the fix before the guard existed and
+again on control build B, whose dismount asks only whether a Stable is near: the banner's own button claims the
+ground, a Stable is accepted on the tilt field, the store's own `constructBuilding` finishes it, the steed is mounted,
+the rider is set down five metres from the Stable and E gets him off — "The horse is stabled — assign it to a defender
+in the Roster (N)." — and Richard's steed is in the list a save keeps. On the fix it is not taken. But no ordinary
+play finishes a Stable there today: the hammer prompt is not offered away from home, and builders work only where
+villagers live — the founded settlements, of which the Tourney Grounds is not one. (So the final review found, by
+reading; it also named a contrived road, through build mode across a ceremony, which was not tried.) So `canStable`
+(`game/riding.ts`) — the stable takes a horse of the homestead's own herd, once, and no horse that lives at a
+destination — guards a state no ordinary road reaches, and keeps Richard's steed his if one ever does. It is a design
+call made here, and the one line to change if the steed should ever be winnable. For a horse of the herd nothing
+changes.
+
+**What changes in play.** At the Tourney Grounds the red pennant stands beside Richard's post, the rails step down the
+slope, the blue pennant marks the edge of the field and the steed grazes beyond it. A player can walk up to the steed,
+mount it and ride the pass. The horse a carried rider leaves at The King's Approach is no longer on offer there (it is
+lost to its own scene either way: the bug logged at the end of this file). Nothing else in the game moves.
+
+**Existing saves.** Nothing to heal: a save keeps nothing of a horse's place or home (only which horses are stabled
+and who rides which), the dressing is not saved, and no ordinary play on `main` could put the steed in its stable: no
+Stable can be finished anywhere it could be ridden.
+
+**Verified** on the sources as committed. *By play* (`tourney_live.mjs` on a production build of the fix, and the same
+under `next dev`; the player is set down by the game's own teleport, and what he does there is done with real keys):
+the five pieces stand at the new points, each on the terrain at its own spot (3.32, 2.69, 1.75, 0.98 and 0.98 m — the
+line runs down the slope), 10.4 to 25.6 m from Richard, and a player can stand at every one; a player can stand at the
+steed's home, 35.7 m from Richard, and at all eight points tried of the circle it grazes in. Set down three paces from
+the steed the player is 2.55 m from it and E offers the horse; E puts him in the saddle; set 20 m from Richard, part
+way down the slope, he gallops (Shift + W), the joust is offered 5.9 m from Richard (5.7 m under `next dev`), and with
+E held from there the game answers "A solid hit! Richard salutes the pass." (under `next dev`, "A glancing blow!") — a
+pass. (How well a pass goes has a dice roll in it; that one can be ridden does not.) *The same probe on `main`:* no
+horse within reach, no pass. *Each horse in each of ten scenes* (`horse_scenes.mjs`: at home and at the nine template
+destinations — the crypt, the arena and the six challenge grounds were not visited; the same line gates them, and the
+unit tests try the rule for the crypt and the arena — for each of the five horses: is it drawn, how near can a player
+get, what does E offer): on the fix, production and `next dev`, every horse is drawn and on offer in the scene it
+lives in and in no other of the ten; on `main` the same but for the steed, which is drawn at the Tourney Grounds and
+cannot be walked up to (50.25 m). *A carried rider* (`horse_carried.mjs`): on the fix the horse he leaves at The
+King's Approach — a horse of the herd, and the steed — is not on offer there; on `main` the herd's is. *The stable*
+(`horse_stable.mjs`): a horse of the herd at home, got off 17 m from a Stable, is not stabled; got off beside it, is,
+with the notice; got off beside it again, is not stabled twice — on `main` and on the fix alike. The steed, got off
+beside the Stable the store finished on a claimed Tourney Grounds, is not stabled, on the fix's production build and
+under `next dev` (on `main` it cannot be mounted). *And on two control builds* — A, the fix with the question taken
+out of the destination's loop and with the dismount stabling a herd horse wherever its rider gets off; B, with the
+dismount stabling a horse again and again — the survey finds the steed on offer at The King's Approach, rides it, and
+finds it out of reach back at the Tourney Grounds (A); the carried-rider probe finds the herd's horse on offer,
+undrawn, where it was left (A); the stable probe finds a herd horse stabled 17 m from any Stable (A) and the notice a
+second time (B): each of the three faults that play can reach and no unit test can see is caught by a probe. (B also
+gives the steed away to the Stable the store finished — the state no ordinary play reaches.) *Nothing else moved:* the
+scenery of home and of the eight destinations with an arrival point (`cln22_live.mjs`: arrival points, residents,
+nodes, road masks, and 2,404 fixed meshes compared to 2 mm) is the same on `main` and on the fix except at the Tourney
+Grounds, where exactly 13 meshes differ each way — the lists' own, three rails of three meshes and two pennants of
+two, gone from the hillside and standing at the new points; Richard stands where he did. CLN-20's frame-by-frame probe
+(2,210 frames, 36 store calls and sounds) is identical. *Unit tests:* 28 new (373 in total) — the lists' shape (one
+north-south line to his east, three evenly spaced rails, a pennant beyond each end, red by his post and blue by the
+field), where they begin and end beside him, the steed stabled past their far end with its whole grazing circle clear
+of where the pass is offered and on the field's side of the barrier's line, the six points that were looked at, lists
+and steed moving with his post by exactly as much as he does and standing twice as far from him in a destination drawn
+twice as large, his `NpcDef` standing on the anchor; the dressing called as plain functions (one grounded piece per
+point of the table, each told the destination's origin, the rails turned a quarter and drawn from the rail's model at
+its height, each pennant in its colour); the horses called the same way (the herd of four at home and the steed at the
+Tourney Grounds, its home the table's own array, each record told its scene, each horse drawn in its own scene and in
+no other); and the three rules a record is asked (the scene it lives in, kept through a second registration and
+through a ride; the horse E offers — one that lives here and that nobody is riding, so neither the steed next door nor
+a herd horse left at a destination; the horse the stable takes — one of the herd, once). *Mutation:* of 53 single
+edits tried, the 48 the unit tests own are all caught; three only a running game can show (the destination's loop not
+asking; getting off anywhere stabling a herd horse; a horse stabled again and again — the controls above); and two no
+ordinary play shows: the HOME loop not asking, since the one horse that lives away from home is some 1,380 m beyond
+the homestead's edge and nothing can bring its record home, and the dismount asking only `main`'s question and not
+whose the horse is, since only the steed beside a finished Stable at the Tourney Grounds tells the two apart.
+*Imports:* the same cycles as `main`.
+
+**Left as found:** the rails and pennants stop nobody (the dressing never had collision), so a charge from the field
+rides across the barrier's line — the recorded one passes through the first rail — unless it goes round the barrier's
+north end; after a ride a horse's home is wherever its rider got off, as for every horse, until the page is reloaded;
+a rider who is carried to another scene in the saddle takes his horse's record with him (logged at the end of this
+file as its own bug: measured, not fixed here); a stabled horse that is out with a defender is hidden in the meadow
+and, by the code, still on offer at its record (so on `main`; read, not run); a quintain offers a rider "Mounted
+training!" before it is built and wherever it stands — the mounted branch asks neither, as on `main` — so on a claimed
+Tourney Grounds a quintain site trains a rider on the steed (read, not run); Richard's Travel Map landing is 2.4 m
+north of him, which by the arithmetic of the two is just off the pad (not run). **Not checked:** a player who has
+claimed land at the Tourney Grounds and built on the slope may find the barrier among his buildings; the errands
+themselves (`r_lists`, `kn_drill`) were not played through — the probe rides one pass; that the lists scale with the
+destination is shown by a unit test that redraws it twice as large, not in the running game; the contrived road to a
+finished Stable at the Tourney Grounds was not tried.
 
 ## Bug: the walls of the merchant's camp stop nobody — FOUND 2026-10-12 (during CLN-22), not yet fixed
 
@@ -8028,3 +8147,43 @@ a cut-out in the alpha channel at all (every texture reports the same RGBA forma
 the other destinations show the same; why three materials differ; whether this is the fault
 `PropModel.tsx` already works round for three placed props (`ALPHA_MASK_ASSETS` / `fixAlphaMasks`), arriving by
 another loader.
+
+## Bug: a rider carried to another scene in the saddle takes his horse's record with him, and the horse is lost until the page is reloaded — FOUND 2026-10-13 (reviewing the tourney-lists fix), not yet fixed
+
+**The fault.** A horse lives in one scene, and since the fix above its record says which (`HorseMob.world`,
+`game/riding.ts`). But a mounted player can be carried to another scene without getting off. `beginCeremony`
+(`game/store/gameStore.ts`) travels the player to The King's Approach when the rank of Knight, Paladin or Marshal is
+reached — `announceRankChange` calls it when XP in any skill raises a level across the rank's threshold (or on the
+first capture of Cedric) — and it does not ask whether he is riding. XP is earned in the saddle: a pass at Richard's
+lists (a base award of 8 to 90 combat XP, `joustRichard`, before `addXp` scales it), mounted training at a quintain
+(base 16), a mounted kill. He arrives at the ceremony on horseback; the travel board and "Return Home" are not offered
+from the saddle, so he gets off there — and `dismountHorse` writes the horse's place and its home where he stands, in
+the other scene's coordinates. The horse is drawn only in the scene it lives in, so it is not drawn where he left it,
+and back in its own scene it is drawn at that far-off point.
+
+**Measured** (`horse_carried.mjs`, production builds, 2026-10-13 and again on the final sources 2026-10-14: the horse
+is mounted with the interact key in the scene it lives in, and the ceremony is started by the rank change's own call,
+`beginCeremony('Knight')`):
+
+- **On `main` (fc1fc35), a horse of the herd (`horse0`, at home):** the player is carried to The King's Approach at
+  (1000, 978.6), still in the saddle when the ceremony is over; E gets him off; the horse's place and home are now
+  (1000, 977.4), and it is not drawn there. Back home its record is 1,429 m from where it grazed, and a player sent to
+  it is put 1,118 m away, at the homestead's edge: the horse is lost until the page is reloaded.
+- **On the tourney-lists fix, the same horse:** the same. (One thing differs, and is the fix above's doing: on `main`
+  the horse he left is still on offer at The King's Approach, "Ride Horse" on screen with no horse drawn; on the fix
+  it is not. It cannot be brought home either way: neither the travel board nor "Return Home" is offered from the
+  saddle.)
+- **On the tourney-lists fix, Richard's steed (`horse2`):** the same, and back at the Tourney Grounds the steed is
+  drawn 323 m from where it was stabled; a player sent to it is put 290 m away — out of reach, so no more passes that
+  session (not tried). Each pass grants XP, so a rank earned ON a pass does exactly this: now that the pass can be
+  ridden, it is one more way to meet it, and the one that strands Richard's steed.
+
+A save keeps nothing of a horse's place or home, so reloading the page heals it. (Loading a save or starting a new
+game in the same page does not, by reading: the horses' records are kept for as long as the page is open.)
+
+**By reading, not run:** a knock-out in the saddle carries the player to the spawn meadow and gets him off THERE
+(`PlayerController.tsx`, `combatState.teleportTo`) — at home that is the horse coming back to camp with its rider;
+away from home nothing can knock a rider out today (no horse can be ridden where there is anything to fight).
+
+**A way to fix it:** a rider who is carried to another scene gets off first, and the horse stays in the scene it lives
+in — at one place, where the scene changes, now that the record can be asked.

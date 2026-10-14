@@ -22,6 +22,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import { NPC_KING } from '@/game/data/world';
 import { NPC_BY_ID } from '@/game/data/npcs';
+import { TOURNEY_LISTS } from '@/game/data/tourney';
 import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
 import PropModel from './PropModel';
 import { Torch } from './Buildings';
@@ -95,21 +96,25 @@ function RoyalCourt({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number
   );
 }
 
-/** Richard's lists: a tilt barrier running the joust line (his post toward
- *  the stabled steed) with pennants at either end. */
+/** Richard's lists: a tilt barrier running south from beside his post down
+ *  to the tilt field, with a pennant beyond each end. WHERE each piece stands
+ *  is data/tourney.ts's TOURNEY_LISTS, laid out from Richard's own post —
+ *  this used to hold five world points of its own, typed round where he
+ *  stood in the first build, and they stayed behind when he was moved. The
+ *  rails are turned a quarter to run along the line, which runs north-south. */
 function TourneyLists({ originOffset = ZERO_OFFSET }: { originOffset?: { x: number; z: number } }) {
-  const fenceX = 1292.5; // between Richard (1300, 888) and the steed (1285, 915)
   return (
     <Suspense fallback={null}>
-      {[897, 902.5, 908].map((z) => (
-        <Grounded key={z} x={fenceX} z={z} originOffset={originOffset}>
+      {TOURNEY_LISTS.rails.map((rail, i) => (
+        <Grounded key={i} x={rail.x} z={rail.z} originOffset={originOffset}>
           <group rotation-y={Math.PI / 2}>
             <PropModel url={`${SCEN}/l607900.glb`} height={1.1} />
           </group>
         </Grounded>
       ))}
-      <Grounded x={fenceX} z={893} originOffset={originOffset}><Pennant color="#b03a2e" /></Grounded>
-      <Grounded x={fenceX} z={912} originOffset={originOffset}><Pennant color="#2e5fb0" /></Grounded>
+      {TOURNEY_LISTS.pennants.map((pennant) => (
+        <Grounded key={pennant.color} x={pennant.x} z={pennant.z} originOffset={originOffset}><Pennant color={pennant.color} /></Grounded>
+      ))}
     </Suspense>
   );
 }

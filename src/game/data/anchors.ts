@@ -46,4 +46,7 @@ export const WORLD_ANCHOR = {
   buildersHall: { dest: 'template-04', x: 2663.733, z: 10942.8 },
   /** The Anglers' Circle hall (data/guilds.ts), and the east-west line Wyeth stands on. */
   anglersHall: { dest: 'template-03', x: -93.333, z: -733.333 },
+  /** Richard's post at The Tourney Grounds: his NpcDef (data/cast/court.ts), and the point his lists and his
+   *  steed's home are laid out from (data/tourney.ts). */
+  richard: { dest: 'template-02', x: 0, z: -446.667 },
 } as const satisfies Record<string, WorldAnchor>;

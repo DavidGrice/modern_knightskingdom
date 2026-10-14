@@ -129,7 +129,10 @@ export const COURT_NPCS: NpcDef[] = [
     // the jousting props/castle).
     // 2026-08-25: converted to a durable LOCAL point via resolveDestPoint —
     // local (0, -446.667), derived from the 2026-08-21 world position above.
-    ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-02'], 0, -446.667), yaw: Math.PI,
+    // That local point is WORLD_ANCHOR.richard now (data/anchors.ts): his
+    // lists and his steed's home are laid out from it (data/tourney.ts), so
+    // the next move of Richard takes them with him. The last two did not.
+    ...resolveWorldAnchor(WORLD_ANCHOR.richard), yaw: Math.PI,
     world: 'template-02',
     greetSound: 'greeting_richard',
     portrait: '/assets/minifigs/minifigrichardstrong00.png',
