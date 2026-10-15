@@ -85,6 +85,7 @@ import { POND, FISHING_DOCK, NPC_KING, SIGNPOST, STARTER_VILLAGE_CLEAR, WORLD_HA
 import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN, TEMPLATE_ARRIVAL_SPAWN, resolveDestPoint } from '../data/worlds';
 import { INTERIORS, enterSpawnFor, pocketFor } from '../data/interiors';
 import { cartLivePos } from '../carts';
+import { standDown } from '../standDown';
 import {
   FILL_REFUND, MAX_WATERWORKS, digCost, setWaterworks, shapeConflict,
   snapDigRect, terrainConflict, waterAt, waterworks, waterworksInRect,
@@ -1863,6 +1864,11 @@ function createGameStore() {
     beginCeremony: (rank) => {
       const st = get();
       if (st.ceremony) return;
+      // whatever he was doing — in the saddle, crewing an engine, pushing a
+      // ram, towing a cart — ends here, in the scene he is leaving (see
+      // game/standDown.ts for what it used to cost); a ram or cart is set
+      // down where it was
+      for (const id of standDown()) st.settleCart(id);
       // Phase 20: the court resides at the royal castle — a knighting is a
       // summons TO The King's Approach, not a house call. travelTo no-ops if
       // the player is somehow already standing there; our teleport below

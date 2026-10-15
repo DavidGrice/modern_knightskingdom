@@ -8148,42 +8148,71 @@ the other destinations show the same; why three materials differ; whether this i
 `PropModel.tsx` already works round for three placed props (`ALPHA_MASK_ASSETS` / `fixAlphaMasks`), arriving by
 another loader.
 
-## Bug: a rider carried to another scene in the saddle takes his horse's record with him, and the horse is lost until the page is reloaded — FOUND 2026-10-13 (reviewing the tourney-lists fix), not yet fixed
+## Bugfix: the knighting carried the player off in the saddle, at an engine, or with a ram or a cart — FOUND 2026-10-13 (reviewing the tourney-lists fix), FIXED 2026-10-15
 
-**The fault.** A horse lives in one scene, and since the fix above its record says which (`HorseMob.world`,
-`game/riding.ts`). But a mounted player can be carried to another scene without getting off. `beginCeremony`
-(`game/store/gameStore.ts`) travels the player to The King's Approach when the rank of Knight, Paladin or Marshal is
-reached — `announceRankChange` calls it when XP in any skill raises a level across the rank's threshold (or on the
-first capture of Cedric) — and it does not ask whether he is riding. XP is earned in the saddle: a pass at Richard's
-lists (a base award of 8 to 90 combat XP, `joustRichard`, before `addXp` scales it), mounted training at a quintain
-(base 16), a mounted kill. He arrives at the ceremony on horseback; the travel board and "Return Home" are not offered
-from the saddle, so he gets off there — and `dismountHorse` writes the horse's place and its home where he stands, in
-the other scene's coordinates. The horse is drawn only in the scene it lives in, so it is not drawn where he left it,
-and back in its own scene it is drawn at that far-off point.
+**Found** while the tourney-lists fix (#258) was being reviewed, and logged there as "a rider carried to another scene
+in the saddle takes his horse's record with him". Grounding the fix (two readers set on the code, then the running
+game) showed the rider is one of three.
 
-**Measured** (`horse_carried.mjs`, production builds, 2026-10-13 and again on the final sources 2026-10-14: the horse
-is mounted with the interact key in the scene it lives in, and the ceremony is started by the rank change's own call,
-`beginCeremony('Knight')`):
+**The fault.** `beginCeremony` (`game/store/gameStore.ts`) travels the player to The King's Approach when the rank of
+Knight, Paladin or Marshal is reached — `announceRankChange` calls it when XP in any skill raises a level across the
+rank's threshold (or on the first capture of Cedric) — and nothing ended what he was doing. XP comes in the middle of
+things: a pass at Richard's lists or mounted training at a quintain, in the saddle; the kills of an engine's shots,
+crewing it; and challenge rewards are paid on a four-second timer (`checkChallenges`, from `GameScreen.tsx`) whatever
+he is doing. The travel board and "Return Home" are not offered to a rider, and a crew, a ram or a cart can be taken
+up only at home, where neither is offered either; so in play the knighting is the one road by which any of them
+changes scene.
 
-- **On `main` (fc1fc35), a horse of the herd (`horse0`, at home):** the player is carried to The King's Approach at
-  (1000, 978.6), still in the saddle when the ceremony is over; E gets him off; the horse's place and home are now
-  (1000, 977.4), and it is not drawn there. Back home its record is 1,429 m from where it grazed, and a player sent to
-  it is put 1,118 m away, at the homestead's edge: the horse is lost until the page is reloaded.
-- **On the tourney-lists fix, the same horse:** the same. (One thing differs, and is the fix above's doing: on `main`
-  the horse he left is still on offer at The King's Approach, "Ride Horse" on screen with no horse drawn; on the fix
-  it is not. It cannot be brought home either way: neither the travel board nor "Return Home" is offered from the
-  saddle.)
-- **On the tourney-lists fix, Richard's steed (`horse2`):** the same, and back at the Tourney Grounds the steed is
-  drawn 323 m from where it was stabled; a player sent to it is put 290 m away — out of reach, so no more passes that
-  session (not tried). Each pass grants XP, so a rank earned ON a pass does exactly this: now that the pass can be
-  ridden, it is one more way to meet it, and the one that strands Richard's steed.
+**Measured on `main`** (production build of 1528a07; `horse_carried.mjs` and `carried_modes.mjs`, which take the
+activity up with the interact key and start the ceremony the way a rank change does, `beginCeremony('Knight')`):
 
-A save keeps nothing of a horse's place or home, so reloading the page heals it. (Loading a save or starting a new
-game in the same page does not, by reading: the horses' records are kept for as long as the page is open.)
+- **In the saddle** — a horse of the herd at home, and Richard's steed at the Tourney Grounds: he arrived at The
+  King's Approach still riding; getting off there wrote the horse's place and home in that scene's coordinates, and a
+  horse is drawn only in its own scene — back there, at a point no player can reach (the herd's horse 1,429 m from
+  where it grazed, a player sent to it put 1,118 m away; the steed 323 m from where it was stabled, a player sent to
+  it put 290 m away). The horse was lost to its own scene (until the page is reloaded, by reading: a reload makes the
+  record afresh).
+- **Crewing an engine** (a Crossbow Station): the crew position held him at the engine's spot at home — (0, 9.2) in
+  the home scene's coordinates — inside The King's Approach's scene, 1,394 m from the King, when the ceremony was over
+  (sampled for 1.5 s). E offered "Return Home" there; by the code a crew's "Step down" is never offered at a
+  destination, since it comes after the destination's prompts, and he could step down only once he was home again.
+- **Pushing a ram or towing a cart:** he went to the ceremony still pushing or towing; the ram's or cart's live place
+  followed him at The King's Approach, in that scene's coordinates; by the code he could not let go of it there (that
+  prompt, too, comes after the destination's), and home again it was still in his hands, where E offered to let it go.
+  Nothing was lost: its stored place is written only when it is let go.
 
-**By reading, not run:** a knock-out in the saddle carries the player to the spawn meadow and gets him off THERE
-(`PlayerController.tsx`, `combatState.teleportTo`) — at home that is the horse coming back to camp with its rider;
-away from home nothing can knock a rider out today (no horse can be ridden where there is anything to fight).
+**The fix.** `game/standDown.ts` ends what the player is in the middle of, where he stands: he gets off the horse
+(`dismountHorse` at his place — the horse stays where he was, its home with it, as at any dismount), steps down from
+the engine (`leaveEngine`), and lets go of the ram or cart, which the store's `settleCart` sets down at its last
+place. `beginCeremony` calls it first, before it travels: the player's place in `playerState` is still the one in the
+scene he is leaving, since a scene's arrival point reaches it only on the next frame. It is called whether or not the
+ceremony travels (he may be at The King's Approach already), and once per ceremony.
 
-**A way to fix it:** a rider who is carried to another scene gets off first, and the horse stays in the scene it lives
-in — at one place, where the scene changes, now that the record can be asked.
+**What changes in play.** A player knighted in the middle of something arrives before the King on foot. His horse
+stays where he was, in its own scene, and can be ridden there again; an engine stands crewless; a ram or a cart stands
+where he had it. Nothing else.
+
+**Existing saves.** Nothing to heal: a save keeps nothing of a horse's place or home, nor whether the player was
+riding, crewing, pushing or towing, and a ram's or cart's stored place is written only when it is let go.
+
+**Verified** on the sources as committed, by play on a production build of the fix and under `next dev` (the same
+probes): knighted in the saddle, on a horse of the herd and on Richard's steed, he arrives on foot, the horse stays
+where he was (its record at his place when the ceremony took him, to the centimetre), and back where it lives a player
+can walk up to it and E offers it; knighted while crewing, pushing or towing, he arrives before the King on foot (2.4
+m from him), and home again the engine, ram or cart is there and he is on foot. *On `main`, and on a control build* —
+the fix with the call taken out of `beginCeremony` — each of the five goes wrong as described above. *Nothing else
+moved:* the scenery of home and of the eight destinations with an arrival point (`cln22_live.mjs`) and CLN-20's
+frame-by-frame probe are identical on `main` and on the fix. *Unit tests:* 8 new (381 in total) — standing down gets a
+rider off where he is (the horse keeping its scene and taking its home there), steps a crew down, lets go of a ram and
+of a cart and names each for settling, and leaves a player on foot and every horse alone; the knighting does it (a
+horse of the herd left at home where he was, the player set before the King), settles a ram where it was, does it at
+The King's Approach too, and does it once. *Mutation:* of 13 single edits, the 12 the unit tests own are all caught;
+one — standing him down after the travel instead of before — changes nothing observable, since the travel moves
+nothing that standing down reads. *Imports:* the same cycles as `main`.
+
+**Left as found (seen while reading, not run):** a knighting that comes during build mode (the four-second challenge
+timer pays XP there too) travels with build mode still on; one that comes in the crypt or the arena travels without
+resetting either (`travelTo` resets neither; `returnHome` does); a knock-out while crewing an engine at home carries
+the player to the spawn meadow, and the crew position pulls him straight back to the engine; and a session start
+leaves the crew position as it was — the session reset clears the saddle and the carts, not `crewState` — so after
+Save & Quit while crewing, the next game loaded can pin the player to whichever of its buildings has that id.
