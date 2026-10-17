@@ -51,6 +51,7 @@ import { KEEP_PART_BY_ID, KEEP_SOCKETS, keepWalkwayAt } from '@/game/data/keep';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine, manEngine } from '@/game/crew';
+import { fixedSolids } from '@/game/fixedSolids';
 import { commandWheel, steerWheel } from '@/game/commandWheel';
 import { pointerLockActive, releaseGameLock, requestGameLock } from '@/game/pointerLock';
 import { exposeDebug } from '@/lib/debugHooks';
@@ -1811,7 +1812,9 @@ export default function PlayerController() {
           }
         }
       } else {
-        for (const b of st.buildings) {
+        // the player's buildings, and the walls the world puts up itself (the
+        // merchant's camp — game/fixedSolids.ts): the same boxes, the same push
+        for (const list of [st.buildings, fixedSolids(null)]) for (const b of list) {
           if (!isBuilt(b)) continue; // walk freely through a ghost outline
           // raised gate / opened door — passable (Wave 8: one predicate, see
           // isDoorLike; the nav grid and the raiders read the same rule)

@@ -43,6 +43,12 @@ export function shapeFor(type: string): ShapeBox[] | null {
   return shapes?.[type] ?? null;
 }
 
+/** whether the file has been read — or failed to be, which leaves every piece
+ *  without volumes of its own. From then on shapeFor's answers are final. */
+export function shapesLoaded(): boolean {
+  return shapes !== null;
+}
+
 if (typeof window !== 'undefined') {
   loadCollisionShapes();
   exposeDebug('__kkshapes', () => shapes);

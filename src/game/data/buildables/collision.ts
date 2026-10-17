@@ -1,7 +1,7 @@
 // CLN-10 · split out of buildables.ts unchanged: a placed piece's geometry — its footprint and height, which
 // pieces fall inside a rectangle, and the collision boxes the player, the nav grid and line of sight all read.
 import type { BuildRect, PlacedBuilding } from '../../types';
-import { shapeFor } from '../../collisionShapes';
+import { shapeFor, shapesLoaded } from '../../collisionShapes';
 import { BUILDABLE_BY_ID } from './catalog';
 
 // Wave 29 · a hand-authored buildable that reuses a GENERATED_BUILDABLES
@@ -163,6 +163,14 @@ function solidOffset(type: string): [number, number] {
   }
   solidOffsetCache[type] = out;
   return out;
+}
+
+/** solidOffsetRotated, but only once the collision shapes have loaded — null before. Asking solidOffset sooner would
+ *  cache a zero offset for the type for the rest of the session (see solidOffsetCache above); collisionBoxesFor asks
+ *  only when the piece's shape is there, and this only once the file has been read. From then on its answer is final
+ *  either way: a piece with no shape of its own has no offset, and its fallback boxes are centred on it. */
+export function knownSolidOffsetRotated(type: string, rot: number): [number, number] | null {
+  return shapesLoaded() ? solidOffsetRotated(type, rot) : null;
 }
 
 /** the same offset, turned to face the way the piece is placed */

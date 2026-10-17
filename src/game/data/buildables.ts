@@ -14,7 +14,7 @@ export {
   BUILDABLES, BUILDABLE_BY_ID, BUILD_CATEGORIES, labAssetId, buildableForLabAsset, maxHpFor,
 } from './buildables/catalog';
 export { costBill } from './buildables/costBill';
-export { sizeFor, heightOf, buildingsInRect, solidOffsetRotated, collisionBoxesFor } from './buildables/collision';
+export { sizeFor, heightOf, buildingsInRect, solidOffsetRotated, knownSolidOffsetRotated, collisionBoxesFor } from './buildables/collision';
 export type { CollisionBox } from './buildables/collision';
 
 // The dev-only "no fixed world prop inside BUILD_REGION" guard that used to
