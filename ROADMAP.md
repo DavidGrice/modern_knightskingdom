@@ -8094,41 +8094,127 @@ themselves (`r_lists`, `kn_drill`) were not played through — the probe rides o
 destination is shown by a unit test that redraws it twice as large, not in the running game; the contrived road to a
 finished Stable at the Tourney Grounds was not tried.
 
-## Bug: the walls of the merchant's camp stop nobody — FOUND 2026-10-12 (during CLN-22), not yet fixed
+## Bugfix: the walls of the merchant's camp stopped nobody — FOUND 2026-10-12 (during CLN-22), FIXED 2026-10-16
 
-**Found by** CLN-22's live probe, which looks for the camp's five wall pieces in the scene and, since it was standing
-there, walks at one.
+**Found by** CLN-22's live probe, which looked for the camp's five wall pieces in the scene and, standing there,
+walked at one.
 
 **The fault.** The merchant's camp (Wave 46: "a real defended enclosure of his own") is five pieces of castle wall
-drawn round his spot — three straights and two corners, 3.84 m high. They are drawn and nothing else: they have no
-collision box and no entry in the navigation grid. The one list that names the camp at all, the development-time
-guard that keeps fixed props out of the buildable region (`FIXED_WORLD_PROPS`, `data/world.ts`), holds the
-merchant's own spot and not the walls. Until CLN-22 the five placements were literals inside `MerchantCamp.tsx` that
-no data module could read; they are now `MERCHANT_CAMP_WALLS` in `data/trade.ts`, which is what a fix would read.
+drawn round his spot — three straights and two corners, 3.84 m high, the table `MERCHANT_CAMP_WALLS` (`data/trade.ts`)
+drawn by `MerchantCamp.tsx`. Everything a player builds is a `PlacedBuilding` in the store, and three readers turn
+those into obstacles with `collisionBoxesFor`: the player's own collision at home (`PlayerController.tsx`), the
+navigation grid (`nav/grid.ts`'s `rebuild`) and line of sight (`nav/lineOfSight.ts`). None of the three read the
+camp's table, so the walls were drawn and nothing else.
 
-**Measured** (production build of `main` at cc30e97, 2026-10-12):
+**Measured on `main`** (production build of 81880f4, 2026-10-16, in the fix's evidence pass; `camp_walls_probe.mjs`,
+`camp_life_probe.mjs`):
 
-- *A walker* (`cln22_live.mjs`, two runs): the player is set down in the middle of the yard, at z 16, facing the
-  back wall, which stands across z 12 — 8 m wide and 2.4 m deep. Three seconds of the forward key end at z 4: twelve
-  metres at a walk, straight through the wall, without a check.
-- *The navigation grid* (`cln22_campnav_probe.mjs`): sampled every half metre, not one point of any piece's footprint
-  is blocked — 0 of 85 in the back wall, 0 of 49 in each corner, 0 of 85 in each wing. The control — a finished low
-  wall of the same model and facing, written into the store's buildings some 36 m off, and the grid rebuilt by the
-  probe — is blocked at 85 of 85.
+- *A player* set down in the yard or outside and walked (the forward key held 2.5 s) at the back wall from either
+  side, and from the yard at each wing, at each wing's front end and into each back corner of the yard, where a wing
+  meets its corner piece, went through at all eight places — ten metres at a walk, without a check.
+- *The navigation grid* had none of it: sampled along the stone, 0 of 14 points of the back wall and 0 of 17 of each
+  wing were blocked.
+- *Sightlines* from the yard went through the back wall and through both wings.
+- *The merchant*, walking in from the village corner to his spot, crossed the east wing's stone (7 points of his way
+  in, the first at (-71.2, 20.8)), his cart and team with him (16 samples with the team's outline over the stone: the
+  cart's bug below says what is counted), and, at the game's default 12-minute day, reached his spot 6.02 s of the
+  game's clock before his trading window opened; on his way out he crossed it again (5 points; his cart and team, 32
+  samples over it and the back-right corner) and reached the village corner 3.6 s before that walk's window closed.
+- *The camp's guard* (a villager made a defender, stationed at the camp and watched on his rounds) walked them 6 m
+  from the merchant's spot — the loop of every guard stationed at a building — and 51 of the points sampled on them
+  were inside the drawn stone: the back wall, both back corners and the east wing.
 
-**What it costs.** The enclosure is a picture of one. A player walks through it; and by the code, not run, so does
-anything that finds its way by the grid — a raider making for the guard posted there, the guard himself, the
-merchant on his way in and out.
+The logged entry guessed that raiders making for the guard, and the guard himself, find their way by the grid. By the
+code they do not: a raider making for a defender, the companion or a villager steps straight at him, and a guard walks
+his rounds and charges in straight lines (`Enemies.tsx`, `Defenders.tsx`). Of the camp's own two walkers only the
+merchant reads the grid (as, anywhere at home, do a raider chasing the player and Tam).
 
-**Not checked:** whether a raid ever comes near the camp; whether the merchant's own walk in and out passes through
-a wall today; the two huts of the starter village, which are drawn the same way from literals of their own
-(`StarterVillage.tsx`).
+**Where the stone is.** Rays cast at walker height (0.6, 1.0 and 1.5 m) at the drawn walls found it: the back wall's
+stone is a slab 0.4 m deep (z 11.2 to 11.6) with pilasters on its outer face (reaching z 11.07 a metre up, 10.95 lower
+down), each wing's a slab as deep on its -x side with pilasters on that face — outside the west wing, in the yard for
+the east wing, where they reach x -71.85 — and the corners 3.2 m square. The voxel boxes of the same models (the
+shapes `collision.ts` uses for a placed piece), turned the quarter turn of the table and laid on its points, enclose
+that stone everywhere, pilasters too — a little deeper on the outer side, as voxels are. The drawn pieces leave a slot
+of 0.4 m at each of the four seams between a corner and a straight (the boxes, 0.22 m): too narrow for a walker.
 
-**Fix, to follow in its own change:** give each piece of `MERCHANT_CAMP_WALLS` the collision its buildable has when
-a player places it (`collisionBoxesFor`, by model and quarter-turn — the table's facings are whole quarter turns) and
-stamp the same boxes into the home navigation grid, leaving the gate side — the +z side; the camp's own comments
-call it north, the HUD's compass south — open. It changes where a player and a
-walker can go, so it wants a live look at the gate and at the merchant's walk through it.
+**The fix.** `game/fixedSolids.ts` makes the table into `PlacedBuilding`-shaped entries — never put into the store,
+where they would be saved, demolished, sieged, counted and offered for interaction like the player's own; the Crypt's
+walls are made the same way (`nav/registry.ts`). The three readers take them beside the store's list: the player's
+collision loop at home, the grid's `rebuild` (stamped with the same callback as buildings) and line of sight. A placed
+piece's mesh is drawn shifted by its solid offset and its boxes re-centred by the same amount; the camp draws each
+piece at the table's point, unshifted, so each entry stands at the table's point plus the solid offset, which puts the
+boxes back on the stone that is drawn. That offset is known only once the voxel shapes have loaded, and asking for it
+sooner caches a zero offset for the model for the rest of the session (`solidOffset`, in `collision.ts`) — so
+`knownSolidOffsetRotated` answers only once the shapes file has been read (`shapesLoaded`, `collisionShapes.ts`; the
+file is fetched as soon as the title screen's code loads). Until then the entries stand at the table's points with the
+fallback boxes — for these pieces, cores short of each piece's ends, which leaves the seams open, and as much as 1.24
+m off the stone's faces — and a fresh list is made on each call; the grid and line of sight remember the camp's list
+by its identity beside the store's, so their next look after the shapes arrive takes the real boxes. From then on the
+list is made once and kept, also when the file has no shape for a piece or could not be fetched, which leave the
+fallback boxes for good: a list made afresh on every call would have line of sight remake every building's boxes on
+every query. The camp guard's rounds are pulled in to stay inside the yard (`CAMP_GUARD_RADIUS`, 3.5 m:
+`data/trade.ts`): the nearest stone is 4.4 m behind the merchant's spot (the back wall), 4.95 m to the east (the east
+wing's pilasters) and 6.4 m to the west, and 3.5 m keeps the guard's centre 0.9 m from the nearest of it.
+
+**What changes in play.** At the merchant's camp a player is stopped by the walls, and walks in and out through the
+open front; what finds its way by the grid goes round them (the merchant walks in and out through the gate — though on
+his way out his cart and team, riding 1.9 m beside him, still sweep over the east wing: logged below as its own bug —
+and, by the code, so do a raider chasing the player and Tam); arrows, bolts and the AI's eyes (which march the grid)
+no longer pass through them; the camp's guard walks his rounds inside the yard. The merchant's ways in and out, round
+the east wing, are longer than his old ways through it: at a day set to 11 minutes (the Options' day length) his way
+out runs past its window, so that the next stage sets him down at the village corner, and at 10 minutes and below,
+where both builds already fall short on both walks, the fix falls shorter (measured at 11 and 10 minutes; logged below
+as its own bug). One consequence is not new in kind: a raider with a crossbow and a guard with a bow on either side of
+these walls can no longer hit each other, and neither moves to find a clear shot — as across the player's own walls
+since Wave 20 (by the code, not run; logged below as its own bug).
+
+**Existing saves.** Nothing to heal: the camp is not saved, and no saved building changes.
+
+**Verified** on the sources as committed, by play on a production build of the fix and under `next dev` (the same
+probes): a player is stopped at all eight places tried — from the yard he stands against the back wall at z 12.12: the
+face of its collision box (z 11.67, 7 cm proud of the stone) and his own 0.45 m; the grid has every point sampled
+along the stone (14 of 14 of the back wall, 17 of 17 of each wing) and leaves the merchant's spot and the gate open;
+sightlines from the yard stop at all three walls and pass out of the gate; the merchant and his cart and team walk in
+clear of the stone, and, at the game's default 12-minute day, he reaches his spot 5.35 s of the game's clock before
+his window opens (5.02 s under `next dev`, 6.02 s on `main`); on his way out he keeps clear of the stone himself and
+reaches the village corner 1.57 s before that walk's window closes (1.89 s under `next dev`, 3.6 s on `main`, whose
+way through the wing is shorter) — but his cart and team sweep over the east wing as he walks up the yard beside it
+and round its front end (the team's outline in 40 samples, 44 under `next dev`, against 32 on `main` over it and the
+back-right corner, where he walks through it himself): logged below as its own bug; the camp guard's rounds, 3.5 m
+from the spot, keep clear of the stone. At an 11-minute day his way out no longer fits: at the last sample before its
+window closes he is still 2.49 m short of the village corner, and the next stage then sets him there (by the code),
+whereas on `main` his way still fits (0.44 s to spare); at 10 minutes both builds fall short on both walks, the fix by
+more (7.14 m against 4.62 m on the way out, 2.21 m against 1.42 m on the way in, each at the last sample before the
+window closed, about a tenth of a second early) — logged below as its own bug (his walk in at 11 minutes was not run).
+*On `main`* the player, the grid, the sightlines, the merchant with his cart and team and the guard on his rounds all
+go through the walls, as above. *And on a control build* — the fix with the camp taken out of the player's collision
+loop and the guard's rounds back at 6 m — the player walks through at all eight places and the guard through the walls
+again, while the grid and line of sight still have them: the two lines of the change no unit test can reach are each
+caught by a probe. *Nothing else moved:* the scenery of home and of the eight destinations with an arrival point
+(`cln22_live.mjs`: 2,404 fixed meshes compared to 2 mm) is the same on `main` and on the fix, and the one difference
+it finds is this change's — its own walk at the camp's back wall, which goes through on `main` and is stopped on the
+fix (that probe judged the walk by the wall's centre line until now; it judges it by the stone). CLN-20's
+frame-by-frame probe is identical. *Unit tests:* 9 new (390 in total) — the solids are the camp's five pieces, at home
+only, each at the quarter turn its facing gives; they stand at the table's points until the shapes file has been read,
+made afresh each time, and once it has stand where their boxes come back onto the drawn stone, and are kept — at the
+table's points if the file has no shape for them; the grid stamps them and leaves the yard and its gate open; line of
+sight stops at them and not at the gate; both take the real boxes on their next look when the shapes arrive late, and
+make them no more after that; the guard's rounds clear the stone measured on the drawn walls. *Mutation:* of 20 single
+edits, the 18 the unit tests own are all caught, and the 2 in the frame loops are the control above. *Imports:* the
+same cycles as `main`.
+
+**Left as found:** what moves in straight lines with no building collision still passes through these walls as through
+any other (the keep's are an open question, logged): an enemy making for the camp's guard, the companion or a villager
+(a raider, or a skeleton by night), a raider fleeing the player, and a wandering enemy (a raider, or a skeleton by
+night); the camp's guard himself everywhere but on his rounds — at a raider when he charges and back to his rounds
+after it, to and from a bed at each change of watch (the beds stand east of the camp), in when stationed there from
+elsewhere, after the player under the Follow order, and out to a 30 m circle round the camp and back under the Scout
+order (by the code; the probe watched him on his rounds only); and a horse left grazing at the camp by its rider
+(horse3, which grazes round (-58, 18), keeps its centre at least 0.2 m outside the east wing's outer face; only its
+body reaches the stone). The merchant's cart and team, which ride beside him and sweep over the east wing on his way
+out, and the timing of his walks at a short day are logged below as bugs of their own. The two huts of the starter
+village (`StarterVillage.tsx`) are drawn from literals of their own at yaws that are not quarter turns, which the box
+collision cannot follow, and still stop nobody.
 
 ## Seen, not looked into: trees drawn on opaque white cards at the Tourney Grounds — logged 2026-10-12 (during CLN-22)
 
@@ -8216,3 +8302,75 @@ resetting either (`travelTo` resets neither; `returnHome` does); a knock-out whi
 the player to the spawn meadow, and the crew position pulls him straight back to the engine; and a session start
 leaves the crew position as it was — the session reset clears the saddle and the carts, not `crewState` — so after
 Save & Quit while crewing, the next game loaded can pin the player to whichever of its buildings has that id.
+
+## Bug: a crossbowman and a bowman with a wall between them stand off — logged 2026-10-16 (in the review of the camp-walls fix; by the code, not run)
+
+**What the code does.** A raider with a crossbow (`data.ranged`: four bandits in ten, `combat/enemyStore.ts`) turns on
+a defender within 16 m who is nearer than the player, and once within `RANGED_RANGE` (14 m) stops and shoots every 1.8
+s — but the bolt lands only on a clear sightline (`hasLineOfSight`, since Wave 20), and nothing moves him to find one
+(`Enemies.tsx`, the defender branch). A guard with a bow takes the nearest raider within 22 m (`ENGAGE_RADIUS`) and,
+once within bow range (16 m), stands and looses; his arrow, too, lands only on a clear sightline, and he does not move
+either (`Defenders.tsx`). With a wall between them neither hits, and each holds where it stands. A raid ends only when
+no raider is left (`raidActive`, `Enemies.tsx`), and a bandit breaks off at 2 hp, which this one never comes to: the
+raid waits on something else to change it — anyone else wounding the bandit to 2 hp (the player's crossbow, another
+archer with a clear line), the player or another defender coming nearer to him than the guard is, another raider
+knocking the guard down, or an order that moves the guard while the player is at home (Attack, when the threat nearest
+the player is another one beyond his bow range; Follow, when the raider nearest the player within 22 m of him is
+another one beyond the guard's bow range, or when there is none; away from home every order is Patrol) — but not the
+end of his watch: a guard looks at the watch only when he has no raider to fight, and on his own rounds (Patrol or
+Scout) a bow guard with a raider in bow range always has one (`Defenders.tsx`).
+
+**Where.** Across any of the player's walls that stops a sightline, since Wave 20; and, with the camp-walls fix above,
+across the merchant's camp — a raid that follows the player there from the homestead side meets the camp guard's
+rounds with the east wing between them (raiders make for the homestead and then for the player — within 26 m of him,
+or once alerted — so they come to the camp after him, as a rule; a raid left to wander can drift there too).
+
+**To do.** Measure it first (a crossbow bandit and a bow guard set either side of a wall, live, on `main`); then
+decide the fix — the shooter stepping aside until the sightline clears, closing in, or turning to another target.
+
+## Bug: the merchant's cart and team ride beside him and sweep over what he passes — logged 2026-10-16 (in the review of the camp-walls fix; measured at the camp)
+
+**What the code does.** The merchant's "cart" — a yoked two-horse team hauling a chest slung between them (`oc6095b3`)
+— is a child of his own group at a fixed offset, 1.9 m to one side of him and 0.4 m back (`Merchant.tsx`'s `<Cart>`),
+and turns with him. His way is found on the navigation grid (`navSteer`), which keeps only his own centre clear of
+what stands in it — obstacles are widened by a walker's 0.55 m (`AGENT_RADIUS`, `nav/grid.ts`). So the team, about 1.8
+by 2.3 m, sweeps over whatever he passes close by on that side.
+
+**Measured** at the merchant's camp (`camp_life_probe.mjs`, in the camp-walls fix's evidence pass, 2026-10-16): with
+the fix, his way out goes up the yard's east side and round the east wing's front end, and the team's outline overlaps
+the east wing at its widest (the pilasters' reach taken along its whole face) in 40 of the probe's samples, taken
+about a tenth of a second apart (44 under `next dev`); on `main`, where he walks through the wing himself, it overlaps
+the wing or the back-right corner in 32. The outline is the bounds of the team's parts as it stood at rest before the
+walk, laid down unchanged as it walks (its legs swing and its heads lift as it goes): the counts are close, not exact.
+His way in is clear of the stone on the fix.
+
+**Not measured:** the rest of his road — the village corner, and the buildings and trees along the way.
+
+**To do.** Let the team follow behind him on his own track, as a towed cart would, or find his way for something as
+wide as the team; then measure his whole road. His walk out has 1.57 s of its window to spare on the fix at the
+default 12-minute day and none at 11 (the bug below), so a way out that is longer needs its time looked at too.
+
+## Bug: the merchant's walks are timed by the day and stepped by the second, so at a short day he jumps to the end of a walk — logged 2026-10-16 (in the review of the camp-walls fix; measured)
+
+**What the code does.** His day is a set of windows, each a fraction of the day (`Merchant.tsx`'s `stageFor`): his
+walk from the village corner to his spot ('arriving') is the last 0.056 of the day before his trading window opens at
+0.3, and his walk back ('leaving') the first 0.056 after it closes at 0.72. He walks at a fixed 1.2 m a second (1.3
+times that on the road). The day's length is the player's to set (Options, 4 to 30 minutes; 12 by default), and a
+stage that holds him — at his spot ('present'), at the village corner ('village_am', 'village_pm') — sets him there
+whatever his walk had left. So at a day too short for one of the walks those stages end, he jumps to its end when its
+window closes (his evening walk to the road's end ends in 'away', which hides him wherever he is).
+
+**Measured** (`camp_life_probe.mjs` with a day length, in the camp-walls fix's evidence pass, 2026-10-16): at 10
+minutes (each figure from the last sample before the window closed, about a tenth of a second early), on `main`, he is
+4.62 m short of the village corner when his walk out's window closes and 1.42 m short of his spot when his trading
+window opens; with the camp-walls fix, whose way round the camp's east wing is longer, 7.14 m and 2.21 m. At 11
+minutes `main`'s way out fits, with 0.44 s to spare, and the fix's falls 2.49 m short. Not measured: his walk in at 11
+minutes (from its 12-minute time, 34.93 s on the fix, it should fit the 36.96 s window), his other walks (from the
+road's end to the village corner in the morning, and from the village corner back to the road's end in the evening),
+and the other day lengths.
+
+**To do.** Decide how his walks keep time at a short day — letting a walk that runs past its window finish before the
+stage that follows it holds him (only when that stage follows its own walk, so that a game loaded mid-day still finds
+him in his place; and the trading window, which `Merchant.tsx` promises finds him on his spot, would then have to
+follow him), scaling his pace by the day's length, or timing his walks in seconds rather than in fractions of the day
+— then measure his walks at the day lengths the Options offer.

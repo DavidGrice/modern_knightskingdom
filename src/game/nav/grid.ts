@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { collisionBoxesFor, type CollisionBox } from '../data/buildables';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '../types';
 import { activeTerrainExclusions, terrainBlocks } from '../navTerrain';
+import { fixedSolids } from '../fixedSolids';
 import { waterworks } from '../waterworks';
 import { getMountedRoot, getMountedRegion } from '../templateGround';
 import { useGameStore } from '../store/gameStore';
@@ -161,6 +162,10 @@ export class NavGrid {
   // -1 can never be a live revision (waterworks.rev starts at 0), so the first
   // rebuild always runs.
   private builtWaterRev = -1;
+  // the third: the walls the world puts up itself (game/fixedSolids.ts). Their
+  // list is a fresh one until the collision shapes file has been read and one
+  // kept list after, so the first rebuild once it has been read re-stamps them.
+  private builtFixed: PlacedBuilding[] | null = null;
 
   // Phase 2, iteration 2.5 — ground-height field, window-mode grids only.
   // null means "no height data yet" (nothing mounted, or nothing mounted
@@ -444,18 +449,23 @@ export class NavGrid {
    * Rebuild the obstacle grid from the current buildings. Cheap enough to
    * call whenever the building list changes identity; a no-op if the array
    * is the same one last consumed AND no waterway has been dug or filled in
-   * since (Wave 12 — see `builtWaterRev`).
+   * since (Wave 12 — see `builtWaterRev`) AND the walls the world puts up
+   * itself are the list last stamped (see `builtFixed`).
    */
   rebuild(buildings: PlacedBuilding[]): void {
-    if (this.builtFrom === buildings && this.builtWaterRev === waterworks.rev) return;
+    const fixed = fixedSolids(this.region);
+    if (this.builtFrom === buildings && this.builtWaterRev === waterworks.rev && this.builtFixed === fixed) return;
     this.builtFrom = buildings;
     this.builtWaterRev = waterworks.rev;
+    this.builtFixed = fixed;
     this.blocked = new Uint8Array(this.dim * this.dim);
 
     // Wave 20 · the filter (built-only, region match, open-gate skip) now
     // lives in the shared forEachObstacleBox above, alongside the new
     // hasLineOfSight — mechanical extraction, no behavior change here.
-    forEachObstacleBox(buildings, this.region, (b, box) => {
+    // The player's buildings first, then the walls the world puts up itself
+    // (the merchant's camp), stamped the same way.
+    const stamp = (b: PlacedBuilding, box: CollisionBox) => {
       const base = (b.y ?? 0) + box.yBase;
       const top = (b.y ?? 0) + box.yTop;
       // an overhang (a battlement walkway, an archway crown) is not an
@@ -472,7 +482,9 @@ export class NavGrid {
       for (let i = i0; i <= i1; i++) {
         for (let j = j0; j <= j1; j++) this.blocked[this.idx(i, j)] = 1;
       }
-    });
+    };
+    forEachObstacleBox(buildings, this.region, stamp);
+    forEachObstacleBox(fixed, this.region, stamp);
 
     // Phase 2, iteration 2.1 — stamp terrain exclusions (water) in AFTER
     // building obstacles, on top of them. Wave 12: the list is now the static

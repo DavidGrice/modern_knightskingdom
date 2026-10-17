@@ -1,6 +1,8 @@
 'use client';
 // CLN-14 · the shared 3D line-of-sight check for ranged combat and perception, moved verbatim out of game/navgrid.ts.
 import type { PlacedBuilding } from '../types';
+import type { CollisionBox } from '../data/buildables';
+import { fixedSolids } from '../fixedSolids';
 import { useGameStore } from '../store/gameStore';
 import { forEachObstacleBox } from './grid';
 import { dungeonWallBuildings, ensureDungeonGrid } from './registry';
@@ -30,7 +32,7 @@ export const GROUND_LOS_Y = 1.2;
 
 interface LosBox { cx: number; cz: number; hx: number; hz: number; yBase: number; yTop: number; }
 
-interface LosCache { builtFrom: PlacedBuilding[]; boxes: LosBox[]; }
+interface LosCache { builtFrom: PlacedBuilding[]; fixed: PlacedBuilding[]; boxes: LosBox[]; }
 
 // One cache per region, each memoized on its own source array's identity —
 // exactly the way NavGrid.rebuild() memoizes on `builtFrom === buildings`.
@@ -55,11 +57,15 @@ function losSource(region: string | null): PlacedBuilding[] {
 function losBoxes(region: string | null): LosBox[] {
   const key = String(region);
   const source = losSource(region);
+  // and the walls the world puts up itself (the merchant's camp) — the same
+  // list the navigation grid stamps (game/fixedSolids.ts), remembered by its
+  // identity the same way
+  const fixed = fixedSolids(region);
   const cached = losCaches.get(key);
-  if (cached && cached.builtFrom === source) return cached.boxes;
+  if (cached && cached.builtFrom === source && cached.fixed === fixed) return cached.boxes;
 
   const boxes: LosBox[] = [];
-  forEachObstacleBox(source, region, (b, box) => {
+  const add = (b: PlacedBuilding, box: CollisionBox) => {
     boxes.push({
       cx: b.x + (box.ox ?? 0),
       cz: b.z + (box.oz ?? 0),
@@ -68,8 +74,10 @@ function losBoxes(region: string | null): LosBox[] {
       yBase: (b.y ?? 0) + box.yBase,
       yTop: (b.y ?? 0) + box.yTop,
     });
-  });
-  losCaches.set(key, { builtFrom: source, boxes });
+  };
+  forEachObstacleBox(source, region, add);
+  forEachObstacleBox(fixed, region, add);
+  losCaches.set(key, { builtFrom: source, fixed, boxes });
   return boxes;
 }
 

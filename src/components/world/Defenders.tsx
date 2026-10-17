@@ -30,7 +30,7 @@ import { hashId } from '@/lib/rng';
 import { homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import { POND } from '@/game/data/world';
-import { MERCHANT_SPOT, MERCHANT_CAMP_STATION } from '@/game/data/trade';
+import { CAMP_GUARD_RADIUS, MERCHANT_SPOT, MERCHANT_CAMP_STATION } from '@/game/data/trade';
 import { pushOutOfWater } from '@/game/waterworks';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import type { CharacterConfig, Villager } from '@/game/types';
@@ -297,7 +297,9 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       }
       // active circuit (Phase 22): steady rounds — wide sweeps free-roaming,
       // tight loops when stationed; Scout doubles the sweep at a jog
-      const radius = order === 'scout' ? 30 : (station || atMerchantCamp) ? 6 : 15;
+      // (the merchant's camp has walls now that stop a walker: its guard's
+      // rounds stay inside the yard — CAMP_GUARD_RADIUS, data/trade.ts)
+      const radius = order === 'scout' ? 30 : atMerchantCamp ? CAMP_GUARD_RADIUS : station ? 6 : 15;
       const pace = order === 'scout' ? 2.1 : 1.3;
       patrolA.current += (pace / radius) * dt;
       const txP = ds.postX + Math.cos(patrolA.current) * radius;

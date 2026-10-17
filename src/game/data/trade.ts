@@ -41,6 +41,15 @@ export const MERCHANT_SPOT = { x: -76.8, z: 16, yaw: Math.PI };
  *  validation of the id it is given, so this needs no store changes. */
 export const MERCHANT_CAMP_STATION = 'merchant_camp';
 
+/** How far from MERCHANT_SPOT the camp's guard walks his rounds. It was 6 m, the loop of every guard stationed at a
+ *  building — which ran through the camp's back wall, both back corners and the east wing, where the walls stopped
+ *  nobody. The walls stop a walker now (game/fixedSolids.ts), so the loop stays inside the yard: the nearest stone,
+ *  measured on the drawn walls at walker height, is 4.4 m behind the spot (the back wall), 4.95 m to the east (the
+ *  east wing's pilasters) and 6.4 m to the west (the west wing), and 3.5 m keeps his centre 0.9 m from the nearest of
+ *  it. The rounds only: his other walks (to a bed and back, a charge, the Follow and Scout orders, his walk in when
+ *  stationed here from elsewhere) are straight lines that take no notice of walls. */
+export const CAMP_GUARD_RADIUS = 3.5;
+
 /** One piece of the merchant camp's wall: which mc-family piece it is (the buildable's id, which is also its model's
  *  file name), where it stands in home-world metres, and which way it faces. */
 export interface CampWallPiece {
