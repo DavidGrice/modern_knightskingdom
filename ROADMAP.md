@@ -8347,30 +8347,200 @@ His way in is clear of the stone on the fix.
 **Not measured:** the rest of his road — the village corner, and the buildings and trees along the way.
 
 **To do.** Let the team follow behind him on his own track, as a towed cart would, or find his way for something as
-wide as the team; then measure his whole road. His walk out has 1.57 s of its window to spare on the fix at the
-default 12-minute day and none at 11 (the bug below), so a way out that is longer needs its time looked at too.
+wide as the team; then measure his whole road. When this was logged his walk out had 1.57 s of its window to spare at
+the default 12-minute day and none at 11 (by `camp_life_probe.mjs`; the bugfix below, measuring with its own probe,
+gives `main` 2.07 s at 12 minutes); he keeps time now (the bugfix below), so a way out that is longer only quickens
+his step, up to a run (6 m a second) — at a 4-minute day he already runs his walk out at about three times his pace, so
+a much longer way out would be late again there.
 
-## Bug: the merchant's walks are timed by the day and stepped by the second, so at a short day he jumps to the end of a walk — logged 2026-10-16 (in the review of the camp-walls fix; measured)
+## Bugfix: the merchant's walks were timed by the day and stepped by the second, so at a short day he jumped to a walk's end, and when the clock moved on without him he walked on from wherever it found him — FOUND 2026-10-16 (in the review of the camp-walls fix), FIXED 2026-10-18
 
-**What the code does.** His day is a set of windows, each a fraction of the day (`Merchant.tsx`'s `stageFor`): his
-walk from the village corner to his spot ('arriving') is the last 0.056 of the day before his trading window opens at
-0.3, and his walk back ('leaving') the first 0.056 after it closes at 0.72. He walks at a fixed 1.2 m a second (1.3
-times that on the road). The day's length is the player's to set (Options, 4 to 30 minutes; 12 by default), and a
-stage that holds him — at his spot ('present'), at the village corner ('village_am', 'village_pm') — sets him there
-whatever his walk had left. So at a day too short for one of the walks those stages end, he jumps to its end when its
-window closes (his evening walk to the road's end ends in 'away', which hides him wherever he is).
+**The fault.** His day is a set of windows, each a fraction of the day (the stage function, now
+`data/merchantDay.ts`'s `merchantStage`): his walk from the road's end to the village corner in the morning
+('to_village_am'), from there to his spot ('arriving'), back to the corner after his trading window ('leaving'), and
+on to the road's end ('to_offstage'). He walked at a fixed 1.2 m a second (1.3 times that on the road), and the day's
+length is the player's to set (Options, 4 to 30 minutes; 12 by default). The stage after three of the walks holds him
+at its end — at the village corner ('village_am', 'village_pm') or at his spot ('present') — so at a day too short for
+one of them he jumped to its end when its window closed; the fourth ends in 'away', which hid him wherever he was. And
+when the clock moved on without him he walked on from wherever it found him. A night's sleep and a knock-out (but in
+the arena, which only brings the player home) both set the clock to 0.27, inside his walk in. The bed is offered while
+the night is deep enough — from about 0.7464 of the day to about 0.2536 (0.7377 to 0.2623 in winter) — so a sleep
+found him hidden where his evening walk had left him (at the road's end, or at a short day short of it) if it was
+taken once that walk was done (from 0.844); on his morning walk or at the village corner after it (a sleep before
+dawn); barely set out on his walk in (a sleep at dawn: it sets out at 0.244); or on his walk out, at the village
+corner or on his evening walk (a sleep at dusk). A game loaded moves the clock as well; a return home mounts him
+afresh at the road's end (he is drawn at home only), whatever walk the clock is in; and a long frame (a tab brought
+back) was walked in one straight stride toward the point he made for, on past it if it was near. The camp-walls fix
+above made his ways in and out longer, round the camp's east wing, and his walk out ran late at 11 minutes too.
 
-**Measured** (`camp_life_probe.mjs` with a day length, in the camp-walls fix's evidence pass, 2026-10-16): at 10
-minutes (each figure from the last sample before the window closed, about a tenth of a second early), on `main`, he is
-4.62 m short of the village corner when his walk out's window closes and 1.42 m short of his spot when his trading
-window opens; with the camp-walls fix, whose way round the camp's east wing is longer, 7.14 m and 2.21 m. At 11
-minutes `main`'s way out fits, with 0.44 s to spare, and the fix's falls 2.49 m short. Not measured: his walk in at 11
-minutes (from its 12-minute time, 34.93 s on the fix, it should fit the 36.96 s window), his other walks (from the
-road's end to the village corner in the morning, and from the village corner back to the road's end in the evening),
-and the other day lengths.
+**Measured on `main`** (production build of c9d63ca, 2026-10-18, in this fix's evidence pass;
+`merchant_day_probe.mjs`, the day's length set as the Options slider sets it): from the opening of each window, every
+walk ended inside it at 12, 14, 20 and 30 minutes; at 11 minutes the walk out was 2.57 m short of the village corner
+when its window closed, and the next stage set him there; at 10 minutes and shorter every walk was short — at 10
+minutes by 2.47, 2.19, 7.22 and 2.73 m (the morning walk, the walk in, the walk out and the evening walk), at 5 by
+19.74, 21.85, 26.02 and 19.54 m, at 4 by 23.13, 25.97, 29.71 and 23.06 m — and he jumped the rest at the end of the
+first three, by up to 29.71 m; at the end of the evening walk he was hidden short of the road's end. When the clock
+moved on without him: after a night's sleep taken once his evening walk was done (the store's `sleep()`, which the bed
+calls) he was first seen at the road's end, 79.43 m from his spot, and when his window opened he jumped the last 55.46
+m onto it (50.12 m at 4 minutes); after a sleep before dawn, on his morning walk, he was first seen where it found
+him, 58.38 m from his spot, and jumped the last 34.58 m (65.41 m at 4 minutes); after a sleep at dawn, a second into
+his walk in, 42.68 m from his spot, and he jumped the last 16.04 m (34.96 m at 4 minutes); home again with three
+tenths of his evening walk's window gone, he was first seen at the road's end and stood there until it closed, and
+home again with nine tenths of his walk out's window gone, at 20 minutes, he walked to the village corner from the
+road's end and jumped the last 28.11 m; a 10 s frame, 4 m short of a turn of his way in, carried him 7.56 m off it.
+After a sleep at dusk, on his walk out, he walked back to his spot from where it found him and made it — with 0.48 s
+to spare at 12 minutes, from half-way out — and a knock-out while he traded left him on his spot.
 
-**To do.** Decide how his walks keep time at a short day — letting a walk that runs past its window finish before the
-stage that follows it holds him (only when that stage follows its own walk, so that a game loaded mid-day still finds
-him in his place; and the trading window, which `Merchant.tsx` promises finds him on his spot, would then have to
-follow him), scaling his pace by the day's length, or timing his walks in seconds rather than in fractions of the day
-— then measure his walks at the day lengths the Options offer.
+**The fix.** He keeps time. `merchantSpeed` (`data/merchantDay.ts`) gives him his own pace unless what is left of the
+walk, at his own pace, would not fit what is left of its window less a tenth of the window kept in hand — then his own
+pace quickened everywhere, on the road and off it, just enough that it would, at most a run (6 m a second); once the
+tenth is spent with the walk not over, a run. What is left of the walk at his own pace (`secondsLeftAtPace`) is
+reckoned along the way `navSteer` planned for it, a metre or less at a time at his pace there, to where he stops, half
+a metre short of its end — and nothing once he stands there; a plan's own seconds are kept with the plan, so that a
+frame reckons only the leg to the point he makes for. A plan's last point is left out when it is only the centre of
+the end's own cell (`pointsWalked`): the grid's plan to a point ends there, and on the walk out and the evening walk
+that centre lies beyond the end as he comes to it, where he never goes. Whenever the clock moves on without him — at a
+change of stage, and when it has run more than a second beyond his step — he keeps to his schedule on the walk it
+finds him on (`keepToSchedule`, `Merchant.tsx`). His schedule puts him (`scheduledPlace`) along his way (`walkWay`: a
+plan of the walk from its start) as far as the further of his own pace since its window opened and the window's share
+of the whole walk, facing along it. Out of hiding — the stage before was 'away', or he has just been mounted — he is
+put there; otherwise only if he has fallen behind it by more than half a second at his own pace, each side reckoned
+along a fresh plan, and never back (`putOnSchedule`). So the morning walk finds him at the road's end, as before; a
+night's sleep, a sleep before dawn or a sleep at dawn finds him as far along his walk in as his schedule says (on a
+long day, at its end); a sleep at dusk finds him on his walk out, and puts him on the walk in's schedule if he is
+behind it, as half-way out, or leaves him to walk back to his spot if he is ahead of it, as early in a winter evening;
+a return home finds him part-way along whatever walk the clock is in, or at its end; and a knock-out while he trades
+leaves him on his spot. His step a frame is at most a tenth of a second's: a frame over 1.1 s long is kept to along
+his way rather than walked in one stride, and a shorter hitch only quickens his step to make the time up. When a walk
+is done his figure stands at rest until the next stage (on `main`, by its code, it walked on the spot through whatever
+time he had to spare). His steps keep up with him (`merchantGait`): the walk's cadence quickens as he hurries (set on
+his rig's animator: `RiggedFigure` takes its own time scale only when its clip changes), with a run taken up above 2.2
+times his pace and left below 1.8, at half the cadence; and his team's trot follows his speed in tenths of a metre a
+second. His walk and run clips are loaded ahead (`preloadClip`, `lib/minifigRig.ts`): the animator's `play()` awaits a
+clip's load, and in a trial before this was added his figure ended his walk in at 6 minutes on the run — read, from
+that end and the code, as a run first asked for in the walk's last strides whose load came back after the rest pose
+that followed it (the next section logs the race as a bug of its own; on his first mount of a session it can still
+meet him, if the run is asked for before its load is back). His windows and their stage function moved unchanged from
+`Merchant.tsx` into `data/merchantDay.ts` (their notes repointed), where `walkWindow` gives each walk's window on the
+same bounds, so that the schedule and the pace can be tested as plain functions. His rig is published for the probes
+as `__kkmerchantRig`.
+
+**What changes in play.** At the default 12 minutes he keeps his own pace on the morning walk, the walk in and the
+evening walk, and hurries a little on the walk out, round the camp's east wing (at most 1.11 to 1.12 times his pace in
+the runs measured); after a night's sleep, a sleep before dawn, a sleep at dawn or a sleep at dusk half-way through
+his walk out, he is found part-way along his walk in, about 20 m from his spot and facing along it, and walks the rest
+at his own pace, where on `main` he walked on from where the clock had found him and, but at dusk, jumped onto his
+spot; after a sleep early in a winter evening he walks back to his spot from where he was, as on `main`. At a shorter
+day he steps out faster in the same measure — about three times his pace at 4 minutes, a run — and no longer jumps;
+but at the end of a walk he must hurry, where the tenth he keeps in hand and what is left of the walk run out
+together, his step can quicken further for a moment (in this pass, below a run at 8 to 11 minutes, and to his top
+speed at the end of the evening walk at 4). At a longer day he hurries less, and at 14, 20 and 30 minutes not at all;
+on a long day a night's sleep finds him at the end of his walk in, on his spot (by the code: the probe saw it only
+from his spot). Home again during one of his walks he is found along it, or at its end facing on the way he was going;
+after a long frame, on his way. When a walk is done his figure stands at rest, and his team's trot follows his
+quickened step. His trading window, and its promise that it finds him on his spot, are as they were.
+
+**Verified** on the sources as committed (one source hash at every step of the evidence pass), by play on a production
+build of the fix and under `next dev` (the same probe, at 12, 8 and 4 minutes, the clock moved on without him at 12
+and 4, and home again late in his walk out at 20): at each of the ten day lengths sampled — 4, 5, 6, 8, 10, 11, 12,
+14, 20 and 30 minutes — every walk ends inside its window and he never jumps. At 4 minutes, on the production build,
+he ends them with 1.06 to 1.33 s of their 11 to 13 s windows in hand, at least 0.93 of the tenth he keeps
+(`merchanttime_check.cjs`; also 0.93 under `next dev`), his greatest hurry 2.96 to 3.27 times his pace on three walks
+and, for a moment at the end of the evening walk, 3.82 — his fastest step measured at 5.95 m a second, his top speed
+(under `next dev` his greatest hurries 2.96 to 3.29). At 12 minutes his greatest hurry is 1 on the morning walk, the
+walk in and the evening walk and 1.11 on the walk out (1.12 under `next dev`), and he ends them with 4.45 s to spare
+on the morning walk, 5.27 on the walk in, 4.08 on the walk out and 4.14 on the evening walk, against `main`'s 4.45,
+5.17, 2.07 and 4.12; at 14, 20 and 30 minutes his greatest hurry is 1 on every walk, and at 8, 10 and 11 at most 1.69
+(1.76 under `next dev` at 8), below a run. When the clock moves on without him, at 12 minutes: after a night's sleep
+he is first seen 19.93 m from his spot, after a sleep before dawn 19.66 m (moved 40.69 m from his morning walk), after
+a sleep at dawn 19.64 m, and after a sleep at dusk half-way through his walk out 19.64 m (moved 11.09 m) — each on his
+way and facing along it — and walks the rest unhurried, ending it with 4.62 to 4.65 s to spare; after a sleep early in
+a winter evening (0.74 of the day) he is not moved (0.38 m, his own steps between two samples) and walks back to his
+spot unhurried; home again with three tenths of his evening walk's window gone he is first seen 24.15 m from the
+road's end, on his way and facing along it; home again with nine tenths of his walk out's window gone, at 20 minutes,
+at the village corner, facing on the way he was going; a knock-out while he trades leaves him on his spot; after the
+10 s frame he stands on his way; and the clock moved on while he stands at a walk's end — the probe's own move on a
+long day — leaves him where he stands, on every walk at 12, 20 and 30 minutes. At 4 minutes (the production build) the
+same sleeps put him 21.02 to 21.99 m from his spot, and every walk of those runs ends with at least 0.95 of the tenth
+in hand (0.90 under `next dev`, on the return home); at 30 minutes a night's sleep put him on his spot facing along
+his walk in — though that run began with him hidden on his spot, so only his facing (main's, hidden there too, was
+136.68 degrees off) shows that he was put there. His figure, read from his rig: at the end of every walk at all ten
+day lengths, of the late return and of every case of the clock moved on, it stands at rest, and at rest in the stage
+that holds him after it; at 4 minutes, at a run, its cadence keeps up with his hurry in every sample; at 4, 5 and 6
+minutes, once at a run, it never falls back to a walk while his hurry is above 1.9 (his hurry dips while he runs on to
+2.13 at 5 minutes and to 1.95 at 6). His team, read from its front leg: it swings through 1.1 rad while he walks, on
+every walk measured, against 0.1 grazing. *And on fifteen control builds*, each the fix with one edit: walking at his
+own pace whatever the time, he is late on every walk at 8 and 4 minutes, by up to 15.4 and 29.91 m, and jumps again;
+reckoning the walk left without the road, he hurries at 12 minutes on the walks that fit (1.1 times his pace on the
+walk in); never put on his schedule, after a night's sleep he is first seen 79.32 m from his spot and runs at 3.88
+times his pace; reckoning the window's seconds left on a 12-minute day, he is late on every walk at 4 minutes;
+measuring the window from now, he is late at 4 minutes — on every walk in its run, by about half a metre (on two to
+four walks from run to run); put on his schedule only at a change of stage, after a sleep at dawn he is first seen
+40.62 m from his spot and hurries at 1.97 times his pace; put on it whether behind it or not, a knock-out while he
+trades moves him 19.64 m off his spot; with nothing made of hiding, home again during his evening walk he is first
+seen at the road's end and stands there; walking a long frame in one stride, the 10 s frame carries him 13.66 m off
+his way; put on his schedule facing as he was, after a night's sleep he is first seen facing 130.73 degrees off his
+way; with his figure's cadence left as its clip began it, his steps keep up with his hurry in none of the samples at 4
+minutes; with no rest on arrival, his figure walks on at the end of every walk; with his way kept to the centre of its
+end's own cell, home again late in his walk out he is put at its end facing 168.29 degrees off the way he was going;
+with his gait chosen afresh each frame, at 5 minutes his figure falls back to a walk with his hurry above 1.9, five
+times over three walks; with his team never trotting, its front leg swings through 0.1 rad while he walks. A build
+without his clips loaded ahead did not show the race in its one run at 6 minutes (it needs a run's first load to come
+back after the rest pose). *Nothing else moved:* the scenery of home and of the eight destinations with an arrival
+point (`cln22_live.mjs`: 2,404 fixed meshes compared to 2 mm) is the same on `main` and on the fix, and CLN-20's
+frame-by-frame probe is identical. *Unit tests:* 25 new (415 in total) — the stages kept as they were, their windows
+and every bound; each walk's window on the same bounds; a walk's way and the plan points he walks toward; what is left
+of a walk in seconds at his own pace (along the plan from the next point he makes for, to where he stops, quicker on
+the road, nothing once he stands there, the centre of the end's own cell left out; the plan's seconds kept with it,
+and reckoned afresh for another end or pace); where his schedule puts him on a walk the clock has moved on without
+him, and facing which way, at the end of a walk whose plan ran past it among them; his gait; whether keeping to his
+schedule puts him there (out of hiding always, otherwise only when behind it by more than the slack, never back); how
+fast he walks; and each of the four walks, as long as it was measured on `main` at 30 minutes, simulated at every day
+length from 4 to 30 minutes — it ends inside its window with nearly its tenth in hand, and at 12 minutes and longer
+every walk that fits with a tenth to spare is walked at his own pace throughout — the walk in after a night's sleep
+among them. *Mutation:* of 53 single edits, the 36 the unit tests own are all caught, 15 are the control builds above,
+and two no check measures: the team's trot set every frame (a re-render, nothing to see), and his clips not loaded
+ahead (the race it opens hangs on how fast a load comes back). *Imports:* the same cycles as `main`.
+
+**Not measured:** how his quicker steps and his run look in motion (his figure's clip and cadence are read, not seen)
+— the cadence follows his hurry, not his speed over the ground, so at a run's top speed it changes at the road's edge;
+a game loaded, a knock-out during a walk, a return home during his morning walk, and a night's sleep on a long day
+from where his evening walk leaves him (each the clock moved on without him, kept to by the same rule as the cases
+measured; a return home during his walk in takes the same path as the night's sleep, measured; the 30-minute sleep
+started from his spot); where a placement puts him is checked against the grid's plan of the walk, on which it lies by
+construction, and by his facing, not against the track of an ordinary walk; hitches between a tenth of a second and
+1.1 s long, and frame rates under ten a second, which his step makes up only by hurrying, up to a run (by reckoning,
+not measured: at 4 minutes, from about 7 frames a second down, he would be late again); the day lengths the probe did
+not sample (the unit tests walk each walk at every length from 4 to 30 minutes).
+
+## Bug: a figure's clip asked for before another's load has come back can end on the older one — logged 2026-10-18 (in the merchant-timing fix, seen on the merchant)
+
+**What the code does.** `MinifigAnimator.play()` (`lib/minifigRig.ts`) awaits its clip's load before it switches to it
+(`loadClip` keeps each clip's fetch from the first time the clip is asked for, so later calls share a load still out,
+and a failed one stays failed), and nothing marks the latest call as the one that counts. When a second `play()` is
+made while the first's load is still out, and the second's clip comes back first — already loaded, say — the second
+takes effect first and the first takes effect over it when its load comes back; and `play()` returns at once for the
+clip the animator already has, so asking again for that clip while another's load is out does not stop the other
+either. `RiggedFigure` calls `play()` from an effect when its `clip`, loop or time scale changes, and not otherwise,
+so the figure goes on playing the older clip until the next such change.
+
+**Seen** in the merchant-timing fix's trial (`merchant_day_probe.mjs` at a 6-minute day, on that fix before it loaded
+his clips ahead; record `out/merchanttime/try/r4_6.txt`): at the end of his walk in, before his trading window opened,
+his figure played `anim_c_run`, where every other walk in the trial — at 4, 5, 6 and 12 minutes — ended on
+`anim_r_restpose`. No sample of that walk saw him at a run (his greatest sampled hurry was 1.97, where a run is taken
+up above 2.2), so the rest is read from that end and the code: a run was asked for between the probe's samples in the
+walk's last strides — the run's first use in the session, its load still out — then the rest pose on his arrival,
+which the run's load overtook. By the code he would have run on the spot through his trading window. That fix loads
+his walk and his run ahead (`preloadClip`), when he is first mounted, so he meets it only if his figure asks for the
+run before that load is back, on his first mount of a session.
+
+**Not measured:** the other figures that change clips through the same `play()` — the villagers, the court and the
+destinations' people, the defenders and the companion, the raiders and the crypt's foes, the player's own figure and
+its previews, and the mounted horse's rider. Any of them asked for a new clip while the one before's first load is out
+could meet it.
+
+**To do.** Let only the latest `play()` take effect: a count kept on the animator, taken by each call — the early
+return for the clip it already has too — and checked once the load is in; with a unit test that stubs the clips' fetch
+and lets two loads come back out of order (`MinifigAnimator` would need exporting, or a test hook: it is built only
+inside `assembleRiggedMinifig`, and the clips' cache kept apart between tests). Then watch the figures that change
+clips most often.
