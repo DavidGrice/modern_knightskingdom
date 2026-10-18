@@ -36,6 +36,14 @@ function loadClip(name: string): Promise<AnimClip> {
   return p;
 }
 
+/** Starts loading an animation clip ahead of its first play(), so that play() finds it loaded. play() awaits the
+ *  clip's load, and a clip asked for while another's load is still out can be overtaken by that one when its load
+ *  comes back last (ROADMAP.md: "a figure's clip asked for before another's load has come back"). A failed load is
+ *  play()'s to report. */
+export function preloadClip(name: string): void {
+  loadClip(name).catch(() => {});
+}
+
 /** rest-pose reference rotations/positions per track (from anim_r_restpose frame 0) */
 let restRef: Promise<Map<string, AnimFrame>> | null = null;
 function loadRest(): Promise<Map<string, AnimFrame>> {

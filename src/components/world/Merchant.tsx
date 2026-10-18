@@ -1,16 +1,21 @@
 'use client';
 // The traveling merchant: visits by day with his cart, gone by night.
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import RiggedFigure from '../character/RiggedFigure';
 import RiggedProp from './RiggedProp';
 import { worldEnv } from '@/game/env';
-import { navSteer } from '@/game/navgrid';
+import { findPath, navSteer, type NavAgent } from '@/game/navgrid';
 import { roadEntry, roadSpeedMult } from '@/game/data/road';
-import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
+import { MERCHANT_SPOT } from '@/game/data/trade';
+import {
+  WALK_STOP, merchantGait, merchantSpeed, merchantStage, putOnSchedule, scheduledPlace, secondsLeftAtPace, walkWay,
+  walkWindow, type MerchantStage,
+} from '@/game/data/merchantDay';
 import { homeGroundY } from './TemplateWorld';
 import type { CharacterConfig } from '@/game/types';
+import { preloadClip, type RiggedMinifig } from '@/lib/minifigRig';
 import { wrapAngle } from '@/lib/math';
 import { exposeDebug } from '@/lib/debugHooks';
 
@@ -59,6 +64,8 @@ const MERCHANT_KEEP_PROPS = false;
 // road leg) — call it ~66.5s to fully close the gap. 0.1 (72s) leaves ~5.5s
 // of margin over that measurement rather than trimming it to the wire.
 const WALK_SPEED = 1.2;
+/** his own pace at a point of his road: WALK_SPEED, quicker on the road itself (what keeping time reckons with) */
+const paceAt = (x: number, z: number) => WALK_SPEED * roadSpeedMult(x, z);
 
 // The actual road's far entry point — the same spot every newcomer walks in
 // from (villagerMobs.arriveByRoad) — not an arbitrary offset behind
@@ -81,52 +88,37 @@ const OFF_STAGE = roadEntry();
 // invented stop with its own new geometry.
 const VILLAGE_STOP = { x: -40, z: 38.4 };
 
-// The walk becomes three legs each way instead of one: OFF_STAGE<->
-// VILLAGE_STOP, a dwell AT VILLAGE_STOP, then VILLAGE_STOP<->MERCHANT_SPOT.
-// Split against this file's own already-measured ~66.5s OFF_STAGE<-
-// >MERCHANT_SPOT walk (Wave 46's own live sampling above) by real road
-// distance along that same route: OFF_STAGE to the VILLAGE_STOP row is
-// ~52.8m on-road (leg 3's own 25.6m N-S run down to the leg-2 junction, then
-// 27.2m of leg 2's own E-W run west to x=-40); VILLAGE_STOP to MERCHANT_SPOT
-// is the remaining ~49.6m on-road (leg 2's own last 36.8m west to the camp
-// spur's junction, then 12.8m down the spur) plus the same ~9.6m off-road
-// tail Wave 46 already measured into camp. VILLAGE_DWELL is new — not
-// derived from the old walk, a real deliberate pause — and WALK_BUFFER
-// widens to fit all three legs, the "widen the existing buffer to absorb the
-// added dwell time" this wave's own research called for.
-// LIVE-VERIFIED this wave (real headless Chrome — see this repo's own
-// CLAUDE.md for the required launch flags — worldEnv.time scrubbed via the
-// window.__kkenv debug handle across the new windows, merchant position
-// sampled at each transition): he reaches VILLAGE_STOP and MERCHANT_SPOT
-// with margin to spare at both boundaries, no teleport-pop at either seam.
-const TO_VILLAGE_BUFFER = 0.047; // ~34s at the default 720s day
-const VILLAGE_DWELL = 0.021; // ~15s dwell at the village corner
-const VILLAGE_TO_SPOT_BUFFER = 0.056; // ~40s at the default 720s day
-const WALK_BUFFER = TO_VILLAGE_BUFFER + VILLAGE_DWELL + VILLAGE_TO_SPOT_BUFFER;
+/** each walk's two ends, where its stage starts him and where it takes him (only the walking stages ask) */
+function walkEnds(stage: MerchantStage): [{ x: number; z: number }, { x: number; z: number }] {
+  switch (stage) {
+    case 'to_village_am': return [OFF_STAGE, VILLAGE_STOP];
+    case 'arriving': return [VILLAGE_STOP, MERCHANT_SPOT];
+    case 'leaving': return [MERCHANT_SPOT, VILLAGE_STOP];
+    default: return [VILLAGE_STOP, OFF_STAGE]; // to_offstage
+  }
+}
 
-type Stage =
-  | 'away' | 'to_village_am' | 'village_am' | 'arriving'
-  | 'present' | 'leaving' | 'village_pm' | 'to_offstage';
+/** What is left of his walk to `to` from (x, z), in seconds at his own pace, along a fresh plan from there. */
+function secondsLeftFrom(x: number, z: number, to: { x: number; z: number }): number {
+  return secondsLeftAtPace(x, z, { pts: findPath(x, z, to.x, to.z) ?? [], i: 0 }, to.x, to.z, paceAt);
+}
 
-function stageFor(time: number): Stage {
-  if (merchantPresent(time)) return 'present';
-  // morning approach: OFF_STAGE -> VILLAGE_STOP -> (dwell) -> MERCHANT_SPOT,
-  // counting the three sub-windows down to 0.3 (present's own start)
-  const toVillageStart = 0.3 - WALK_BUFFER;
-  const villageAmStart = 0.3 - VILLAGE_TO_SPOT_BUFFER - VILLAGE_DWELL;
-  const arrivingStart = 0.3 - VILLAGE_TO_SPOT_BUFFER;
-  if (time > toVillageStart && time <= villageAmStart) return 'to_village_am';
-  if (time > villageAmStart && time <= arrivingStart) return 'village_am';
-  if (time > arrivingStart && time <= 0.3) return 'arriving';
-  // evening departure: MERCHANT_SPOT -> VILLAGE_STOP -> (dwell) -> OFF_STAGE,
-  // the same three windows mirrored up from 0.72 (present's own end)
-  const leavingEnd = 0.72 + VILLAGE_TO_SPOT_BUFFER;
-  const villagePmEnd = leavingEnd + VILLAGE_DWELL;
-  const toOffstageEnd = 0.72 + WALK_BUFFER;
-  if (time >= 0.72 && time < leavingEnd) return 'leaving';
-  if (time >= leavingEnd && time < villagePmEnd) return 'village_pm';
-  if (time >= villagePmEnd && time < toOffstageEnd) return 'to_offstage';
-  return 'away';
+/** Keeps him to his schedule on the walk the clock finds him on, once it has moved on without him: if putOnSchedule
+ *  (data/merchantDay.ts) says so — always out of hiding, and otherwise only when he has fallen behind it — he is put
+ *  where his schedule puts him on the walk (scheduledPlace, along a plan of the whole walk: walkWay), facing along it,
+ *  to make a fresh plan from there. */
+function keepToSchedule(s: NavAgent & { yaw: number }, stage: MerchantStage, outOfHiding: boolean) {
+  const win = walkWindow(stage);
+  if (!win) return; // a stage that holds him in place or hides him
+  const [from, to] = walkEnds(stage);
+  const share = Math.max(0, (worldEnv.time - win.start) / (win.end - win.start));
+  const way = walkWay(from, findPath(from.x, from.z, to.x, to.z) ?? [], to);
+  const at = scheduledPlace(way, share * (win.end - win.start) * worldEnv.dayLength, share, paceAt);
+  if (!putOnSchedule(outOfHiding, secondsLeftFrom(s.x, s.z, to), secondsLeftFrom(at.x, at.z, to))) return;
+  s.x = at.x;
+  s.z = at.z;
+  if (at.dx !== 0 || at.dz !== 0) s.yaw = Math.atan2(-at.dx, -at.dz);
+  s.nav = undefined;
 }
 
 // the merchant's "cart": a yoked two-horse team hauling a shared tow-bar with
@@ -157,7 +149,21 @@ export default function Merchant() {
   const group = useRef<THREE.Group>(null);
   const [clip, setClip] = useState('anim_r_restpose');
   const [gaitSpeed, setGaitSpeed] = useState(0);
-  const state = useRef({ x: OFF_STAGE.x, z: OFF_STAGE.z, yaw: MERCHANT_SPOT.yaw, stage: 'away' as Stage });
+  // his rig, once assembled: his steps' cadence is set on its animator as his pace changes (RiggedFigure's own
+  // timeScale is taken only when its clip changes)
+  const rig = useRef<RiggedMinifig | null>(null);
+  // the clips his walks ask for, loaded ahead: the animator's play() awaits a clip's load, so a run first asked for in
+  // a walk's last strides (a short day hurries him most there) could come back after the rest pose that followed it,
+  // and win — he would run on the spot through his trading window
+  useEffect(() => {
+    preloadClip('anim_c_walk');
+    preloadClip('anim_c_run');
+  }, []);
+  // `hurry`: how much he is quickening his own pace this frame to keep time (1: not at all) — read by the live probes;
+  // `lastTime`: the clock as the last frame found it
+  const state = useRef<NavAgent & { yaw: number; stage: MerchantStage; hurry: number; lastTime: number }>({
+    x: OFF_STAGE.x, z: OFF_STAGE.z, yaw: MERCHANT_SPOT.yaw, stage: 'away', hurry: 1, lastTime: worldEnv.time,
+  });
   // Wave 53 (E4) · debug/test only, same convention as this project's other
   // __kk* handles (AgentManager's __kkai, Locomotion's __kkloco, road.ts's
   // own __kkroadEntry/__kkonRoad) — lets a live smoke test read the
@@ -166,21 +172,35 @@ export default function Merchant() {
   // headless Chrome, worldEnv.time scrubbed via __kkenv, sampled against
   // this handle at each stage transition).
   exposeDebug('__kkmerchant', state.current);
+  // ...and his rig, so that a probe can read what his figure plays: the animator's clip (`current`) and the cadence it
+  // plays it at (`timeScale`)
+  exposeDebug('__kkmerchantRig', rig);
 
-  useFrame((_, dt) => {
+  useFrame((_, rawDt) => {
     const g = group.current;
     if (!g) return;
     const s = state.current;
-    const stage = stageFor(worldEnv.time);
+    // his step, a tenth of a second's at most: a frame over 1.1 s long (a tab brought back) is not walked in one
+    // stride, straight on past the point he makes for — the clock it ran on is kept to below, along his way — and a
+    // shorter hitch only quickens his step to make the time up
+    const dt = Math.min(rawDt, 0.1);
+    const stage = merchantStage(worldEnv.time);
+    s.hurry = 1;
+    // the seconds of play the clock ran since the last frame (a clock set back reads as one run on round the day)
+    const moved = ((((worldEnv.time - s.lastTime) % 1) + 1) % 1) * worldEnv.dayLength;
+    s.lastTime = worldEnv.time;
 
-    // a stage change either end resets the walk cleanly, rather than
-    // inheriting stale navSteer path state from the opposite direction.
-    // Only entering `to_village_am` (from `away`) needs an explicit
-    // position reset — every other transition already starts exactly where
-    // the PREVIOUS stage left him (present pins MERCHANT_SPOT, village_am/
-    // village_pm pin VILLAGE_STOP), so there is nothing stale to clear.
-    if (stage !== s.stage) {
-      if (stage === 'to_village_am') { s.x = OFF_STAGE.x; s.z = OFF_STAGE.z; }
+    // Whenever the clock moves on without him — at a change of stage, and when it has run more than a second beyond
+    // his step: a night's sleep and a knock-out (but in the arena, which only brings the player home) both set it to
+    // 0.27, inside his walk in; a game loaded; a frame over 1.1 s long — he keeps to his schedule on the walk it finds
+    // him on (keepToSchedule). Out of hiding — the stage before was 'away', or he has just been mounted (this component
+    // is mounted at home only, so a return home mounts him afresh) — he is put where it says: the morning's walk finds
+    // him at the road's end, a night's sleep as far along his walk in as the time since it set out allows (on a long
+    // day, at its end). Otherwise he is put forward to it only if he has fallen behind it, never back: a walk's start
+    // finds him where the stage before left him (present pins MERCHANT_SPOT, village_am/village_pm pin VILLAGE_STOP),
+    // and a knock-out while he trades leaves him on his spot.
+    if (stage !== s.stage || moved > dt + 1) {
+      keepToSchedule(s, stage, s.stage === 'away');
       s.stage = stage;
     }
 
@@ -225,27 +245,47 @@ export default function Merchant() {
 
     // to_village_am / arriving / leaving / to_offstage: walk toward
     // whichever end this leg is headed
-    const [tx, tz] = stage === 'to_village_am' ? [VILLAGE_STOP.x, VILLAGE_STOP.z]
-      : stage === 'arriving' ? [MERCHANT_SPOT.x, MERCHANT_SPOT.z]
-      : stage === 'leaving' ? [VILLAGE_STOP.x, VILLAGE_STOP.z]
-      : [OFF_STAGE.x, OFF_STAGE.z]; // to_offstage
+    const [, end] = walkEnds(stage);
+    const tx = end.x;
+    const tz = end.z;
     const { nx, nz, dist } = navSteer(s, tx, tz, dt);
-    if (dist > 0.5) {
+    if (dist > WALK_STOP) {
       // Wave 34 (G6.6) · the merchant's whole walk is along the printed
       // road by design (his timing is tuned against the roadEntry() ->
       // MERCHANT_SPOT distance), so this is a real target for the road
       // speed perk, not just a mechanical extension — flagged for a live
       // check against that tuned arrival timing.
-      const speed = WALK_SPEED * roadSpeedMult(s.x, s.z);
+      const pace = paceAt(s.x, s.z);
+      // ...and he keeps time: his walk's window is a fraction of the day, whose length the player sets, so when what
+      // is left of the walk would not fit what is left of the window he steps out faster (data/merchantDay.ts)
+      const win = walkWindow(stage)!;
+      const speed = merchantSpeed(
+        pace,
+        secondsLeftAtPace(s.x, s.z, s.nav, tx, tz, paceAt),
+        (win.end - worldEnv.time) * worldEnv.dayLength,
+        (win.end - win.start) * worldEnv.dayLength,
+      );
       s.x += nx * speed * dt;
       s.z += nz * speed * dt;
       const desired = Math.atan2(-nx, -nz);
       const diff = wrapAngle(desired - s.yaw);
       s.yaw += diff * Math.min(1, dt * 3);
-      if (clip !== 'anim_c_walk') setClip('anim_c_walk');
-      if (gaitSpeed !== speed) setGaitSpeed(speed);
-    } else if (gaitSpeed !== 0) {
-      setGaitSpeed(0);
+      // his steps keep up with him (data/merchantDay.ts's merchantGait): the walk's own cadence, quickened as he
+      // hurries, and a run past about twice his pace
+      const rate = speed / pace;
+      s.hurry = rate;
+      const { running, cadence } = merchantGait(rate, clip === 'anim_c_run');
+      const want = running ? 'anim_c_run' : 'anim_c_walk';
+      if (clip !== want) setClip(want);
+      if (rig.current) rig.current.animator.timeScale = cadence;
+      // the team's trot follows his speed, in tenths of a metre a second (a state: not set every frame)
+      const gait = Math.round(speed * 10) / 10;
+      if (gaitSpeed !== gait) setGaitSpeed(gait);
+    } else {
+      // there: he stands at rest until the next stage, rather than walking — or, hurried, running — on the spot (the
+      // rest pose's own play() puts his cadence back to 1)
+      if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+      if (gaitSpeed !== 0) setGaitSpeed(0);
     }
     g.position.set(s.x, homeGroundY(s.x, s.z), s.z);
     g.rotation.y = s.yaw + Math.PI; // RiggedFigure convention (see Villagers.tsx)
@@ -254,7 +294,7 @@ export default function Merchant() {
   return (
     <group ref={group}>
       <Suspense fallback={null}>
-        <RiggedFigure config={MERCHANT_CONFIG} height={1.75} keepProps={MERCHANT_KEEP_PROPS} clip={clip} />
+        <RiggedFigure config={MERCHANT_CONFIG} height={1.75} keepProps={MERCHANT_KEEP_PROPS} clip={clip} onReady={(r) => { rig.current = r; }} />
       </Suspense>
       <Cart gaitSpeed={gaitSpeed} />
     </group>
