@@ -8328,30 +8328,107 @@ or once alerted — so they come to the camp after him, as a rule; a raid left t
 **To do.** Measure it first (a crossbow bandit and a bow guard set either side of a wall, live, on `main`); then
 decide the fix — the shooter stepping aside until the sightline clears, closing in, or turning to another target.
 
-## Bug: the merchant's cart and team ride beside him and sweep over what he passes — logged 2026-10-16 (in the review of the camp-walls fix; measured at the camp)
+## Bugfix: the merchant's cart and team rode beside him and swept over what he passed, and he walked through the village's huts and a roadside tree — FOUND 2026-10-16 (in the review of the camp-walls fix; his whole road measured 2026-10-19), FIXED 2026-10-21
 
-**What the code does.** The merchant's "cart" — a yoked two-horse team hauling a chest slung between them (`oc6095b3`)
-— is a child of his own group at a fixed offset, 1.9 m to one side of him and 0.4 m back (`Merchant.tsx`'s `<Cart>`),
-and turns with him. His way is found on the navigation grid (`navSteer`), which keeps only his own centre clear of
-what stands in it — obstacles are widened by a walker's 0.55 m (`AGENT_RADIUS`, `nav/grid.ts`). So the team, about 1.8
-by 2.3 m, sweeps over whatever he passes close by on that side.
+**The fault.** His "cart" — a yoked two-horse team hauling a chest slung between them (`oc6095b3`, 1.84 m across and
+2.14 m long as drawn) — was a child of his own group at a fixed offset, 1.9 m to his left and 0.4 m back, turned a
+further 0.4 rad (`Merchant.tsx`'s `<Cart>`), and turned with him: it swept, out to 3.2 m on that side, over whatever he
+passed. His way was found on the navigation grid (`navSteer`), which keeps a walker's centre 0.55 m clear of what it
+holds — and it holds neither the village's two huts nor the trees (the huts are drawn and stop nobody, the trees stop
+only the player; logged below as a fault of its own), so his own way ran through Beda's hut on his morning and evening
+walks and Alric's on his walks in and out, and through a roadside tree on his walk out. His stop at the village corner
+stood on the road's centreline, 0.4 m from Alric's own spot, and after his walk out the team at his side stood in
+Alric's hut through his whole evening dwell; and when his trading window opened his facing snapped round to the gate and
+the team, fixed to him, swung 3.8 m round him in one frame.
 
-**Measured** at the merchant's camp (`camp_life_probe.mjs`, in the camp-walls fix's evidence pass, 2026-10-16): with
-the fix, his way out goes up the yard's east side and round the east wing's front end, and the team's outline overlaps
-the east wing at its widest (the pilasters' reach taken along its whole face) in 40 of the probe's samples, taken
-about a tenth of a second apart (44 under `next dev`); on `main`, where he walks through the wing himself, it overlaps
-the wing or the back-right corner in 32. The outline is the bounds of the team's parts as it stood at rest before the
-walk, laid down unchanged as it walks (its legs swing and its heads lift as it goes): the counts are close, not exact.
-His way in is clear of the stone on the fix.
+**Measured on `main`** (production build of 6085c0f, `cart_road_probe.mjs` sampling his whole day every tenth of a
+second, 2026-10-21: at the 12-, 4- and 30-minute days the team overlapped something along his road in 300, 107 and 1,077
+samples — the camp's east wing, both huts, a roadside tree — and he himself stood inside a hut in 77, 19 and 56; the
+team rode 22.9 degrees askew of the way it moved (median), never behind him; it swung 3.8 m in the frame his trading
+window opened; he stood 0.4 m from Alric's spot at the village corner; and after an early sleep at dusk in winter, left
+on his walk in, he is first seen facing 113 degrees off his way, back along his walk out.))
 
-**Not measured:** the rest of his road — the village corner, and the buildings and trees along the way.
+**The fix.** *His team is towed after him* (`data/merchantTeam.ts`), as a cart is towed: drawn in a group of its own
+rather than his, its front hooves are dragged after him on a pole 1.375 m long — so that its noses stay 0.7 m behind him
+and never come nearer (walked at, it is pushed back) — and its back hooves after the front ones on another, the 1.03 m
+between the two pairs (`towTeam`). On a straight track both pairs come down on his track; round a turn they cut inside
+it, as a cart's wheels do. When the clock moves on without him and puts him somewhere, when he comes out of hiding, and
+when the clock moves on into another stage, the team is set down behind him as if he had walked his way there
+(`laidBehind`, `teamOn`) — or, where it leaves him more than a metre off his way (a sleep early on his walk out leaves
+him on his walk in, 7 m from its way), straight behind him as he will walk, toward the first point of his plan, and he
+is faced that way (`OFF_WAY`, `firstStepOf`, `teamBehind`); it is hidden with him while he is away. (Placed instead by
+distance along his track, the team bunched up at a sharp turn with its noses 0.23 m from his centre, inside him; placed
+by the first point of his track at a distance from him, it jumped by up to 1.9 m in one frame — both tried, on next dev
+and in plain node, before the pole.) *His way is found wide enough for his team* (`NavGrid.findPath`'s `wide`,
+`nav/grid.ts`): on a mask of its own — every cell the grid blocks, every cell within a walker's 0.55 m of what such a
+walker also keeps clear of (`nav/wideSolids.ts`: at home, the village's two huts as the turned squares they stand on —
+now a table, `data/world.ts`'s `VILLAGE_HUTS`, which `StarterVillage.tsx` draws from — the signpost, and the store's
+standing trees and rocks as the circles the player is stopped at), and then every cell next to one of those — so that
+the centre of a cell he may stand on is at least 2.05 m from anything that stands (a building, the camp's stone, a hut,
+the signpost, a tree or a rock), and a cell further from water than an ordinary walker's; where there is no such way,
+the ordinary one. The mask is made when first asked for and again once the grid has been rebuilt or the trees and rocks
+have changed. He steers on from a corner of his way only once within half a metre of it (`WIDE_REACH`; every other
+walker, 1.1 m), and walks straight for the end of a walk from the corner before rather than to the centre of its own
+cell; and all three of his planners — his steps, his timing, and where his schedule puts him — plan wide. *His walk in
+is brought round his yard*: through the gate and down its west side, then due east to his spot, 3.7 m (`CAMP_WEST`,
+`CAMP_TURN`), so that his team ends at his right hand when he turns to face the gate to trade rather than between him
+and whoever comes in through it (brought straight in from the gate, a towed team stands there, 1.6 m in front of him;
+brought down the side and round by a right angle rather than straight from the gate to the turn, it parks 31 degrees
+rather than 44, 0.58 m ahead of him rather than 0.73 off that short stretch). *His stop at the village corner moved* 2.2
+m north, to the road's north half (`VILLAGE_STOP`, (-40, 40.6)), 2.6 m from Alric's spot, where his way brings the team
+in clear of both huts. His walks are now lists of stops (`WALK_STOPS`): he makes for each in turn, past a point his walk
+turns him at once within half a metre of it, and his timing reckons through them (`data/merchantDay.ts`:
+`secondsLeftAtPace`'s reach at a turn, `wayThrough`, `legOf`, `secondsLeftThrough`, `nearestOnWay`, and the index of the
+way's point he makes for from where `scheduledPlace` puts him). His team's group and his walks' ways are published for
+the probes (`__kkmerchantTeam`, `__kkmerchantWay`).
 
-**To do.** Let the team follow behind him on his own track, as a towed cart would, or find his way for something as
-wide as the team; then measure his whole road. When this was logged his walk out had 1.57 s of its window to spare at
-the default 12-minute day and none at 11 (by `camp_life_probe.mjs`; the bugfix below, measuring with its own probe,
-gives `main` 2.07 s at 12 minutes); he keeps time now (the bugfix below), so a way out that is longer only quickens
-his step, up to a run (6 m a second) — at a 4-minute day he already runs his walk out at about three times his pace, so
-a much longer way out would be late again there.
+**What changes in play.** His cart and team are led now rather than carried: they come along behind him on his track and
+round his turns, and neither they nor he pass through the camp's stone, the village's huts, the signpost or the trees
+and rocks along his road. His ways are a little longer — round the huts and the roadside tree, and down his yard's west
+side — so each walk takes a little longer at his own pace (at a 30-minute day 30.2, 40.3, 38.9 and 31.9 s for his
+morning walk, walk in, walk out and evening walk, against 29.5, 35.0, 38.4 and 29.6 on main), and at the default
+12-minute day he steps out faster on all four of his walks, by 2% on his morning walk and up to 18% on his walk in (on
+main, only his walk out, by 14%) (#261 keeps every walk inside its window at any day length). At the village corner he
+stands on the road's north half, 2.2 m north of where he stood, 2.6 m from Alric's spot rather than 0.4 m. He still
+trades on his spot, facing the gate; his team now stands at his right hand there (its centre 1.66 m to his right and
+0.58 m ahead of him, parked 31 degrees off the stretch to his spot) rather than at his left, where it stood on main (1.9
+m to his left and 0.4 m back). When his trading window opens he still turns to the gate in one frame (logged below as
+its own entry), but his team no longer swings round him: it is only drawn after him the half metre he is set forward
+onto his spot. Whenever the clock moves on without him — a sleep, a knock-out, a return home — his team is first seen
+behind him on his way, and he facing along it; left off his way by an early sleep at dusk in winter, he is faced the way
+he walks on, his team straight behind him. The team's gait is as it was (its doubled cadence and its tails are logged
+below).
+
+**Verified** on the final tree: `tsc`, the unit tests (450; new: `wide.test.ts`, `merchantTeam.test.ts`, and his walk's
+stops in `merchantDay.test.ts`), `npm run build`, and a mutation run of 80 edits to the change, each filed under the
+check that owns it — 54 caught by the unit tests, 16 only live (each built into a control), 6 caught by nothing and 4 no
+different, each with its reason — and the timing fix's 53 again (its 37 that the unit tests own, all caught). Live on
+next dev, 2026-10-21: his whole road at 12 minutes, the team clear of everything in every sample and never nearer
+anything than 0.88 m, its noses never nearer him than 0.7 m, behind him whenever he walks, at his right hand while he
+trades, and set down behind him when the player comes home while he trades or during his evening dwell; every walk
+inside its window at 12 and 4 minutes; and nine moves of the clock without him, after each of which he is first seen on
+his way facing along it (or, left off it by an early sleep at dusk in winter, facing the way he walks) with his team
+behind him, its front hooves on his way. Thirteen control builds of the final tree, each with a fault planted, failed
+what they must but one: with the walk beyond his yard's turn not reckoned he was late on his walk in at a 4-minute day
+in one pass and in time in the other, a fault too small at that length to tell; a fourteenth (his team laid on his way
+where he is left off it) did not build, and was shown on next dev instead. On production builds of the tree before its
+last change — the set-down where he is left off his way, and smaller changes to tests and comments — main and the fix
+side by side, 2026-10-21: his whole road at 4, 12 and 30 minutes (the figures above; the fix clear of everything, never
+nearer anything than 0.84 m); his walks at ten day lengths from 4 to 30 minutes, every one inside its window; six more
+controls (the timing fix's own five, and his beyond-the-next-stop timing reckoned once only); the scenery of home and
+eight destinations the same but for his team, which stands on the other side of his spot; and the game's rules frame by
+frame, identical. That last change was watched frame by frame on next dev: from the first frame after the clock moves
+on, he faces the way he walks, his team straight behind him. The final evidence pass on it was cut short by the
+session's end before its production probes.
+
+**Not measured:** the team against the player's own buildings standing across his road (his way goes round anything the
+grid holds, and the grid holds them; no probe built one there) — the camp's stone is what was measured; a tree or rock
+felled or grown back along his road while he walks it (the mask is made again: a unit test, not watched live); his whole
+road at day lengths other than 4, 12 and 30 minutes (his timing alone was measured at ten lengths from 4 to 30); and how
+long the wide mask takes to make on a slow machine (it is made once, when first asked for, and again only when the grid
+is rebuilt or the trees and rocks standing at home change — one felled or grown back, the orchard planted or watered,
+the nodes seeded afresh; the frame-by-frame probe runs on a virtual clock and compares what the game's rules do, not how
+long a frame takes).
 
 ## Bugfix: the merchant's walks were timed by the day and stepped by the second, so at a short day he jumped to a walk's end, and when the clock moved on without him he walked on from wherever it found him — FOUND 2026-10-16 (in the review of the camp-walls fix), FIXED 2026-10-18
 
@@ -8544,3 +8621,57 @@ return for the clip it already has too — and checked once the load is in; with
 and lets two loads come back out of order (`MinifigAnimator` would need exporting, or a test hook: it is built only
 inside `assembleRiggedMinifig`, and the clips' cache kept apart between tests). Then watch the figures that change
 clips most often.
+
+## Bug: the village's huts and the signpost stop nobody, and the trees and rocks stop only the player — logged 2026-10-20 (in the fix of the merchant's cart; measured for the merchant, by the code for the rest)
+
+**What the code does.** Alric's and Beda's huts (`StarterVillage.tsx`: the small castle-wall corner piece, mc001,
+drawn 2.6 m tall — 2.17 m square — and turned to face their corner, standing where `data/world.ts`'s `VILLAGE_HUTS`
+says) and the signpost (`Signpost.tsx`) are drawn, and nothing else knows them: not the player's collision
+(`PlayerController.tsx`: the store's buildings, the camp's walls, the keep's great hall, the trees and rocks, water and
+the world's edge), not the navigation grid every walker is steered by (`nav/grid.ts`: the store's buildings, the
+camp's walls, water and the terrain the walkers keep off), not line of sight (`nav/lineOfSight.ts`). The trees and
+rocks (the store's `nodes`) stop the player — a circle of 0.55 m times its scale about a trunk, of 1.1 m times its
+scale about a boulder — and no walker: the grid does not hold them.
+
+**Measured** for the merchant on `main` (production build of 6085c0f, 2026-10-19, `cart_road_probe.mjs` at the default
+12-minute day, his place sampled every tenth of a second over his whole day): his own centre (a body 0.25 m across
+taken round it) was inside Beda's hut in 20 samples of his morning walk and 21 of his evening walk, inside Alric's in
+12 of his walk in and 5 of his walk out, and inside a roadside tree's circle (`verge3`, at (-46.77, 33.2)) in 11 of
+his walk out. The fix of his cart, above, plans his way round them — his alone (`nav/wideSolids.ts`).
+
+**Not measured:** the player walking through the huts or the signpost; Alric, Beda, the villagers, the raiders and the
+defenders walking through them, or through the trees and the rocks — by the code, every walker the grid steers.
+
+**To do.** Decide what each should stop. The huts are buildings, and should stop everyone; but making them solid for
+the walkers blocks cells round them that Alric's and Beda's own standing spots are in or beside (2.1 and 2.2 m from
+their huts' centres, where the grid blocks what comes within 0.55 m of a hut, a whole cell at a time), so measure what
+that does to the two of them first. The trees are what the gatherers walk up to. The data is there to build on: the
+huts' table, and the list of what the merchant keeps clear of.
+
+## Bug: the merchant's team trots at twice its cadence, and swings its tails as hind legs — logged 2026-10-20 (in the fix of the merchant's cart; by the code and the rig chart, not run)
+
+**What the code does.** `RiggedProp.tsx` runs two blocks of walk cycle over the team. While its `gaitSpeed` is over
+0.01, the block for a standalone horse (`if (gaitSpeed > 0.01 || rig.parts['leg_upper#0'])`) advances the gait clock
+by `dt * (2.2 + gaitSpeed * 1.8)` and finds none of its legs; then the team's own block (`if
+(rig.parts['horse_L_leg_FL_upper'])`) advances the same clock again by as much and swings the team's legs by it — so
+while the merchant walks his team's legs swing at twice the cadence a standalone horse's do at the same speed (at
+rest only the team's block runs). And the rig lab's chart of the team (`public/assets/rigs/part_roles.json`, oc6095b3)
+names the two tails (`056_shape23`, `098_shape40`: their extents are those of the standalone horse's own tail,
+l7339200's `042_shape15`) `horse_L_leg_BR_upper` and `horse_R_leg_BR_upper`; the two pieces it names `..._BR_lower`
+(`041_shape17`, `083_shape36`) are the back-right upper legs, and the back-right lower legs (`044`, `086`) are charted
+`extra_0`. So each tail swings as a leg, and each horse's back-right lower leg does not move. Read from the code and
+from the chart against the model's bounds (computed in the reading of the cart fix, 2026-10-19), not watched.
+
+**To do.** Advance the gait clock once a frame; put the chart's three back-right roles right (or map them in code, with
+a note); then watch the team walk, beside a standalone horse at the same speed.
+
+## Seen, not looked into: the merchant turns on the spot in one frame when his trading window opens — logged 2026-10-20 (in the fix of the merchant's cart)
+
+`Merchant.tsx`'s branch for his trading window sets his facing to `MERCHANT_SPOT.yaw` (toward his camp's gate) from its
+first frame. On `main` (`cart_road_probe.mjs`'s samples, 2026-10-19, 12-minute day) he faces 0.43 rad at the last
+sample of his walk in and π at the first of his window: a turn of 155.5 degrees from one frame to the next. The cart
+fix above brings him to his spot from the west, and the turn is about 100 degrees. In the same frame the branch sets
+him on `MERCHANT_SPOT` itself, from wherever his walk in ended him — anywhere within `WALK_STOP`, half a metre, short
+of it — and his team, towed, is drawn after him that far. To do: let him turn over his last steps, or over the
+window's first second, as his walk turns him (an ease: each second, three times the angle he still has to turn), and
+walk him the rest of the way onto his spot rather than set him there.

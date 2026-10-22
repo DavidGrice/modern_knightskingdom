@@ -168,8 +168,9 @@ export function rebuildNav(buildings: PlacedBuilding[]): void {
   homeGrid.rebuild(buildings);
 }
 
+/** A way across the home grid (NavGrid.findPath; `wide`: for a wide walker, the merchant leading his team). */
 export function findPath(
-  sx: number, sz: number, tx: number, tz: number, maxNodes = 4000,
+  sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, wide = false,
 ): { x: number; z: number }[] | null {
-  return homeGrid.findPath(sx, sz, tx, tz, maxNodes);
+  return homeGrid.findPath(sx, sz, tx, tz, maxNodes, 0, wide);
 }

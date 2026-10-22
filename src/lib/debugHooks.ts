@@ -20,7 +20,8 @@
 //   ai/perception/index:     __kkperception    ai/perception/sounds:     __kksounds
 //   components/fps/PlayerController: __kkscene, __kkcam
 //   components/world/CedricSiege: __kkCedricSiege   DragonSiegeController: __kkSiege, __kkBlackSiege
-//   components/world/Merchant: __kkmerchant, __kkmerchantRig   PostProcessing: __kkgl   RiggedProp: __kkpropfire
+//   components/world/Merchant: __kkmerchant, __kkmerchantRig, __kkmerchantTeam, __kkmerchantWay
+//   components/world/PostProcessing: __kkgl   RiggedProp: __kkpropfire
 //   components/world/TemplatePopulation: __kkpop   TemplateWorld: __kkworld
 //   game/arena: __kkarena                      game/buildCam: __kkbuildcam
 //   game/buildChallenge: __kkbuildchallenge    game/carts: __kkCart, __kkCartPos

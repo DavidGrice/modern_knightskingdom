@@ -21,8 +21,15 @@ export interface NavAgent {
    *  gets pushed around by everyone else's avoidance same as before this
    *  wave, just without being able to name itself out of the scan. */
   id?: string;
+  /** a wide walker — the merchant, leading his team (Merchant.tsx): its way is found for its breadth (NavGrid.findPath's
+   *  `wide`), and it steers on from a corner of that way only once within WIDE_REACH of it, rather than the 1.1 m every
+   *  other walker cuts its corners by, so that it keeps to the room its way was found with. Absent: an ordinary walker. */
+  wide?: boolean;
   nav?: { pts: { x: number; z: number }[]; i: number; t: number; tx: number; tz: number };
 }
+
+/** how near a wide walker comes to a corner of its way before it steers on for the next (NavAgent's `wide`) */
+export const WIDE_REACH = 0.5;
 
 // ---------------------------------------------------------------------------
 // Wave 42 (A7) — NPC_AI_SPEC §7.5's local-avoidance separation steering.
@@ -205,14 +212,22 @@ export function navSteer(
     n.t = 1.1 + Math.random() * 0.8;
     n.tx = tx;
     n.tz = tz;
-    n.pts = grid.findPath(agent.x, agent.z, tx, tz) ?? [];
+    n.pts = grid.findPath(agent.x, agent.z, tx, tz, undefined, undefined, agent.wide) ?? [];
     n.i = 0;
   }
-  while (n.i < n.pts.length
-    && Math.hypot(n.pts[n.i].x - agent.x, n.pts[n.i].z - agent.z) < 1.1) n.i++;
+  const reach = agent.wide ? WIDE_REACH : 1.1;
+  // A wide walker steers on for the target itself from the corner before a plan's last point that is only the centre
+  // of the target's own cell (findPath's plan to a point ends there): that point can lie to one side of the target or
+  // beyond it as he comes to it, and the step to it and back would swing his team round at his shoulder. His timing
+  // leaves it out the same way (data/merchantDay.ts's pointsWalked).
+  let walked = n.pts.length;
+  if (agent.wide && walked > 0
+    && Math.hypot(n.pts[walked - 1].x - tx, n.pts[walked - 1].z - tz) <= (grid.cellSize * Math.SQRT2) / 2 + 1e-9) walked--;
+  while (n.i < walked
+    && Math.hypot(n.pts[n.i].x - agent.x, n.pts[n.i].z - agent.z) < reach) n.i++;
 
   let baseNx: number, baseNz: number;
-  if (n.i >= n.pts.length) {
+  if (n.i >= walked) {
     baseNx = gdx / inv;
     baseNz = gdz / inv;
   } else {

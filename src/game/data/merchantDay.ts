@@ -75,6 +75,9 @@ type Point = { x: number; z: number };
 
 /** He ends a walk within this much of its end (Merchant.tsx's arrival rule: he walks on while further than this). */
 export const WALK_STOP = 0.5;
+/** He is past a point his walk turns him at once within this much of it (Merchant.tsx's WALK_STOPS), and makes for the
+ *  next: as near as he comes to his way's other corners (nav/steering.ts's WIDE_REACH). */
+export const TURN_REACH = 0.5;
 
 /** The centre of the cell a point lies in is no further than this from it: half the diagonal of the home grid's cells
  *  (navgrid.json's cellSize across), and a hair over for rounding. */
@@ -83,12 +86,22 @@ const OWN_CELL_REACH = (navgridConfig.home.cellSize * Math.SQRT2) / 2 + 1e-9;
 /** How many of a plan's points he walks toward: all of them but a last that is only the centre of the walk's end's
  *  own cell. The grid's plan to a point ends there (nav/grid.ts's findPath gives the corners of its way and then the
  *  goal's cell), and on some walks that centre lies beyond the end as he comes to it, where he never goes: navSteer
- *  steers on past a point once within 1.1 m of it, and he stops within WALK_STOP of the end. Counted, it made the walk
- *  out and the evening walk, whose ends' cell centres lie so, a metre longer than he walks them, and turned him back
- *  the way he came when he was put at their ends. */
+ *  leaves that point out for him (a wide walker: nav/steering.ts), steering straight for the end from the corner
+ *  before, and he stops within WALK_STOP of the end. Counted, it made the walk out and the evening walk, whose ends'
+ *  cell centres lie so, a metre longer than he walks them, and turned him back the way he came when he was put at
+ *  their ends. */
 export function pointsWalked(pts: Point[], tx: number, tz: number): number {
   const n = pts.length;
   return n > 0 && Math.hypot(pts[n - 1].x - tx, pts[n - 1].z - tz) <= OWN_CELL_REACH ? n - 1 : n;
+}
+
+/** Where he steers first, standing at `at` with `plan` to `to` before him, as navSteer reads a plan for him: the first
+ *  of the plan's points he walks toward (pointsWalked) that stands `reach` or more from him — nearer ones he counts as
+ *  reached (nav/steering.ts's WIDE_REACH) — or, past them all, `to` itself. */
+export function firstStepOf(at: Point, plan: Point[], to: Point, reach: number): Point {
+  const n = pointsWalked(plan, to.x, to.z);
+  for (let k = 0; k < n; k++) if (Math.hypot(plan[k].x - at.x, plan[k].z - at.z) >= reach) return plan[k];
+  return to;
 }
 
 /** A walk's way: its start (`from`), the points of a plan for it (`plan`) that he walks toward (pointsWalked), and its
@@ -112,25 +125,25 @@ function legSeconds(ax: number, az: number, bx: number, bz: number, paceAt: Pace
   return seconds;
 }
 
-/** A plan's own seconds, from each of the points he walks toward (pointsWalked) to where he will stop, kept with the
- *  plan (navSteer makes a fresh array for each plan it makes), so that each frame reckons only the leg from where he
- *  stands to the point he makes for. */
-const planSeconds = new WeakMap<object, { tx: number; tz: number; paceAt: Pace; fromPoint: number[] }>();
-function secondsFromEachPoint(pts: Point[], tx: number, tz: number, paceAt: Pace): number[] {
+/** A plan's own seconds, from each of the points he walks toward (pointsWalked) to where he will stop (`stop` short of
+ *  its end), kept with the plan (navSteer makes a fresh array for each plan it makes), so that each frame reckons only
+ *  the leg from where he stands to the point he makes for. */
+const planSeconds = new WeakMap<object, { tx: number; tz: number; paceAt: Pace; stop: number; fromPoint: number[] }>();
+function secondsFromEachPoint(pts: Point[], tx: number, tz: number, paceAt: Pace, stop: number): number[] {
   const kept = planSeconds.get(pts);
-  if (kept && kept.tx === tx && kept.tz === tz && kept.paceAt === paceAt) return kept.fromPoint;
+  if (kept && kept.tx === tx && kept.tz === tz && kept.paceAt === paceAt && kept.stop === stop) return kept.fromPoint;
   const walked = pointsWalked(pts, tx, tz);
   const fromPoint = new Array<number>(walked);
   if (walked > 0) {
     const last = pts[walked - 1];
-    let after = legSeconds(last.x, last.z, tx, tz, paceAt, WALK_STOP);
+    let after = legSeconds(last.x, last.z, tx, tz, paceAt, stop);
     fromPoint[walked - 1] = after;
     for (let k = walked - 2; k >= 0; k--) {
       after += legSeconds(pts[k].x, pts[k].z, pts[k + 1].x, pts[k + 1].z, paceAt);
       fromPoint[k] = after;
     }
   }
-  planSeconds.set(pts, { tx, tz, paceAt, fromPoint });
+  planSeconds.set(pts, { tx, tz, paceAt, stop, fromPoint });
   return fromPoint;
 }
 
@@ -138,30 +151,71 @@ function secondsFromEachPoint(pts: Point[], tx: number, tz: number, paceAt: Pace
  *  plan on the walker: the path's points, `i` the next one he makes for) from where he stands, and on to where he will
  *  stop, WALK_STOP short of the walk's end — a metre or less at a time at his pace there (`paceAt`: Merchant.tsx's
  *  WALK_SPEED, quicker on the road). With no plan, or past the last point he walks toward (pointsWalked), the straight
- *  line. Within WALK_STOP of the end, nothing: he has stopped, whatever a plan still holds. */
+ *  line. Within WALK_STOP of the end, nothing: he has stopped, whatever a plan still holds. Of a stretch of a walk that
+ *  ends at a point it turns him at rather than at its end, `stop` is how far short of that point he turns
+ *  (TURN_REACH). */
 export function secondsLeftAtPace(
   x: number, z: number,
   nav: { pts: Point[]; i: number } | undefined,
   tx: number, tz: number,
   paceAt: Pace,
+  stop = WALK_STOP,
 ): number {
-  if (Math.hypot(tx - x, tz - z) <= WALK_STOP) return 0;
-  if (!nav || nav.i >= pointsWalked(nav.pts, tx, tz)) return legSeconds(x, z, tx, tz, paceAt, WALK_STOP);
+  if (Math.hypot(tx - x, tz - z) <= stop) return 0;
+  if (!nav || nav.i >= pointsWalked(nav.pts, tx, tz)) return legSeconds(x, z, tx, tz, paceAt, stop);
   const next = nav.pts[nav.i];
-  return legSeconds(x, z, next.x, next.z, paceAt) + secondsFromEachPoint(nav.pts, tx, tz, paceAt)[nav.i];
+  return legSeconds(x, z, next.x, next.z, paceAt) + secondsFromEachPoint(nav.pts, tx, tz, paceAt, stop)[nav.i];
+}
+
+/** A walk's way through its stops (`stops`: where it starts him, the points it turns him at, where it takes him): the
+ *  walkWay of each stretch from one stop to the next, along `plan`'s way for it, one after another; and the index in
+ *  it of each stop (`at`). */
+export function wayThrough(stops: Point[], plan: (from: Point, to: Point) => Point[]): { way: Point[]; at: number[] } {
+  const way: Point[] = [stops[0]];
+  const at = [0];
+  for (let k = 1; k < stops.length; k++) {
+    way.push(...walkWay(stops[k - 1], plan(stops[k - 1], stops[k]), stops[k]).slice(1));
+    at.push(way.length - 1);
+  }
+  return { way, at };
+}
+
+/** Which of a walk's stops he makes for — its index in the walk's stops, never the first, where the walk starts him —
+ *  when the point of the walk's way he makes for is its `next`th (`at`: wayThrough's indices of the stops). */
+export function legOf(at: number[], next: number): number {
+  for (let k = 1; k < at.length; k++) if (at[k] >= next) return k;
+  return at.length - 1;
+}
+
+/** What is left of a walk through its stops (`stops`) from (x, z), making for its `leg`th, in seconds at his own pace:
+ *  secondsLeftAtPace along `plan`'s way to that stop, then from each stop to the next — to each point the walk turns
+ *  him at, TURN_REACH short of it; to its end, WALK_STOP short. */
+export function secondsLeftThrough(
+  x: number, z: number, stops: Point[], leg: number, plan: (from: Point, to: Point) => Point[], paceAt: Pace,
+): number {
+  let seconds = 0;
+  let from: Point = { x, z };
+  for (let k = leg; k < stops.length; k++) {
+    const to = stops[k];
+    seconds += secondsLeftAtPace(
+      from.x, from.z, { pts: plan(from, to), i: 0 }, to.x, to.z, paceAt, k === stops.length - 1 ? WALK_STOP : TURN_REACH,
+    );
+    from = to;
+  }
+  return seconds;
 }
 
 /** Where his schedule puts him on a walk the clock has moved on without him — a night's sleep and a knock-out (but in
  *  the arena, which only brings the player home) both set it to 0.27, inside his walk in; a game loaded; a return home,
- *  which mounts him afresh; a frame over 1.1 s long: along the walk's way (`way`: walkWay's) as far as the further of
+ *  which mounts him afresh; a frame over 1.1 s long: along the walk's way (`way`: wayThrough's) as far as the further of
  *  the time since its window opened (`elapsedSeconds`), walked at his own pace, and the window's share gone (`share`)
  *  of the whole walk at his own pace — the share is what keeps him to a short day (in play he runs a little ahead of
  *  it, to keep a tenth of the window in hand) — and no further than its end; with the way the walk runs there (`dx`,
  *  `dz`: a unit vector along the leg he is put on, at the end its last leg of any length; nothing for a way of no
- *  length). */
+ *  length), and the index in `way` of the point he makes for from there (`next`; at the end, its last). */
 export function scheduledPlace(
   way: Point[], elapsedSeconds: number, share: number, paceAt: Pace,
-): Point & { dx: number; dz: number } {
+): Point & { dx: number; dz: number; next: number } {
   let total = 0;
   for (let k = 1; k < way.length; k++) total += legSeconds(way[k - 1].x, way[k - 1].z, way[k].x, way[k].z, paceAt);
   let todo = Math.min(total, Math.max(0, elapsedSeconds, share * total));
@@ -180,13 +234,32 @@ export function scheduledPlace(
       const step = full / steps / paceAt(a.x + (b.x - a.x) * mid, a.z + (b.z - a.z) * mid);
       if (todo <= step) {
         const f = (s + todo / step) / steps;
-        return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, dx, dz };
+        return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, dx, dz, next: k };
       }
       todo -= step;
     }
   }
   const end = way[way.length - 1];
-  return { x: end.x, z: end.z, dx, dz };
+  return { x: end.x, z: end.z, dx, dz, next: way.length - 1 };
+}
+
+/** The point of a way (`way`) nearest (x, z) — the earliest along it, of points as near — and the index of the point
+ *  of the way he makes for from there (`next`, as scheduledPlace gives it; at the way's end, its last). */
+export function nearestOnWay(way: Point[], x: number, z: number): Point & { next: number } {
+  let best = { x: way[0].x, z: way[0].z, next: Math.min(1, way.length - 1) };
+  let bestD = Math.hypot(way[0].x - x, way[0].z - z);
+  for (let k = 1; k < way.length; k++) {
+    const a = way[k - 1], b = way[k];
+    const len2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2;
+    const f = len2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (z - a.z) * (b.z - a.z)) / len2)) : 0;
+    const px = a.x + (b.x - a.x) * f, pz = a.z + (b.z - a.z) * f;
+    const d = Math.hypot(px - x, pz - z);
+    if (d < bestD) {
+      bestD = d;
+      best = { x: px, z: pz, next: k };
+    }
+  }
+  return best;
 }
 
 /** How far behind his schedule, in seconds at his own pace, he may stand when the clock moves on without him and stay
