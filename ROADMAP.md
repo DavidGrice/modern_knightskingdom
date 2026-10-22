@@ -8675,3 +8675,26 @@ him on `MERCHANT_SPOT` itself, from wherever his walk in ended him — anywhere 
 of it — and his team, towed, is drawn after him that far. To do: let him turn over his last steps, or over the
 window's first second, as his walk turns him (an ease: each second, three times the angle he still has to turn), and
 walk him the rest of the way onto his spot rather than set him there.
+
+## Bugfix: a knock-out never stood the player down — FOUND 2026-10-15 (left as found in the knighting fix, above), FIXED 2026-10-21
+
+**The fault.** A knock-out — the blow that takes the player to 0 hit points (`combat/playerDamage.ts`) — carries him to
+the spawn meadow, home first if he is away, and ended nothing he was doing: the knighting had the same fault, and its
+fix gave it `game/standDown.ts`. Measured on `main` (a production build of a87b69f, 2026-10-21, `knockout_modes.mjs`):
+knocked out crewing a Crossbow Station at home, he woke still crewing it, held at the engine — not at the meadow;
+pushing a Battering Cart or towing a Blade Cart, he woke still at it, the cart carried 14.7 m and 14.3 m with him to
+the meadow; in the saddle, the horse was carried with him to the meadow — 55 m from where he fell at home, or, from The
+Tourney Grounds, out of its own scene altogether, 1,637 m away.
+
+**The fix.** The knock-out stands him down where he falls, as the knighting does (`standDown()`, the carts it lets go
+settled by the store's `settleCart`), right after it shuts his panel and before the arena's own way out: a rider is got
+off, his horse left there with its home; a crew is stepped down from the engine; a ram or a cart is let go where it
+stands.
+
+**Verified** with `tsc`, the unit tests (a new one in `combat.test.ts` — the saddle, an engine, a ram and a cart at
+home, a horse of The Tourney Grounds there, and the arena — which fails with the stand-down taken out), the import
+graph (the same cycles as `main`), and live on production builds of `main` and the fix side by side, 2026-10-21, in
+all five of `knockout_modes.mjs`'s cases: on the fix he wakes on foot at the meadow every time, and the engine, the
+ram, the cart and the horse each stay where he went down (the horse where he was, as at any dismount). *Not
+measured live:* a knock-out in the crypt or the arena while riding, crewing or at a cart — the unit test takes the
+arena's way out by its code path only.
