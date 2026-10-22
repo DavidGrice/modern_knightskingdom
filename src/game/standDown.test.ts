@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audio } from '@/lib/audio';
 import { cartLivePos, cartState, resetCarts } from './carts';
 import { crewState, leaveEngine } from './crew';
+import { arenaState } from './arena';
+import { dungeonState } from './dungeon';
 import { NPC_KING } from './data/world';
 import { playerState, resetPlayerState } from './playerState';
 import { horses, mountHorse, registerHorse, resetRiding, ridingState } from './riding';
@@ -106,6 +108,26 @@ describe('the knighting', () => {
     crewState.engineId = 'engine1';
     game().beginCeremony('Knight');
     expect(crewState.engineId).toBe('engine1');
+  });
+
+  it('leaves build mode, and puts the Sealed Crypt and an arena run by as "Return Home" does', () => {
+    game().setBuildMode(true);
+    game().beginCeremony('Knight');
+    expect(game().buildMode).toBe(false);
+    // in the crypt (it opens to one who has the Knight's arms)
+    useGameStore.setState({ ceremony: null, completedQuests: ['knights_arms'] });
+    game().returnHome();
+    game().enterDungeon();
+    expect([game().destination, !!dungeonState.layout]).toEqual(['dungeon', true]);
+    game().beginCeremony('Paladin');
+    expect([game().destination, dungeonState.layout]).toEqual(['template-01', null]);
+    // in the arena
+    useGameStore.setState({ ceremony: null });
+    game().returnHome();
+    game().enterArena('earth');
+    expect(arenaState.active).toBe(true);
+    game().beginCeremony('Marshal');
+    expect([game().destination, arenaState.active, arenaState.env]).toEqual(['template-01', false, null]);
   });
 });
 
