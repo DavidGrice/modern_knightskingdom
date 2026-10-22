@@ -1,6 +1,7 @@
 import type { SkillId } from '../types';
 import { SKILLS, levelFromXp } from './ranks';
 import { QUESTS } from './quests';
+import { ownsMeleeSlot } from './melee';
 
 // Deeds: checked against a snapshot of the game state; awarded once, saved.
 
@@ -52,14 +53,11 @@ export const DEEDS: DeedDef[] = [
     // chain style) consumes the tier below, so a player who forged straight
     // to a Crested Sword before ever owning a shield would otherwise find
     // this permanently unearnable (inventory.sword reads 0 forever once
-    // re-forged). Inlined rather than importing combat.ts's ownsMeleeSlot:
-    // gameStore.ts imports THIS file, and combat.ts imports gameStore.ts, so
-    // that import would be a real cycle, not just a longer one.
-    // Wave 50 (C2): a dropped Legendary Sword is the exact same regression
-    // class — added here rather than left for a future wave to rediscover.
-    check: (s) => ((s.inventory.sword ?? 0) > 0 || (s.inventory.sword_forged ?? 0) > 0 || (s.inventory.sword_crested ?? 0) > 0
-      || (s.inventory.sword_legendary ?? 0) > 0)
-      && (s.inventory.shield ?? 0) > 0 },
+    // re-forged). Any tier of the sword counts — data/melee.ts's ladder, a
+    // dropped Legendary Sword among them (Wave 50, C2) — read from that pure
+    // module, which imports neither the store nor combat (CLN-23: this used
+    // to write the four tiers out again, to keep clear of combat.ts's cycle).
+    check: (s) => ownsMeleeSlot('sword', s.inventory) && (s.inventory.shield ?? 0) > 0 },
   { id: 'sharpshooter', name: 'Sharpshooter', icon: '🏹', desc: 'Own a crossbow.',
     check: (s) => (s.inventory.crossbow ?? 0) > 0 },
   { id: 'wealthy', name: 'Merchant’s Friend', icon: '🪙', desc: 'Hold 50 gold at once.',

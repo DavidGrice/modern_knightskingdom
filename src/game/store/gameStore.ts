@@ -49,6 +49,7 @@ import {
 import { SETTLEMENT_RAID_YIELD_PENALTY_MS } from '../settlementRaid';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT } from '../data/trade';
+import { buyQuote, haggleOf, sellQuote } from '../data/pricing';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress, CHALLENGE_TIER_REWARD, GOLDEN_FORTUNE_GOLD } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
@@ -2483,17 +2484,10 @@ function createGameStore() {
       // pays more, in BOTH directions (see data/trade.ts's own header note:
       // one signed lever drives both the sell and buy price).
       const marketMul = marketPriceMultiplier(st.marketState[item], now);
-      // Wit attribute: a sharper tongue haggles +4% per point. Silver Tongue
-      // trade-off perk: a flat +15% on top (its own downside lives in
-      // Storm's own duel cooldown — see Enemies.tsx's 'storm' branch). Wave
-      // 32: the Wanderer's own small Fair Dealer passive — no signature
-      // skill to hang a nudge off, so it gets a tiny universal haggle instead.
-      const take = Math.round(price * n * (1 + marketMul + (st.attrSpent.wit ?? 0) * 0.04
-        + (st.perks.includes('silver_tongue') ? 0.15 : 0)
-        // Wave 52 (D2): Honest Weight — the same +8% in both directions,
-        // no downside, stacking additively alongside Silver Tongue's own term.
-        + (st.perks.includes('honest_weight') ? 0.08 : 0)
-        + (st.character?.classId === 'wanderer' ? 0.02 : 0)));
+      // ...and the player's haggle on top: Wit, Silver Tongue, Honest Weight
+      // and the Wanderer's Fair Dealer (data/pricing.ts, the one formula the
+      // tickets and the caravan's quote share)
+      const take = sellQuote(price, n, marketMul, haggleOf(st));
       inv.gold = (inv.gold ?? 0) + take;
       set({
         inventory: inv,
@@ -2514,17 +2508,10 @@ function createGameStore() {
       // applied the other direction: a scarce item (positive pressure) costs
       // MORE to buy, exactly as it also pays more to sell into.
       const marketMul = marketPriceMultiplier(st.marketState[item], now);
-      // Wave 23 · Wit attribute: the same haggle sellItem() gives when
-      // selling, spent the other way here — Wit becomes a full haggle stat
-      // in both directions. Silver Tongue trade-off perk: the same ±15%
-      // haggle sellItem() gives, spent the other direction, stacking with
-      // Wit. Clamped to 1g so a maxed haggler is never handed goods for free.
-      // Wave 32: the Wanderer's small Fair Dealer passive, the same tiny cut
-      // sellItem() gives as a bonus, spent the other direction here.
-      const cost = Math.max(1, Math.round(price * (1 + marketMul - (st.attrSpent.wit ?? 0) * 0.04
-        - (st.perks.includes('silver_tongue') ? 0.15 : 0)
-        - (st.perks.includes('honest_weight') ? 0.08 : 0)
-        - (st.character?.classId === 'wanderer' ? 0.02 : 0))));
+      // Wave 23 · the same haggle sellItem() gives when selling, spent the
+      // other way here (data/pricing.ts) — clamped to 1g so a maxed haggler
+      // is never handed goods for free.
+      const cost = buyQuote(price, marketMul, haggleOf(st));
       if ((st.inventory.gold ?? 0) < cost) {
         st.notify('Not enough gold!');
         return;
