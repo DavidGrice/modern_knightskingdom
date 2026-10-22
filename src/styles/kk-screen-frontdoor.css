@@ -450,6 +450,15 @@
   color: var(--kk-text-faint);
 }
 .kk-save-empty:hover { color: var(--kk-n-500); background: rgba(37, 40, 51, .7); }
+/* CLN-09 · a save that could not be fetched or read, shown where its card would be */
+.kk-save-trouble { cursor: default; box-shadow: inset 0 0 0 1px var(--kk-warn); }
+.kk-save-trouble .kk-save-thumb { color: var(--kk-warn); }
+.kk-save-retry { border: 0; cursor: pointer; }
+.kk-save-note {
+  margin-top: -2px;
+  font: 400 11px/1.45 var(--kk-font);
+  color: var(--kk-text-dim);
+}
 .kk-menu-foot {
   margin-top: auto;
   padding-top: 14px;
