@@ -45,6 +45,7 @@ import { dungeonState, SURVIVE_DURATION_MS, SURVIVE_CADENCE_MS, ESCORT_EXTRACTIO
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
 import { pick } from '@/lib/rng';
+import { aimFor } from '@/game/combat/sightline';
 
 const CONFIGS: Record<string, CharacterConfig> = {
   skeleton: {
@@ -620,6 +621,56 @@ function Enemy({ data }: { data: EnemyData }) {
         : data.kind === 'caster' ? { range: CASTER_RANGE, cd: CASTER_ATTACK_CD }
         : null;
 
+      // A crossbow bolt lands only on a clear sightline. A raider whose mark — a guard, Tam, a villager or the player, as
+      // the chain below picks — stands in range behind something turns to the nearest of them in range he can see, and
+      // with none closes in on his mark by a path round what stands between them, until he can see it; he used to
+      // stand there for good, and a guard with a bow behind a wall from him did the same (game/combat/sightline.ts).
+      let mark: 'def' | 'companion' | 'villager' | 'player' = defTarget && defD < d ? 'def'
+        : companionTarget && companionD < d ? 'companion'
+        : villagerTarget && villagerD < d ? 'villager' : 'player';
+      let blocked = false;
+      if (data.ranged) {
+        const at = { def: defTarget, companion: companionTarget, villager: villagerTarget, player: null };
+        const away = { def: defD, companion: companionD, villager: villagerD, player: d };
+        ({ target: mark, blocked } = aimFor(
+          mark, (['def', 'companion', 'villager', 'player'] as const).filter((k) => k === 'player' || at[k]),
+          (k) => away[k], RANGED_RANGE,
+          (k) => {
+            const p = at[k];
+            return p ? hasLineOfSight(m.x, GROUND_LOS_Y, m.z, p.x, GROUND_LOS_Y, p.z, data.world ?? null)
+              : hasLineOfSight(m.x, GROUND_LOS_Y, m.z, playerState.x, playerState.y, playerState.z, data.world ?? null);
+          },
+        ));
+      }
+      // a step along a path to (tx, tz), round structures and through real openings (game/navgrid.ts) — the chase of
+      // the player below, and a crossbow raider closing in on a mark he cannot see. The path is recomputed on a timer,
+      // and whenever the mark has moved far enough that the old one is stale; with no route, straight at it.
+      const pathStep = (tx: number, tz: number) => {
+        path.current.t -= dt;
+        const targetMoved = Math.hypot(tx - path.current.tx, tz - path.current.tz) > 3;
+        if (path.current.t <= 0 || targetMoved) {
+          path.current.t = 0.7 + Math.random() * 0.4;   // desync the herd
+          path.current.tx = tx;
+          path.current.tz = tz;
+          path.current.pts = findPath(m.x, m.z, tx, tz) ?? [];
+          path.current.i = 0;
+        }
+        // aim at the next corner if we have one, otherwise straight at the mark
+        let aimX = tx;
+        let aimZ = tz;
+        const pts = path.current.pts;
+        while (path.current.i < pts.length
+          && Math.hypot(pts[path.current.i].x - m.x, pts[path.current.i].z - m.z) < 1.1) {
+          path.current.i++;
+        }
+        if (path.current.i < pts.length) {
+          aimX = pts[path.current.i].x;
+          aimZ = pts[path.current.i].z;
+        }
+        const ad = Math.hypot(aimX - m.x, aimZ - m.z) || 1;
+        return { nx: (aimX - m.x) / ad, nz: (aimZ - m.z) / ad };
+      };
+
       // Wave 58 (H4) addendum #2: the elevated-raider targeting carve-out —
       // resolved fresh every frame from the SAME derivation Defenders.tsx
       // itself uses for a keep-wall station (`stationId === "keep:<id>"`,
@@ -769,8 +820,8 @@ function Enemy({ data }: { data: EnemyData }) {
           m.attackCd = ATTACK_CD[data.kind];
           st.damageKeepPart(keepTarget.socketId, RAID_SIEGE_DMG[data.kind] ?? 8, `was battered by ${CONFIGS[data.kind].name}`);
         }
-      } else if (defTarget && defD < d) {
-        if (defD < (data.ranged ? RANGED_RANGE : 1.7)) {
+      } else if (defTarget && mark === 'def') {
+        if (defD < (data.ranged ? RANGED_RANGE : 1.7) && !blocked) {
           m.state = 'attack';
           m.attackCd -= dt;
           const ndx = defTarget.x - m.x;
@@ -799,18 +850,18 @@ function Enemy({ data }: { data: EnemyData }) {
         } else {
           m.state = 'chase';
           m.attackCd = Math.max(0.4, m.attackCd - dt);
-          const nx = (defTarget.x - m.x) / defD;
-          const nz = (defTarget.z - m.z) / defD;
+          const { nx, nz } = blocked ? pathStep(defTarget.x, defTarget.z)
+            : { nx: (defTarget.x - m.x) / defD, nz: (defTarget.z - m.z) / defD };
           const sp = data.kind === 'skeleton' ? (defD > 8 ? speed * 0.7 : speed * 1.5) : speed;
           m.x += nx * sp * dt;
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);
         }
-      } else if (companionTarget && companionD < d) {
+      } else if (companionTarget && mark === 'companion') {
         // Wave 25: same shape as the defTarget branch above, one rung
         // weaker — Tam gets fought back at exactly like a sworn defender
         // does.
-        if (companionD < (data.ranged ? RANGED_RANGE : 1.7)) {
+        if (companionD < (data.ranged ? RANGED_RANGE : 1.7) && !blocked) {
           m.state = 'attack';
           m.attackCd -= dt;
           const ndx = companionTarget.x - m.x;
@@ -839,17 +890,17 @@ function Enemy({ data }: { data: EnemyData }) {
         } else {
           m.state = 'chase';
           m.attackCd = Math.max(0.4, m.attackCd - dt);
-          const nx = (companionTarget.x - m.x) / companionD;
-          const nz = (companionTarget.z - m.z) / companionD;
+          const { nx, nz } = blocked ? pathStep(companionTarget.x, companionTarget.z)
+            : { nx: (companionTarget.x - m.x) / companionD, nz: (companionTarget.z - m.z) / companionD };
           const sp = data.kind === 'skeleton' ? (companionD > 8 ? speed * 0.7 : speed * 1.5) : speed;
           m.x += nx * sp * dt;
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);
         }
-      } else if (villagerTarget && villagerD < d) {
+      } else if (villagerTarget && mark === 'villager') {
         // Wave 21: the same shape as the defTarget branch above, one rung
         // weaker — a villager who chose to fight gets fought back at.
-        if (villagerD < (data.ranged ? RANGED_RANGE : 1.7)) {
+        if (villagerD < (data.ranged ? RANGED_RANGE : 1.7) && !blocked) {
           m.state = 'attack';
           m.attackCd -= dt;
           const ndx = villagerTarget.x - m.x;
@@ -881,14 +932,14 @@ function Enemy({ data }: { data: EnemyData }) {
         } else {
           m.state = 'chase';
           m.attackCd = Math.max(0.4, m.attackCd - dt);
-          const nx = (villagerTarget.x - m.x) / villagerD;
-          const nz = (villagerTarget.z - m.z) / villagerD;
+          const { nx, nz } = blocked ? pathStep(villagerTarget.x, villagerTarget.z)
+            : { nx: (villagerTarget.x - m.x) / villagerD, nz: (villagerTarget.z - m.z) / villagerD };
           const sp = data.kind === 'skeleton' ? (villagerD > 8 ? speed * 0.7 : speed * 1.5) : speed;
           m.x += nx * sp * dt;
           m.z += nz * sp * dt;
           m.yaw = Math.atan2(-nx, -nz);
         }
-      } else if (d < (rangedProfile ? rangedProfile.range : 1.8)) {
+      } else if (d < (rangedProfile ? rangedProfile.range : 1.8) && !blocked) {
         m.state = 'attack';
         m.attackCd -= dt;
         // held at range rather than closing the last few metres (see the
@@ -936,36 +987,11 @@ function Enemy({ data }: { data: EnemyData }) {
         m.state = 'chase';
         m.attackCd = Math.max(0.4, m.attackCd - dt);
 
-        // Route AROUND structures and THROUGH real openings (game/navgrid.ts)
+        // Route AROUND structures and THROUGH real openings (pathStep above)
         // instead of steering straight at the player and letting the
         // collision solver shove us sideways — which is what used to read as
-        // walking through a wall. The path is recomputed on a timer, and
-        // whenever the player has moved far enough that the old one is stale.
-        path.current.t -= dt;
-        const targetMoved = Math.hypot(playerState.x - path.current.tx, playerState.z - path.current.tz) > 3;
-        if (path.current.t <= 0 || targetMoved) {
-          path.current.t = 0.7 + Math.random() * 0.4;   // desync the herd
-          path.current.tx = playerState.x;
-          path.current.tz = playerState.z;
-          path.current.pts = findPath(m.x, m.z, playerState.x, playerState.z) ?? [];
-          path.current.i = 0;
-        }
-        // aim at the next corner if we have one, otherwise straight at the
-        // player (open ground, or no route — the old behaviour)
-        let aimX = playerState.x;
-        let aimZ = playerState.z;
-        const pts = path.current.pts;
-        while (path.current.i < pts.length
-          && Math.hypot(pts[path.current.i].x - m.x, pts[path.current.i].z - m.z) < 1.1) {
-          path.current.i++;
-        }
-        if (path.current.i < pts.length) {
-          aimX = pts[path.current.i].x;
-          aimZ = pts[path.current.i].z;
-        }
-        const ad = Math.hypot(aimX - m.x, aimZ - m.z) || 1;
-        let nx = (aimX - m.x) / ad;
-        let nz = (aimZ - m.z) / ad;
+        // walking through a wall.
+        let { nx, nz } = pathStep(playerState.x, playerState.z);
         // pack flanking (advanced AI): each enemy closes on its own shoulder
         // of the target — a fixed per-id flank angle that fades to a direct
         // line inside ~5m, so a group arrives SURROUNDING you instead of

@@ -8303,30 +8303,30 @@ the player to the spawn meadow, and the crew position pulls him straight back to
 leaves the crew position as it was — the session reset clears the saddle and the carts, not `crewState` — so after
 Save & Quit while crewing, the next game loaded can pin the player to whichever of its buildings has that id.
 
-## Bug: a crossbowman and a bowman with a wall between them stand off — logged 2026-10-16 (in the review of the camp-walls fix; by the code, not run)
+## Bugfix: a crossbowman and a bowman with a wall between them stood off — logged 2026-10-16 (in the review of the camp-walls fix), measured and FIXED 2026-10-21
 
-**What the code does.** A raider with a crossbow (`data.ranged`: four bandits in ten, `combat/enemyStore.ts`) turns on
-a defender within 16 m who is nearer than the player, and once within `RANGED_RANGE` (14 m) stops and shoots every 1.8
-s — but the bolt lands only on a clear sightline (`hasLineOfSight`, since Wave 20), and nothing moves him to find one
-(`Enemies.tsx`, the defender branch). A guard with a bow takes the nearest raider within 22 m (`ENGAGE_RADIUS`) and,
-once within bow range (16 m), stands and looses; his arrow, too, lands only on a clear sightline, and he does not move
-either (`Defenders.tsx`). With a wall between them neither hits, and each holds where it stands. A raid ends only when
-no raider is left (`raidActive`, `Enemies.tsx`), and a bandit breaks off at 2 hp, which this one never comes to: the
-raid waits on something else to change it — anyone else wounding the bandit to 2 hp (the player's crossbow, another
-archer with a clear line), the player or another defender coming nearer to him than the guard is, another raider
-knocking the guard down, or an order that moves the guard while the player is at home (Attack, when the threat nearest
-the player is another one beyond his bow range; Follow, when the raider nearest the player within 22 m of him is
-another one beyond the guard's bow range, or when there is none; away from home every order is Patrol) — but not the
-end of his watch: a guard looks at the watch only when he has no raider to fight, and on his own rounds (Patrol or
-Scout) a bow guard with a raider in bow range always has one (`Defenders.tsx`).
+**The fault.** A raider with a crossbow (`data.ranged`: four bandits in ten) and a guard with a bow each stood and
+loosed once their target was in range — the raider's in `components/combat/Enemies.tsx`, the guard's in
+`components/world/Defenders.tsx` — but a shot lands only on a clear sightline (`hasLineOfSight`), and nothing moved
+either of them to find one, or to turn to a target they could see. Measured on `main` (a production build of 2246756,
+2026-10-21, `standoff_probe.mjs`): a bow guard just inside the merchant's camp and a crossbow raider 8 m outside it,
+the east wing between them, neither moved a centimetre nor landed a hit in sixteen seconds; and with the player 13 m
+from the raider, in his range and his sight, the raider went on facing the wall. A raid ends only when no raider is
+left, so such a pair held it up until something else changed.
 
-**Where.** Across any of the player's walls that stops a sightline, since Wave 20; and, with the camp-walls fix above,
-across the merchant's camp — a raid that follows the player there from the homestead side meets the camp guard's
-rounds with the east wing between them (raiders make for the homestead and then for the player — within 26 m of him,
-or once alerted — so they come to the camp after him, as a rule; a raid left to wander can drift there too).
+**The fix.** A shooter whose target stands in range but out of sight turns to the nearest target in range it can see,
+and with none closes in on its own until it can (`game/combat/sightline.ts`'s `aimFor`): the raider weighs a guard,
+Tam, a villager who has chosen to fight and the player — those his rules already pick between — and closes in by a
+path round what stands between them, the one his chase of the player already followed (now `pathStep`, shared); the
+guard weighs the raiders, and closes in by the home grid's plan (`navSteer`). Melee fighters and spell-casters are as
+they were.
 
-**To do.** Measure it first (a crossbow bandit and a bow guard set either side of a wall, live, on `main`); then
-decide the fix — the shooter stepping aside until the sightline clears, closing in, or turning to another target.
+**Verified** with `tsc`, the unit tests (`sightline.test.ts`: in range and in sight, out of range, turned to the
+nearest in sight, blocked), and live on production builds of `main` and the fix side by side, 2026-10-21: on the fix,
+across the east wing, the raider made for the gate and the guard went round it; each had a sightline within two
+seconds, each was hit, and the raider fell within four; with the player in his sight, the raider turned on the player
+at once, before the guard came round and brought him down. *Not measured live:* a guard on Attack or Follow orders,
+a mounted guard, and Tam or a villager as the raider's mark.
 
 ## Bugfix: the merchant's cart and team rode beside him and swept over what he passed, and he walked through the village's huts and a roadside tree — FOUND 2026-10-16 (in the review of the camp-walls fix; his whole road measured 2026-10-19), FIXED 2026-10-21
 
