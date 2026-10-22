@@ -1,4 +1,5 @@
 import type { ItemId, Recipe } from '../types';
+import { BASE_FX, TALENT_FX } from './effects';
 
 export const RECIPES: Recipe[] = [
   // ---- by hand ----
@@ -276,7 +277,8 @@ export function repairCostFor(id: ItemId, skillTree: string[]): Partial<Record<I
   if (entries.length === 0) return {};
   // Guild Rates talent (smithing3): repairs at half the usual fraction.
   // Master Forge mastery talent (smithing4): a twentieth of materials.
-  const frac = skillTree.includes('smithing4') ? 0.05 : skillTree.includes('smithing3') ? 0.15 : 0.3;
+  const frac = skillTree.includes('smithing4') ? TALENT_FX.smithing4.repairShare
+    : skillTree.includes('smithing3') ? TALENT_FX.smithing3.repairShare : BASE_FX.repairShare;
   const cost: Partial<Record<ItemId, number>> = {};
   for (const [k, n] of entries) {
     const scaled = Math.round(n * frac);

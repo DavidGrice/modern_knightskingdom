@@ -2,6 +2,7 @@
 // CLN-11 · split out of game/combat.ts: the vitals' ceilings follow the store (levels, perks, talents, attributes).
 import { useGameStore } from '../store/gameStore';
 import { SKILLS, levelFromXp } from '../data/ranks';
+import { ATTR_FX, PERK_FX, TALENT_FX } from '../data/effects';
 import { combatState } from './state';
 
 // CLN-04 · set by the session-reset hook (combat/session.ts, through armVitalsRefill), consumed by the FIRST
@@ -27,12 +28,12 @@ useGameStore.subscribe((s) => {
   const total = SKILLS.reduce((t, sk) => t + levelFromXp(s.xp[sk.id] ?? 0), 0);
   combatState.maxStamina = Math.round((100
     + Math.round(total * 1.5)                     // general levels
-    + (s.perks.includes('iron_grip') ? 15 : 0)
-    + (s.perks.includes('iron_discipline') ? 20 : 0) // Iron Discipline trade-off (Wave 52)
-    + (s.skillTree.includes('combat2') ? 10 : 0)  // Second Wind talent
-    + (s.attrSpent.courage ?? 0) * 5)             // Courage attribute
-    * (s.perks.includes('berserker') ? 0.8 : 1)   // Berserker trade-off: −20%
-    * (s.perks.includes('quick_draw') ? 0.85 : 1)); // Quick Draw trade-off: −15% (Wave 52)
+    + (s.perks.includes('iron_grip') ? PERK_FX.iron_grip.staminaPlus : 0)
+    + (s.perks.includes('iron_discipline') ? PERK_FX.iron_discipline.staminaPlus : 0) // Iron Discipline trade-off (Wave 52)
+    + (s.skillTree.includes('combat2') ? TALENT_FX.combat2.staminaPlus : 0)  // Second Wind talent
+    + (s.attrSpent.courage ?? 0) * ATTR_FX.courage.staminaPlus)              // Courage attribute
+    * (s.perks.includes('berserker') ? PERK_FX.berserker.staminaTimes : 1)   // Berserker trade-off: −20%
+    * (s.perks.includes('quick_draw') ? PERK_FX.quick_draw.staminaTimes : 1)); // Quick Draw trade-off: −15% (Wave 52)
   // the trade-off perks above are the first thing in this subscriber that
   // can ever make maxStamina go DOWN (every other term here only adds) — a
   // stamina value left above the new lower ceiling from a stale render would

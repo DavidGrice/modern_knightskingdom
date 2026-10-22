@@ -29,7 +29,7 @@ export const PERKS: PerkDef[] = [
   // become distinct instead of strictly additive.
   {
     id: 'berserker', name: 'Berserker', icon: '🪓', tradeoff: true,
-    desc: '+30% sword damage, but −20% max stamina.',
+    desc: '+30% damage with a melee weapon in hand, but −20% max stamina.',
   },
   {
     id: 'hermit', name: 'Hermit', icon: '🏚️', tradeoff: true,

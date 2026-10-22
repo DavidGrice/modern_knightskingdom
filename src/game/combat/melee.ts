@@ -4,6 +4,7 @@
 import { audio } from '@/lib/audio';
 import { atGuildMaxRank, useGameStore } from '../store/gameStore';
 import { callingSignature } from '../data/classes';
+import { ATTR_FX, CALLING_FX, PERK_FX, TALENT_FX } from '../data/effects';
 import { playerState } from '../playerState';
 import { ridingState } from '../riding';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
@@ -161,7 +162,7 @@ export function playerAttack(): boolean {
   // less stamina, armed or not — a training-economy nudge, deliberately NOT
   // more flat damage (Knights' Order and Heavy Hand already own that slot).
   const staminaCost = callingSignature(st.character?.classId, 'combat')
-    ? Math.max(1, wp.stamina - 1) : wp.stamina;
+    ? Math.max(1, wp.stamina - CALLING_FX.combat.swingStaminaCut) : wp.stamina;
   if (combatState.stamina < staminaCost) return false;
   combatState.stamina -= staminaCost;
   combatState.attackAt = performance.now();
@@ -177,13 +178,13 @@ export function playerAttack(): boolean {
   // Wave 22: Champion of the Order (max guild rank) sharpens the base
   // passive itself, +1 -> +2.
   const orderBonus = (st.guild === 'knights' ? (atGuildMaxRank(st.guild, st.guildRanks, 'knights') ? 2 : 1) : 0)
-    + (st.skillTree.includes('combat3') ? 1 : 0)
-    + (st.skillTree.includes('combat4') ? 1 : 0) // Master-at-Arms mastery talent (Wave 52)
-    + Math.floor((st.attrSpent.might ?? 0) / 2); // Might attribute
+    + (st.skillTree.includes('combat3') ? TALENT_FX.combat3.meleePlus : 0)
+    + (st.skillTree.includes('combat4') ? TALENT_FX.combat4.meleePlus : 0) // Master-at-Arms mastery talent (Wave 52)
+    + Math.floor((st.attrSpent.might ?? 0) / 2) * ATTR_FX.might.meleePlusPerTwo; // Might attribute
   const baseDmg = held ? (worn ? wp.wornDmg : wp.dmg) : 1; // nothing held = bare fists
   // Berserker trade-off: +30% damage with a weapon in hand specifically (its
   // own downside is the −20% max stamina above) — unarmed swings don't benefit
-  const berserkerMult = held && st.perks.includes('berserker') ? 1.3 : 1;
+  const berserkerMult = held && st.perks.includes('berserker') ? PERK_FX.berserker.meleeTimes : 1;
   // the couched charge, applied to the finished figure the way the ranged
   // weapons' battlement bonus is: it scales the WHOLE blow, guild bonuses and
   // all, because it is momentum behind the point, not a better point

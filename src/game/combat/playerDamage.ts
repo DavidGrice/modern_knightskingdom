@@ -8,6 +8,7 @@ import { playerState } from '../playerState';
 import { resetDungeon } from '../dungeon';
 import { standDown } from '../standDown';
 import { bestChestplateOwned } from '../data/armor';
+import { PERK_FX } from '../data/effects';
 import { worldEnv } from '../env';
 import { fortDamageReduction } from '../fort';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
@@ -27,7 +28,7 @@ function armorReduction(inv: Partial<Record<ItemId, number>>, perks: string[] = 
   // plate plus helm plus Ironclad now runs into it, which is the point of
   // having it: a shield block stays the primary defense.
   r += bestChestplateOwned(inv)?.reduction ?? 0;
-  if (perks.includes('ironclad')) r += 0.05;
+  if (perks.includes('ironclad')) r += PERK_FX.ironclad.damageReductionPlus;
   return Math.min(0.45, r);
 }
 

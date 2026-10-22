@@ -46,6 +46,7 @@ import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
 import { pick } from '@/lib/rng';
 import { aimFor } from '@/game/combat/sightline';
+import { PERK_FX } from '@/game/data/effects';
 
 const CONFIGS: Record<string, CharacterConfig> = {
   skeleton: {
@@ -228,7 +229,7 @@ function fireAtPlayer(data: EnemyData, rangedProfile: { range: number; cd: numbe
   const st = useGameStore.getState();
   m.attackCd = rangedProfile ? rangedProfile.cd : data.kind === 'storm'
     ? Math.max(0.55, ATTACK_CD.storm - (st.reputation['storm'] ?? 0) * 0.006
-      - (st.perks.includes('silver_tongue') ? 0.15 : 0))
+      - (st.perks.includes('silver_tongue') ? PERK_FX.silver_tongue.stormCooldownCut : 0))
     : ATTACK_CD[data.kind];
   const originY = feetY + GROUND_LOS_Y;
   if (data.ranged) {
@@ -954,7 +955,7 @@ function Enemy({ data }: { data: EnemyData }) {
             // cooldown, so a Silver Tongue holder meets a permanently
             // "further into the escalation" Storm rather than a new curve
             ? Math.max(0.55, ATTACK_CD.storm - (useGameStore.getState().reputation['storm'] ?? 0) * 0.006
-              - (useGameStore.getState().perks.includes('silver_tongue') ? 0.15 : 0))
+              - (useGameStore.getState().perks.includes('silver_tongue') ? PERK_FX.silver_tongue.stormCooldownCut : 0))
             : ATTACK_CD[data.kind];
           // a duel with Storm ends the instant either side lands a blow —
           // no lingering damage, just resolution (see combat.ts's resolveDuel)
