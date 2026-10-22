@@ -9,6 +9,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ user: null });
   return NextResponse.json({
     user: { id: user.id, username: user.username },
-    hasSave: loadSave(userId) !== null,
+    // one that cannot be read counts: the menu shows it as such, and asks before a new game is written over it
+    hasSave: loadSave(userId).status !== 'none',
   });
 }

@@ -10,47 +10,13 @@
 // human replaying the scatter by hand (see cultivatedPlots.ts's own history).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RectSection } from '@/game/data/grounds';
-import { distanceToRoad, ROAD_REACH, ROAD_TILE, roadGateFor, routeCells } from '@/game/data/road';
-import { POND, BROOK, STARTER_VILLAGE_CLEAR, WORLD_HALF } from '@/game/data/world';
+import { ROAD_TILE, routeCells } from '@/game/data/road';
+import { POND, BROOK, STARTER_VILLAGE_CLEAR } from '@/game/data/world';
 import type { TerrainRegion } from '@/game/data/terrainRegions';
-import { DOWNS_MAX_GRADIENT, DOWNS_SINK, regionSurfaceY } from '@/game/data/terrainRegions';
-import { DIG_OUTSKIRT } from '@/game/waterworks';
-import { aabbOverlapCenterHalf } from '@/lib/geometry';
-
-type Kind = 'tree' | 'rock' | 'herb';
-
-interface GroundRow extends RectSection {
-  id: string;
-  name: string;
-  tier: number;
-  lockedHint: string;
-}
-interface LandTierRow {
-  walls: number;
-  half: number;
-  // Wave 17 #4 · the south fence no longer grows with the rest — `half`
-  // stays shared by north/east/west (see landTiers.ts's LAND_TIERS note),
-  // `southHalf` is this table's own separate, normally-constant south bound.
-  southHalf: number;
-  cost: number;
-  name: string;
-}
-interface PlotRow extends RectSection {
-  id: string;
-  name: string;
-  plantHint: string;
-  stage: number;
-  plantedAt: number;
-  lastWateredAt: number | null;
-  world?: string | null;
-}
-
-interface Tables {
-  grounds: GroundRow[];
-  landTiers: LandTierRow[];
-  cultivatedPlots: PlotRow[];
-  terrainRegions: TerrainRegion[];
-}
+import { liveChecks, type GroundRow, type Kind, type LandTierRow, type PlotRow, type Tables } from './liveChecks';
+import {
+  AddButton, Field, FieldGrid, inputStyle, KindSelect, NumField, RemoveButton, RowCard, rowEdits, TextField, WARN_COLOR,
+} from './formPrimitives';
 
 type TableName = keyof Tables;
 const TABLE_LABEL: Record<TableName, string> = {
@@ -60,164 +26,10 @@ const TABLE_LABEL: Record<TableName, string> = {
   terrainRegions: 'Terrain Regions',
 };
 
-// Mirrors grounds.ts's own HOMESTEAD_CLEARANCE constant exactly. Not
-// imported from there: that file's clearsHomestead() reads the STATIC,
-// already-saved LAND_TIERS, not whatever half-values are sitting unsaved in
-// this page's own form state — the whole point of a live preview is
-// checking the edit in progress, before it's written to disk.
-const HOMESTEAD_CLEARANCE = 8;
-
-// Wave 60 · the structural shape every one of these live checks actually
-// needs (a box's own centre and half-extents) — narrowed down from
-// `RectSection` so a TerrainRegion (which has `half`, not `halfX`/`halfZ`)
-// can be checked by the SAME functions via a `{ x: r.x, z: r.z, halfX:
-// r.half, halfZ: r.half }` view, instead of forking duplicate copies of this
-// math for regions. Every existing call site already passes a variable that
-// structurally satisfies this — TypeScript's excess-property check only
-// applies to object LITERALS, not variables — so this is a safe, local
-// widening, not a behaviour change.
-interface Box { x: number; z: number; halfX: number; halfZ: number }
-
-// Shared by clearsHomesteadLive and terrainRegionProblems's own fence check —
-// was recomputed separately in each place before Wave 60.
-function maxHalfOf(landTiers: LandTierRow[]): number {
-  return landTiers.reduce((m, t) => Math.max(m, t.half), 0);
-}
-function clearsHomesteadLive(s: RectSection, landTiers: LandTierRow[]): boolean {
-  const maxHalf = maxHalfOf(landTiers);
-  // Wave 17 #4 · mirrors grounds.ts's own clearsHomestead(): the X bound is
-  // still the shared `half` (north/east/west), but the Z bound depends on
-  // which side of the homestead the section is actually on — `southHalf`
-  // south of it, `half` north of it — now that those two numbers can differ.
-  const maxSouthHalf = landTiers.reduce((m, t) => Math.max(m, t.southHalf), 0);
-  const xHalf = maxHalf + HOMESTEAD_CLEARANCE;
-  const zHalf = (s.z >= 0 ? maxSouthHalf : maxHalf) + HOMESTEAD_CLEARANCE;
-  return Math.abs(s.x) - s.halfX >= xHalf || Math.abs(s.z) - s.halfZ >= zHalf;
-}
-function crossesRoad(s: Box): boolean {
-  const half = ROAD_TILE / 2;
-  return routeCells().some(([cx, cz]) => {
-    const rx = cx * ROAD_TILE, rz = cz * ROAD_TILE;
-    return Math.abs(s.x - rx) < s.halfX + half && Math.abs(s.z - rz) < s.halfZ + half;
-  });
-}
-// Wave 12 · how far the ground you are dragging has ended up from the leg of
-// road that was laid to serve it. `crossesRoad` above only says the road
-// misses it — a ground dragged clean away from its own spur passes that check
-// happily, leaving the leg pointing at empty grass. Returns the distance so
-// the warning can say how far, since "move it back a bit" is the fix.
-function offRoad(s: Box): number {
-  const gate = roadGateFor(s);
-  return distanceToRoad(gate.x, gate.z);
-}
-
-// Wave 60 · ports terrainRegions.ts's own five dev-mode assertion checks
-// (region overlap, field gradient/rim-buried, homestead fence, dig reach,
-// road/grounds clash) into a LIVE, unsaved-form-state version — the same
-// "check the edit in progress, not what's on disk" reasoning
-// clearsHomesteadLive/crossesRoad above already apply to grounds/plots.
-// `regionSurfaceY`/DOWNS_MAX_GRADIENT/DOWNS_SINK/DIG_OUTSKIRT are imported,
-// not re-derived, so the surface math and every threshold stay the single
-// copy terrainRegions.ts/waterworks.ts already own. Returns both the
-// human-readable messages (for the warnings list) and the offending ids (for
-// problemIds) from one pass, since the per-region sweep below is the one
-// genuinely non-trivial cost in this file's live checks (see this wave's own
-// report: ~18.7k grid points x 4 regionSurfaceY calls per region today).
-function terrainRegionProblems(
-  regions: TerrainRegion[],
-  landTiers: LandTierRow[],
-  grounds: GroundRow[],
-): { messages: string[]; ids: Set<string> } {
-  const messages: string[] = [];
-  const ids = new Set<string>();
-  const boxes = regions.map((r) => ({ r, box: { x: r.x, z: r.z, halfX: r.half, halfZ: r.half } }));
-
-  // 0. no two regions overlap each other
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      if (aabbOverlapCenterHalf(boxes[i].box, boxes[j].box)) {
-        messages.push(`${boxes[i].r.name} and ${boxes[j].r.name} overlap — two regions can never share ground`);
-        ids.add(boxes[i].r.id);
-        ids.add(boxes[j].r.id);
-      }
-    }
-  }
-
-  const fence = maxHalfOf(landTiers);
-  // Mirrors terrainRegions.ts's own `outside()`: a "keep OUT of the square
-  // ±n" test, not a distance — the SYMMETRIC test that file actually uses,
-  // not clearsHomesteadLive's asymmetric north/south homestead test (a region
-  // is a hillside a build fence must stay clear of on every side, not a
-  // section the homestead's own south/north split applies to).
-  const outside = (box: Box, n: number) =>
-    box.z + box.halfZ < -n || box.z - box.halfZ > n || box.x + box.halfX < -n || box.x - box.halfX > n;
-
-  for (const { r, box } of boxes) {
-    // 1. the field itself: walkable everywhere, and back to fully buried
-    //    before the rim — identical 0.5m sweep/central-difference gradient/
-    //    thresholds to terrainRegions.ts's own dev check, run here against
-    //    live (unsaved) field values instead of the file on disk.
-    let maxGrad = 0;
-    let rimHigh = -Infinity;
-    for (let x = r.x - r.half; x <= r.x + r.half; x += 0.5) {
-      for (let z = r.z - r.half; z <= r.z + r.half; z += 0.5) {
-        const gx = (regionSurfaceY(r, x + 0.05, z) - regionSurfaceY(r, x - 0.05, z)) / 0.1;
-        const gz = (regionSurfaceY(r, x, z + 0.05) - regionSurfaceY(r, x, z - 0.05)) / 0.1;
-        maxGrad = Math.max(maxGrad, Math.hypot(gx, gz));
-        if (Math.abs(Math.abs(x - r.x) - r.half) < 2 || Math.abs(Math.abs(z - r.z) - r.half) < 2) {
-          rimHigh = Math.max(rimHigh, regionSurfaceY(r, x, z));
-        }
-      }
-    }
-    if (maxGrad > DOWNS_MAX_GRADIENT) {
-      messages.push(`${r.name}'s field reaches a gradient of ${maxGrad.toFixed(3)} — over ${DOWNS_MAX_GRADIENT}, `
-        + 'the player falls rather than runs down it');
-      ids.add(r.id);
-    }
-    if (rimHigh > -DOWNS_SINK + 1e-6) {
-      messages.push(`${r.name} has a bump reaching ${rimHigh.toFixed(2)} within 2m of the box edge — it will `
-        + 'end in a cliff instead of sinking away under the meadow');
-      ids.add(r.id);
-    }
-
-    // 2. the two bounds every region's box must be chosen against
-    if (!outside(box, fence)) {
-      messages.push(`${r.name} overlaps the widest fence (±${fence}) — buildings would be placed on it`);
-      ids.add(r.id);
-    }
-    if (!outside(box, fence + DIG_OUTSKIRT)) {
-      messages.push(`${r.name} is within digging reach (±${fence + DIG_OUTSKIRT}) of the homestead`);
-      ids.add(r.id);
-    }
-
-    // 3. …and clear of everything already standing in the world
-    if (crossesRoad(box)) {
-      messages.push(`the road runs over ${r.name} — check the tile actually belongs on this hillside`);
-      ids.add(r.id);
-    }
-    for (const g of grounds) {
-      if (aabbOverlapCenterHalf(box, g)) {
-        messages.push(`${g.name} now lies on ${r.name} — its fence, boundary stone and scattered nodes assume `
-          + 'flat ground');
-        ids.add(r.id);
-        ids.add(g.id);
-      }
-    }
-  }
-
-  return { messages, ids };
-}
-
 const KIND_COLOR: Record<Kind, string> = { tree: '#3f8f5b', rock: '#8b8378', herb: '#8b5fa8' };
-const WARN_COLOR = '#c0392b';
 // Wave 60 · terrain regions' own colour — visually distinct earth tone, not
 // reused from KIND_COLOR (a region is elevation, not a resource ground).
 const REGION_COLOR = '#a67c3d';
-
-function num(v: string): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
 
 export default function WorldEditorClient() {
   const [tables, setTables] = useState<Tables | null>(null);
@@ -243,55 +55,10 @@ export default function WorldEditorClient() {
 
   useEffect(() => { load(); }, [load]);
 
-  const warnings = useMemo(() => {
-    if (!tables) return [] as string[];
-    const sections: (RectSection & { id: string; name: string })[] = [...tables.grounds, ...tables.cultivatedPlots];
-    const out: string[] = [];
-    for (const s of sections) {
-      if (!clearsHomesteadLive(s, tables.landTiers)) out.push(`${s.name} overlaps the fully-bought homestead`);
-      if (crossesRoad(s)) out.push(`${s.name} lies across the road`);
-      if (Math.abs(s.x) > WORLD_HALF - 20 || Math.abs(s.z) > WORLD_HALF - 20) {
-        out.push(`${s.name} sits within 20m of the world edge — node seeding will silently starve here`);
-      }
-    }
-    // grounds only: a cultivated plot is ground you broke yourself, not
-    // somewhere the kingdom built a road to
-    for (const g of tables.grounds) {
-      const d = offRoad(g);
-      if (d > ROAD_REACH) {
-        out.push(`${g.name} is ${d.toFixed(0)}m off the carriageway — no leg of the road reaches its gate (road.ts's LEGS)`);
-      }
-    }
-    for (let i = 0; i < sections.length; i++) {
-      for (let j = i + 1; j < sections.length; j++) {
-        if (aabbOverlapCenterHalf(sections[i], sections[j])) {
-          out.push(`${sections[i].name} overlaps ${sections[j].name}`);
-        }
-      }
-    }
-    const idCount = new Map<string, number>();
-    for (const s of sections) idCount.set(s.id, (idCount.get(s.id) ?? 0) + 1);
-    for (const [id, n] of idCount) if (n > 1) out.push(`id "${id}" is used by ${n} entries — ids must be unique`);
-    out.push(...terrainRegionProblems(tables.terrainRegions, tables.landTiers, tables.grounds).messages);
-    return out;
-  }, [tables]);
-
-  const problemIds = useMemo(() => {
-    const set = new Set<string>();
-    if (!tables) return set;
-    const sections: (RectSection & { id: string })[] = [...tables.grounds, ...tables.cultivatedPlots];
-    for (const s of sections) {
-      if (!clearsHomesteadLive(s, tables.landTiers) || crossesRoad(s)) set.add(s.id);
-    }
-    for (const g of tables.grounds) if (offRoad(g) > ROAD_REACH) set.add(g.id);
-    for (let i = 0; i < sections.length; i++) {
-      for (let j = i + 1; j < sections.length; j++) {
-        if (aabbOverlapCenterHalf(sections[i], sections[j])) { set.add(sections[i].id); set.add(sections[j].id); }
-      }
-    }
-    for (const id of terrainRegionProblems(tables.terrainRegions, tables.landTiers, tables.grounds).ids) set.add(id);
-    return set;
-  }, [tables]);
+  // CLN-09 · one pass for both — it used to run every check twice, the terrain sweep with them
+  const checks = useMemo(() => (tables ? liveChecks(tables) : { messages: [] as string[], ids: new Set<string>() }), [tables]);
+  const warnings = checks.messages;
+  const problemIds = checks.ids;
 
   const save = useCallback((table: TableName) => {
     if (!tables) return;
@@ -484,136 +251,90 @@ function SectionRect({ s, dashed, problem }: { s: RectSection; dashed: boolean; 
 }
 
 // ---- forms ------------------------------------------------------------------
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 11, gap: 2 }}>
-      {label}
-      {children}
-    </label>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  background: '#26282e', color: '#e8e6df', border: '1px solid #444', borderRadius: 3, padding: '4px 6px', fontSize: 12, width: '100%',
-};
-
-function RowCard({ problem, children }: { problem: boolean; children: React.ReactNode }) {
-  return (
-    <div style={{ border: `1px solid ${problem ? WARN_COLOR : '#3a3f4b'}`, borderRadius: 6, padding: 10, marginBottom: 8, background: '#20222a' }}>
-      {children}
-    </div>
-  );
-}
+// built from formPrimitives.tsx's pieces (CLN-09); each renders what it did when it wrote them out itself
 
 function GroundsForm({ rows, onChange, problemIds }: { rows: GroundRow[]; onChange: (r: GroundRow[]) => void; problemIds: Set<string> }) {
-  const update = (i: number, patch: Partial<GroundRow>) => {
-    const next = rows.slice();
-    next[i] = { ...next[i], ...patch };
-    onChange(next);
-  };
-  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
-  const add = () => onChange([...rows, {
-    id: `ground_${rows.length + 1}`, name: 'New Ground', kind: 'tree', x: 0, z: 0, halfX: 10, halfZ: 10,
-    tier: 0, count: 6, lockedHint: 'Yours from the first day',
-  }]);
+  const { update, remove, add } = rowEdits(rows, onChange);
   return (
     <div>
       {rows.map((g, i) => (
         <RowCard key={i} problem={problemIds.has(g.id)}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            <Field label="id"><input style={inputStyle} value={g.id} onChange={(e) => update(i, { id: e.target.value })} /></Field>
-            <Field label="name"><input style={inputStyle} value={g.name} onChange={(e) => update(i, { name: e.target.value })} /></Field>
-            <Field label="kind">
-              <select style={inputStyle} value={g.kind} onChange={(e) => update(i, { kind: e.target.value as Kind })}>
-                <option value="tree">tree</option><option value="rock">rock</option><option value="herb">herb</option>
-              </select>
-            </Field>
+          <FieldGrid cols={4}>
+            <TextField label="id" value={g.id} onChange={(id) => update(i, { id })} />
+            <TextField label="name" value={g.name} onChange={(name) => update(i, { name })} />
+            <KindSelect value={g.kind} onChange={(kind) => update(i, { kind })} />
             <Field label="variant">
               <select style={inputStyle} value={g.variant ?? ''} onChange={(e) => update(i, { variant: e.target.value === 'iron' ? 'iron' : undefined })}>
                 <option value="">—</option><option value="iron">iron</option>
               </select>
             </Field>
-            <Field label="x"><input style={inputStyle} type="number" value={g.x} onChange={(e) => update(i, { x: num(e.target.value) })} /></Field>
-            <Field label="z"><input style={inputStyle} type="number" value={g.z} onChange={(e) => update(i, { z: num(e.target.value) })} /></Field>
-            <Field label="halfX"><input style={inputStyle} type="number" value={g.halfX} onChange={(e) => update(i, { halfX: num(e.target.value) })} /></Field>
-            <Field label="halfZ"><input style={inputStyle} type="number" value={g.halfZ} onChange={(e) => update(i, { halfZ: num(e.target.value) })} /></Field>
-            <Field label="tier"><input style={inputStyle} type="number" value={g.tier} onChange={(e) => update(i, { tier: num(e.target.value) })} /></Field>
-            <Field label="count"><input style={inputStyle} type="number" value={g.count} onChange={(e) => update(i, { count: num(e.target.value) })} /></Field>
+            <NumField label="x" value={g.x} onChange={(x) => update(i, { x })} />
+            <NumField label="z" value={g.z} onChange={(z) => update(i, { z })} />
+            <NumField label="halfX" value={g.halfX} onChange={(halfX) => update(i, { halfX })} />
+            <NumField label="halfZ" value={g.halfZ} onChange={(halfZ) => update(i, { halfZ })} />
+            <NumField label="tier" value={g.tier} onChange={(tier) => update(i, { tier })} />
+            <NumField label="count" value={g.count} onChange={(count) => update(i, { count })} />
             <Field label="pondShore">
               <input type="checkbox" checked={g.pondShore ?? false} onChange={(e) => update(i, { pondShore: e.target.checked || undefined })} />
             </Field>
-            <Field label="lockedHint"><input style={inputStyle} value={g.lockedHint} onChange={(e) => update(i, { lockedHint: e.target.value })} /></Field>
-          </div>
-          <button onClick={() => remove(i)} style={{ marginTop: 8, fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '3px 8px', cursor: 'pointer' }}>Remove</button>
+            <TextField label="lockedHint" value={g.lockedHint} onChange={(lockedHint) => update(i, { lockedHint })} />
+          </FieldGrid>
+          <RemoveButton onClick={() => remove(i)} />
         </RowCard>
       ))}
-      <button onClick={add} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}>+ Add Ground</button>
+      <AddButton onClick={() => add({
+        id: `ground_${rows.length + 1}`, name: 'New Ground', kind: 'tree', x: 0, z: 0, halfX: 10, halfZ: 10,
+        tier: 0, count: 6, lockedHint: 'Yours from the first day',
+      })}>+ Add Ground</AddButton>
     </div>
   );
 }
 
 function PlotsForm({ rows, onChange, problemIds }: { rows: PlotRow[]; onChange: (r: PlotRow[]) => void; problemIds: Set<string> }) {
-  const update = (i: number, patch: Partial<PlotRow>) => {
-    const next = rows.slice();
-    next[i] = { ...next[i], ...patch };
-    onChange(next);
-  };
-  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
-  const add = () => onChange([...rows, {
-    id: `plot_${rows.length + 1}`, name: 'New Plot', kind: 'herb', x: 0, z: 0, halfX: 8, halfZ: 8,
-    count: 6, plantHint: 'Break the ground and plant', stage: 0, plantedAt: 0, lastWateredAt: null,
-  }]);
+  const { update, remove, add } = rowEdits(rows, onChange);
   return (
     <div>
       {rows.map((p, i) => (
         <RowCard key={i} problem={problemIds.has(p.id)}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            <Field label="id"><input style={inputStyle} value={p.id} onChange={(e) => update(i, { id: e.target.value })} /></Field>
-            <Field label="name"><input style={inputStyle} value={p.name} onChange={(e) => update(i, { name: e.target.value })} /></Field>
-            <Field label="kind">
-              <select style={inputStyle} value={p.kind} onChange={(e) => update(i, { kind: e.target.value as Kind })}>
-                <option value="tree">tree</option><option value="rock">rock</option><option value="herb">herb</option>
-              </select>
-            </Field>
-            <Field label="x"><input style={inputStyle} type="number" value={p.x} onChange={(e) => update(i, { x: num(e.target.value) })} /></Field>
-            <Field label="z"><input style={inputStyle} type="number" value={p.z} onChange={(e) => update(i, { z: num(e.target.value) })} /></Field>
-            <Field label="halfX"><input style={inputStyle} type="number" value={p.halfX} onChange={(e) => update(i, { halfX: num(e.target.value) })} /></Field>
-            <Field label="halfZ"><input style={inputStyle} type="number" value={p.halfZ} onChange={(e) => update(i, { halfZ: num(e.target.value) })} /></Field>
-            <Field label="count (full stage)"><input style={inputStyle} type="number" value={p.count} onChange={(e) => update(i, { count: num(e.target.value) })} /></Field>
-            <Field label="plantHint"><input style={inputStyle} value={p.plantHint} onChange={(e) => update(i, { plantHint: e.target.value })} /></Field>
-          </div>
-          <button onClick={() => remove(i)} style={{ marginTop: 8, fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '3px 8px', cursor: 'pointer' }}>Remove</button>
+          <FieldGrid cols={4}>
+            <TextField label="id" value={p.id} onChange={(id) => update(i, { id })} />
+            <TextField label="name" value={p.name} onChange={(name) => update(i, { name })} />
+            <KindSelect value={p.kind} onChange={(kind) => update(i, { kind })} />
+            <NumField label="x" value={p.x} onChange={(x) => update(i, { x })} />
+            <NumField label="z" value={p.z} onChange={(z) => update(i, { z })} />
+            <NumField label="halfX" value={p.halfX} onChange={(halfX) => update(i, { halfX })} />
+            <NumField label="halfZ" value={p.halfZ} onChange={(halfZ) => update(i, { halfZ })} />
+            <NumField label="count (full stage)" value={p.count} onChange={(count) => update(i, { count })} />
+            <TextField label="plantHint" value={p.plantHint} onChange={(plantHint) => update(i, { plantHint })} />
+          </FieldGrid>
+          <RemoveButton onClick={() => remove(i)} />
         </RowCard>
       ))}
-      <button onClick={add} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}>+ Add Plot</button>
+      <AddButton onClick={() => add({
+        id: `plot_${rows.length + 1}`, name: 'New Plot', kind: 'herb', x: 0, z: 0, halfX: 8, halfZ: 8,
+        count: 6, plantHint: 'Break the ground and plant', stage: 0, plantedAt: 0, lastWateredAt: null,
+      })}>+ Add Plot</AddButton>
     </div>
   );
 }
 
 function LandTiersForm({ rows, onChange }: { rows: LandTierRow[]; onChange: (r: LandTierRow[]) => void }) {
-  const update = (i: number, patch: Partial<LandTierRow>) => {
-    const next = rows.slice();
-    next[i] = { ...next[i], ...patch };
-    onChange(next);
-  };
-  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
-  const add = () => onChange([...rows, { walls: 3, half: 16, southHalf: 12, cost: 0, name: 'New Tier' }]);
+  const { update, remove, add } = rowEdits(rows, onChange);
   return (
     <div>
       {rows.map((t, i) => (
         <RowCard key={i} problem={false}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-            <Field label="name"><input style={inputStyle} value={t.name} onChange={(e) => update(i, { name: e.target.value })} /></Field>
-            <Field label="walls"><input style={inputStyle} type="number" value={t.walls} onChange={(e) => update(i, { walls: num(e.target.value) })} /></Field>
-            <Field label="half (N/E/W)"><input style={inputStyle} type="number" value={t.half} onChange={(e) => update(i, { half: num(e.target.value) })} /></Field>
-            <Field label="southHalf"><input style={inputStyle} type="number" value={t.southHalf} onChange={(e) => update(i, { southHalf: num(e.target.value) })} /></Field>
-            <Field label="cost"><input style={inputStyle} type="number" value={t.cost} onChange={(e) => update(i, { cost: num(e.target.value) })} /></Field>
-          </div>
-          <button onClick={() => remove(i)} style={{ marginTop: 8, fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '3px 8px', cursor: 'pointer' }}>Remove</button>
+          <FieldGrid cols={5}>
+            <TextField label="name" value={t.name} onChange={(name) => update(i, { name })} />
+            <NumField label="walls" value={t.walls} onChange={(walls) => update(i, { walls })} />
+            <NumField label="half (N/E/W)" value={t.half} onChange={(half) => update(i, { half })} />
+            <NumField label="southHalf" value={t.southHalf} onChange={(southHalf) => update(i, { southHalf })} />
+            <NumField label="cost" value={t.cost} onChange={(cost) => update(i, { cost })} />
+          </FieldGrid>
+          <RemoveButton onClick={() => remove(i)} />
         </RowCard>
       ))}
-      <button onClick={add} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}>+ Add Tier</button>
+      <AddButton onClick={() => add({ walls: 3, half: 16, southHalf: 12, cost: 0, name: 'New Tier' })}>+ Add Tier</AddButton>
       <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
         Tiers must stay sorted smallest-to-largest `half` for the deed ladder to make sense — this isn&apos;t
         enforced live yet, double-check order before saving. `southHalf` (Wave 17 #4) is the separate south
@@ -629,36 +350,20 @@ function LandTiersForm({ rows, onChange }: { rows: LandTierRow[]; onChange: (r: 
 // sub-editor for its `bumps` array — the same Field/inputStyle/RowCard
 // idiom every other form on this page already uses, no new UI dependency.
 function TerrainRegionsForm({ rows, onChange, problemIds }: { rows: TerrainRegion[]; onChange: (r: TerrainRegion[]) => void; problemIds: Set<string> }) {
-  const update = (i: number, patch: Partial<TerrainRegion>) => {
-    const next = rows.slice();
-    next[i] = { ...next[i], ...patch };
-    onChange(next);
-  };
-  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
-  const add = () => onChange([...rows, {
-    id: `region_${rows.length + 1}`, name: 'New Region', x: 0, z: -94, half: 30,
-    bumps: [{ ox: 0, oz: 0, r: 20, h: 3 }],
-  }]);
-
-  const updateBump = (i: number, bi: number, patch: Partial<TerrainRegion['bumps'][number]>) => {
-    const bumps = rows[i].bumps.slice();
-    bumps[bi] = { ...bumps[bi], ...patch };
-    update(i, { bumps });
-  };
-  const removeBump = (i: number, bi: number) => update(i, { bumps: rows[i].bumps.filter((_, idx) => idx !== bi) });
-  const addBump = (i: number) => update(i, { bumps: [...rows[i].bumps, { ox: 0, oz: 0, r: 20, h: 3 }] });
+  const { update, remove, add } = rowEdits(rows, onChange);
+  const bumpsOf = (i: number) => rowEdits(rows[i].bumps, (bumps) => update(i, { bumps }));
 
   return (
     <div>
       {rows.map((r, i) => (
         <RowCard key={i} problem={problemIds.has(r.id)}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-            <Field label="id"><input style={inputStyle} value={r.id} onChange={(e) => update(i, { id: e.target.value })} /></Field>
-            <Field label="name"><input style={inputStyle} value={r.name} onChange={(e) => update(i, { name: e.target.value })} /></Field>
-            <Field label="x"><input style={inputStyle} type="number" value={r.x} onChange={(e) => update(i, { x: num(e.target.value) })} /></Field>
-            <Field label="z"><input style={inputStyle} type="number" value={r.z} onChange={(e) => update(i, { z: num(e.target.value) })} /></Field>
-            <Field label="half"><input style={inputStyle} type="number" value={r.half} onChange={(e) => update(i, { half: num(e.target.value) })} /></Field>
-          </div>
+          <FieldGrid cols={5}>
+            <TextField label="id" value={r.id} onChange={(id) => update(i, { id })} />
+            <TextField label="name" value={r.name} onChange={(name) => update(i, { name })} />
+            <NumField label="x" value={r.x} onChange={(x) => update(i, { x })} />
+            <NumField label="z" value={r.z} onChange={(z) => update(i, { z })} />
+            <NumField label="half" value={r.half} onChange={(half) => update(i, { half })} />
+          </FieldGrid>
 
           <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
@@ -666,12 +371,12 @@ function TerrainRegionsForm({ rows, onChange, problemIds }: { rows: TerrainRegio
             </div>
             {r.bumps.map((b, bi) => (
               <div key={bi} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) auto', gap: 8, marginBottom: 6, alignItems: 'end' }}>
-                <Field label="ox"><input style={inputStyle} type="number" value={b.ox} onChange={(e) => updateBump(i, bi, { ox: num(e.target.value) })} /></Field>
-                <Field label="oz"><input style={inputStyle} type="number" value={b.oz} onChange={(e) => updateBump(i, bi, { oz: num(e.target.value) })} /></Field>
-                <Field label="r"><input style={inputStyle} type="number" value={b.r} onChange={(e) => updateBump(i, bi, { r: num(e.target.value) })} /></Field>
-                <Field label="h"><input style={inputStyle} type="number" value={b.h} onChange={(e) => updateBump(i, bi, { h: num(e.target.value) })} /></Field>
+                <NumField label="ox" value={b.ox} onChange={(ox) => bumpsOf(i).update(bi, { ox })} />
+                <NumField label="oz" value={b.oz} onChange={(oz) => bumpsOf(i).update(bi, { oz })} />
+                <NumField label="r" value={b.r} onChange={(radius) => bumpsOf(i).update(bi, { r: radius })} />
+                <NumField label="h" value={b.h} onChange={(h) => bumpsOf(i).update(bi, { h })} />
                 <button
-                  onClick={() => removeBump(i, bi)}
+                  onClick={() => bumpsOf(i).remove(bi)}
                   style={{ fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', height: 28 }}
                 >
                   Remove
@@ -679,17 +384,20 @@ function TerrainRegionsForm({ rows, onChange, problemIds }: { rows: TerrainRegio
               </div>
             ))}
             <button
-              onClick={() => addBump(i)}
+              onClick={() => bumpsOf(i).add({ ox: 0, oz: 0, r: 20, h: 3 })}
               style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}
             >
               + Add bump
             </button>
           </div>
 
-          <button onClick={() => remove(i)} style={{ marginTop: 10, fontSize: 11, background: 'none', border: '1px solid #663333', color: '#d99', borderRadius: 3, padding: '3px 8px', cursor: 'pointer' }}>Remove region</button>
+          <RemoveButton onClick={() => remove(i)} gap={10}>Remove region</RemoveButton>
         </RowCard>
       ))}
-      <button onClick={add} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 4, border: '1px solid #444', background: '#26282e', color: '#e8e6df', cursor: 'pointer' }}>+ Add Region</button>
+      <AddButton onClick={() => add({
+        id: `region_${rows.length + 1}`, name: 'New Region', x: 0, z: -94, half: 30,
+        bumps: [{ ox: 0, oz: 0, r: 20, h: 3 }],
+      })}>+ Add Region</AddButton>
     </div>
   );
 }

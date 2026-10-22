@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore } from '@/game/store/gameStore';
-import { fetchSave, hasGuestSave } from '@/lib/save';
+import { fetchSave, hasGuestSave, type SaveResult } from '@/lib/save';
 import { SKILLS, levelFromXp, rankFromTotalLevel, RANKS } from '@/game/data/ranks';
 import { QUESTS } from '@/game/data/quests';
 import { stageNewGamePlus } from '@/game/ngPlus';
@@ -36,6 +36,13 @@ interface SlotInfo {
   gold: number;
 }
 
+/** CLN-09 · a save that is there but could not be fetched just now, or cannot be read at all — shown where its card would
+ *  be, never taken for "no save" (which sent Continue on to character creation, whose first autosave wrote a new game
+ *  over it) — or a note that the server fell back to the save before the latest. */
+type Trouble = { kind: 'error' | 'corrupt'; problem: string } | { kind: 'restored' };
+
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 function describe(save: SaveGame): SlotInfo {
   const total = SKILLS.reduce((t, s) => t + levelFromXp(save.xp?.[s.id] ?? 0), 0);
   const done = save.completedQuests ?? [];
@@ -57,6 +64,7 @@ export default function MainMenu() {
   const user = useAppStore((s) => s.user);
   const guest = useAppStore((s) => s.guest);
   const hasSave = useAppStore((s) => s.hasSave);
+  const setHasSave = useAppStore((s) => s.setHasSave);
   const push = useAppStore((s) => s.push);
   const resetTo = useAppStore((s) => s.resetTo);
   const setUser = useAppStore((s) => s.setUser);
@@ -70,48 +78,72 @@ export default function MainMenu() {
   // the actual xp/skillTree to stage without a second fetch.
   const [rawSave, setRawSave] = useState<SaveGame | null>(null);
   const [checked, setChecked] = useState(false);
+  const [trouble, setTrouble] = useState<Trouble | null>(null);
+  const [tries, setTries] = useState(0);
 
-  const canContinue = guest ? checked && !!slot : hasSave;
+  // signed in, `hasSave` is the server's word that it holds one (readable or not); a guest's is in this browser
+  const saveOnRecord = guest ? hasGuestSave() : hasSave;
+  const canContinue = (guest ? checked && !!slot : hasSave) && trouble?.kind !== 'corrupt';
 
-  // read the save once on mount so the card can show what is in it
+  const take = useCallback((r: SaveResult) => {
+    if (r.status === 'ok') {
+      setSlot(describe(r.save));
+      setRawSave(r.save);
+      setTrouble(r.restored ? { kind: 'restored' } : null);
+      return;
+    }
+    setSlot(null);
+    setRawSave(null);
+    if (r.status !== 'none') { setTrouble({ kind: r.status, problem: r.problem }); return; }
+    setTrouble(null);
+    if (!guest) setHasSave(false);
+  }, [guest, setHasSave]);
+
+  // read the save on mount (and on "Try again") so the card can show what is in it
   useEffect(() => {
     let alive = true;
     const present = guest ? hasGuestSave() : hasSave;
     if (!present) { setChecked(true); return; }
-    fetchSave(guest).then((s) => {
+    fetchSave(guest).then((r) => {
       if (!alive) return;
-      if (s?.character) { setSlot(describe(s)); setRawSave(s); }
+      take(r);
       setChecked(true);
     });
     return () => { alive = false; };
-  }, [guest, hasSave]);
+  }, [guest, hasSave, take, tries]);
 
   const play = useCallback(async (continueGame: boolean) => {
     if (continueGame) {
       setLoading(true);
-      const save = await fetchSave(guest);
+      const r = await fetchSave(guest);
       setLoading(false);
-      if (save?.character) {
-        loadFromSave(save);
+      if (r.status === 'ok') {
+        loadFromSave(r.save);
         push('game');
         return;
       }
+      // anything else stays on this screen, shown for what it is — Continue never starts a new game (CLN-09)
+      take(r);
+      return;
     }
     push('create');
-  }, [guest, loadFromSave, push]);
+  }, [guest, loadFromSave, push, take]);
 
   // Reported 2026-07-28: "Empty slot — start a new holdfast" sits directly
   // beneath the real save card, styled almost the same way, and used to jump
   // straight to character creation on a single click — this file's own
   // footer text already says "Starting a new holdfast overwrites the one
   // above", so a misclick here silently discards real progress with no way
-  // back. Only guard when there's actually something to lose.
+  // back. Only guard when there's actually something to lose — which there is
+  // whenever a save is on record, read or not (CLN-09: an unreadable one used
+  // to look like none, and went without asking).
   const startNew = useCallback(() => {
-    if (slot && !window.confirm(`Starting a new holdfast will overwrite "${slot.name}". This cannot be undone — continue?`)) {
+    const what = slot ? `"${slot.name}"` : 'the holdfast you have saved';
+    if (saveOnRecord && !window.confirm(`Starting a new holdfast will overwrite ${what}. This cannot be undone — continue?`)) {
       return;
     }
     play(false);
-  }, [slot, play]);
+  }, [slot, saveOnRecord, play]);
 
   // Wave 39 (A4) · New Game+, gated on having actually reached the top rank
   // (see canBeginNgPlus below) — reuses startNew()'s exact overwrite-confirm
@@ -212,9 +244,30 @@ export default function MainMenu() {
                 <div className="kk-save-cta">RESUME</div>
               </button>
             )}
+            {trouble && trouble.kind !== 'restored' && (
+              <div className="kk-save kk-save-trouble" role="alert">
+                <div className="kk-save-thumb"><KkIcon name="k-scroll" size={30} /></div>
+                <div className="kk-save-main">
+                  <div className="kk-save-name-row">
+                    <span className="kk-save-name">
+                      {trouble.kind === 'corrupt' ? 'Your holdfast could not be read' : 'Your holdfast could not be fetched'}
+                    </span>
+                  </div>
+                  <div className="kk-save-chapter">
+                    {sentence(trouble.problem)}. {trouble.kind === 'corrupt' ? 'It has been left untouched.' : 'Nothing has been changed.'}
+                  </div>
+                </div>
+                {trouble.kind === 'error' && (
+                  <button className="kk-save-cta kk-save-retry" onClick={() => setTries((n) => n + 1)}>TRY AGAIN</button>
+                )}
+              </div>
+            )}
+            {trouble?.kind === 'restored' && (
+              <div className="kk-save-note">The latest save could not be read, so the one before it was restored.</div>
+            )}
             <button className="kk-save-empty" onClick={startNew}>
               <KkIcon name="k-plus" size={15} />
-              {slot ? 'Empty slot — start a new holdfast' : 'Empty slot — forge your first hero'}
+              {slot || saveOnRecord ? 'Empty slot — start a new holdfast' : 'Empty slot — forge your first hero'}
             </button>
           </div>
           <div className="kk-menu-foot">

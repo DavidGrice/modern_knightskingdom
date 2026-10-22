@@ -36,7 +36,9 @@ export default function AuthStack() {
       return;
     }
     const me = await fetch('/api/auth/me').then((r) => r.json()).catch(() => null);
-    setUser(data.user, !!me?.hasSave);
+    // CLN-09 · a save we could not ask about counts as one: the menu reads it for itself, and asks before a new game is
+    // written over it
+    setUser(data.user, typeof me?.hasSave === 'boolean' ? me.hasSave : true);
     resetTo('menu');
   }
 
