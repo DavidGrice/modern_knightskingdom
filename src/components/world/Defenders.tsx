@@ -24,7 +24,8 @@ import { dragonAir } from '@/game/dragonAir';
 import { horses, mountOf } from '@/game/riding';
 import RiggedProp from './RiggedProp';
 import { heightOf } from '@/game/data/buildables';
-import { hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
+import { hasLineOfSight, GROUND_LOS_Y, navSteer } from '@/game/navgrid';
+import { aimFor } from '@/game/combat/sightline';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from '@/lib/rng';
 import { homeGroundY } from './TemplateWorld';
@@ -347,10 +348,20 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
 
     // Longshot companion trait: +6 bow range
     const range = loadout === 'bow' ? BOW_RANGE + (hasTrait(villager, 'def_longshot') ? 6 : 0) : MELEE_RANGE;
+    // An arrow lands only on a clear sightline: a bow guard whose raider stands in range behind a wall turns to the
+    // nearest raider in range he can see, and with none closes in on his own until he can — he used to stand there
+    // for good (game/combat/sightline.ts)
+    let blocked = false;
+    if (loadout === 'bow') {
+      ({ target, blocked } = aimFor(
+        target, enemies.filter((e) => e.mob.state !== 'dying'), (e) => Math.hypot(e.mob.x - ds.x, e.mob.z - ds.z), range,
+        (e) => hasLineOfSight(ds.x, GROUND_LOS_Y, ds.z, e.mob.x, GROUND_LOS_Y, e.mob.z),
+      ));
+    }
     const dxT = target.mob.x - ds.x;
     const dzT = target.mob.z - ds.z;
     const dT = Math.hypot(dxT, dzT) || 1;
-    const inRange = dT <= range;
+    const inRange = dT <= range && !blocked;
 
     if (!inRange) {
       // G27 · a defender with a stabled horse assigned rides it, which is
@@ -358,9 +369,11 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       // ground far faster and reach a raid before it reaches the walls
       const mounted = !!mountOf(villager.id);
       const speed = (order === 'attack' ? 3.0 : 2.3) * (mounted ? 1.9 : 1);
-      ds.x += (dxT / dT) * speed * dt;
-      ds.z += (dzT / dT) * speed * dt;
-      const desired = Math.atan2(-dxT, -dzT);
+      // closing in on a raider he cannot see, round what stands between them, by the home grid's plan
+      const step = blocked ? navSteer(ds, target.mob.x, target.mob.z, dt) : { nx: dxT / dT, nz: dzT / dT };
+      ds.x += step.nx * speed * dt;
+      ds.z += step.nz * speed * dt;
+      const desired = Math.atan2(-step.nx, -step.nz);
       const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 3);
       if (clip !== 'anim_c_run') setClip('anim_c_run');
