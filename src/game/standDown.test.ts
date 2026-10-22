@@ -108,3 +108,23 @@ describe('the knighting', () => {
     expect(crewState.engineId).toBe('engine1');
   });
 });
+
+describe('a session start', () => {
+  it('starts the player on foot: out of the saddle, at no engine, at no cart — a new game, and a saved game continued', () => {
+    game().newGame(HERO);
+    const engine: PlacedBuilding = { id: 'b1', type: 'oc4806b2', x: 0, z: 10, y: 0, rot: 0, built: 1, world: null };
+    useGameStore.setState({ buildings: [...game().buildings, engine] });
+    const save = game().toSave();
+    // crewing the engine when the game is saved and quit, then continued
+    crewState.engineId = 'b1';
+    game().loadFromSave(save);
+    expect(crewState.engineId).toBeNull();
+    // ...and for a new game, with a horse and a cart taken up as well
+    crewState.engineId = 'b1';
+    registerHorse('sessionSteed', 'a.glb', 5, 5);
+    mountHorse('sessionSteed');
+    cartState.hitchedId = 'cart1';
+    game().newGame(HERO);
+    expect([crewState.engineId, ridingState.active, cartState.hitchedId]).toEqual([null, false, null]);
+  });
+});
