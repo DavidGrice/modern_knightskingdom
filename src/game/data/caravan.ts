@@ -35,6 +35,7 @@
 // supports without a far larger, out-of-scope rearchitecture.
 import type { ItemId } from '../types';
 import { SELL_PRICES } from './trade';
+import { HAGGLE_PER_WIT, HONEST_WEIGHT_HAGGLE, SILVER_TONGUE_HAGGLE } from './pricing';
 import { contestedPressure } from './allegiance';
 
 export const CARAVAN_CAP_PER_CART = 10;      // matches CARRIERS' own "cart" = +10/trip
@@ -111,13 +112,13 @@ export function caravanTradeableItems(inventory: Partial<Record<ItemId, number>>
   return (Object.keys(SELL_PRICES) as ItemId[]).filter((id) => (inventory[id] ?? 0) > 0);
 }
 
-/** The exact same Wit/Silver-Tongue/Honest-Weight haggle formula `sellItem()`
- *  already uses (gameStore.ts: `1 + wit*0.04 + (silverTongue ? 0.15 : 0) +
- *  (honestWeight ? 0.08 : 0)`), run through the caravan's own markup instead
- *  of the flat merchant rate — no new pricing table invented, one rounding
- *  at the end same as sellItem(). `honestWeight` defaults false so any
- *  caller that predates Wave 52's perk keeps working unchanged. */
+/** The Wit/Silver-Tongue/Honest-Weight haggle `sellItem()` sells by (data/pricing.ts's terms), run through the
+ *  caravan's own markup instead of the flat merchant rate — no new pricing table invented, one rounding at the end
+ *  same as sellItem(). A caravan's quote has never taken the market's pressure or the Wanderer's cut, and still does
+ *  not: it is the price the caravan both shows and pays. `honestWeight` defaults false so any caller that predates
+ *  Wave 52's perk keeps working unchanged. */
 export function caravanQuoteGold(item: ItemId, qty: number, wit: number, silverTongue: boolean, honestWeight = false): number {
   const price = SELL_PRICES[item] ?? 0;
-  return Math.round(price * qty * CARAVAN_MARKUP * (1 + wit * 0.04 + (silverTongue ? 0.15 : 0) + (honestWeight ? 0.08 : 0)));
+  return Math.round(price * qty * CARAVAN_MARKUP
+    * (1 + wit * HAGGLE_PER_WIT + (silverTongue ? SILVER_TONGUE_HAGGLE : 0) + (honestWeight ? HONEST_WEIGHT_HAGGLE : 0)));
 }

@@ -1,5 +1,8 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
+import { marketPriceMultiplier } from '@/game/data/trade';
+import { buyQuote } from '@/game/data/pricing';
 import { ITEMS } from '@/game/data/items';
 import { CHALLENGES, challengeProgress } from '@/game/data/challenges';
 import { GUILD_BY_ID, GUILD_BY_WORLD, guildEligible, guildMaxRank, guildRankIndex, SWITCH_TITHE } from '@/game/data/guilds';
@@ -31,12 +34,22 @@ export default function GuildPanel() {
   const guildRanks = useGameStore((s) => s.guildRanks);
   const inventory = useGameStore((s) => s.inventory);
   const buyGuildOffer = useGameStore((s) => s.buyGuildOffer);
-  // Wave 23 · mirrors the exact haggle terms buyOffer() itself applies (see
-  // its own comment) — the vendor's ticket price must agree with what a
-  // purchase will really deduct, same reasoning as ShopPanel's own mirror.
+  // Wave 23 · the vendor's ticket price must agree with what a purchase will
+  // really deduct: a purchase goes through buyOffer(), and the ticket is
+  // priced by the same formula (data/pricing.ts) — the market's pressure on
+  // the item and the Wanderer's cut included, which it used to leave out —
+  // read again every few seconds as the market's pressure decays, as
+  // ShopPanel's own tickets are.
   const silverTongue = useGameStore((s) => s.perks.includes('silver_tongue'));
   const honestWeight = useGameStore((s) => s.perks.includes('honest_weight'));
   const wit = useGameStore((s) => s.attrSpent.wit ?? 0);
+  const wanderer = useGameStore((s) => s.character?.classId === 'wanderer');
+  const marketState = useGameStore((s) => s.marketState);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 4000);
+    return () => clearInterval(id);
+  }, []);
   const g = destination ? GUILD_BY_WORLD[destination] : null;
   if (!g) return null;
   const eligible = guildEligible(g, stats);
@@ -106,7 +119,7 @@ export default function GuildPanel() {
 
           <div className="creator-section" style={{ marginTop: 16 }}>Guild Store</div>
           {g.vendor.map((o) => {
-            const cost = Math.max(1, Math.round(o.price * (1 - wit * 0.04 - (silverTongue ? 0.15 : 0) - (honestWeight ? 0.08 : 0))));
+            const cost = buyQuote(o.price, marketPriceMultiplier(marketState[o.item], Date.now()), { wit, silverTongue, honestWeight, wanderer });
             const locked = (o.minRank ?? 0) > rankIdx;
             return (
               <div className="recipe-row" key={o.item}>

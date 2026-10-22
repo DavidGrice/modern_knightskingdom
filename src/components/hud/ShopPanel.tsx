@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { SELL_PRICES, BUY_OFFERS, marketPriceMultiplier } from '@/game/data/trade';
+import { buyQuote, sellQuote } from '@/game/data/pricing';
 import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
@@ -29,16 +30,18 @@ export default function ShopPanel() {
   const inventory = useGameStore((s) => s.inventory);
   const sellItem = useGameStore((s) => s.sellItem);
   const buyOffer = useGameStore((s) => s.buyOffer);
-  // Wit + Silver Tongue trade-off perk + Honest Weight perk (Wave 52): the
-  // haggle terms here mirror the exact multipliers sellItem()/buyOffer()
-  // themselves apply — shown so the price on the ticket is the price
-  // actually charged, not a stale base number, and so the Buy button's
-  // affordability check agrees with what buyOffer() will really deduct (a
-  // player with exactly enough gold for the discounted price would
-  // otherwise see it wrongly greyed out).
+  // The player's haggle — Wit, Silver Tongue, Honest Weight, the Wanderer's
+  // Fair Dealer — priced by the very formula sellItem()/buyOffer() charge by
+  // (data/pricing.ts), so that the price on the ticket is the price actually
+  // charged and the Buy button's affordability check agrees with what
+  // buyOffer() will really deduct (a player with exactly enough gold for the
+  // discounted price would otherwise see it wrongly greyed out). The ticket
+  // used to leave the Wanderer's cut out.
   const silverTongue = useGameStore((s) => s.perks.includes('silver_tongue'));
   const honestWeight = useGameStore((s) => s.perks.includes('honest_weight'));
   const wit = useGameStore((s) => s.attrSpent.wit ?? 0);
+  const wanderer = useGameStore((s) => s.character?.classId === 'wanderer');
+  const haggler = { wit, silverTongue, honestWeight, wanderer };
   const marketState = useGameStore((s) => s.marketState);
   const gold = inventory.gold ?? 0;
 
@@ -70,7 +73,7 @@ export default function ShopPanel() {
             // sellItem() itself makes — see this file's own long-standing
             // comment above on why the ticket must show the real price.
             const marketMul = marketPriceMultiplier(marketState[id], Date.now());
-            const each = Math.round((SELL_PRICES[id] ?? 0) * (1 + marketMul + wit * 0.04 + (silverTongue ? 0.15 : 0) + (honestWeight ? 0.08 : 0)));
+            const each = sellQuote(SELL_PRICES[id] ?? 0, 1, marketMul, haggler);
             return (
               <div className="recipe-row" key={id}>
                 <div className="icon"><Ico e={ITEMS[id].icon} /></div>
@@ -88,7 +91,7 @@ export default function ShopPanel() {
           <div className="creator-section">Buy</div>
           {BUY_OFFERS.map((o) => {
             const marketMul = marketPriceMultiplier(marketState[o.item], Date.now());
-            const cost = Math.max(1, Math.round(o.price * (1 + marketMul - wit * 0.04 - (silverTongue ? 0.15 : 0) - (honestWeight ? 0.08 : 0))));
+            const cost = buyQuote(o.price, marketMul, haggler);
             return (
               <div className="recipe-row" key={o.item}>
                 <div className="icon"><Ico e={ITEMS[o.item].icon} /></div>
