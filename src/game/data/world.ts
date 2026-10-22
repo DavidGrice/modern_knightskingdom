@@ -114,6 +114,19 @@ export const NIGHT_GATHER_SPOT = { x: KEEP_INTERIOR.x, z: KEEP_INTERIOR.z - 14 }
 // short walk from SPAWN (0, 26) so it is still the first thing you meet.
 // FIXED_WORLD_PROPS below asserts this stays true.
 export const SIGNPOST = { x: -16, z: 36 };
+/** half the signpost's breadth and depth as drawn (Signpost.tsx: its board, 0.9 m across, on the pole's foot) */
+export const SIGNPOST_HALF = { x: 0.45, z: 0.15 };
+
+// Alric's and Beda's huts, drawn by StarterVillage.tsx: the small corner piece of castle wall (mc001) drawn 2.6 m tall,
+// turned to face their corner. Kept here as data, for the same reason as the clear zone below, so that the merchant's
+// way (nav/wideSolids.ts) can keep his team clear of them. VILLAGE_HUT_HALF is half the side of the square each stands
+// on: mc001 is 3.2 m square at its catalogue height of 3.84 m (data/buildables/catalog.ts), scaled to the hut's.
+export const VILLAGE_HUT_HEIGHT = 2.6;
+export const VILLAGE_HUT_HALF = (3.2 / 2) * (VILLAGE_HUT_HEIGHT / 3.84);
+export const VILLAGE_HUTS: { x: number; z: number; yaw: number }[] = [
+  { x: -41.5, z: 36.5, yaw: Math.PI * 0.2 }, // Alric's
+  { x: -34, z: 44, yaw: Math.PI * 1.3 },     // Beda's
+];
 
 // O3 · Alric and Beda's home corner (their StarterVillage.tsx hut props, and
 // their own standing spot from data/npcs.ts) is neither in BUILD_REGION nor
@@ -129,9 +142,9 @@ export const SIGNPOST = { x: -16, z: 36 };
 // component) for the same reason road.ts keeps its own route data out of the
 // road renderer: the store's seedNodes must not pull React/three.js in.
 export const STARTER_VILLAGE_CLEAR: { x: number; z: number; r: number }[] = [
-  { x: -41.5, z: 36.5, r: 4.5 }, // Alric's hut (mc001.glb)
+  { x: VILLAGE_HUTS[0].x, z: VILLAGE_HUTS[0].z, r: 4.5 }, // Alric's hut (mc001.glb)
   { x: -40, z: 38, r: 3 },       // Alric himself (data/npcs.ts)
-  { x: -34, z: 44, r: 4.5 },     // Beda's hut (mc001.glb)
+  { x: VILLAGE_HUTS[1].x, z: VILLAGE_HUTS[1].z, r: 4.5 }, // Beda's hut (mc001.glb)
   { x: -35, z: 42, r: 3 },       // Beda herself (data/npcs.ts)
 ];
 

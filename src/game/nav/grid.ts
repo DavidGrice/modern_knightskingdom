@@ -6,6 +6,7 @@ import { collisionBoxesFor, type CollisionBox } from '../data/buildables';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '../types';
 import { activeTerrainExclusions, terrainBlocks } from '../navTerrain';
 import { fixedSolids } from '../fixedSolids';
+import { wideSolids, type WideSolid } from './wideSolids';
 import { waterworks } from '../waterworks';
 import { getMountedRoot, getMountedRegion } from '../templateGround';
 import { useGameStore } from '../store/gameStore';
@@ -166,6 +167,8 @@ export class NavGrid {
   // list is a fresh one until the collision shapes file has been read and one
   // kept list after, so the first rebuild once it has been read re-stamps them.
   private builtFixed: PlacedBuilding[] | null = null;
+  // the mask a wide walker plans on (wideMask), with the obstacle mask and the solids it was made from
+  private wide: { from: Uint8Array; solids: WideSolid[]; mask: Uint8Array } | null = null;
 
   // Phase 2, iteration 2.5 — ground-height field, window-mode grids only.
   // null means "no height data yet" (nothing mounted, or nothing mounted
@@ -438,11 +441,12 @@ export class NavGrid {
     this.heights = heights;
   }
 
-  /** True if (x, z) is walkable — in bounds and not blocked. `layer` is
-   *  accepted now (spec §0.1) but unused until multi-layer grids exist. */
-  isWalkable(x: number, z: number, _layer = 0): boolean {
+  /** True if (x, z) is walkable — in bounds and not blocked (`wide`: for a
+   *  wide walker, by wideMask). `layer` is accepted now (spec §0.1) but unused
+   *  until multi-layer grids exist. */
+  isWalkable(x: number, z: number, _layer = 0, wide = false): boolean {
     if (!this.inBounds(x, z)) return false;
-    return this.blocked[this.idx(this.toCellX(x), this.toCellZ(z))] === 0;
+    return (wide ? this.wideMask() : this.blocked)[this.idx(this.toCellX(x), this.toCellZ(z))] === 0;
   }
 
   /**
@@ -507,12 +511,86 @@ export class NavGrid {
     }
   }
 
-  /** Nearest open cell to (i, j), searched outward to `maxRadius` cells — so
+  /**
+   * The mask a wide walker plans on (findPath's `wide`; today the merchant, leading his team: Merchant.tsx): every cell
+   * the grid blocks, and every cell within AGENT_RADIUS of what such a walker also keeps clear of (wideSolids.ts) —
+   * found as a building's box is found, by its square's reach on each axis, a turned box's own two axes as well, and a
+   * circle's by its distance — and then every cell next to one of those, the eight round it. The centre of a cell
+   * it leaves open is then at least a whole cell further from anything than the grid keeps a walker: 2.05 m or more
+   * from a box (a cell is blocked when any of it comes within AGENT_RADIUS of one, and it is a metre across). Water
+   * and the terrain the walkers keep off are grown the same cell. Made when first asked for, and again once the grid
+   * has been rebuilt or what the walker keeps clear of has changed.
+   */
+  private wideMask(): Uint8Array {
+    const solids = wideSolids(this.region);
+    if (this.wide && this.wide.from === this.blocked && this.wide.solids === solids) return this.wide.mask;
+    const dim = this.dim;
+    const near = this.blocked.slice();
+    for (const s of solids) this.stampWideSolid(near, s);
+    // grown by a cell: along each column (index i * dim + j: j runs along z), then along each row
+    const cols = new Uint8Array(dim * dim);
+    for (let i = 0; i < dim; i++) {
+      for (let j = 0; j < dim; j++) {
+        const k = i * dim + j;
+        if (near[k] || (j > 0 && near[k - 1]) || (j < dim - 1 && near[k + 1])) cols[k] = 1;
+      }
+    }
+    const mask = new Uint8Array(dim * dim);
+    for (let i = 0; i < dim; i++) {
+      for (let j = 0; j < dim; j++) {
+        const k = i * dim + j;
+        if (cols[k] || (i > 0 && cols[k - dim]) || (i < dim - 1 && cols[k + dim])) mask[k] = 1;
+      }
+    }
+    this.wide = { from: this.blocked, solids, mask };
+    return mask;
+  }
+
+  /** Block in `mask` every cell that comes within AGENT_RADIUS of `s`: a circle by the distance from its centre to the
+   *  cell's square; a box by the gap between the two along each of the four axes they could be told apart on (the
+   *  cell's two and the box's own two) — the largest of them, which for a box that is not turned is the grid's own
+   *  rule for a building's box. */
+  private stampWideSolid(mask: Uint8Array, s: WideSolid): void {
+    const h = this.cellSize / 2;
+    let ex: number, ez: number;
+    let cos = 1, sin = 0;
+    if (s.kind === 'circle') {
+      ex = ez = s.r;
+    } else {
+      cos = Math.cos(s.yaw);
+      sin = Math.sin(s.yaw);
+      ex = s.hx * Math.abs(cos) + s.hz * Math.abs(sin);
+      ez = s.hx * Math.abs(sin) + s.hz * Math.abs(cos);
+    }
+    const i0 = Math.max(0, this.toCellX(s.x - ex - AGENT_RADIUS));
+    const i1 = Math.min(this.dim - 1, this.toCellX(s.x + ex + AGENT_RADIUS));
+    const j0 = Math.max(0, this.toCellZ(s.z - ez - AGENT_RADIUS));
+    const j1 = Math.min(this.dim - 1, this.toCellZ(s.z + ez + AGENT_RADIUS));
+    for (let i = i0; i <= i1; i++) {
+      for (let j = j0; j <= j1; j++) {
+        const dx = this.toWorldX(i) - s.x;
+        const dz = this.toWorldZ(j) - s.z;
+        let near: boolean;
+        if (s.kind === 'circle') {
+          near = Math.hypot(Math.max(0, Math.abs(dx) - h), Math.max(0, Math.abs(dz) - h)) <= s.r + AGENT_RADIUS;
+        } else {
+          // the box's own axes: +x along (cos, -sin), +z along (sin, cos)
+          const gapU = Math.abs(dx * cos - dz * sin) - h * (Math.abs(cos) + Math.abs(sin)) - s.hx;
+          const gapV = Math.abs(dx * sin + dz * cos) - h * (Math.abs(sin) + Math.abs(cos)) - s.hz;
+          near = Math.max(Math.abs(dx) - h - ex, Math.abs(dz) - h - ez, gapU, gapV) <= AGENT_RADIUS;
+        }
+        if (near) mask[this.idx(i, j)] = 1;
+      }
+    }
+  }
+
+  /** Nearest open cell of `blocked` (the grid's own mask unless another is
+   *  given) to (i, j), searched outward to `maxRadius` cells — so
    *  a walker that has been shoved inside geometry can still find its way
    *  back out. `findPath` uses the default (matches the original module's
    *  hardcoded r<=6); `nearestWalkable` exposes the radius to its caller. */
-  private nearestOpenCell(i: number, j: number, maxRadius = 6): [number, number] | null {
-    if (i >= 0 && j >= 0 && i < this.dim && j < this.dim && !this.blocked[this.idx(i, j)]) return [i, j];
+  private nearestOpenCell(i: number, j: number, maxRadius = 6, blocked = this.blocked): [number, number] | null {
+    if (i >= 0 && j >= 0 && i < this.dim && j < this.dim && !blocked[this.idx(i, j)]) return [i, j];
     for (let r = 1; r <= maxRadius; r++) {
       for (let di = -r; di <= r; di++) {
         for (let dj = -r; dj <= r; dj++) {
@@ -520,7 +598,7 @@ export class NavGrid {
           const a = i + di;
           const b = j + dj;
           if (a < 0 || b < 0 || a >= this.dim || b >= this.dim) continue;
-          if (!this.blocked[this.idx(a, b)]) return [a, b];
+          if (!blocked[this.idx(a, b)]) return [a, b];
         }
       }
     }
@@ -609,9 +687,15 @@ export class NavGrid {
    * cost of the one search this function already runs. A fixed-mode grid
    * keeps the original behaviour exactly: an out-of-bounds target is simply
    * unreachable, same as before this iteration.
+   *
+   * `wide`: a way for a wide walker — the merchant, leading his team
+   * (Merchant.tsx) — found on wideMask's cells, a cell further from anything
+   * than an ordinary way and round what the grid does not hold but such a
+   * walker keeps clear of (wideSolids.ts); where there is no such way, the
+   * ordinary one, so that he never walks straight on through a wall instead.
    */
   findPath(
-    sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, _layer = 0,
+    sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, _layer = 0, wide = false,
   ): { x: number; z: number }[] | null {
     this.ensureHeights();
     this.ensureRoadMask();
@@ -623,8 +707,16 @@ export class NavGrid {
       gx = clamped.x;
       gz = clamped.z;
     }
-    const start = this.nearestOpenCell(this.toCellX(sx), this.toCellZ(sz));
-    const goal = this.nearestOpenCell(this.toCellX(gx), this.toCellZ(gz));
+    return (wide ? this.search(sx, sz, gx, gz, maxNodes, this.wideMask()) : null)
+      ?? this.search(sx, sz, gx, gz, maxNodes, this.blocked);
+  }
+
+  /** findPath's A*, from (sx, sz) to (gx, gz) — both in bounds — over the cells `blocked` leaves open. */
+  private search(
+    sx: number, sz: number, gx: number, gz: number, maxNodes: number, blocked: Uint8Array,
+  ): { x: number; z: number }[] | null {
+    const start = this.nearestOpenCell(this.toCellX(sx), this.toCellZ(sz), 6, blocked);
+    const goal = this.nearestOpenCell(this.toCellX(gx), this.toCellZ(gz), 6, blocked);
     if (!start || !goal) return null;
     const [si, sj] = start;
     const [gi, gj] = goal;
@@ -682,9 +774,9 @@ export class NavGrid {
         const nj = cj + dj;
         if (ni < 0 || nj < 0 || ni >= this.dim || nj >= this.dim) continue;
         const n = this.idx(ni, nj);
-        if (this.blocked[n]) continue;
+        if (blocked[n]) continue;
         // no cutting a corner diagonally between two blocked cells
-        if (di && dj && (this.blocked[this.idx(ci + di, cj)] || this.blocked[this.idx(ci, cj + dj)])) continue;
+        if (di && dj && (blocked[this.idx(ci + di, cj)] || blocked[this.idx(ci, cj + dj)])) continue;
         // §2.3 maxStep: unlink a neighbour pair whose rasterized heights
         // differ by more than a walker can climb. this.heights is null for
         // fixed/home grids and for a window grid with no height data yet, so
