@@ -1869,6 +1869,13 @@ function createGameStore() {
       // game/standDown.ts for what it used to cost); a ram or cart is set
       // down where it was
       for (const id of standDown()) st.settleCart(id);
+      // ...and so does where he is, where it is a place left only by its own way out: build mode is left (as Escape
+      // leaves it), and the Sealed Crypt and an arena run are put by as "Return Home" puts them by — the travel below
+      // does neither, and he used to arrive before the King still in build mode, or with the arena's run still on
+      // (ROADMAP.md, "the knighting kept build mode, the crypt or an arena run")
+      if (st.buildMode) st.setBuildMode(false);
+      resetDungeon();
+      endArenaRun();
       // Phase 20: the court resides at the royal castle — a knighting is a
       // summons TO The King's Approach, not a house call. travelTo no-ops if
       // the player is somehow already standing there; our teleport below

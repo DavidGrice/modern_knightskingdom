@@ -8716,3 +8716,20 @@ building of that id; a saved game with one under that id would have pinned him t
 started from crewing; it fails with the line taken out), and live on production builds of `main` and the fix side by
 side, 2026-10-21: on the fix "Continue Journey" starts him on foot at the spawn, and he walks off (4.8 m in a second);
 "New Journey" is as it was.
+
+## Bugfix: the knighting kept build mode, the crypt or an arena run — FOUND 2026-10-15 (left as found in the knighting fix, above), FIXED 2026-10-21
+
+**The fault.** The knighting (`gameStore`'s `beginCeremony`) travels the player to The King's Approach with
+`travelTo('template-01')`, which — unlike "Return Home" — neither resets the Sealed Crypt nor ends an arena run, and
+nothing there left build mode. Measured on `main` (a production build of 057f9be, 2026-10-21, `knight_scenes.mjs`):
+knighted in build mode at home (the build challenge's timer pays XP there), he stood before the King still in build
+mode; knighted in the crypt, its layout was kept after he left it; knighted in the arena, its run was still on — its
+badge and its rules — at The King's Approach.
+
+**The fix.** The ceremony, having stood him down, leaves build mode as Escape does (`setBuildMode(false)`), and puts
+the crypt and an arena run by as "Return Home" does (`resetDungeon()`, `endArenaRun()`) before it travels.
+
+**Verified** with `tsc`, the unit tests (a new one in `standDown.test.ts`, a knighting from each of the three, which
+fails with the lines taken out), and live on production builds of `main` and the fix side by side, 2026-10-21: on the
+fix, three seconds into each knighting he is at The King's Approach with build mode off, the crypt reset and no arena
+run.
