@@ -58,7 +58,7 @@ export const TALENTS: TalentDef[] = [
     ['+10% Woodcutting XP.', '15% chance of an extra log per chop.', 'Trees yield flowers twice as often.', 'Trees always yield their flower.']),
   ...branch('mining',
     ['Stone Sense', 'Ore Eye', 'Vein Splitter', 'Deep Vein Mastery'],
-    ['+10% Mining XP.', 'Ordinary boulders yield ore 15% more often.', 'Iron veins give bonus stone twice as often.', 'Iron veins always give bonus stone.']),
+    ['+10% Mining XP.', '+15% chance of ore from an ordinary boulder.', 'Iron veins give bonus stone twice as often.', 'Iron veins always give bonus stone.']),
   ...branch('smithing',
     ['Forge Sense', 'Tempered Edges', 'Guild Rates', 'Master Forge'],
     ['+10% Smithing XP.', 'Tools and weapons wear 20% slower.', 'Workbench repairs cost half the materials.', 'Workbench repairs cost only a twentieth of the materials.']),

@@ -50,6 +50,8 @@ import { SETTLEMENT_RAID_YIELD_PENALTY_MS } from '../settlementRaid';
 import { COMPANION_ID, COMPANION_LINES, TAM_TITLE } from '../data/companion';
 import { SELL_PRICES, marketPriceMultiplier, nudgeMarketLevel, MARKET_NUDGE_PER_UNIT } from '../data/trade';
 import { buyQuote, haggleOf, sellQuote } from '../data/pricing';
+import { ATTR_FX, BASE_FX, CALLING_FX, PERK_FX, TALENT_FX } from '../data/effects';
+import { cropGrowTime, harvestSheaves, wearPerUse } from '../data/derivedStats';
 import { DEEDS } from '../data/achievements';
 import { CHALLENGES, challengeProgress, CHALLENGE_TIER_REWARD, GOLDEN_FORTUNE_GOLD } from '../data/challenges';
 import { CREST_UNLOCKS, unlockCrest, crestLabel } from '../data/crestUnlocks';
@@ -1957,13 +1959,9 @@ function createGameStore() {
       // (a trade-off that speeds wear) can stack against Steady Hands (which
       // slows it) instead of the two being mutually exclusive flat values.
       // Verified this reproduces Steady Hands' old 1.4 exactly: 2 * 0.7 = 1.4.
-      let wear = 2;
-      if (st.perks.includes('steady_hands')) wear *= 0.7;
-      if (st.perks.includes('iron_discipline')) wear *= 1.25;
-      if (st.skillTree.includes('smithing2')) wear *= 0.8; // Tempered Edges talent
-      // Wave 32: Smith's Prentice calling's small Forge-Scarred passive —
-      // less than half of Tempered Edges' own cut, stacks with it.
-      if (callingSignature(st.character?.classId, 'smithing')) wear *= 0.92;
+      // Steady Hands, Iron Discipline, Tempered Edges and the Smith's
+      // Prentice's Forge-Scarred, in that order (data/derivedStats.ts)
+      const wear = wearPerUse(st);
       const after = Math.max(0, before - wear);
       set({ durability: { ...st.durability, [id]: after }, dirty: true });
       if (after <= 0) st.notify(`Your ${ITEMS[id].name} is worn out — repair it at the workbench.`);
@@ -2531,11 +2529,8 @@ function createGameStore() {
     plantPlot: (buildingId) => {
       const st = get();
       if ((st.plots[buildingId] ?? -1) >= 0) return;
-      let growTime = st.perks.includes('green_thumb') ? GROW_TIME * 0.85 : GROW_TIME;
-      if (st.skillTree.includes('farming2')) growTime *= 0.88; // Rich Soil talent
-      // Wave 32: Farmhand calling's small Green-Fingered passive — a third
-      // of Rich Soil's own cut, stacks with it and with the perk.
-      if (callingSignature(st.character?.classId, 'farming')) growTime *= 0.96;
+      // Green Thumb, Rich Soil and the Farmhand's Green-Fingered (data/derivedStats.ts)
+      const growTime = cropGrowTime(GROW_TIME, st);
       set({ plots: { ...st.plots, [buildingId]: growTime }, dirty: true });
       audio.play('graze', 0.5);
       st.notify('Wheat planted. Give it time and sunshine.');
@@ -2550,7 +2545,7 @@ function createGameStore() {
       set({ plots, dirty: true });
       // Heavy Sheaves talent (farming3): +1 wheat every harvest.
       // Bountiful Harvest mastery talent (farming4): +2 instead.
-      const sheaves = st.skillTree.includes('farming4') ? 2 : st.skillTree.includes('farming3') ? 1 : 0;
+      const sheaves = harvestSheaves(st);
       st.addItems({ wheat: 2 + sheaves + (Math.random() < 0.35 ? 1 : 0) }, 'gather');
       st.addXp('farming', 12);
       audio.play('treasure', 0.5);
@@ -3494,7 +3489,7 @@ function createGameStore() {
           // top — its own upside is the player's own gathering, doubled, in
           // harvestNode() above.
           const trip = jobDef.tripSeconds * tripSpeedMult(v) * tripTraitMult(v)
-            * (st.perks.includes('hermit') ? 1.25 : 1);
+            * (st.perks.includes('hermit') ? PERK_FX.hermit.villagerTripTimes : 1);
           // L66 · the trip only runs down while they are actually somewhere
           // that counts: at their worksite, or back at the stores hauling. A
           // villager stuck on the far side of the map used to fill their sack
@@ -3848,11 +3843,11 @@ function createGameStore() {
 
     addXp: (skill, amount) => {
       const st = get();
-      let scaled = st.perks.includes('quick_study') ? Math.round(amount * 1.1) : amount;
+      let scaled = st.perks.includes('quick_study') ? Math.round(amount * PERK_FX.quick_study.xpTimes) : amount;
       // tier-1 talents (Phase 21): +10% XP in that talent's own skill
-      if (st.skillTree.includes(`${skill}1`)) scaled = Math.round(scaled * 1.1);
+      if (st.skillTree.includes(`${skill}1`)) scaled = Math.round(scaled * TALENT_FX.firstTierXpTimes);
       // calling signature skill (Phase 22): the trade you were raised in
-      if (CLASS_BY_ID[st.character?.classId ?? '']?.signature === skill) scaled = Math.round(scaled * 1.1);
+      if (CLASS_BY_ID[st.character?.classId ?? '']?.signature === skill) scaled = Math.round(scaled * CALLING_FX.signatureXpTimes);
       const before = st.xp[skill];
       // I43 · XP scaling. Awards were FLAT — a skeleton paid 20 combat XP at
       // level 1 and at level 20 — while the curve is quadratic (50·L²), so
@@ -3889,12 +3884,12 @@ function createGameStore() {
       if (node.kind === 'fishing') {
         // one bite, one fish — already a single chunky action, unaffected
         // by the multi-hit drip fix below
-        let fish = st.skillTree.includes('fishing4') ? (Math.random() < 0.3 ? 2 : 1)
-          : st.skillTree.includes('fishing3') && Math.random() < 0.15 ? 2 : 1;
-        if (st.perks.includes('hermit')) fish *= 2; // Hermit trade-off perk
+        let fish = st.skillTree.includes('fishing4') ? (Math.random() < TALENT_FX.fishing4.twoFishChance ? 2 : 1)
+          : st.skillTree.includes('fishing3') && Math.random() < TALENT_FX.fishing3.twoFishChance ? 2 : 1;
+        if (st.perks.includes('hermit')) fish *= PERK_FX.hermit.gatherTimes; // Hermit trade-off perk
         // Forager's Fortune perk (Wave 52, D2): a plain, no-downside chance
         // at one more, independent of Hermit's own always-double
-        if (st.perks.includes('foragers_fortune') && Math.random() < 0.1) fish += 1;
+        if (st.perks.includes('foragers_fortune') && Math.random() < PERK_FX.foragers_fortune.extraYieldChance) fish += 1;
         // Wave 9 · report what the stores actually took, not what was on the
         // hook — a "You got 2 fish!" over a full store is indistinguishable
         // from a bug. addItems raises its own "stores are full" toast.
@@ -3923,12 +3918,13 @@ function createGameStore() {
             // calling's own small Forest-Raised passive stacks on top too —
             // a third of the guild's base rate, since it needs no membership.
             const extraChance = (st.guild === 'woodsmen' ? (atGuildMaxRank(st.guild, st.guildRanks, 'woodsmen') ? 0.3 : 0.2) : 0)
-              + (st.skillTree.includes('woodcutting2') ? 0.15 : 0)
-              + (st.attrSpent.diligence ?? 0) * 0.04 // Diligence attribute
-              + (callingSignature(st.character?.classId, 'woodcutting') ? 0.05 : 0);
+              + (st.skillTree.includes('woodcutting2') ? TALENT_FX.woodcutting2.extraLogChance : 0)
+              + (st.attrSpent.diligence ?? 0) * ATTR_FX.diligence.yieldChance // Diligence attribute
+              + (callingSignature(st.character?.classId, 'woodcutting') ? CALLING_FX.woodcutting.extraLogChance : 0);
             totals.wood = (totals.wood ?? 0) + (Math.random() < extraChance ? 2 : 1);
             // Ancient Growth mastery talent (woodcutting4): flowers guaranteed
-            const flowerChance = st.skillTree.includes('woodcutting4') ? 1 : st.skillTree.includes('woodcutting3') ? 0.36 : 0.18;
+            const flowerChance = st.skillTree.includes('woodcutting4') ? TALENT_FX.woodcutting4.flowerChance
+              : st.skillTree.includes('woodcutting3') ? TALENT_FX.woodcutting3.flowerChance : BASE_FX.flowerChance;
             if (Math.random() < flowerChance) totals.flowers = (totals.flowers ?? 0) + 1;
             xpTotal += 10;
             st.useTool('axe');
@@ -3937,7 +3933,9 @@ function createGameStore() {
             if (node.variant === 'iron') {
               // Vein Splitter talent: bonus stone from veins twice as often
               // Deep Vein Mastery mastery talent (mining4): bonus stone guaranteed
-              const veinBonus = (st.skillTree.includes('mining4') ? 1 : st.skillTree.includes('mining3') ? 0.6 : 0.3) + (st.attrSpent.diligence ?? 0) * 0.04;
+              const veinBonus = (st.skillTree.includes('mining4') ? TALENT_FX.mining4.veinStoneChance
+                : st.skillTree.includes('mining3') ? TALENT_FX.mining3.veinStoneChance : BASE_FX.veinStoneChance)
+                + (st.attrSpent.diligence ?? 0) * ATTR_FX.diligence.yieldChance;
               totals.iron_ore = (totals.iron_ore ?? 0) + 1;
               if (Math.random() < veinBonus) totals.stone = (totals.stone ?? 0) + 1;
               xpTotal += 16;
@@ -3949,8 +3947,8 @@ function createGameStore() {
               // 32: the Quarryman calling's own small Stone-Bred passive
               // stacks on top too, no membership required.
               const oreChance = (st.guild === 'miners' ? (atGuildMaxRank(st.guild, st.guildRanks, 'miners') ? 0.75 : 0.65) : 0.4)
-                + (st.skillTree.includes('mining2') ? 0.15 : 0)
-                + (callingSignature(st.character?.classId, 'mining') ? 0.05 : 0);
+                + (st.skillTree.includes('mining2') ? TALENT_FX.mining2.oreChancePlus : 0)
+                + (callingSignature(st.character?.classId, 'mining') ? CALLING_FX.mining.oreChancePlus : 0);
               totals.stone = (totals.stone ?? 0) + 1;
               if (mining && Math.random() < oreChance) totals.iron_ore = (totals.iron_ore ?? 0) + 1;
               xpTotal += 12;
@@ -3967,13 +3965,13 @@ function createGameStore() {
         // duration below) — after the per-kind rolls above, not baked into
         // any one of them, so it applies uniformly across tree/rock/herb
         if (st.perks.includes('hermit')) {
-          for (const k of Object.keys(totals) as ItemId[]) totals[k] = (totals[k] ?? 0) * 2;
+          for (const k of Object.keys(totals) as ItemId[]) totals[k] = (totals[k] ?? 0) * PERK_FX.hermit.gatherTimes;
         }
         // Forager's Fortune perk (Wave 52, D2): one roll per harvest action
         // (not per hit — hits are already batched above), +1 of the node's
         // own primary resource on a hit. A plain sibling to Hermit's
         // always-double trade-off, no downside.
-        if (st.perks.includes('foragers_fortune') && Math.random() < 0.1) {
+        if (st.perks.includes('foragers_fortune') && Math.random() < PERK_FX.foragers_fortune.extraYieldChance) {
           const primary: ItemId | null = node.kind === 'tree' ? 'wood' : node.kind === 'rock' ? 'stone' : node.kind === 'herb' ? 'herb' : null;
           if (primary) totals[primary] = (totals[primary] ?? 0) + 1;
         }
@@ -4038,9 +4036,7 @@ function createGameStore() {
         // soil, whoever pushed the seed into it. Deliberately quiet — no
         // notify, no sound: a villager doing their job all day should not
         // narrate every furrow, unlike the player's own deliberate action.
-        let growTime = st.perks.includes('green_thumb') ? GROW_TIME * 0.85 : GROW_TIME;
-        if (st.skillTree.includes('farming2')) growTime *= 0.88;
-        if (callingSignature(st.character?.classId, 'farming')) growTime *= 0.96; // Wave 32 Green-Fingered
+        const growTime = cropGrowTime(GROW_TIME, st);
         set({ plots: { ...st.plots, [buildingId]: growTime }, dirty: true });
         return 'planted';
       }
@@ -4053,7 +4049,7 @@ function createGameStore() {
       // swinging the sickle must not level it. Their equivalent, trade
       // mastery, is granted by the completed HAUL (awardTradeXp in haul.ts),
       // which is where every other trade earns it too.
-      const sheaves = st.skillTree.includes('farming4') ? 2 : st.skillTree.includes('farming3') ? 1 : 0;
+      const sheaves = harvestSheaves(st);
       return { item: 'wheat' as ItemId, amount: 2 + sheaves + (Math.random() < 0.35 ? 1 : 0) };
     },
 
@@ -4099,7 +4095,7 @@ function createGameStore() {
         inv[id as ItemId] = (inv[id as ItemId] ?? 0) - (n as number);
       }
       // Craft attribute: +4% per point that the work turns out a double batch
-      const doubled = Math.random() < (st.attrSpent.craft ?? 0) * 0.04;
+      const doubled = Math.random() < (st.attrSpent.craft ?? 0) * ATTR_FX.craft.doubleBatchChance;
       const made = recipe.outputCount * (doubled ? 2 : 1);
       // Wave 9 · this writes `inv` directly rather than through addItems, so
       // it deliberately bypasses the storage cap — do NOT "fix" that. The
@@ -4523,10 +4519,10 @@ function createGameStore() {
       // small Builder's Eye passive stacks in too — every swing on ANY site
       // counts a little extra, no membership required.
       const swingBonus = (st.guild === 'builders' ? (atGuildMaxRank(st.guild, st.guildRanks, 'builders') ? 0.45 : 0.3) : 0)
-        + (st.skillTree.includes('building2') ? 0.15 : 0)
-        + (st.skillTree.includes('building3') ? 0.15 : 0)
-        + (st.skillTree.includes('building4') ? 0.20 : 0) // Grand Architect mastery talent
-        + (callingSignature(st.character?.classId, 'building') ? 0.05 : 0);
+        + (st.skillTree.includes('building2') ? TALENT_FX.building2.swingPlus : 0)
+        + (st.skillTree.includes('building3') ? TALENT_FX.building3.swingPlus : 0)
+        + (st.skillTree.includes('building4') ? TALENT_FX.building4.swingPlus : 0) // Grand Architect mastery talent
+        + (callingSignature(st.character?.classId, 'building') ? CALLING_FX.building.swingPlus : 0);
       const swing = amount * (1 + swingBonus);
       const before = b.built ?? 0;
       const after = Math.min(1, before + swing);

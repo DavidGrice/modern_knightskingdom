@@ -12,6 +12,7 @@ import { hasLineOfSight, GROUND_LOS_Y } from '../navgrid';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { enemyBeliefId } from '@/ai/perception/Belief';
 import { MOUNT_SEAT_Y } from '../data/enemies';
+import { PERK_FX } from '../data/effects';
 import { combatState, onBattlement } from './state';
 import { useEnemyStore, type EnemyData } from './enemyStore';
 import { damagePlayer } from './playerDamage';
@@ -107,7 +108,7 @@ export function fireBolt(): boolean {
     // so it should hit meaningfully harder than a free sword swing (3): one
     // shot drops a skeleton, two drop a bandit. The battlement bonus stays
     // proportional rather than a flat +1.
-    damage: 7 * (onBattlement() ? 1.25 : 1) * (st.perks.includes('quick_draw') ? 1.2 : 1),
+    damage: 7 * (onBattlement() ? 1.25 : 1) * (st.perks.includes('quick_draw') ? PERK_FX.quick_draw.rangedTimes : 1),
   });
   combatState.attackAt = performance.now();
   audio.play('crossbow', 0.8);
@@ -153,7 +154,7 @@ export function fireArrow(power: number): boolean {
     // 6..16 across the draw: a snap shot is worse than a bolt, a full draw
     // is the strongest single hit in the game — which is the point of a
     // weapon that makes you stand still to use it. +25% from a battlement.
-    damage: (6 + power * 10) * (onBattlement() ? 1.25 : 1) * (st.perks.includes('quick_draw') ? 1.2 : 1),
+    damage: (6 + power * 10) * (onBattlement() ? 1.25 : 1) * (st.perks.includes('quick_draw') ? PERK_FX.quick_draw.rangedTimes : 1),
   });
   combatState.attackAt = performance.now();
   audio.play('longbow', 0.85);
