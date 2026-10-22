@@ -36,10 +36,8 @@ function loadClip(name: string): Promise<AnimClip> {
   return p;
 }
 
-/** Starts loading an animation clip ahead of its first play(), so that play() finds it loaded. play() awaits the
- *  clip's load, and a clip asked for while another's load is still out can be overtaken by that one when its load
- *  comes back last (ROADMAP.md: "a figure's clip asked for before another's load has come back"). A failed load is
- *  play()'s to report. */
+/** Starts loading an animation clip ahead of its first play(), so that play() finds it loaded and the figure takes it
+ *  up at once rather than a load later. A failed load is play()'s to report. */
 export function preloadClip(name: string): void {
   loadClip(name).catch(() => {});
 }
@@ -560,7 +558,8 @@ export async function assembleRiggedMinifig(
 const FPS = 15;
 const FADE = 0.18;
 
-class MinifigAnimator {
+/** Exported for its tests; built for a figure only by assembleRiggedMinifig. */
+export class MinifigAnimator {
   private clip: AnimClip | null = null;
   private clipName = '';
   private time = 0;
@@ -570,6 +569,9 @@ class MinifigAnimator {
   private hipsBaseY: number;
   private hipsRefY = 0;
   private onEnd: (() => void) | null = null;
+  /** how many play() and stop() calls have been made: each takes its number, and a play() whose clip is still loading
+   *  takes effect only if no later call has come in by the time its load is in */
+  private calls = 0;
   timeScale = 1;
 
   constructor(
@@ -582,9 +584,15 @@ class MinifigAnimator {
 
   get current() { return this.clipName; }
 
+  /** Plays `name` once its clip is loaded — unless another play() or a stop() has been called meanwhile: only the latest
+   *  call counts, so a clip asked for while an earlier one's first load is still out is not overtaken by that one when
+   *  it comes back (ROADMAP.md, "a figure's clip asked for before another's load had come back ended on the older
+   *  one"). Asking for the clip it already plays changes nothing, and counts as the latest. */
   async play(name: string, opts: { loop?: boolean; timeScale?: number; onEnd?: () => void } = {}) {
+    const call = ++this.calls;
     if (this.clipName === name && (opts.loop ?? true) === this.loop) return;
     const clip = await loadClip(name);
+    if (call !== this.calls) return;
     // snapshot current pose for crossfade
     this.blendFrom.clear();
     for (const j of JOINTS) this.blendFrom.set(j, this.joints[j].rotation.clone());
@@ -615,6 +623,7 @@ class MinifigAnimator {
   }
 
   stop() {
+    this.calls++;
     this.clip = null;
     this.clipName = '';
     for (const j of JOINTS) this.joints[j].rotation.set(0, 0, 0);

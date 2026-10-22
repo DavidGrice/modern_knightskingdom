@@ -8590,37 +8590,26 @@ construction, and by his facing, not against the track of an ordinary walk; hitc
 not measured: at 4 minutes, from about 7 frames a second down, he would be late again); the day lengths the probe did
 not sample (the unit tests walk each walk at every length from 4 to 30 minutes).
 
-## Bug: a figure's clip asked for before another's load has come back can end on the older one — logged 2026-10-18 (in the merchant-timing fix, seen on the merchant)
+## Bugfix: a figure's clip asked for before another's load had come back ended on the older one — logged 2026-10-18 (in the merchant-timing fix, seen on the merchant), FIXED 2026-10-21
 
-**What the code does.** `MinifigAnimator.play()` (`lib/minifigRig.ts`) awaits its clip's load before it switches to it
-(`loadClip` keeps each clip's fetch from the first time the clip is asked for, so later calls share a load still out,
-and a failed one stays failed), and nothing marks the latest call as the one that counts. When a second `play()` is
-made while the first's load is still out, and the second's clip comes back first — already loaded, say — the second
-takes effect first and the first takes effect over it when its load comes back; and `play()` returns at once for the
-clip the animator already has, so asking again for that clip while another's load is out does not stop the other
-either. `RiggedFigure` calls `play()` from an effect when its `clip`, loop or time scale changes, and not otherwise,
-so the figure goes on playing the older clip until the next such change.
+**The fault.** `MinifigAnimator.play()` (`lib/minifigRig.ts`) awaits its clip's load before it switches to it, and
+nothing marked the latest call as the one that counts: a clip asked for while an earlier one's first load was still out
+took effect first, and the earlier one took effect over it when its load came back; and asking again for the clip
+already playing returned at once without stopping the other. `RiggedFigure` calls `play()` only when its clip, loop or
+time scale changes, so the figure then went on with the older clip until its next change — seen once on the merchant,
+who ended his walk in on a run rather than at rest (the merchant-timing fix's trial at a 6-minute day).
 
-**Seen** in the merchant-timing fix's trial (`merchant_day_probe.mjs` at a 6-minute day, on that fix before it loaded
-his clips ahead; record `out/merchanttime/try/r4_6.txt`): at the end of his walk in, before his trading window opened,
-his figure played `anim_c_run`, where every other walk in the trial — at 4, 5, 6 and 12 minutes — ended on
-`anim_r_restpose`. No sample of that walk saw him at a run (his greatest sampled hurry was 1.97, where a run is taken
-up above 2.2), so the rest is read from that end and the code: a run was asked for between the probe's samples in the
-walk's last strides — the run's first use in the session, its load still out — then the rest pose on his arrival,
-which the run's load overtook. By the code he would have run on the spot through his trading window. That fix loads
-his walk and his run ahead (`preloadClip`), when he is first mounted, so he meets it only if his figure asks for the
-run before that load is back, on his first mount of a session.
+**The fix.** Each `play()` and `stop()` takes a number from a count kept on the animator, the early return for the clip
+it already has included, and a `play()` whose clip is still loading takes effect only if no later call has come in by
+the time its load is in. `MinifigAnimator` is exported for its tests (it is still built for a figure only by
+`assembleRiggedMinifig`), and `preloadClip`'s comment no longer warns of the race.
 
-**Not measured:** the other figures that change clips through the same `play()` — the villagers, the court and the
-destinations' people, the defenders and the companion, the raiders and the crypt's foes, the player's own figure and
-its previews, and the mounted horse's rider. Any of them asked for a new clip while the one before's first load is out
-could meet it.
-
-**To do.** Let only the latest `play()` take effect: a count kept on the animator, taken by each call — the early
-return for the clip it already has too — and checked once the load is in; with a unit test that stubs the clips' fetch
-and lets two loads come back out of order (`MinifigAnimator` would need exporting, or a test hook: it is built only
-inside `assembleRiggedMinifig`, and the clips' cache kept apart between tests). Then watch the figures that change
-clips most often.
+**Verified** with `tsc`, the unit tests (new: `minifigAnimator.test.ts` — the clips' fetch held and let come back out of
+order: the later clip kept when the earlier one's load comes back last; the clip already playing kept when it is asked
+for again while another's load is out; a stop kept when a load asked for before it comes back — all three fail with the
+check taken out), and on a production build of the fix: the merchant's whole day at 12 minutes, every walk ending at
+rest in its window. *Not measured live:* the race itself — it needs a clip's first load to be out at the moment another
+is asked for, which the unit tests set up and play seldom does.
 
 ## Bug: the village's huts and the signpost stop nobody, and the trees and rocks stop only the player — logged 2026-10-20 (in the fix of the merchant's cart; measured for the merchant, by the code for the rest)
 
