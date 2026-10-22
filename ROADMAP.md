@@ -8698,3 +8698,21 @@ all five of `knockout_modes.mjs`'s cases: on the fix he wakes on foot at the mea
 ram, the cart and the horse each stay where he went down (the horse where he was, as at any dismount). *Not
 measured live:* a knock-out in the crypt or the arena while riding, crewing or at a cart — the unit test takes the
 arena's way out by its code path only.
+
+## Bugfix: a session start kept the crew position — FOUND 2026-10-15 (left as found in the knighting fix, above), FIXED 2026-10-21
+
+**The fault.** A session start — a new game, New Game+, or a saved game continued (`beginSession`, with its leaf resets
+in `store/sessionReset.ts`) — cleared the saddle and the carts but not the crew position (`game/crew.ts`'s `crewState`),
+and `PlayerController` pins a crewing player to his engine every frame while a building of that id stands. Measured on
+`main` (a production build of 9caef1e, 2026-10-21, `crew_session.mjs`): crewing a Crossbow Station when he chose Save &
+Return to Menu, "Continue Journey" started him still crewing it, at the engine rather than at the spawn, and holding
+the forward key for a second moved him nowhere. "New Journey" started him on foot at the spawn — a new game has no
+building of that id; a saved game with one under that id would have pinned him to it, whatever it was.
+
+**The fix.** The session reset steps him down from the engine too (`leaveEngine()`, beside `resetRiding()` and
+`resetCarts()`).
+
+**Verified** with `tsc`, the unit tests (a new one in `standDown.test.ts` — a saved game continued and a new game, each
+started from crewing; it fails with the line taken out), and live on production builds of `main` and the fix side by
+side, 2026-10-21: on the fix "Continue Journey" starts him on foot at the spawn, and he walks off (4.8 m in a second);
+"New Journey" is as it was.

@@ -26,6 +26,7 @@ import { resetDefenders } from '../defenders';
 import { resetVillagerCombat } from '../villagerCombat';
 import { resetRiding } from '../riding';
 import { resetCarts } from '../carts';
+import { leaveEngine } from '../crew';
 import { resetDragonAir } from '../dragonAir';
 import { endArenaRun } from '../arena';
 import { runSessionResetHooks } from './sessionHooks';
@@ -53,6 +54,10 @@ export function resetSessionModules(next: { villagers: readonly Villager[] }): v
   resetVillagerCombat();
   resetRiding();
   resetCarts();
+  // and the crew position: kept, it pinned the next session's player to whichever of its buildings had the id of the
+  // engine he had crewed — after Save & Quit while crewing, Continue started him at the engine, and could not leave it
+  // (ROADMAP.md, "a session start kept the crew position")
+  leaveEngine();
   resetDragonAir();
   endArenaRun();
   // combat.ts (enemies + ram/ladder + player vitals), cedricSiege.ts
