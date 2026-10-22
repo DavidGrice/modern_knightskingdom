@@ -6,11 +6,14 @@ import {
 } from './combat';
 import { lootFor } from './combat/loot';
 import { arenaState } from './arena';
+import { cartLivePos, cartState, resetCarts } from './carts';
+import { crewState, leaveEngine } from './crew';
 import { worldEnv } from './env';
 import { registerHitbox, unregisterHitbox } from './hitbox';
 import { playerState } from './playerState';
+import { horses, mountHorse, registerHorse, resetRiding, ridingState } from './riding';
 import { useGameStore } from './store/gameStore';
-import type { CharacterConfig } from './types';
+import type { CharacterConfig, PlacedBuilding } from './types';
 
 const HERO: CharacterConfig = { name: 'Test', headDonor: 'x', bodyDonor: 'x', armColor: 0, handColor: 0, legColor: 0, hipColor: 0 };
 const game = () => useGameStore.getState();
@@ -161,6 +164,53 @@ describe('damagePlayer', () => {
     damagePlayer(999);
     expect([game().panel, game().destination]).toEqual(['none', null]);
     expect(combatState.teleportTo).toBeNull(); // not the meadow: leaveArena's own way out
+  });
+
+  it('a knockout stands the player down where he falls — at home, away, and in the arena — as the knighting does', () => {
+    try {
+      // in the saddle at home: got off where he fell, his horse left there, its home with it
+      const steed = registerHorse('koSteed', 'a.glb', -50, 8);
+      mountHorse('koSteed');
+      Object.assign(playerState, { x: -51.8, z: 9.8, yaw: 0.3 });
+      damagePlayer(999);
+      expect(ridingState.active).toBe(false);
+      expect([steed.x, steed.z, steed.homeX, steed.homeZ, steed.mounted]).toEqual([-51.8, 9.8, -51.8, 9.8, false]);
+      // crewing an engine: stepped down from it, so that its position no longer holds him there
+      crewState.engineId = 'b1';
+      damagePlayer(999);
+      expect(crewState.engineId).toBeNull();
+      // pushing a ram and towing a cart: each let go, its place settled where it stood
+      const ram: PlacedBuilding = { id: 'koRam', type: 'warcart', x: 0, z: 10, y: 0, rot: 0, built: 1, world: null };
+      const cart: PlacedBuilding = { id: 'koCart', type: 'bladecart', x: 4, z: 10, y: 0, rot: 0, built: 1, world: null };
+      useGameStore.setState({ buildings: [...game().buildings, ram, cart] });
+      cartState.pushingId = 'koRam';
+      cartLivePos.koRam = { x: 0, z: 14 };
+      damagePlayer(999);
+      cartState.hitchedId = 'koCart';
+      cartLivePos.koCart = { x: 6, z: 15 };
+      damagePlayer(999);
+      expect([cartState.pushingId, cartState.hitchedId]).toEqual([null, null]);
+      expect(game().buildings.find((b) => b.id === 'koRam')).toMatchObject({ x: 0, z: 14 });
+      expect(game().buildings.find((b) => b.id === 'koCart')).toMatchObject({ x: 6, z: 15 });
+      // away, on a horse of that scene: got off there, the horse left in its own scene, and he is brought home
+      const away = registerHorse('koAway', 'b.glb', 1322.5, 994.25, 'template-02');
+      useGameStore.setState({ destination: 'template-02' } as never);
+      mountHorse('koAway');
+      Object.assign(playerState, { x: 1301, z: 968, yaw: 0 });
+      damagePlayer(999);
+      expect([away.x, away.z, away.world, away.mounted, game().destination]).toEqual([1301, 968, 'template-02', false, null]);
+      // in the arena, put down outside the ring: stood down too, before that early way out
+      useGameStore.setState({ destination: 'arena' } as never);
+      arenaState.active = true;
+      crewState.engineId = 'b1';
+      damagePlayer(999);
+      expect([crewState.engineId, game().destination]).toEqual([null, null]);
+    } finally {
+      resetRiding();
+      for (const id of Object.keys(horses)) delete horses[id];
+      leaveEngine();
+      resetCarts();
+    }
   });
 });
 

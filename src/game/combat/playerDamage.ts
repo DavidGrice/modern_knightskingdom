@@ -6,6 +6,7 @@ import type { ItemId } from '../types';
 import { useGameStore } from '../store/gameStore';
 import { playerState } from '../playerState';
 import { resetDungeon } from '../dungeon';
+import { standDown } from '../standDown';
 import { bestChestplateOwned } from '../data/armor';
 import { worldEnv } from '../env';
 import { fortDamageReduction } from '../fort';
@@ -102,6 +103,11 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
     // from (ROADMAP.md, "a knock-out left an open panel up"). Ahead of the arena's early return below: being put
     // down outside the ring is a knock-out too.
     st.setPanel('none');
+    // And whatever he was in the middle of ends where he falls (game/standDown.ts), as at the knighting: a rider is got
+    // off, his horse left there; a crew is stepped down from the engine, whose position used to pull him from the spawn
+    // meadow straight back to it; a ram or a cart is let go and its place settled where it stands — they used to be
+    // carried off with him (ROADMAP.md, "a knock-out never stood the player down").
+    for (const id of standDown()) st.settleCart(id);
     // requested 2026-08-03: the arena's own "respawn just outside, redo"
     // rule, checked and returned BEFORE the general path below — per this
     // function's own long-standing comment (just below) anticipating
