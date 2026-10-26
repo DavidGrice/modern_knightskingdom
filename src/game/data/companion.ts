@@ -21,7 +21,7 @@
 // halberd+shield. That is wrong, and demonstrably so: `minifiggenericgood00`'s
 // halberd+shield are 'prop'-kind parts, parented straight to the BODY joint at
 // their ORIGINAL baked position rather than re-hung alongside the arm
-// (lib/minifigRig.ts's rehangArm) — precisely the bug Enemies.tsx's own
+// (lib/rig/rehang.ts's rehangArm) — precisely the bug Enemies.tsx's own
 // 2026-07-28 comment documents finding and fixing for Gilbert (a floating axe
 // once his arm settled to its neutral hang). Every armed figure in this game
 // already avoids that by keeping `keepProps` false and wearing a REAL,

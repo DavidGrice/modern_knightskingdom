@@ -5,8 +5,8 @@
 // rack and horse gear that aren't wanted). Normalized the same way as
 // PropModel's GLB props: stood upright, scaled to a target height, grounded.
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { loadObjMtl } from './obj/load';
+import { normalizeUpright } from './obj/normalize';
 
 export type PropPartId = 'chest';
 
@@ -26,23 +26,7 @@ function loadObjDonor(base: string, file: string): Promise<THREE.Group> {
   const key = base + file;
   let p = donorCache.get(key);
   if (!p) {
-    p = new Promise((resolve, reject) => {
-      const mtlLoader = new MTLLoader();
-      mtlLoader.setPath(base);
-      mtlLoader.setResourcePath(base);
-      mtlLoader.load(
-        `${file}.mtl`,
-        (materials) => {
-          materials.preload();
-          const objLoader = new OBJLoader();
-          objLoader.setMaterials(materials);
-          objLoader.setPath(base);
-          objLoader.load(`${file}.obj`, resolve, undefined, reject);
-        },
-        undefined,
-        reject,
-      );
-    });
+    p = loadObjMtl(base, file);
     donorCache.set(key, p);
   }
   return p;
@@ -72,18 +56,7 @@ export function loadPropPart(id: PropPartId, targetHeight: number): Promise<THRE
       const inner = new THREE.Mesh(geo, Array.isArray(mesh.material) ? mats : mats[0]);
       inner.castShadow = true;
       inner.receiveShadow = true;
-      inner.rotation.x = Math.PI; // stand upright (extraction convention)
-
-      const holder = new THREE.Group();
-      holder.add(inner);
-      holder.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(holder);
-      const size = box.getSize(new THREE.Vector3());
-      holder.scale.setScalar(targetHeight / (size.y || 1));
-      holder.updateMatrixWorld(true);
-      const box2 = new THREE.Box3().setFromObject(holder);
-      const center = box2.getCenter(new THREE.Vector3());
-      holder.position.set(-center.x, -box2.min.y, -center.z);
+      const holder = normalizeUpright(inner, targetHeight); // stand upright (extraction convention), scaled, grounded
 
       const wrapper = new THREE.Group();
       wrapper.add(holder);

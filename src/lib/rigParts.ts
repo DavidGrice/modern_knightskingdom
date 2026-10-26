@@ -5,7 +5,7 @@
 //
 // WHY THIS EXISTS: the donor OBJs name their objects `012_shape3`,
 // `034_shape17`… — meaningless on their own — so the rig code had to GUESS
-// what each mesh was from where it sat in space (minifigRig.ts's
+// what each mesh was from where it sat in space (lib/rig/classify.ts's
 // `classifyBySpace`: topmost centred cluster = head, widest mid-height =
 // arms, oversized limb-band shape = "probably a held prop"). That guessing is
 // the direct cause of two long-standing problems: donors whose weapon is

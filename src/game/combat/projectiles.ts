@@ -206,7 +206,7 @@ export function fireSpellBolt(e: EnemyData, damage: number): void {
     age: 0,
     damage,
   });
-  // no dedicated spell SFX exists in the extracted bank (lib/audio.ts's
+  // no dedicated spell SFX exists in the extracted bank (lib/audioCatalog.ts's
   // SOUNDS) — 'lightning' is the closest "something just loosed" cue that
   // isn't a gunpowder bang or a mundane weapon sound
   audio.play('lightning', 0.5);

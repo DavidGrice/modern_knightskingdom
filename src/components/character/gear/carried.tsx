@@ -6,8 +6,8 @@ import type { CarrierTier, ItemId } from '@/game/types';
  *  `rig.joints.hips` — the ONE free joint on this rig. Verified rather than
  *  assumed: `rightarm` already carries weapons AND `ResourceProp` (the load
  *  itself), `leftarm` is the shield's, `head` the helmet's and `body` the
- *  chestplate's, and `hips` is read nowhere but minifigRig's own walk-bob
- *  animator — never portaled to. A hip/back-slung pack is also the one place
+ *  chestplate's, and `hips` is read nowhere but the rig's own walk-bob
+ *  animator (lib/rig/MinifigAnimator.ts) — never portaled to. A hip/back-slung pack is also the one place
  *  a carrier can hang without colliding with the resource cube in the hand,
  *  which is exactly when it will most often be on screen.
  *

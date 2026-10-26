@@ -1471,7 +1471,7 @@ export default function PlayerController() {
       // no vessel to craft and nothing to spend: the walk to the water IS the
       // cost this wave (see ROADMAP — a real bucket item/animation is later)
       st.addItems({ water_bucket: 1 }, 'grant');
-      // no water sample in the extracted bank (see lib/audio's SOUNDS) — the
+      // no water sample in the extracted bank (see lib/audioCatalog.ts's SOUNDS) — the
       // soft 'graze' is what plantPlot already borrows for the same reason
       audio.play('graze', 0.5);
       st.notify('You fill a pail from the brook.');

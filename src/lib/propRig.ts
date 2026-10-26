@@ -16,8 +16,8 @@
 // scale to a target height, re-ground at y=0) so a rigged prop drops into the
 // same world coordinates as the static one it replaces.
 import * as THREE from 'three';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { loadObjMtl } from './obj/load';
+import { normalizeUpright } from './obj/normalize';
 import { partRolesFor, loadPartRoles } from './rigParts';
 
 const BASE = '/assets/props/objrig/';
@@ -65,23 +65,7 @@ function splitDisjoint(meshes: THREE.Mesh[]): THREE.Mesh[][] {
 const cache = new Map<string, Promise<RiggedProp | null>>();
 
 function loadObj(id: string): Promise<THREE.Group> {
-  return new Promise((resolve, reject) => {
-    const mtl = new MTLLoader();
-    mtl.setPath(BASE);
-    mtl.setResourcePath(BASE);
-    mtl.load(
-      `${id}.mtl`,
-      (materials) => {
-        materials.preload();
-        const obj = new OBJLoader();
-        obj.setMaterials(materials);
-        obj.setPath(BASE);
-        obj.load(`${id}.obj`, resolve, undefined, reject);
-      },
-      undefined,
-      reject,
-    );
-  });
+  return loadObjMtl(BASE, id);
 }
 
 /** the lab's `orig` names occasionally carry an export suffix the OBJ doesn't
@@ -216,17 +200,7 @@ export function loadRiggedProp(id: string, targetHeight: number): Promise<Rigged
 
       // same normalization as PropModel: stand upright, scale to target
       // height, re-ground at y=0 and centre on x/z
-      inner.rotation.x = Math.PI;
-      const holder = new THREE.Group();
-      holder.add(inner);
-      holder.updateMatrixWorld(true);
-      const b1 = new THREE.Box3().setFromObject(holder);
-      const size = b1.getSize(new THREE.Vector3());
-      holder.scale.setScalar(targetHeight / (size.y || 1));
-      holder.updateMatrixWorld(true);
-      const b2 = new THREE.Box3().setFromObject(holder);
-      const centre = b2.getCenter(new THREE.Vector3());
-      holder.position.set(-centre.x, -b2.min.y, -centre.z);
+      const holder = normalizeUpright(inner, targetHeight);
 
       const group = new THREE.Group();
       group.add(holder);

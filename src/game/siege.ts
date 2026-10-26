@@ -58,7 +58,7 @@ export const useSiegeStore = create<SiegeStore>((set, get) => ({
  * put nine engines in the catalog — so a counterweight catapult went off with
  * a gunpowder bang, which is the one noise a catapult definitely does not
  * make. There is no new sample to reach for (the extracted bank has 40 named
- * WAVs and no `snd060` anything — see lib/audio's SOUNDS), so the variety is
+ * WAVs and no `snd060` anything — see lib/audioCatalog.ts's SOUNDS), so the variety is
  * built from what the bank really holds, keyed off the lab's own `siegeRole`
  * rather than an id list: torsion arms get the timber THUD of the arm hitting
  * its stop under a whoosh, bolt-throwers get the crossbow's release, and only

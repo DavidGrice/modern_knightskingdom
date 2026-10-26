@@ -5,7 +5,7 @@
 // — so a bolt through the skull and a bolt through the shin were the same
 // event, and a shot that visibly passed beside a figure still connected.
 // These boxes come from the ASSEMBLED RIG itself: each joint group
-// (head / body / hips / arms / legs, see lib/minifigRig.ts) is measured in
+// (head / body / hips / arms / legs, see lib/rig/joints.ts) is measured in
 // the figure's own local frame the moment it finishes loading, so the
 // volumes match whatever donor that character actually uses instead of an
 // invented set of proportions.

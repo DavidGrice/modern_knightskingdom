@@ -1,10 +1,8 @@
 'use client';
-// Loads the extracted minifig OBJ+MTL models, classifies their named body-part
-// objects, and assembles a custom character: head/face from one donor, torso decal
-// from another, limbs recolored with the game's global runtime palette.
+// Loads the extracted minifig OBJ+MTL models — the donors a rigged figure is built from (lib/rig/assemble.ts: head and
+// face from one donor, torso decal from another, limbs recoloured) — and the game's global runtime palette.
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { loadObjMtl } from './obj/load';
 
 const BASE = '/assets/minifigs/';
 
@@ -28,33 +26,12 @@ export function paletteColor(colors: [number, number, number][], index: number):
 export function loadDonor(id: string): Promise<THREE.Group> {
   let p = donorCache.get(id);
   if (!p) {
-    p = new Promise((resolve, reject) => {
-      const mtlLoader = new MTLLoader();
-      mtlLoader.setPath(BASE);
-      mtlLoader.setResourcePath(BASE);
-      mtlLoader.load(
-        `${id}.mtl`,
-        (materials) => {
-          materials.preload();
-          const objLoader = new OBJLoader();
-          objLoader.setMaterials(materials);
-          objLoader.setPath(BASE);
-          objLoader.load(
-            `${id}.obj`,
-            (g) => {
-              // stamp the donor id so part classification can look up this
-              // donor's verified shape->role map (lib/rigParts.ts) without
-              // every call site having to thread the id through
-              g.userData.donorId = id;
-              resolve(g);
-            },
-            undefined,
-            reject,
-          );
-        },
-        undefined,
-        reject,
-      );
+    p = loadObjMtl(BASE, id, (g) => {
+      // stamp the donor id so part classification can look up this
+      // donor's verified shape->role map (lib/rigParts.ts) without
+      // every call site having to thread the id through
+      g.userData.donorId = id;
+      return g;
     });
     donorCache.set(id, p);
   }
