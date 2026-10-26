@@ -22,8 +22,8 @@ import { totalSkillLevel } from './data/ranks';
 import type { DifficultyId } from './types';
 import { exposeDebug } from '@/lib/debugHooks';
 
-// gameStore does not export its state interface, and widening its API just to
-// satisfy this module would be the wrong trade — derive the type instead.
+// The store's state type, derived. gameStore did not export it when this was written (it does since CLN-07, as
+// `GameState` — the same type); deriving it keeps this module from naming it.
 type GameState = ReturnType<typeof useGameStore.getState>;
 
 /** Wave 39 (A4) · Normal/Hard/Grueling — a manual pressure multiplier chosen

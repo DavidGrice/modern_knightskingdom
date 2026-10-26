@@ -11,7 +11,7 @@
 // this Activity's real presence instead of its own proximity heuristic, so
 // running alongside Villagers.tsx's "Phase 24B" worksite cascade and
 // tickVillagers' own per-trip timer is safe (see workSignal.ts's own header
-// and villagerAtWork()'s new early-return in gameStore.ts). `carrying`'s
+// and villagerAtWork()'s new early-return in store/slices/villagerSlice.ts). `carrying`'s
 // economic effect (HaulToDeposit's addItems() call) stays gated off until
 // 5.8b — see haul.ts's own CARRYING_ENABLED flag.
 import { useGameStore } from '@/game/store/gameStore';

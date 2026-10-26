@@ -7,7 +7,7 @@
 // `gather_resource`/`haul_to_deposit` (5.7, gather.ts/haul.ts) join the live
 // registry as of 5.8a — safe now that `workSignal.ts` lets `tickVillagers`
 // trust the AI's real presence instead of its own proximity heuristic
-// (`villagerAtWork()`, `gameStore.ts`), so Villagers.tsx's "Phase 24B"
+// (`villagerAtWork()`, `store/slices/villagerSlice.ts`), so Villagers.tsx's "Phase 24B"
 // worksite cascade and this Activity can coexist for the same villager
 // without fighting over movement. `HaulToDeposit`'s real yield transfer is
 // still gated off (`CARRYING_ENABLED` in haul.ts) until 5.8b.

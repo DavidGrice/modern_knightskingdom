@@ -51,7 +51,7 @@ function branch(
 // 2/5/8 level-gate sequence's own +1-per-step second-order pattern (11).
 // Each mastery is a single-constant sharpening of that same skill's own
 // tier-3 capstone mechanism (never a new hook point) — see the exact call
-// sites in gameStore.ts/combat.ts (each skillTree.includes('<skill>4') check).
+// sites in the store's slices and combat.ts (each skillTree.includes('<skill>4') check).
 export const TALENTS: TalentDef[] = [
   ...branch('woodcutting',
     ['Timber Sense', 'Deep Rings', 'Forest Bounty', 'Ancient Growth'],

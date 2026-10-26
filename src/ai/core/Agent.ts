@@ -30,7 +30,7 @@ import { recall as recallMemory } from './Memory';
 // top-level scope. See that setter's own comment for why this is safe.
 import { agentManager, tierChangeHooks } from './AgentManager';
 // A second, longer cycle for the same reason: gameStore.ts imports
-// store/sessionReset.ts, which imports sync/rosterSync.ts and
+// store/slices/sessionSlice.ts, which imports store/sessionReset.ts, which imports sync/rosterSync.ts and
 // sync/courtSync.ts (for resetVillagerAgentSync/resetCourtAgentSync),
 // which import agentManager from AgentManager.ts above, which imports this
 // file — so gameStore.ts -> ... -> Agent.ts -> gameStore.ts. Only ever

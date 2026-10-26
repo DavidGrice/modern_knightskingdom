@@ -1,7 +1,7 @@
 // CLN-04 · every leaf-module reset a fresh session needs, in one place.
 //
-// Imported ONLY by gameStore.ts (nothing here may import gameStore.ts — see the
-// TDZ history in its homeGroundY comment). Modules that must reset but cannot be
+// Imported ONLY by the store's session slice, slices/sessionSlice.ts (nothing here may import gameStore.ts — see
+// the TDZ history in slices/buildSlice.ts's homeGroundY comment). Modules that must reset but cannot be
 // imported from here because they import gameStore.ts themselves register through
 // ./sessionHooks instead (combat.ts — enemies, ram, ladder, player vitals — and
 // cedricSiege.ts).

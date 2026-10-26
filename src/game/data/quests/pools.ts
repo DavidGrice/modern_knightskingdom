@@ -36,7 +36,7 @@ export const CEDRIC_WAR_QUESTS: SideQuestDef[] = [
 // is no NpcDef to merge into. Chains use `requires` exactly like every other
 // pool; every errand targeting a crafted good (plank/iron_bar/cooked_fish)
 // deliberately uses `kind: 'craft'` with `target` = the recipe id, NEVER
-// `kind: 'gather'` — bumpSideQuest's matchesKind (gameStore.ts) never
+// `kind: 'gather'` — bumpSideQuest's matchesKind (store/slices/shared.ts) never
 // cross-matches craft<->gather, so a gather-kind errand aimed at a craft-only
 // item can never have its counter incremented. Wave 34 (G6.8) fixed the five
 // real instances this had already shipped with: bd_timber/q_relief
@@ -306,7 +306,7 @@ export const GUILD_QUESTS: Record<string, SideQuestDef[]> = {
 
 /** Wave 55 (F2) · the only guild quests that grant more than the flat +15
  *  rep every one of the original 15 guild errands earns (turnInSideQuest,
- *  gameStore.ts). Sized so each guild's 5-quest arc — 20+24+26+32+38 = 140,
+ *  store/slices/questSlice.ts). Sized so each guild's 5-quest arc — 20+24+26+32+38 = 140,
  *  plus the pre-existing 3×15 = 45 — totals 185, clearing rank 3's 160
  *  threshold with real margin: before this arc shipped, 45 was the maximum
  *  achievable guild rep in the whole game (turnInSideQuest is the ONLY
