@@ -164,7 +164,7 @@ function spawnFor(v: Villager): Agent {
  *  its own position instead.
  *
  *  The mob is deliberately left stale for the whole time rather than tracked
- *  live: `gameStore.villagerAtWork()` reads `villagerMobs[id]` positions to
+ *  live: the store's `villagerAtWork()` (slices/villagerSlice.ts) reads `villagerMobs[id]` positions to
  *  decide whether a villager's production timer keeps ticking, so a live
  *  mirror here would change a shipped Wave 9/10 economy path as a side effect
  *  of an LOD change. Freezing it is precisely today's behaviour. The single
@@ -210,7 +210,7 @@ export function mirrorVillagerPositions() {
 }
 
 /** newGame/loadFromSave already call agentManager.clear() (see
- *  gameStore.ts); without this, this module's own roster/lastVillagers
+ *  store/sessionReset.ts); without this, this module's own roster/lastVillagers
  *  would still think every agent from the last game exists, and never
  *  re-spawn them for the new one. */
 export function resetVillagerAgentSync() {

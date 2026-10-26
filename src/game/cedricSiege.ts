@@ -4,7 +4,7 @@
 // his real final stand instead of one more fight he walks away from (see
 // combat.ts's `finalStand` flag and Enemies.tsx's flee-guard), and — Wave 38
 // (A1) — when a jailed Cedric has served enough time to break free for a
-// scaling rematch (`cedricJailbreakAllowed` below; see gameStore.ts's
+// scaling rematch (`cedricJailbreakAllowed` below; see store/slices/storySlice.ts's
 // freeCedric/markCedricDefeated for what "jailed" now actually means).
 //
 // Leaf module, same role as raiderRam.ts / difficulty.ts's own consumers:
@@ -17,8 +17,8 @@ import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST } from './data/world';
 import { CEDRIC_SIEGE_TIER, difficultyState } from './difficulty';
 import { exposeDebug } from '@/lib/debugHooks';
 
-// gameStore does not export its state interface — derive the type instead,
-// the same trade difficulty.ts itself already made for the same reason.
+// The store's state type, derived, as difficulty.ts does (gameStore exports it as `GameState` since CLN-07; it did
+// not when this was written).
 type GameState = ReturnType<typeof useGameStore.getState>;
 
 /** camp revealed, currently at large (not jailed — see freeCedric below for
@@ -40,7 +40,7 @@ const CEDRIC_JAILBREAK_COOLDOWN_DAYS = 3;
 
 /** may tonight's roll spring him from his cell? Requires him currently being
  *  IN custody (`defeatedCedric`, which Wave 38 repurposes from "permanently
- *  dead" to "currently jailed" — see gameStore.ts's freeCedric/
+ *  dead" to "currently jailed" — see storySlice.ts's freeCedric/
  *  markCedricDefeated) and the cooldown since his capture having elapsed. */
 export function cedricJailbreakAllowed(st: GameState): boolean {
   return st.defeatedCedric && st.dayCount - st.cedricCapturedAtDay >= CEDRIC_JAILBREAK_COOLDOWN_DAYS;

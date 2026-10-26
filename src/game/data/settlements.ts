@@ -24,7 +24,7 @@ import type { ItemId, ResourceNodeState, VillagerJob } from '../types';
 import type { SideQuestDef } from './cast/types';
 
 /** Wave 26 · generalizes `foundSettlement()`/DialoguePanel's settlement UI
- *  (previously hardcoded to Fenwick/template-08 alone — see gameStore.ts's
+ *  (previously hardcoded to Fenwick/template-08 alone — see store/slices/empireSlice.ts's
  *  and DialoguePanel.tsx's own Wave 26 comments) to any destination: the
  *  gold cost, the id of the errand that unlocks the deed (the one that
  *  closed the giver's chain when this was written; today the second of
@@ -66,7 +66,7 @@ export interface SettlementFoundingDef {
  *  actually walks a resident there treats a trip this size as more ambient
  *  wander than a committed worksite trip (the same short-local-hops-only
  *  locomotion gap this wave's research flagged, not something to fix here —
- *  see gameStore.ts's villagerAtWork comment). This distance is a real,
+ *  see villagerAtWork's comment in store/slices/villagerSlice.ts). This distance is a real,
  *  live-confirmed fix for that, not a guess — including the iron rock's
  *  own exact spot, nudged a few more metres after the same live watch
  *  found the settlement's actual miner resident settling into a fixed
@@ -102,7 +102,7 @@ export interface SettlementDef {
   giver: string;
   /** The giver's errands, in the order he offers them. This very array is his NpcDef's `sideQuests`. */
   quests: SideQuestDef[];
-  /** Wave 47 (B7) · the errand whose turn-in raises this settlement's own `growthTier` (gameStore.ts's
+  /** Wave 47 (B7) · the errand whose turn-in raises this settlement's own `growthTier` (the store's
    *  `settlements` record) — read by turnInSideQuest right after the ordinary reward grant, the same narrow
    *  hand-named-side-effect precedent as 'r_squire' recruiting Tam. A real, permanent yield-tier bump, gated on real
    *  completed content (the defense link each one `requires`), not a second disconnected system. */
@@ -158,7 +158,7 @@ export const SETTLEMENTS: Record<string, SettlementDef> = {
       },
       // Wave 47 (B5/B7) · a real settlement raid (game/settlementRaid.ts),
       // not flavor text — this errand only closes when resolveSettlementRaid
-      // (gameStore.ts) calls bumpSideQuest('defend', destId, 1) on a WIN.
+      // (store/slices/empireSlice.ts) calls bumpSideQuest('defend', destId, 1) on a WIN.
       {
         id: 'ruins_hold_the_line', kind: 'defend', target: 'template-08', need: 1,
         label: "Rival riders test any claim that's picked a side — hold Fenwick when they come for it.",
@@ -167,7 +167,7 @@ export const SETTLEMENTS: Record<string, SettlementDef> = {
       },
       // The chain's first real "growth" milestone — gated on having actually
       // defended the place, paid off through collectSettlementYield's own
-      // per-growthTier bonus (gameStore.ts).
+      // per-growthTier bonus (store/slices/empireSlice.ts).
       {
         id: 'ruins_expand', kind: 'gather', target: 'stone', need: 30,
         label: "Fenwick's earned room to grow — bring 30 stone to raise a real granary.",
@@ -216,7 +216,7 @@ export const SETTLEMENTS: Record<string, SettlementDef> = {
         requires: ['frostpass_clear', 'settle_clear'],
       },
       // The caravan mechanic's own quest — advanced by a real collectCaravan()
-      // call (gameStore.ts), not by carrying anything yourself (see the
+      // call (store/slices/empireSlice.ts), not by carrying anything yourself (see the
       // 'caravan' SideQuestDef.kind, data/cast/types.ts).
       {
         id: 'first_caravan', kind: 'caravan', target: 'any', need: 1,
@@ -284,7 +284,7 @@ export const SETTLEMENTS: Record<string, SettlementDef> = {
   // direction (see torvald's own pass_want_stone above for its pair).
   // Deliberately targets `wood`, a raw `kind:'gather'`-harvestable
   // good, not a crafted good like `iron_bar` -- bumpSideQuest's matchesKind
-  // (gameStore.ts) only ever cross-matches `kind:'deliver'` with
+  // (store/slices/shared.ts) only ever cross-matches `kind:'deliver'` with
   // `kind:'gather'` bumps, never `kind:'craft'` (the exact bug class Wave 34
   // fixed at five other real sites -- see GUILD_QUESTS' own header comment
   // in data/quests/pools.ts) -- an iron_bar-deliver quest here would have been
@@ -333,7 +333,7 @@ export const SETTLEMENTS: Record<string, SettlementDef> = {
     // not a promise of a rich vein — see this wave's research notes for why
     // that's not enough to earn real ore nodes on its own). Either way the
     // job falls straight through to villagerAtWork's own "nothing to work —
-    // do not stall the economy" fallback (gameStore.ts) with zero matching
+    // do not stall the economy" fallback (store/slices/villagerSlice.ts) with zero matching
     // nodes in this world, identical to Bram's `farmer` at template-08.
     founding: {
       cost: { gold: 60 },

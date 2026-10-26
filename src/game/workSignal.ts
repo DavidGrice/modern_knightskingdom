@@ -4,7 +4,7 @@ import { exposeDebug } from '@/lib/debugHooks';
 // real presence, published for tickVillagers to trust instead of its own
 // hand-rolled proximity heuristic. A standalone leaf module (no store
 // import), per the carts.ts/difficulty.ts pattern — src/ai/actions/gather.ts
-// and haul.ts (the writers) and gameStore.ts's villagerAtWork() (the reader)
+// and haul.ts (the writers) and store/slices/villagerSlice.ts's villagerAtWork() (the reader)
 // can both depend on it without a circular import either direction.
 //
 // `active` is deliberately narrower than "this agent currently has a work

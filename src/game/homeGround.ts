@@ -2,13 +2,13 @@
 // Wave 31 hotfix · home-elevation ground height, pulled out of
 // TemplateWorld.tsx into its own genuine leaf module.
 //
-// Why this file exists at all: gameStore.ts's evalPlacement needs a real
+// Why this file exists at all: the store's evalPlacement (store/slices/buildSlice.ts) needs a real
 // home ground height (`homeGroundY`) instead of the flat 0 it used to assume,
 // and the only existing implementation lived in TemplateWorld.tsx. But
 // TemplateWorld.tsx transitively imports DungeonScene -> Buildings -> siege
 // -> combat -> difficulty, and difficulty.ts calls
 // `useGameStore.subscribe(refresh)` at ITS OWN module scope (not deferred).
-// gameStore.ts importing TemplateWorld.tsx therefore closes a real cycle
+// The store (gameStore.ts, or any slice of it) importing TemplateWorld.tsx therefore closes a real cycle
 // back onto itself — confirmed live as
 // "ReferenceError: Cannot access 'useGameStore' before initialization" on
 // the very first page load, in both `next dev` and a real production build.

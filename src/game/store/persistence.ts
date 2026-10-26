@@ -9,9 +9,9 @@
 //
 // Leaf module: imports only types and MAX_LAND_TIER (the two zero-tables live
 // here) — nothing here may ever import gameStore.ts (see the TDZ history in
-// gameStore.ts's homeGroundY comment).
+// slices/buildSlice.ts's homeGroundY comment).
 //
-// What deliberately stays OUT of the table (still hand-written in gameStore.ts):
+// What deliberately stays OUT of the table (still hand-written, in slices/sessionSlice.ts and storeCounters.ts):
 // the transient reset literals (their `dirty`/`season` differ between a fresh
 // game and a load), resetSessionModules, the leaf-module writes (stabledHorses,
 // setWaterworks, worldEnv), the id sequence counters, and NG+'s xp/skillTree

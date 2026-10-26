@@ -29,7 +29,8 @@ replace behaviour that currently works but does not scale.
 | `config/` at repo root | **`src/ai/config/*.json`**, imported via `resolveJsonModule` | still plain JSON text edits, which is what §12 actually asks for |
 | `npm i navcat` | **see §5 below — read it before planning phase 2** | there is already a working navigation system |
 
-Three.js is `0.176`. State is **zustand** (`src/game/store/gameStore.ts`).
+Three.js is `0.176`. State is **zustand** (`src/game/store/gameStore.ts`, one store composed of the slices in
+`src/game/store/slices/` — CLN-07).
 
 ### The rule that catches everyone
 

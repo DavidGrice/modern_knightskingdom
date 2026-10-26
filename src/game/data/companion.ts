@@ -35,7 +35,7 @@ import type { CharacterConfig } from '../types';
 /** The fixed id used everywhere Tam needs one: agentManager.spawn/get,
  *  companionCombatState, PlayerController's interact check, Enemies.tsx's
  *  companionTarget branch. Never a roster villager id (those are 'v<n>',
- *  gameStore's villagerSeq) — Tam is never pushed into st.villagers (see
+ *  the store's seq.villager, store/storeCounters.ts) — Tam is never pushed into st.villagers (see
  *  gameStore's recruitCompanion), so there is no collision to guard against. */
 export const COMPANION_ID = 'companion_tam';
 
@@ -56,7 +56,7 @@ export const TAM_CONFIG: CharacterConfig = {
  *  PlayerController's 'talk_companion' interact for why). */
 export const TAM_TITLE = 'Your Squire';
 
-/** Picked at random by greetCompanion() (gameStore.ts). Flavor-only, not a
+/** Picked at random by greetCompanion() (store/slices/companionSlice.ts). Flavor-only, not a
  *  real NpcDef's `lines` — Tam follows the player everywhere and has no
  *  fixed x/z/world for DialoguePanel's stationary-NPC/POI/side-quest
  *  machinery to hang off of. */

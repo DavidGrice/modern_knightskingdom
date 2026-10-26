@@ -86,7 +86,7 @@ export function mirrorCourtPositions() {
 }
 
 /** newGame/loadFromSave already call agentManager.clear() (see
- *  gameStore.ts); without this, this module's own populations and last*
+ *  store/sessionReset.ts); without this, this module's own populations and last*
  *  would still think every agent from the last game exists, and never
  *  re-spawn them for the new one — same reasoning as rosterSync.ts's own
  *  resetVillagerAgentSync. */

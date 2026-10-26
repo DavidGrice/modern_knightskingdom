@@ -15,7 +15,7 @@ import SideQuestBoard from './shared/SideQuestBoard';
 // existing banner costs the transfer tithe.
 // Wave 22 · what each guild's own passive sharpens to at its top rank — pure
 // display text for GuildPanel's Standing block; the real numbers live at
-// each passive's own call site (gameStore.ts/combat.ts/fishing.ts), gated on
+// each passive's own call site (the store's slices, combat.ts, fishing.ts), gated on
 // the same atGuildMaxRank check.
 const GUILD_MAX_RANK_NOTE: Record<string, string> = {
   woodsmen: 'Deep Grain sharpens to a 30% chance',
