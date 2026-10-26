@@ -1,7 +1,7 @@
 'use client';
 // Emote picker (G): plays an original minifig animation on your avatar.
 import { useGameStore } from '@/game/store/gameStore';
-import { EMOTES } from '@/lib/minifigRig';
+import { EMOTES } from '@/game/data/emotes';
 import Ico from '../ui/Ico';
 import { onKeyActivate } from '../ui/a11yClick';
 import PopupFrame from './PopupFrame';

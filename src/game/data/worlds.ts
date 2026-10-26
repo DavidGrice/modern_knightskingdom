@@ -113,7 +113,7 @@ export interface WorldDestination {
    *  every destination played through regardless of theme (the same
    *  mismatch `sky` above fixed for the skybox — birdsong and a circling
    *  falcon over an icy mountain pass, or inside a sealed dungeon). See
-   *  audio.ts's own `ambienceBiome` doc for what each value actually plays. */
+   *  lib/ambience.ts's ambiencePool for what each value actually plays. */
   ambience?: 'meadow' | 'mountain' | 'ruins' | 'silent';
 }
 

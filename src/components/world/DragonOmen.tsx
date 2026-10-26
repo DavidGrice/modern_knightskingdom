@@ -10,8 +10,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { loadObjMtl } from '@/lib/obj/load';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
@@ -73,104 +72,88 @@ const rigPromises: Partial<Record<DragonVariant, Promise<DragonRig>>> = {};
 export function loadDragonRig(variant: DragonVariant = 'green'): Promise<DragonRig> {
   const cached = rigPromises[variant];
   if (cached) return cached;
-  const promise = new Promise<DragonRig>((resolve, reject) => {
-    const mtl = new MTLLoader();
-    mtl.setPath(C);
-    mtl.setResourcePath(C);
-    mtl.load(
-      'l7517400.mtl',
-      (materials) => {
-        materials.preload();
-        const obj = new OBJLoader();
-        obj.setMaterials(materials);
-        obj.setPath(C);
-        obj.load('l7517400.obj', (group) => {
-          if (variant === 'black') {
-            group.traverse((c) => {
-              const mesh = c as THREE.Mesh;
-              if (!mesh.isMesh) return;
-              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-              for (const m of mats) {
-                const mat = m as THREE.MeshPhongMaterial;
-                if (mat.name === 'glit030_s50t0') mat.color.copy(BLACK_BODY_COLOR);
-              }
-            });
-          }
-          const byBone = new Map<string, THREE.Mesh[]>();
-          group.traverse((c) => {
-            const mesh = c as THREE.Mesh;
-            if (!mesh.isMesh) return;
-            const bone = BONE_OF[mesh.name] ?? 'body';
-            byBone.set(bone, [...(byBone.get(bone) ?? []), mesh]);
-          });
-          const boundsOf = (meshes: THREE.Mesh[]) => {
-            const b = new THREE.Box3();
-            for (const m of meshes) {
-              m.geometry.computeBoundingBox();
-              b.union(m.geometry.boundingBox!);
-            }
-            return b;
-          };
-          const all = boundsOf([...byBone.values()].flat());
-          const center = all.getCenter(new THREE.Vector3());
-          const inner = new THREE.Group(); // raw OBJ space
-          const hang = (meshes: THREE.Mesh[], pivot: THREE.Vector3) => {
-            const g = new THREE.Group();
-            g.position.copy(pivot);
-            for (const m of meshes) {
-              const mm = new THREE.Mesh(m.geometry, m.material);
-              mm.position.copy(pivot).negate();
-              g.add(mm);
-            }
-            inner.add(g);
-            return g;
-          };
-          // wings hinge along the forward (z) axis at their body-side root
-          const wingsR = byBone.get('wing_R') ?? [];
-          const wingsL = byBone.get('wing_L') ?? [];
-          const bR = boundsOf(wingsR);
-          const bL = boundsOf(wingsL);
-          const rootR = new THREE.Vector3(
-            Math.abs(bR.min.x - center.x) < Math.abs(bR.max.x - center.x) ? bR.min.x : bR.max.x,
-            bR.getCenter(new THREE.Vector3()).y, bR.getCenter(new THREE.Vector3()).z);
-          const rootL = new THREE.Vector3(
-            Math.abs(bL.min.x - center.x) < Math.abs(bL.max.x - center.x) ? bL.min.x : bL.max.x,
-            bL.getCenter(new THREE.Vector3()).y, bL.getCenter(new THREE.Vector3()).z);
-          const wingR = hang(wingsR, rootR);
-          const wingL = hang(wingsL, rootL);
-          // tail pivots where it meets the body; head at its body-side edge
-          const tails = byBone.get('tail') ?? [];
-          const bT = boundsOf(tails);
-          const tailRoot = new THREE.Vector3(
-            bT.getCenter(new THREE.Vector3()).x,
-            bT.getCenter(new THREE.Vector3()).y,
-            Math.abs(bT.min.z - center.z) < Math.abs(bT.max.z - center.z) ? bT.min.z : bT.max.z);
-          const tail = hang(tails, tailRoot);
-          const heads = byBone.get('head') ?? [];
-          const bH = boundsOf(heads);
-          const headRoot = new THREE.Vector3(
-            bH.getCenter(new THREE.Vector3()).x,
-            bH.getCenter(new THREE.Vector3()).y,
-            Math.abs(bH.min.z - center.z) < Math.abs(bH.max.z - center.z) ? bH.min.z : bH.max.z);
-          const head = hang(heads, headRoot);
-          for (const m of byBone.get('body') ?? []) inner.add(m.clone());
+  const promise = loadObjMtl(C, 'l7517400', (group): DragonRig => {
+    if (variant === 'black') {
+      group.traverse((c) => {
+        const mesh = c as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          const mat = m as THREE.MeshPhongMaterial;
+          if (mat.name === 'glit030_s50t0') mat.color.copy(BLACK_BODY_COLOR);
+        }
+      });
+    }
+    const byBone = new Map<string, THREE.Mesh[]>();
+    group.traverse((c) => {
+      const mesh = c as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const bone = BONE_OF[mesh.name] ?? 'body';
+      byBone.set(bone, [...(byBone.get(bone) ?? []), mesh]);
+    });
+    const boundsOf = (meshes: THREE.Mesh[]) => {
+      const b = new THREE.Box3();
+      for (const m of meshes) {
+        m.geometry.computeBoundingBox();
+        b.union(m.geometry.boundingBox!);
+      }
+      return b;
+    };
+    const all = boundsOf([...byBone.values()].flat());
+    const center = all.getCenter(new THREE.Vector3());
+    const inner = new THREE.Group(); // raw OBJ space
+    const hang = (meshes: THREE.Mesh[], pivot: THREE.Vector3) => {
+      const g = new THREE.Group();
+      g.position.copy(pivot);
+      for (const m of meshes) {
+        const mm = new THREE.Mesh(m.geometry, m.material);
+        mm.position.copy(pivot).negate();
+        g.add(mm);
+      }
+      inner.add(g);
+      return g;
+    };
+    // wings hinge along the forward (z) axis at their body-side root
+    const wingsR = byBone.get('wing_R') ?? [];
+    const wingsL = byBone.get('wing_L') ?? [];
+    const bR = boundsOf(wingsR);
+    const bL = boundsOf(wingsL);
+    const rootR = new THREE.Vector3(
+      Math.abs(bR.min.x - center.x) < Math.abs(bR.max.x - center.x) ? bR.min.x : bR.max.x,
+      bR.getCenter(new THREE.Vector3()).y, bR.getCenter(new THREE.Vector3()).z);
+    const rootL = new THREE.Vector3(
+      Math.abs(bL.min.x - center.x) < Math.abs(bL.max.x - center.x) ? bL.min.x : bL.max.x,
+      bL.getCenter(new THREE.Vector3()).y, bL.getCenter(new THREE.Vector3()).z);
+    const wingR = hang(wingsR, rootR);
+    const wingL = hang(wingsL, rootL);
+    // tail pivots where it meets the body; head at its body-side edge
+    const tails = byBone.get('tail') ?? [];
+    const bT = boundsOf(tails);
+    const tailRoot = new THREE.Vector3(
+      bT.getCenter(new THREE.Vector3()).x,
+      bT.getCenter(new THREE.Vector3()).y,
+      Math.abs(bT.min.z - center.z) < Math.abs(bT.max.z - center.z) ? bT.min.z : bT.max.z);
+    const tail = hang(tails, tailRoot);
+    const heads = byBone.get('head') ?? [];
+    const bH = boundsOf(heads);
+    const headRoot = new THREE.Vector3(
+      bH.getCenter(new THREE.Vector3()).x,
+      bH.getCenter(new THREE.Vector3()).y,
+      Math.abs(bH.min.z - center.z) < Math.abs(bH.max.z - center.z) ? bH.min.z : bH.max.z);
+    const head = hang(heads, headRoot);
+    for (const m of byBone.get('body') ?? []) inner.add(m.clone());
 
-          // upright + wingspan normalization + center (model-up is -Y)
-          const root = new THREE.Group();
-          inner.position.copy(center).negate();
-          const holder = new THREE.Group();
-          holder.add(inner);
-          holder.rotation.x = Math.PI;
-          const span = all.max.x - all.min.x || 1;
-          const s = WINGSPAN / span;
-          holder.scale.setScalar(s);
-          root.add(holder);
-          resolve({ root, wingL, wingR, tail, head });
-        }, undefined, reject);
-      },
-      undefined,
-      reject,
-    );
+    // upright + wingspan normalization + center (model-up is -Y)
+    const root = new THREE.Group();
+    inner.position.copy(center).negate();
+    const holder = new THREE.Group();
+    holder.add(inner);
+    holder.rotation.x = Math.PI;
+    const span = all.max.x - all.min.x || 1;
+    const s = WINGSPAN / span;
+    holder.scale.setScalar(s);
+    root.add(holder);
+    return { root, wingL, wingR, tail, head };
   });
   rigPromises[variant] = promise;
   return promise;

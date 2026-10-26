@@ -9,8 +9,7 @@
 // This keeps every object separate and hands them back in the order the plan
 // says to place them.
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { loadObjOptionalMtl } from './obj/load';
 import plans from '@/game/data/setPlans.generated.json';
 
 const OBJ_BASE = '/assets/props/objrig';
@@ -56,11 +55,7 @@ export function loadModuleParts(asset: string): Promise<BuildPart[] | null> {
   if (hit) return hit;
 
   const job = (async () => {
-    const mtl = await new MTLLoader().setPath(`${OBJ_BASE}/`).loadAsync(`${asset}.mtl`).catch(() => null);
-    if (mtl) { mtl.preload(); }
-    const loader = new OBJLoader();
-    if (mtl) loader.setMaterials(mtl);
-    const root = await loader.setPath(`${OBJ_BASE}/`).loadAsync(`${asset}.obj`).catch(() => null);
+    const root = await loadObjOptionalMtl(`${OBJ_BASE}/`, asset);
     if (!root) return null;
 
     // upright and scaled, exactly as PropModel does it

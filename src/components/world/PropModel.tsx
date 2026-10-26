@@ -4,6 +4,7 @@
 // upright, scaled to a target height and grounded at y=0.
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { normalizeUpright } from '@/lib/obj/normalize';
 import { useGLTF } from '@react-three/drei';
 import { useKtx2ExtendLoader } from '@/game/gltfKtx2';
 
@@ -75,17 +76,7 @@ export function useNormalizedProp(url: string, targetHeight: number): THREE.Grou
     const cached = normalizedPropCache.get(cacheKey);
     if (cached) return cached;
     const inner = scene.clone(true);
-    inner.rotation.x = Math.PI; // stand upright (see resources README)
-    const holder = new THREE.Group();
-    holder.add(inner);
-    holder.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(holder);
-    const size = box.getSize(new THREE.Vector3());
-    holder.scale.setScalar(targetHeight / (size.y || 1));
-    holder.updateMatrixWorld(true);
-    const box2 = new THREE.Box3().setFromObject(holder);
-    const center = box2.getCenter(new THREE.Vector3());
-    holder.position.set(-center.x, -box2.min.y, -center.z);
+    const holder = normalizeUpright(inner, targetHeight); // stand upright (see resources README), scaled, grounded
     const wrapper = new THREE.Group();
     wrapper.add(holder);
     wrapper.traverse((c) => {

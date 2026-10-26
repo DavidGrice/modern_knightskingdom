@@ -34,7 +34,7 @@ const _playerPos = new THREE.Vector3();
 // anim_g_swordswish) — there is no seated-rider clip anywhere in the
 // extraction (all 15 clips under public/assets/anims/ are ground-walk/
 // combat/gesture poses), and the rig has no knee joint to bend independently
-// (minifigRig.ts's 7 joints stop at leftleg/rightleg, one rigid segment
+// (lib/rig/joints.ts's 7 joints stop at leftleg/rightleg, one rigid segment
 // each). So this is a static bone-pose override applied AFTER the clip drives
 // the figure each frame, not a new animation: head/body/arms/hips stay fully
 // clip-driven (a mounted defender still swings a sword normally), and only

@@ -10,6 +10,7 @@
 // draw call per node.
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { normalizeUpright } from '@/lib/obj/normalize';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Instances, Instance } from '@react-three/drei';
 import { worldEnv } from '@/game/env';
@@ -50,17 +51,7 @@ function useInstancedSubMeshes(url: string, targetHeight: number, selfLit: boole
   const { scene } = useGLTF(url, true, true, extendKtx2);
   const subMeshes = useMemo(() => {
     const inner = scene.clone(true);
-    inner.rotation.x = Math.PI; // stand upright (see PropModel.tsx)
-    const holder = new THREE.Group();
-    holder.add(inner);
-    holder.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(holder);
-    const size = box.getSize(new THREE.Vector3());
-    holder.scale.setScalar(targetHeight / (size.y || 1));
-    holder.updateMatrixWorld(true);
-    const box2 = new THREE.Box3().setFromObject(holder);
-    const center = box2.getCenter(new THREE.Vector3());
-    holder.position.set(-center.x, -box2.min.y, -center.z);
+    const holder = normalizeUpright(inner, targetHeight); // stand upright (see PropModel.tsx), scaled, grounded
     holder.updateMatrixWorld(true);
 
     const subMeshes: SubMesh[] = [];
