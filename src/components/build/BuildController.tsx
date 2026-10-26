@@ -10,6 +10,9 @@
 //   · the wrecking tool drags a marquee and arms it for confirmation
 //   · middle-mouse drags the view, Q/E swing it a quarter turn
 //   · F drops the grid entirely (freeform), for dressing a scene
+//
+// CLN-27 · the camera rig is useBuildCamera.ts, the keyboard useBuildHotkeys.ts, and what is drawn over the ground
+// BuildGhost.tsx; this file keeps the piece in hand, the gestures, hold-to-place and the verdicts they all read.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
@@ -18,12 +21,12 @@ import { useGameStore } from '@/game/store/gameStore';
 import { BUILDABLE_BY_ID, BUILD_REGION, GRID, buildingsInRect, labAssetId, sizeFor } from '@/game/data/buildables';
 import { labIsCorner } from '@/game/data/labCapabilities';
 import { snapsAsWall, wallSnap } from '@/game/walls';
-import { WATER_BANK, snapDigRect } from '@/game/waterworks';
+import { snapDigRect } from '@/game/waterworks';
 import { WORLD_HALF } from '@/game/data/world';
-import { buildCamState } from '@/game/buildCam';
-import { playerState } from '@/game/playerState';
-import { destinationGroundY, homeGroundY } from '@/components/world/TemplateWorld';
 import type { ItemId } from '@/game/types';
+import { CAM_BACK, CAM_H, useBuildCamera } from './useBuildCamera';
+import { useBuildHotkeys } from './useBuildHotkeys';
+import BuildGhost from './BuildGhost';
 
 const REGION_CX = (BUILD_REGION.minX + BUILD_REGION.maxX) / 2;
 const REGION_CZ = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
@@ -32,48 +35,6 @@ const REGION_CZ = (BUILD_REGION.minZ + BUILD_REGION.maxZ) / 2;
 // click "popping" a building into being. Relocating an ALREADY-BUILT piece
 // (the move tool) has no such "pop" moment and stays a quick click.
 const PLACE_HOLD_SECONDS = 0.4;
-// Raked build view (2026-07-20): the camera used to sit straight overhead
-// (`position(c.x, 90, c.z)`, `up = -Z`), which flattened every piece into a
-// 2D plan — you could see the grid but not the SIDES of what you were
-// placing, so height and facing were both guesswork. It's still orthographic
-// (no perspective distortion across the grid, which is what makes a build
-// view readable) but now tilted down at ELEV_DEG instead of straight down,
-// looking from the +Z side, so pieces show a face and a flank.
-const ELEV_DEG = 52;                       // 90 would be the old flat top-down
-const CAM_DIST = 92;                       // along the view ray from the focus point
-const CAM_H = CAM_DIST * Math.sin((ELEV_DEG * Math.PI) / 180);
-const CAM_BACK = CAM_DIST * Math.cos((ELEV_DEG * Math.PI) / 180);
-// how much of the vertical screen a metre of GROUND covers at this rake — a
-// raked camera foreshortens the ground, so a middle-mouse drag that ignored it
-// would haul the view further sideways than forward for the same wrist motion
-const GROUND_FORESHORTEN = Math.sin((ELEV_DEG * Math.PI) / 180);
-
-// Wave 9 · Q/E swing the view a QUARTER TURN, not a free angle. Everything the
-// build grid is made of turns in quarter turns (PlacedBuilding.rot, sizeFor's
-// width/depth swap, walls.ts's four cardinal attach points), so a view that
-// could stop at 37° would be the only thing in the system that did not line up
-// with the ground it is looking at. It eases between stops rather than
-// snapping, which is what makes it read as the camera swinging round the site
-// instead of the site teleporting.
-const ROT_EASE = 9;                        // per second, toward the target quarter
-// Wave 9 · freeform's fine rotation step. 24 taps of R walks a full circle,
-// which is enough to angle a bench toward a fire without becoming a job.
-const FINE_YAW_STEP = Math.PI / 12;        // 15°
-// Wave 51 (C6) · freeform's per-instance scale, [ / ] (an unclaimed key pair
-// — grep across the whole codebase found neither bound anywhere). A pair
-// rather than one key: unlike rotation, scale is not cyclic and genuinely
-// needs both directions. Hold-shift-for-a-bigger-step directly mirrors R's
-// own Shift-for-a-full-quarter-turn convention above.
-const SCALE_STEP = 0.1;
-const SCALE_SHIFT_STEP = 0.5;
-// 0.5-2.0: collision never scales (see PlacedBuilding.scale's own comment),
-// so a wider range would only widen the visible gap between what a piece
-// looks like and what it actually blocks/occupies — the honesty this
-// feature already accepts, not something worth stretching further. 2.0 and
-// 0.5 are exact reciprocals, so scaling up then back down returns to
-// exactly 1.0 with no rounding drift.
-const SCALE_MIN = 0.5;
-const SCALE_MAX = 2.0;
 // Wave 9 · the most pieces one row-fill drag will ever try to lay. A flick of
 // the wrist across an orthographic view is a very long way in world metres,
 // and "I meant six, it laid four hundred" is not a mistake undo should have to
@@ -86,7 +47,6 @@ const MIN_MARQUEE = 0.6;
 
 export default function BuildController() {
   const gl = useThree((s) => s.gl);
-  const camRef = useRef<THREE.OrthographicCamera>(null);
 
   const destination = useGameStore((s) => s.destination);
   const buildings = useGameStore((s) => s.buildings);
@@ -100,19 +60,6 @@ export default function BuildController() {
   const regionCX = claim ? claim.x : REGION_CX;
   const regionCZ = claim ? claim.z : REGION_CZ;
 
-  // open the build view WHERE THE PLAYER IS STANDING (2026-07-20) rather than
-  // always snapping to the region centre — entering build mode used to yank
-  // the view across the homestead every time, which read as the character
-  // being teleported. Clamped into the buildable region so standing well
-  // outside it still opens somewhere useful.
-  const center = useRef(new THREE.Vector3(
-    THREE.MathUtils.clamp(playerState.x, regionCX - 26, regionCX + 26),
-    0,
-    THREE.MathUtils.clamp(playerState.z, regionCZ - 26, regionCZ + 26),
-  ));
-  const [zoom, setZoom] = useState(11);
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
   const keys = useRef<Record<string, boolean>>({});
   const [ghost, setGhost] = useState<{ x: number; z: number } | null>(null);
   const [rot, setRot] = useState<0 | 1 | 2 | 3>(0);
@@ -128,14 +75,6 @@ export default function BuildController() {
   const holdCellKey = useRef<string | null>(null);
   const holdTime = useRef(0);
   const [placeFrac, setPlaceFrac] = useState(0);
-
-  // Wave 9 · the camera's own quarter turn around the focus point. The integer
-  // is the authority (it can run past ±4 freely, no wrap needed); `azRef` is
-  // the eased angle the camera is actually at this frame.
-  const [azQuarter, setAzQuarter] = useState(0);
-  const azRef = useRef(0);
-  const azQuarterRef = useRef(0);
-  azQuarterRef.current = azQuarter;
 
   // Wave 9 · drag gestures. The raw (un-snapped) world point the left button
   // went down on drives both row-fill's direction and the demolish marquee;
@@ -199,82 +138,10 @@ export default function BuildController() {
   const freeYawRef = useRef(freeYaw);
   freeYawRef.current = freeYaw;
 
-  // keyboard: pan + rotate piece + undo, plus Wave 9's view rotation and mode
-  // toggles. Hardcoded key codes, matching this file's own convention (the
-  // remappable keybinds.ts table covers the on-foot player, whose controller is
-  // fully unmounted while this one exists — GameWorld.tsx picks one or the
-  // other — so Q/E/F/X cannot collide with anything it binds).
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      keys.current[e.code] = true;
-      // the build rail carries text fields (blueprint name, piece search) —
-      // typing "undo" into one must not undo four placements. Only the
-      // one-shot actions below are guarded; the held pan keys above are
-      // recorded regardless so releasing one always clears it.
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      // every action below is a one-shot: auto-repeat from a leaned-on key
-      // would spin the ghost, the view, or the undo stack
-      if (e.repeat) return;
-      if (e.code === 'KeyR') {
-        // in freeform R turns the piece by the mode's own granularity; hold
-        // shift for the honest quarter turn when you want to get back square
-        if (useGameStore.getState().freeformBuild) {
-          // wrapped at a full turn so a piece spun right round records no
-          // `yaw` at all rather than a cosmetically-identical 6.283
-          setFreeYaw((y) => (y + (e.shiftKey ? Math.PI / 2 : FINE_YAW_STEP)) % (Math.PI * 2));
-        } else {
-          setRot((r) => (((r + 1) % 4) as 0 | 1 | 2 | 3));
-        }
-      }
-      // Wave 51 (C6) · [ / ] resize, freeform only — gated the same way R's
-      // MEANING changes between modes above, rather than firing (and silently
-      // doing nothing useful) while on the grid, where every placement is
-      // always exactly 1x.
-      if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-        if (!useGameStore.getState().freeformBuild) return;
-        const step = e.shiftKey ? SCALE_SHIFT_STEP : SCALE_STEP;
-        const dir = e.code === 'BracketRight' ? 1 : -1;
-        setFreeScale((s) => THREE.MathUtils.clamp(
-          Math.round((s + dir * step) * 100) / 100, SCALE_MIN, SCALE_MAX,
-        ));
-      }
-      if (e.code === 'KeyU') undoLast();
-      if (e.code === 'KeyQ') setAzQuarter((q) => q - 1);
-      if (e.code === 'KeyE') setAzQuarter((q) => q + 1);
-      if (e.code === 'KeyF') {
-        const st = useGameStore.getState();
-        const on = !st.freeformBuild;
-        // carry the facing across the switch in both directions, so the ghost
-        // you are looking at never jumps when the mode changes
-        if (on) setFreeYaw((rotRef.current * Math.PI) / 2);
-        else setRot(((((Math.round(freeYawRef.current / (Math.PI / 2)) % 4) + 4) % 4)) as 0 | 1 | 2 | 3);
-        st.setFreeformBuild(on);
-        st.notify(on
-          ? 'Freeform placement — off the grid. R turns in small steps, [ and ] resize.'
-          : 'Back on the grid.');
-      }
-      if (e.code === 'KeyX') {
-        const st = useGameStore.getState();
-        st.setBuildTool(st.buildTool === 'demolish' ? 'build' : 'demolish');
-      }
-      // Wave 12 · the spade. Its own key rather than a third stop on X's
-      // cycle: X has meant "wrecking tool on/off" since Wave 9, and turning it
-      // into a three-way rotation would make the muscle memory for putting the
-      // wrecking tool away start digging instead.
-      if (e.code === 'KeyG') {
-        const st = useGameStore.getState();
-        st.setBuildTool(st.buildTool === 'dig' ? 'build' : 'dig');
-      }
-    };
-    const up = (e: KeyboardEvent) => { keys.current[e.code] = false; };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
-  }, [undoLast]);
+  // the camera rig and the keyboard (CLN-27: useBuildCamera.ts, useBuildHotkeys.ts) — the camera first, so that its
+  // frame loop still runs before hold-to-place below, as the two halves of one loop did
+  const { camRef, center, zoom, setAzQuarter } = useBuildCamera({ gl, regionCX, regionCZ, destination, keys });
+  useBuildHotkeys({ keys, rotRef, freeYawRef, setRot, setFreeYaw, setFreeScale, setAzQuarter, undoLast });
 
   // adopt the rotation of a picked-up piece — including a freeform one's true
   // facing, so a piece you angled by hand comes back at exactly that angle the
@@ -315,117 +182,8 @@ export default function BuildController() {
     setPlaceFrac(0);
   }, [selection, blueprintSelection, moving]);
 
-  // wheel zoom
-  useEffect(() => {
-    const el = gl.domElement;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      setZoom((z) => THREE.MathUtils.clamp(z * Math.exp(-e.deltaY * 0.0012), 5, 60));
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [gl]);
-
-  // Wave 9 · middle-mouse drag-pan. Attached to the canvas rather than the
-  // ground-plane mesh so the grab survives the cursor crossing a building (or
-  // leaving the canvas entirely, via pointer capture) mid-drag — the whole
-  // point of a drag-pan is that it does not care what is under it.
-  //
-  // The delta is converted through the camera's CURRENT basis, not world X/Z:
-  // once Q/E has swung the view a quarter turn, "drag right" still has to mean
-  // right on screen. Orthographic + R3F's pixel-sized frustum makes the scale
-  // exact — one world metre is `zoom` pixels — and the vertical axis is
-  // additionally un-foreshortened so the ground stays glued to the cursor.
-  useEffect(() => {
-    const el = gl.domElement;
-    let panning = false;
-    let lastX = 0;
-    let lastY = 0;
-    const onDown = (e: PointerEvent) => {
-      if (e.button !== 1) return;
-      e.preventDefault();           // middle click is a browser autoscroll otherwise
-      panning = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      el.setPointerCapture?.(e.pointerId);
-    };
-    const onMove = (e: PointerEvent) => {
-      if (!panning) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      const az = azRef.current;
-      const perPx = 1 / zoomRef.current;
-      // screen-right and screen-up, expressed on the ground plane
-      const rx = Math.cos(az); const rz = -Math.sin(az);
-      const fx = -Math.sin(az); const fz = -Math.cos(az);
-      const c = center.current;
-      // grab-the-ground: the camera moves AGAINST the drag, so the point under
-      // the cursor stays under the cursor
-      c.x -= rx * dx * perPx + fx * (-dy) * perPx / GROUND_FORESHORTEN;
-      c.z -= rz * dx * perPx + fz * (-dy) * perPx / GROUND_FORESHORTEN;
-    };
-    const onUp = (e: PointerEvent) => {
-      if (e.button !== 1 || !panning) return;
-      panning = false;
-      el.releasePointerCapture?.(e.pointerId);
-    };
-    const onAux = (e: MouseEvent) => { if (e.button === 1) e.preventDefault(); };
-    el.addEventListener('pointerdown', onDown);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerup', onUp);
-    el.addEventListener('auxclick', onAux);
-    return () => {
-      el.removeEventListener('pointerdown', onDown);
-      el.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerup', onUp);
-      el.removeEventListener('auxclick', onAux);
-    };
-  }, [gl]);
-
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
-    // ease toward the quarter turn Q/E asked for (see ROT_EASE)
-    const azTarget = (azQuarterRef.current * Math.PI) / 2;
-    azRef.current += (azTarget - azRef.current) * Math.min(1, dt * ROT_EASE);
-    const az = azRef.current;
-    const pan = 24 * dt * (14 / zoom);
-    const c = center.current;
-    // WASD pans in SCREEN space, not world space: after a quarter turn of the
-    // view, W still has to mean "further up the screen" or the keys and the
-    // picture disagree about which way is forward.
-    const fx = -Math.sin(az); const fz = -Math.cos(az);
-    const rx = Math.cos(az); const rz = -Math.sin(az);
-    if (keys.current['KeyW'] || keys.current['ArrowUp']) { c.x += fx * pan; c.z += fz * pan; }
-    if (keys.current['KeyS'] || keys.current['ArrowDown']) { c.x -= fx * pan; c.z -= fz * pan; }
-    if (keys.current['KeyA'] || keys.current['ArrowLeft']) { c.x -= rx * pan; c.z -= rz * pan; }
-    if (keys.current['KeyD'] || keys.current['ArrowRight']) { c.x += rx * pan; c.z += rz * pan; }
-    // pan is clamped around the active region (home, or a claimed template
-    // plot far from world origin) rather than a fixed world-origin box, or
-    // panning away from home would immediately snap back toward (0,0)
-    const panMax = WORLD_HALF * 0.5;
-    c.x = THREE.MathUtils.clamp(c.x, regionCX - panMax, regionCX + panMax);
-    c.z = THREE.MathUtils.clamp(c.z, regionCZ - panMax, regionCZ + panMax);
-    buildCamState.x = c.x;
-    buildCamState.z = c.z;
-    buildCamState.azimuth = az;
-    const cam = camRef.current;
-    if (cam) {
-      // raked, not top-down: pulled back along the view azimuth and lifted, so
-      // the grid AND each piece's front/side faces are both visible (see
-      // ELEV_DEG above). `up` is world-up now — the old (0,0,-1) only made
-      // sense for a camera staring straight down the Y axis.
-      cam.position.set(c.x + Math.sin(az) * CAM_BACK, CAM_H, c.z + Math.cos(az) * CAM_BACK);
-      cam.up.set(0, 1, 0);
-      // Wave 31 · was a fixed y=0 lookAt target — panning far enough to bring
-      // an elevated terrain region (home) or a sloped bake (a claimed
-      // destination plot) into view kept the camera aimed at the old flat
-      // ground plane instead of the terrain actually under the cursor.
-      const lookY = destination ? destinationGroundY(c.x, c.z) : homeGroundY(c.x, c.z);
-      cam.lookAt(c.x, lookY, c.z);
-    }
-
     // hold-to-place: hold LMB over a valid spot to commit a fresh piece or
     // blueprint (the move tool stays an instant click — see onClick below).
     // Moving the cursor to a DIFFERENT snapped cell mid-hold restarts the
@@ -734,201 +492,12 @@ export default function BuildController() {
       >
         <planeGeometry args={[WORLD_HALF * 2, WORLD_HALF * 2]} />
       </mesh>
-      {/* single-piece placement ghost — rotation-y matches the real piece's
-          own rotation-y (Buildings.tsx/PropModel.tsx), applied to the
-          model's true unswapped footprint, so a rotated ghost actually
-          turns instead of only ever showing gsx/gsz swapped on a fixed
-          axis-aligned box. Hidden while a run is being drawn: the run's own
-          per-cell ghosts below already include the anchor cell. */}
-      {activeType && def && ghost && rowCells.length === 0 && (
-        <group position={[ghost.x, 0, ghost.z]}>
-          <group rotation-y={gyaw}>
-            {/* footprint — deliberately OUTSIDE the scaled group below and
-                always drawn at the catalogue's real 1x size: this plane is
-                what evalPlacement/collisionBoxesFor actually test, so it has
-                to stay honest about what you can walk through/build against
-                regardless of how big or small the visual next to it looks
-                (see PlacedBuilding.scale's own comment). */}
-            <mesh rotation-x={-Math.PI / 2} position-y={gy + 0.07}>
-              <planeGeometry args={[gsx, gsz]} />
-              <meshBasicMaterial color={valid ? '#42d95e' : '#e04434'} transparent opacity={0.55} depthWrite={false} />
-            </mesh>
-            {/* Wave 51 (C6) · the scaled VISUAL — box + wireframe, the two
-                things a freeform resize actually changes what you SEE.
-                Positioned at the piece's own base elevation (gy) with the
-                resize applied as this group's OWN scale, so it grows/shrinks
-                from that base exactly the way a real scaled PropModel grows
-                from its own grounded local origin (PropModel.tsx) — never up
-                off the ground or down into it. */}
-            <group position-y={gy} scale={useScale}>
-              {/* while hold-to-place is in progress, the box itself rises from
-                  the ground toward full height — the footprint plane above
-                  stays full-size the whole time so the landing spot is always
-                  clear, only the "it's coming into being" cue animates */}
-              <mesh position-y={(gh * (!moving && placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1)) / 2}>
-                <boxGeometry args={[gsx, gh * (!moving && placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1), gsz]} />
-                <meshBasicMaterial color={valid ? '#42d95e' : '#e04434'} transparent opacity={0.42 + 0.28 * placeFrac} depthWrite={false} />
-              </mesh>
-              {/* crisp wireframe of the FULL final volume — the translucent box
-                  above animates its height while a hold is in progress, so on
-                  its own it never shows the finished silhouette. Drawn at full
-                  size regardless, so you always see exactly what you're
-                  committing to. */}
-              <lineSegments position-y={gh / 2} geometry={ghostEdges}>
-                <lineBasicMaterial color={valid ? '#d8ffe2' : '#ffd8d2'} transparent opacity={0.9} depthTest={false} />
-              </lineSegments>
-            </group>
-            {/* Facing arrow: which way the piece actually points, so rotating
-                with R is no longer guesswork.
-                It sits on local **−Z**, not +Z. Every model is normalised by
-                PropModel with `rotation.x = Math.PI` to stand it upright,
-                and that flip MIRRORS Z — so a piece whose front faces +Z in
-                the source file renders facing −Z in the world. The arrow used
-                to be drawn at +Z and therefore pointed at the back of every
-                wall, a consistent 180° disagreement. */}
-            {!isCorner && (
-              <mesh position={[0, gy + 0.12, -(gsz / 2 + 1.1)]} rotation-x={-Math.PI / 2}>
-                <coneGeometry args={[0.55, 1.5, 4]} />
-                <meshBasicMaterial color={valid ? '#eaffc9' : '#ffc9c9'} transparent opacity={0.95} depthTest={false} />
-              </mesh>
-            )}
-            {/* a matching tick ON the piece's own front face, so the facing
-                still reads when the arrow is off-screen or behind geometry */}
-            {!isCorner && (
-            <mesh position={[0, gy + gh / 2, -(gsz / 2 + 0.02)]}>
-              <planeGeometry args={[Math.min(gsx * 0.5, 1.2), 0.14]} />
-              <meshBasicMaterial color={valid ? '#eaffc9' : '#ffc9c9'} transparent opacity={0.95} depthTest={false} side={THREE.DoubleSide} />
-            </mesh>
-            )}
-          </group>
-          {/* Wave 9 · freeform marker: a piece off the lattice looks exactly
-              like one on it from above, so the mode says so on the ghost
-              itself rather than only on the rail. */}
-          {freeform && (
-            <mesh rotation-x={-Math.PI / 2} position-y={gy + 0.1}>
-              <ringGeometry args={[Math.max(gsx, gsz) / 2 + 0.25, Math.max(gsx, gsz) / 2 + 0.45, 24]} />
-              <meshBasicMaterial color="#7fd4ff" transparent opacity={0.85} depthTest={false} />
-            </mesh>
-          )}
-          {/* wall-connect joint: a gold seam drawn ON the shared edge, so
-              "this piece is joined to that one" is something you can see
-              before you commit rather than something you infer afterwards.
-              Outside the rotated group — the seam is a world-space mark
-              between two centres, not a feature of the piece. */}
-          {linkedTo && (
-            <mesh
-              position={[(linkedTo.x - ghost.x) / 2, gy + 0.14, (linkedTo.z - ghost.z) / 2]}
-              rotation-x={-Math.PI / 2}
-            >
-              <planeGeometry args={[0.7, 0.7]} />
-              <meshBasicMaterial color="#e8c141" transparent opacity={0.95} depthTest={false} />
-            </mesh>
-          )}
-          {/* stack elevation marker */}
-          {gy > 0.05 && (
-            <mesh position-y={gy / 2}>
-              <boxGeometry args={[0.06, gy, 0.06]} />
-              <meshBasicMaterial color="#e8c141" transparent opacity={0.8} depthWrite={false} />
-            </mesh>
-          )}
-        </group>
-      )}
-      {/* Wave 9 · the run being drawn. One footprint + wireframe per segment,
-          each answering for itself, so a run that outgrows the materials or
-          walks into a tree shows exactly where it will stop BEFORE the button
-          comes up. */}
-      {activeType && def && rowPreview.map((p, i) => (
-        <group key={i} position={[p.x, 0, p.z]} rotation-y={gyaw}>
-          <mesh rotation-x={-Math.PI / 2} position-y={p.y + 0.07}>
-            <planeGeometry args={[gsx, gsz]} />
-            <meshBasicMaterial color={p.ok ? '#42d95e' : '#e04434'} transparent opacity={0.5} depthWrite={false} />
-          </mesh>
-          <lineSegments position-y={p.y + gh / 2} geometry={ghostEdges}>
-            <lineBasicMaterial color={p.ok ? '#d8ffe2' : '#ffd8d2'} transparent opacity={0.85} depthTest={false} />
-          </lineSegments>
-        </group>
-      ))}
-      {/* Wave 9 · the demolish marquee: the patch itself, plus a red cage
-          around every piece it would take. The cage is the real feedback —
-          a rectangle on the ground says nothing about the wall whose far end
-          happens to poke into it. */}
-      {marquee && (
-        <group>
-          <mesh
-            position={[(marquee.minX + marquee.maxX) / 2, 0.05, (marquee.minZ + marquee.maxZ) / 2]}
-            rotation-x={-Math.PI / 2}
-          >
-            <planeGeometry args={[marquee.maxX - marquee.minX, marquee.maxZ - marquee.minZ]} />
-            <meshBasicMaterial color="#e04434" transparent opacity={0.22} depthWrite={false} />
-          </mesh>
-          {marqueeHits.map((b) => {
-            const bdef = BUILDABLE_BY_ID[b.type];
-            if (!bdef) return null;
-            return (
-              <mesh
-                key={b.id}
-                position={[b.x, (b.y ?? 0) + bdef.size[1] / 2, b.z]}
-                rotation-y={b.yaw ?? (b.rot * Math.PI) / 2}
-              >
-                <boxGeometry args={[bdef.size[0], bdef.size[1], bdef.size[2]]} />
-                <meshBasicMaterial color="#ff5a44" transparent opacity={0.34} depthWrite={false} />
-              </mesh>
-            );
-          })}
-        </group>
-      )}
-      {/* Wave 12 · the dig patch: the bank it would throw up (the outer, sandy
-          rectangle) and the water itself inside it, so what you are dragging
-          out is the shape that will actually be there — and red the moment the
-          patch is refused, with the rail carrying the reason. A `fill` patch
-          reads sandy throughout: it is ground coming back, not water. */}
-      {waterRect && (
-        <group position={[(waterRect.minX + waterRect.maxX) / 2, 0, (waterRect.minZ + waterRect.maxZ) / 2]}>
-          <mesh rotation-x={-Math.PI / 2} position-y={0.05}>
-            <planeGeometry args={[
-              waterRect.maxX - waterRect.minX + WATER_BANK * 2,
-              waterRect.maxZ - waterRect.minZ + WATER_BANK * 2,
-            ]} />
-            <meshBasicMaterial
-              color={waterEval.problem ? '#e04434' : '#c9b878'}
-              transparent opacity={0.42} depthWrite={false}
-            />
-          </mesh>
-          <mesh rotation-x={-Math.PI / 2} position-y={0.09}>
-            <planeGeometry args={[waterRect.maxX - waterRect.minX, waterRect.maxZ - waterRect.minZ]} />
-            <meshBasicMaterial
-              color={waterEval.problem ? '#8a2a20' : waterEval.mode === 'fill' ? '#a08a50' : '#3fa8d8'}
-              transparent opacity={0.6} depthWrite={false}
-            />
-          </mesh>
-        </group>
-      )}
-      {/* blueprint ghost — one box+footprint per piece, each individually
-          colored so an out-of-region or unlocked-elsewhere piece reads as
-          red without failing the whole stamp silently */}
-      {blueprintEval && blueprintEval.pieces.map((p, i) => {
-        const pdef = BUILDABLE_BY_ID[p.type];
-        const pyaw = (p.rot * Math.PI) / 2;
-        const psx = pdef?.size[0] ?? 1;
-        const psz = pdef?.size[2] ?? 1;
-        const ph = pdef?.size[1] ?? 1;
-        const pieceOk = p.valid && blueprintAffordable;
-        const riseFrac = placeFrac > 0 ? 0.12 + 0.88 * placeFrac : 1;
-        return (
-          <group key={i} position={[p.x, 0, p.z]}>
-            <group rotation-y={pyaw}>
-              <mesh position-y={p.y + (ph * riseFrac) / 2}>
-                <boxGeometry args={[psx, ph * riseFrac, psz]} />
-                <meshBasicMaterial color={pieceOk ? '#42d95e' : '#e04434'} transparent opacity={0.42 + 0.28 * placeFrac} depthWrite={false} />
-              </mesh>
-              <mesh rotation-x={-Math.PI / 2} position-y={p.y + 0.07}>
-                <planeGeometry args={[psx, psz]} />
-                <meshBasicMaterial color={pieceOk ? '#42d95e' : '#e04434'} transparent opacity={0.55} depthWrite={false} />
-              </mesh>
-            </group>
-          </group>
-        );
-      })}
+      <BuildGhost
+        activeType={activeType} def={def} ghost={ghost} rowCells={rowCells} gyaw={gyaw} gy={gy} gsx={gsx} gsz={gsz} gh={gh}
+        valid={valid} useScale={useScale} moving={moving} placeFrac={placeFrac} ghostEdges={ghostEdges} isCorner={isCorner}
+        freeform={freeform} linkedTo={linkedTo} rowPreview={rowPreview} marquee={marquee} marqueeHits={marqueeHits}
+        waterRect={waterRect} waterEval={waterEval} blueprintEval={blueprintEval} blueprintAffordable={blueprintAffordable}
+      />
     </group>
   );
 }
