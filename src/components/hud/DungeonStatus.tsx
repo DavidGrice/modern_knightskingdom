@@ -18,7 +18,7 @@ export default function DungeonStatus() {
     let text = `Sealed Crypt — ${cleared}/${layout.rooms.length} chambers cleared`;
     // Wave 48 (B9) · small additions for the two new objectives, same
     // 250ms-throttled poll — generalizes for free once `cleared` is set
-    // correctly by both (see dungeon.ts/Enemies.tsx), these two are just
+    // correctly by both (see dungeon.ts/game/directors/dungeonDirector.ts), these two are just
     // the mid-attempt prompts the base line alone doesn't convey.
     for (const room of layout.rooms) {
       if (room.objective === 'survive' && room.surviveDeadline > 0 && !room.cleared) {

@@ -6,32 +6,28 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ArmShield, HeldCrossbow, HeldHalberd, HeldSpear, HeldSword, SpellHandGlow } from '../character/Equipment';
-import { useEnemyStore, damagePlayer, resolveDuel, combatState, ATTACK_DMG, ATTACK_CD, MOUNT_SEAT_Y, fireSpellBolt, type EnemyData, type EnemyKind } from '@/game/combat';
+import { useEnemyStore, damagePlayer, resolveDuel, ATTACK_DMG, ATTACK_CD, MOUNT_SEAT_Y, fireSpellBolt, type EnemyData } from '@/game/combat';
 import RiggedProp, { fireProp } from '../world/RiggedProp';
 import type { SoundName } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
-import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
 import { measureHitBoxes } from '@/lib/minifigRig';
 import { registerHitbox, unregisterHitbox } from '@/game/hitbox';
-import { findPath, rebuildNav, getNavGrid, hasLineOfSight, GROUND_LOS_Y, navBlocked } from '@/game/navgrid';
+import { findPath, hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import HealthBillboard from './HealthBillboard';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import { isBuilt, isDoorLike, isHomeBuilding } from '@/game/types';
-import type { CharacterConfig, ItemId } from '@/game/types';
-import { ITEMS } from '@/game/data/items';
-import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD, POND, WORLD_HALF } from '@/game/data/world';
+import type { CharacterConfig } from '@/game/types';
+import { POND, WORLD_HALF } from '@/game/data/world';
 import { sizeFor, heightOf } from '@/game/data/buildables';
 import { labCanFire, labOccupyMode } from '@/game/data/labCapabilities';
-import { difficultyState, CASTER_TIER, SHIELDED_ELITE_TIER } from '@/game/difficulty';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
-import { roadEntry, roadSpeedMult } from '@/game/data/road';
+import { roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
-import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
-import { raiderLadderState, resetRaiderLadder, MAX_CLIMBERS, CLIMBER_STAGGER, climbPose, ladderFoot, type ClimbPose } from '@/game/raiderLadder';
+import { raiderLadderState, MAX_CLIMBERS, CLIMBER_STAGGER, climbPose, ladderFoot, type ClimbPose } from '@/game/raiderLadder';
 import { defenderState, DOWNED_RECOVER_MS } from '@/game/defenders';
 import { villagerCombatState } from '@/game/villagerCombat';
 import { companionCombatState } from '@/game/companion';
@@ -40,13 +36,17 @@ import { villagerMobs } from '@/game/villagerMobs';
 import { peekCombatState, clearCombatState } from '@/ai/actions/combatState';
 import { reportAgentDamaged } from '@/ai/perception/Senses';
 import { agentManager } from '@/ai/core/AgentManager';
-import { insideWalls } from '@/game/fort';
-import { dungeonState, SURVIVE_DURATION_MS, SURVIVE_CADENCE_MS, ESCORT_EXTRACTION_RADIUS } from '@/game/dungeon';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { destinationGroundY, homeGroundY } from '../world/TemplateWorld';
 import { pick } from '@/lib/rng';
 import { aimFor } from '@/game/combat/sightline';
 import { PERK_FX } from '@/game/data/effects';
+import { maintainNav } from '@/game/directors/navMaintenance';
+import { dungeonDirector } from '@/game/directors/dungeonDirector';
+import { campGuardDirector } from '@/game/directors/campGuards';
+import { nightSkeletonDirector } from '@/game/directors/nightSkeletons';
+import { pruneLadderClimbers, raidDirector } from '@/game/directors/raidDirector';
+import { exposeDebug } from '@/lib/debugHooks';
 
 const CONFIGS: Record<string, CharacterConfig> = {
   skeleton: {
@@ -191,17 +191,6 @@ function canClimbLadder(data: EnemyData): boolean {
     && data.kind !== 'siegeCrew' && data.kind !== 'caster' && !data.mountAsset;
 }
 
-/** Wave 37 (A3 remainder) · rolled once per plain-bandit filler slot in the
- *  ordinary dusk raid (see the raid trigger below): an occasional replacement
- *  once the player has climbed the difficulty curve far enough, one roll
- *  partitioned into three mutually-exclusive outcomes rather than two
- *  independent checks that could both fire on the same slot. */
-function rollBanditFiller(): EnemyKind {
-  const r = Math.random();
-  if (difficultyState.tier >= CASTER_TIER && r < 0.18) return 'caster';
-  if (difficultyState.tier >= SHIELDED_ELITE_TIER && r < 0.18 + 0.16) return 'shieldedElite';
-  return 'bandit';
-}
 /** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
  *  every appearance except his own sanctioned final stand — a real fight
  *  first, then he bails, same shape as the bandit morale-break below */
@@ -425,7 +414,7 @@ function Enemy({ data }: { data: EnemyData }) {
         return;
       }
       // N79 (requested 2026-07-28): a raider spawned at the road's entry
-      // point (the raid trigger below) walks in toward the homestead first,
+      // point (the raid trigger, game/directors/raidDirector.ts) walks in toward the homestead first,
       // routed via the same nav-grid pathing the ordinary chase branch uses
       // below, just aimed at HOME_X/HOME_Z instead of the player — until
       // close enough to the homestead, or the player is already near, at
@@ -1303,376 +1292,28 @@ export default function Enemies() {
   const raidCooldown = useRef(0);
   const raidActive = useRef(false);
   const campGuardTimer = useRef(6);
+  // test hook (window.__kkdirectors): the directors' own timers and the raid flag — the refs themselves, so a probe
+  // reads (and can set) what the next tick will see
+  useEffect(() => {
+    exposeDebug('__kkdirectors', { skelTimer, raidCooldown, raidActive, campGuardTimer });
+  }, []);
 
   useFrame((_, dt) => {
     tick.current -= dt;
     if (tick.current > 0) return;
     tick.current = 1; // 1 Hz is plenty for spawning decisions
-    // keep the navigation grid in step with what has been built; this is a
-    // no-op unless the buildings array identity actually changed
-    const buildingsForNav = useGameStore.getState().buildings;
-    rebuildNav(buildingsForNav);
+    // the directors (game/directors/), in the order this tick always ran them: the navigation grids, then — with
+    // the game running — the siege ladder's freed slots, the Sealed Crypt (which, while the player is inside, is all
+    // there is), Cedric's camp guards, the night's skeletons and the dusk raid
+    maintainNav();
     const st = useGameStore.getState();
-    // Post-Wave-33 verify-pass fix: getNavGrid(region) lazily creates a
-    // window-mode grid for whatever destination is mounted (TemplateWorld.tsx
-    // -> Villagers.tsx's navSteer, settlement residents; the reasoner/Agent
-    // path too), but nothing ever called ITS rebuild() the way homeGrid gets
-    // above — so a destination grid's `blocked` array stayed all-zero
-    // forever and every building there was invisible to findPath, no matter
-    // how correct the grid/region resolution itself was. Piggyback on the
-    // exact same 1Hz cadence and buildings array homeGrid already uses;
-    // rebuild() itself is a no-op unless the array identity (or waterworks
-    // rev) changed, so this costs nothing extra on the common case. The
-    // Sealed Crypt is excluded — its own synthesized-wall grid is rebuilt
-    // once on generation by ensureDungeonGrid() and never needs the real
-    // `buildings` array at all.
-    if (st.destination && st.destination !== 'dungeon') {
-      getNavGrid(st.destination).rebuild(buildingsForNav);
-    }
     if (st.paused || !st.character) return;
     const { enemies: list } = useEnemyStore.getState();
-
-    // Wave 58 (H4) addendum #8: a raider that dies or is removed frees its
-    // climb slot — pruned here (1Hz is plenty; this only gates queue timing,
-    // never a correctness-critical path) rather than intercepted at every
-    // possible death call site (player melee/bolt, a defender, a villager,
-    // the wall coming down under it — all already just set `state='dying'`
-    // generically with no knowledge of this list).
-    if (raiderLadderState.climbers.length) {
-      raiderLadderState.climbers = raiderLadderState.climbers.filter((id) =>
-        list.some((e) => String(e.id) === id && e.mob.state !== 'dying'));
-    }
-
-    // the Sealed Crypt (Phase 17) is its own curated encounter space — spawn
-    // each room's enemies once on arrival and watch for a full clear
-    if (st.destination === 'dungeon' && dungeonState.layout) {
-      const layout = dungeonState.layout;
-      let allCleared = true;
-      for (const room of layout.rooms) {
-        if (room.objective === 'none') continue;
-        // Wave 13 · 'retrieve' rooms have no enemies at all — they're
-        // cleared by PlayerController's relic pickup instead, so this
-        // spawn/watch block only applies to 'combat' rooms. Their state
-        // still folds into the allCleared check below either way.
-        // Wave 48 (B9) · 'escort' shares the SAME one-shot spawn-once guard
-        // (a single guard, enemyCount always 1 for that objective — see
-        // dungeon.ts), but its clear condition is entirely separate (below):
-        // the guard's own life/death never sets `cleared`, only delivering
-        // the freed captive to layout.entryPos does.
-        if (room.objective === 'combat' || room.objective === 'escort') {
-          if (!room.spawned) {
-            room.spawned = true;
-            for (let i = 0; i < room.enemyCount; i++) {
-              const a = (i / room.enemyCount) * Math.PI * 2;
-              useEnemyStore.getState().spawn(
-                room.enemyKind, room.cx + Math.cos(a) * 2.5, room.cz + Math.sin(a) * 2.5, false, room.index,
-              );
-            }
-          }
-          if (room.objective === 'combat' && !room.cleared) {
-            const alive = useEnemyStore.getState().enemies.some(
-              (e) => e.dungeonRoom === room.index && e.mob.state !== 'dying',
-            );
-            if (!alive) {
-              room.cleared = true;
-              st.notify(room.isBoss ? 'The crypt falls silent — the guardian is defeated!' : 'The chamber is cleared.');
-            }
-          }
-        }
-        // Wave 48 (B9) · escort delivery — independent of the guard above,
-        // checked every tick once the captive is freed. CaptiveFigure
-        // (DungeonScene.tsx) writes captiveX/captiveZ every frame; this is
-        // the only place that reads them to decide `cleared`.
-        if (room.objective === 'escort' && !room.cleared && room.captiveFreed) {
-          const delivered = Math.hypot(
-            room.captiveX - layout.entryPos.x, room.captiveZ - layout.entryPos.z,
-          ) < ESCORT_EXTRACTION_RADIUS;
-          if (delivered) {
-            room.cleared = true;
-            st.notify('You lead the captive to safety — the chamber is cleared.');
-          }
-        }
-        // Wave 48 (B9) · 'survive' — no enemies until the player physically
-        // steps into the room (surviveDeadline's own doc explains why an
-        // instant dungeon-wide start, the way 'combat' spawns immediately,
-        // would let a player dawdle elsewhere until the clock already ran
-        // out). Once started: cadence-spawn up to enemyCount concurrent,
-        // and `cleared` flips ONLY on timer expiry — never on a kill, which
-        // is the genuinely different completion condition this objective
-        // exists for.
-        if (room.objective === 'survive') {
-          const now = Date.now();
-          if (room.surviveDeadline === 0) {
-            if (Math.abs(playerState.x - room.cx) < room.halfX && Math.abs(playerState.z - room.cz) < room.halfZ) {
-              room.surviveDeadline = now + SURVIVE_DURATION_MS;
-              room.surviveNextSpawn = now;
-              st.notify('Hold the chamber!');
-            }
-          } else if (!room.cleared && now >= room.surviveDeadline) {
-            room.cleared = true;
-            // room-scoped cleanup, NOT removeByWorld('dungeon') — that would
-            // wrongly wipe every other room's live enemies too, and the
-            // exit-cleanup subscriber (combat.ts) only fires on an actual
-            // `destination` change, which hasn't happened here.
-            for (const e of useEnemyStore.getState().enemies) {
-              if (e.dungeonRoom === room.index && e.mob.state !== 'dying') useEnemyStore.getState().remove(e.id);
-            }
-            st.notify('You held the chamber! It falls quiet once more.');
-          } else if (!room.cleared) {
-            const aliveCount = useEnemyStore.getState().enemies.filter(
-              (e) => e.dungeonRoom === room.index && e.mob.state !== 'dying',
-            ).length;
-            if (now >= room.surviveNextSpawn && aliveCount < room.enemyCount) {
-              const a = Math.random() * Math.PI * 2;
-              useEnemyStore.getState().spawn(
-                room.enemyKind, room.cx + Math.cos(a) * 2.5, room.cz + Math.sin(a) * 2.5, false, room.index,
-              );
-              room.surviveNextSpawn = now + SURVIVE_CADENCE_MS;
-            }
-          }
-        }
-        if (!room.cleared) allCleared = false;
-      }
-      if (allCleared && !layout.rewarded) {
-        layout.rewarded = true;
-        const rooms = layout.rooms.length;
-        const gold = 20 + rooms * 8;
-        st.addItems({ gold, iron_ore: 2 + rooms, stone: 4 + rooms * 2 }, 'grant');
-        st.addXp('combat', 30 + rooms * 10);
-        st.recordDungeonClear();
-        // a full clear salvages real gear off the fallen for the garrison
-        // back home (the Armory) — never the player's own Satchel. The
-        // halberd specifically has no craft recipe at all, so a Crypt clear
-        // is the ONLY way one ever reaches the Armory.
-        st.grantArmory('helmet', 1);
-        st.grantArmory('chestplate', 1);
-        st.grantArmory('halberd', 1);
-        st.notify(`The Sealed Crypt is cleared! +${gold} gold, salvaged materials, and a helmet + chestplate + halberd for the Armory.`, true);
-        audio.play('treasure', 0.85);
-      }
-      return; // skip the homestead-only spawn systems below entirely while inside
-    }
-
-    // Cedric's camp guards (Phase 20: the camp sits at The Rival Castle now)
-    // — spawned only while actually visiting his world, and never for an
-    // ally of his banner
-    if (st.destination === CEDRIC_WORLD
-      && st.completedQuests.includes(CEDRIC_REVEAL_QUEST) && !st.defeatedCedric && st.alliance !== 'cedric') {
-      campGuardTimer.current -= 1;
-      const guards = list.filter((e) =>
-        !e.raid && e.mob.state !== 'dying' && (e.kind === 'gilbert' || e.kind === 'bandit')
-        && Math.hypot(e.mob.homeX - CEDRIC_CAMP.x, e.mob.homeZ - CEDRIC_CAMP.z) < 8);
-      if (guards.length < 2 && campGuardTimer.current <= 0) {
-        campGuardTimer.current = 20 + Math.random() * 10;
-        spawn('gilbert', CEDRIC_CAMP.x + 3, CEDRIC_CAMP.z + 2, false);
-        spawn('bandit', CEDRIC_CAMP.x - 3, CEDRIC_CAMP.z - 2, false);
-      }
-    }
-
-    // skeletons rise at night NEAR THE PLAYER, crumble at dawn — spawn
-    // position is anchored to playerState.x/z itself (see below), which is
-    // only meaningful while the player is actually standing at the
-    // homestead to have them rise beside them, so this part alone stays
-    // gated on `st.destination` (a real "player must be home" case, unlike
-    // the raid logic right below it — see that block's own comment for why
-    // IT no longer early-returns here). Wave 18 #5 bugfix: this used to be a
-    // single `if (st.destination) return;` that also swallowed the raid
-    // cooldown/resolve/trigger logic below every frame the player was away —
-    // now it only wraps what actually needs the player's own position.
-    if (!st.destination) {
-      const skeletons = list.filter((e) => e.kind === 'skeleton' && e.mob.state !== 'dying');
-      if (worldEnv.night > 0.62) {
-        skelTimer.current -= 1;
-        if (skeletons.length < 3 && skelTimer.current <= 0) {
-          skelTimer.current = 14 + Math.random() * 14;
-          // Wave 20 · a ring point can land inside a fully walled-in
-          // homestead (insideWalls, game/fort.ts — the same cheap cached
-          // flood-fill Sound Walls already reads), which used to rise a
-          // skeleton on the wrong side of your own fence. A few re-rolls are
-          // enough given the ring sits 26-38m out and a typical wall
-          // footprint is small against that; if every try still lands
-          // inside, fall back to the same road-entry treatment dusk raiders
-          // already get rather than spawning somewhere unchecked.
-          // Wave 34 (G6.3) · insideWalls only floods the outer wall
-          // boundary, so it stayed blind to a BUILDING placed inside that
-          // yard — a ring point could still land inside a house/workshop's
-          // own footprint. navBlocked (navgrid.ts) already rebuilds from
-          // every placed building's real collision boxes, not just walls,
-          // and is already this cheap (one grid lookup), so it's a one-line
-          // addition to the same reroll rather than a new pass.
-          let sx = 0, sz = 0, placed = false;
-          for (let tries = 0; tries < 6; tries++) {
-            const a = Math.random() * Math.PI * 2;
-            const r = 26 + Math.random() * 12;
-            const cx = playerState.x + Math.cos(a) * r;
-            const cz = playerState.z + Math.sin(a) * r;
-            if (!insideWalls(cx, cz) && !navBlocked(cx, cz)) { sx = cx; sz = cz; placed = true; break; }
-          }
-          if (!placed) {
-            const entry = roadEntry();
-            sx = entry.x;
-            sz = entry.z;
-          }
-          // approaching is independent of raid — a fallback skeleton walks in
-          // via the nav grid like a raider does, without being counted as one
-          spawn('skeleton', sx, sz, false, undefined, !placed);
-          audio.playAt('skeleton', sx, sz, 0.7);
-          st.notify('Bones rattle in the dark…');
-        }
-      } else {
-        for (const e of skeletons) {
-          e.mob.state = 'dying';
-          e.mob.dieT = 0;
-        }
-      }
-    }
-
-    // bandit raids at dusk once the homestead is established. Wave 18 #5
-    // bugfix: deliberately NOT gated on `st.destination` (unlike the
-    // skeleton rise above) — every position this block touches is anchored
-    // to roadEntry()/HOME_X/HOME_Z or the ram's own fixed ring, never the
-    // player's own live position, so a raid can genuinely start, be fought
-    // (by defenders and the keep, both of which already read all of
-    // useEnemyStore rather than a world-filtered subset — see Defenders.tsx/
-    // damageKeepPart), and resolve while the player is away visiting a
-    // destination. This is what makes PROJECT_CONTEXT.md's "Instance
-    // separation" claim — that raids deliberately keep resolving in real
-    // time while the player is elsewhere — actually true; previously this
-    // whole section was unreachable whenever `st.destination` was set, so an
-    // already-in-progress raid could never even conclude: raidActive/
-    // raidCooldown just hung until the player came home. The loud one-shot
-    // stingers below (warcry/horn/voice barks) stay `!st.destination`-gated
-    // on their own — ROADMAP.md's own TODO already called out that a raid
-    // resolving while away should notify, not blare, and `st.notify` itself
-    // (never gated) is what delivers that notification regardless of where
-    // the player is.
-    raidCooldown.current = Math.max(0, raidCooldown.current - 1);
-    const raiders = list.filter((e) => e.raid);
-    if (raidActive.current && raiders.length === 0) {
-      raidActive.current = false;
-      raiderRamState.active = false;
-      raiderLadderState.active = false; // Wave 58 (H4) · same singleton cleanup as the ram
-      st.notify('The raid is beaten back! The bandits dropped their spoils.', true);
-      st.addItems({ plank: 4, stone: 4, iron_ore: 2 }, 'grant');
-      st.addXp('combat', 60);
-      // a driven-off raider sometimes leaves gear behind — straight into the
-      // Armory, ready to outfit the garrison that just held the line (real
-      // weapons now drop here too, not just armor, since the Armory arms
-      // defenders' loadouts as well as their helmet/chestplate)
-      if (Math.random() < 0.4) {
-        const drops: ItemId[] = ['helmet', 'chestplate', 'sword', 'shield', 'crossbow'];
-        const piece = pick(drops);
-        st.grantArmory(piece, 1);
-        st.notify(`A fallen raider's ${ITEMS[piece].name.toLowerCase()} is added to the Armory.`, true);
-      }
-      if (!st.destination) audio.play('horn', 0.8);
-    }
-    if (
-      !raidActive.current &&
-      raidCooldown.current <= 0 &&
-      worldEnv.time > 0.7 && worldEnv.time < 0.78 &&
-      st.buildings.filter(isHomeBuilding).length >= 4 &&
-      st.unlocks.includes('mining')
-    ) {
-      raidActive.current = true;
-      raidCooldown.current = Math.max(240, worldEnv.dayLength * 1.5);
-      if (!st.destination) { audio.play('warcry', 0.9); audio.play('horn', 0.9); }
-      const a0 = Math.random() * Math.PI * 2;
-      // N79 (requested 2026-07-28): raiders arrive by the road instead of
-      // popping into existence on a ring around the homestead — spawned
-      // loosely clustered around the same road entry point newcomers and
-      // the merchant already walk in from (roadEntry()), each individually
-      // routed home via Enemies.tsx's own approaching walk (see the
-      // per-frame block above). a0 (below) still picks the ram's own spot —
-      // see that call's own comment for why it's unchanged.
-      const entry = roadEntry();
-      function roadSpawnPos(i: number): [number, number] {
-        const a = (i / 3) * Math.PI * 2;
-        return [entry.x + Math.cos(a) * 3, entry.z + Math.sin(a) * 3];
-      }
-      // Wave 18 #5 bugfix: every spawn() call below now passes `null` as the
-      // explicit 10th `worldOverride` arg — this block can now fire while
-      // `st.destination` is set (see this block's own comment), and spawn()
-      // otherwise stamps a new enemy's `world` from whatever destination the
-      // player currently happens to be standing in. Without the override, a
-      // raid triggered while away would tag its own raiders with the
-      // player's CURRENT destination instead of home, so they'd never render
-      // there (positioned at home's coordinates, thousands of units off) and
-      // would vanish from view for good the moment the player came home
-      // (home is destination null, no longer a `world` match).
-      if (st.alliance === 'cedric') {
-        // Phase 19 alliance branch: pledge to Cedric and it's the CROWN that
-        // comes for your homestead — a wave of royal knights, never Cedric's
-        // own people (your allies now), and no Weezil bark in the pack
-        st.notify('⚔ The crown brands you a traitor — royal knights raid your homestead!', true);
-        for (let i = 0; i < 3; i++) {
-          const [sx, sz] = roadSpawnPos(i);
-          spawn('royal', sx, sz, true, undefined, true, false, 1, false, null);
-        }
-      } else {
-        // unsworn or crown-sworn: the bandit threat, exactly as before
-        // once his camp is known and he's still at large, Cedric himself
-        // occasionally leads the raid in person — a bigger, named wave
-        // instead of another anonymous bandit party (his own real war cry,
-        // snd053, already plays above; his greeting bark makes it unmistakable)
-        const cedricEligible = st.completedQuests.includes(CEDRIC_REVEAL_QUEST) && !st.defeatedCedric;
-        const cedricLed = cedricEligible && Math.random() < 0.35;
-        if (cedricLed) {
-          if (!st.destination) audio.playVoice('greeting_cedric', 0.9);
-          st.notify('⚔ Cedric the Bull himself leads the raid on your homestead!', true);
-          const [sx, sz] = roadSpawnPos(0);
-          spawn('cedric', sx, sz, true, undefined, true, false, 1, false, null);
-        } else {
-          // Gilbert the Bad leads the raid, with Weezil somewhere in the pack —
-          // their own real voice lines instead of an anonymous mob (see combat.ts)
-          if (!st.destination) audio.playVoice('greeting_gilbert', 0.85);
-          st.notify('⚔ Gilbert the Bad leads a raid on your homestead!', true);
-          const [sx, sz] = roadSpawnPos(0);
-          spawn('gilbert', sx, sz, true, undefined, true, false, 1, false, null);
-        }
-        if (!st.destination) audio.playVoice('greeting_weezil', 0.6);
-        // Wave 37 (A3 remainder): each plain-bandit filler slot can
-        // occasionally roll a caster or a shielded elite instead, once the
-        // difficulty curve allows it (rollBanditFiller, above)
-        for (let i = 1; i < 3; i++) {
-          const [sx, sz] = roadSpawnPos(i);
-          spawn(rollBanditFiller(), sx, sz, true, undefined, true, false, 1, false, null);
-        }
-      }
-      // raiders occasionally bring their own ram — the same threat the
-      // player's siege tools already pose, now aimed at the player's gate.
-      // Has no walk-in of its own (raiderRamState is a separate system, not
-      // an EnemyData/mob), so it still starts on the old 34m ring rather
-      // than at the road entry — a rework of its own, out of scope here.
-      if (Math.random() < 0.4) {
-        // full reset, not just `active = true` — a ram that was broken last
-        // raid must not roll back in already wrecked and on 0 HP
-        resetRaiderRam(Math.cos(a0) * 34, Math.sin(a0) * 34);
-      }
-      // Wave 58 (H4): a siege ladder sometimes joins too — a singleton, same
-      // as the ram (game/raiderLadder.ts's own header comment) — gated on
-      // the keep actually having a FINISHED wall-walk to put it against; a
-      // bare keep, or one with only ungated pieces (low wall/gatehouse/great
-      // hall, none of which carry a `walkway`), never gets one, since
-      // there's nothing worth climbing yet. Difficulty-scaled, same shape
-      // raidStrength() itself uses (game/difficulty.ts).
-      if (!raiderLadderState.active) {
-        const walkwaySockets = st.keep
-          ? KEEP_SOCKETS.filter((s) => {
-              const partId = st.keep!.parts[s.id];
-              return !!partId && (st.keep!.built[s.id] ?? 0) >= 1 && !!KEEP_PART_BY_ID[partId]?.walkway;
-            })
-          : [];
-        if (walkwaySockets.length && Math.random() < Math.min(0.6, 0.25 + difficultyState.tier * 0.07)) {
-          const targetSocket = pick(walkwaySockets);
-          resetRaiderLadder(targetSocket.id);
-        }
-      }
-    }
-
-    // Cedric's forest-camp guards: Gilbert and a bandit (Weezil) stand watch
-    // once the camp is revealed, respawning on a cooldown like skeletons —
-    // until Cedric himself is defeated, after which the camp is cleared.
+    pruneLadderClimbers(list);
+    if (dungeonDirector(st)) return; // skip the homestead-only spawn systems below entirely while inside
+    campGuardDirector(st, list, spawn, campGuardTimer);
+    nightSkeletonDirector(st, list, spawn, skelTimer);
+    raidDirector(st, list, spawn, raidCooldown, raidActive);
   });
 
   return (

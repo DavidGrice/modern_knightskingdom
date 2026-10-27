@@ -18,6 +18,7 @@
 //   ai/core/Locomotion:      __kkloco          ai/core/Memory:           __kkmemory
 //   ai/core/Reasoner:        __kkreason        ai/core/TargetRegistry:   __kktargets
 //   ai/perception/index:     __kkperception    ai/perception/sounds:     __kksounds
+//   components/combat/Enemies: __kkdirectors
 //   components/fps/PlayerController: __kkscene, __kkcam
 //   components/world/CedricSiege: __kkCedricSiege   DragonSiegeController: __kkSiege, __kkBlackSiege
 //   components/world/Merchant: __kkmerchant, __kkmerchantRig, __kkmerchantTeam, __kkmerchantWay
