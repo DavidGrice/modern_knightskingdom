@@ -71,7 +71,7 @@ export const BLACK_DRAGON_TIER = 5;
 export const MOUNTED_RAIDER_TIER = 5;
 
 /** Wave 37 (A3 remainder) · the tier at which a caster can show up as an
- *  occasional raid-filler replacement (Enemies.tsx's rollBanditFiller) —
+ *  occasional raid-filler replacement (game/directors/raidDirector.ts's rollBanditFiller) —
  *  deliberately low: it's a glass cannon (KIND_HP.caster = 6), not a
  *  late-game escalation like the mounted raider/black dragon above. */
 export const CASTER_TIER = 1;

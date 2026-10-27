@@ -55,10 +55,10 @@ const CAPTIVE_RUN_SPEED = 4.8;
 // around the crypt's real walls), the same lightweight shape
 // Villagers.tsx/Merchant.tsx already prove out, not a new Agent.
 // Decision/clear-condition logic (has the captive reached layout.entryPos?)
-// lives in Enemies.tsx's existing 1Hz dungeon loop, not here — this
+// lives in the crypt's 1Hz director (game/directors/dungeonDirector.ts), not here — this
 // component only moves the figure and reports its own position back onto
 // the shared room object every frame (room.captiveX/captiveZ), mirroring how
-// `cleared`/`spawned` are already the shared truth Enemies.tsx owns.
+// `cleared`/`spawned` are already the shared truth that director owns.
 function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: number }) {
   const group = useRef<THREE.Group>(null);
   const [clip, setClip] = useState('anim_r_restpose');
@@ -87,11 +87,11 @@ function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: nu
     } else if (clip !== 'anim_r_restpose') {
       setClip('anim_r_restpose');
     }
-    // the shared leaf-module write Enemies.tsx's 1Hz loop reads to decide
+    // the shared leaf-module write the crypt's 1Hz director reads to decide
     // delivery (Math.hypot against layout.entryPos, gated on
     // dungeon.ts's ESCORT_EXTRACTION_RADIUS) — this component owns movement,
     // that one owns the clear decision, exactly like spawned/cleared already
-    // split between Enemies.tsx and PlayerController.tsx.
+    // split between dungeonDirector.ts and PlayerController.tsx.
     room.captiveX = agent.x;
     room.captiveZ = agent.z;
     g.position.set(agent.x - ox, 0, agent.z - oz);
@@ -111,7 +111,7 @@ function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: nu
 // dungeon.ts's DungeonRoom.objective doc). `relicTaken` is a plain mutation
 // on the shared dungeonState object (PlayerController.tsx's 'dungeon_relic'
 // interact flips it, the exact same "leaf module the frame loop reads"
-// pattern Enemies.tsx already uses for `cleared`/`spawned`), so visibility
+// pattern dungeonDirector.ts already uses for `cleared`/`spawned`), so visibility
 // is driven by useFrame reading it directly rather than React state —
 // mirroring HealthBillboard.tsx's own `g.visible = ...` precedent instead of
 // adding a polling re-render for something that changes once per pickup.

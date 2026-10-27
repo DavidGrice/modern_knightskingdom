@@ -3,8 +3,8 @@
 // every descent — kept in a mutable leaf module (not the zustand store, and
 // not persisted) since it's ephemeral generated-world state, exactly like
 // `raiderRamState`/`cartState` — DungeonScene.tsx reads it to render,
-// PlayerController.tsx reads it for wall collision, Enemies.tsx reads/writes
-// room-cleared state as spawned enemies die.
+// PlayerController.tsx reads it for wall collision, the crypt's director
+// (game/directors/dungeonDirector.ts) reads/writes room-cleared state as spawned enemies die.
 //
 // Redesigned from the original single-line-of-square-rooms version: that
 // version's wall-segment spacing (a hardcoded 4m) didn't match the real
@@ -92,7 +92,7 @@ export interface DungeonRoom {
    *  room only) needs nothing — a safe room to get your bearings, unchanged.
    *  'combat' is the original objective this dungeon started with: spawn
    *  enemyCount of enemyKind, cleared flips when the last one dies
-   *  (Enemies.tsx). 'retrieve' is the first alternative: no enemies at all, a
+   *  (game/directors/dungeonDirector.ts). 'retrieve' is the first alternative: no enemies at all, a
    *  Sealed Reliquary sits at the room's centre (DungeonScene.tsx), and
    *  cleared flips the moment the player takes it (PlayerController.tsx's
    *  'dungeon_relic' interact) instead of the last enemy dying.
@@ -105,7 +105,7 @@ export interface DungeonRoom {
    *  `captiveFreed`, after which DungeonScene.tsx's CaptiveFigure follows
    *  the player every frame via navSteer and writes its live position into
    *  captiveX/captiveZ. `cleared` flips only once the freed captive is
-   *  walked all the way back to layout.entryPos (Enemies.tsx) — the guard's
+   *  walked all the way back to layout.entryPos (dungeonDirector.ts) — the guard's
    *  own life/death never touches `cleared`, so this stays structurally
    *  distinct from both 'combat' (kill-count) and 'retrieve' (single
    *  pickup).
@@ -120,7 +120,7 @@ export interface DungeonRoom {
   /** for 'combat' and 'escort', a one-shot spawn count (escort always rolls
    *  1 — a single guard, lighter than combat's 1-2). For 'survive',
    *  repurposed as the max number of this room's enemies allowed alive at
-   *  once during the timer (Enemies.tsx gates the next cadence spawn on
+   *  once during the timer (dungeonDirector.ts gates the next cadence spawn on
    *  this) — a genuinely different meaning for the same field, documented
    *  here rather than added as a second parallel field. */
   enemyCount: number;
@@ -131,7 +131,7 @@ export interface DungeonRoom {
    *  been taken. Kept distinct from `cleared` (even though the two always
    *  flip together) so DungeonScene.tsx has an explicit "should I still be
    *  drawing the prop" flag, rather than overloading `cleared`, which
-   *  DungeonStatus.tsx/Enemies.tsx already read as a pure completion flag. */
+   *  DungeonStatus.tsx/dungeonDirector.ts already read as a pure completion flag. */
   relicTaken: boolean;
   /** Wave 48 (B9) · only meaningful for objective:'escort'. True once
    *  PlayerController.tsx's 'dungeon_captive' interact frees the captive —
@@ -141,14 +141,14 @@ export interface DungeonRoom {
   /** Wave 48 (B9) · only meaningful for objective:'escort' (and only once
    *  captiveFreed) — the captive's own live world position, written every
    *  frame by CaptiveFigure (the same "leaf module the frame loop reads"
-   *  pattern relicTaken already uses) so Enemies.tsx's 1Hz loop can check
+   *  pattern relicTaken already uses) so the crypt's 1Hz director (dungeonDirector.ts) can check
    *  delivery against layout.entryPos without owning any movement state
    *  itself. Initialized to the room centre, so an unfreed captive already
    *  reads as "hasn't gone anywhere." */
   captiveX: number;
   captiveZ: number;
   /** Wave 48 (B9) · only meaningful for objective:'survive'. 0 means the
-   *  timer hasn't started — Enemies.tsx's 1Hz loop sets this to
+   *  timer hasn't started — the crypt's 1Hz director sets this to
    *  `Date.now() + SURVIVE_DURATION_MS` the moment the player is physically
    *  inside the room's AABB, deliberately NOT the instant the layout
    *  generates the way 'combat' spawns immediately: a dungeon-wide instant
@@ -158,7 +158,7 @@ export interface DungeonRoom {
    *  would break 'survive' outright. */
   surviveDeadline: number;
   /** Wave 48 (B9) · only meaningful for objective:'survive', once
-   *  surviveDeadline is set — the next cadence timestamp Enemies.tsx is
+   *  surviveDeadline is set — the next cadence timestamp the crypt's director is
    *  allowed to spawn another hostile at, additionally gated on fewer than
    *  enemyCount of this room's enemies currently being alive. */
   surviveNextSpawn: number;
@@ -358,7 +358,7 @@ const SURVIVE_CHANCE = 0.15;
 
 /** Wave 48 (B9) · 'survive' timer/cadence, and 'escort' delivery radius —
  *  kept here with this generator's other tuning constants (RETRIEVE_CHANCE
- *  above) rather than local to Enemies.tsx/PlayerController.tsx, so a future
+ *  above) rather than local to dungeonDirector.ts/PlayerController.tsx, so a future
  *  balance pass has one place to edit. 6m verified against room geometry
  *  (SIZE_CLASSES' half-extents are 4/8/12, so this safely covers even the
  *  smallest 8x8 entry room plus a stride into its doorway) and against

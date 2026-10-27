@@ -1303,7 +1303,8 @@ export default function PlayerController() {
       // just above, and the same anti-double-trigger grace (talkCooldown) —
       // freeing doesn't clear the room by itself (DungeonRoom.objective's own
       // doc), only walking the captive back to layout.entryPos does
-      // (Enemies.tsx's 1Hz loop), so this branch never touches `cleared`.
+      // (the crypt's 1Hz director, game/directors/dungeonDirector.ts), so
+      // this branch never touches `cleared`.
       const layout = dungeonState.layout;
       const room = layout?.rooms.find((r) => String(r.index) === t.id);
       if (room && !room.captiveFreed) {

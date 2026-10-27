@@ -8722,3 +8722,23 @@ the crypt and an arena run by as "Return Home" does (`resetDungeon()`, `endArena
 fails with the lines taken out), and live on production builds of `main` and the fix side by side, 2026-10-21: on the
 fix, three seconds into each knighting he is at The King's Approach with build mode off, the crypt reset and no arena
 run.
+
+## Bug: Options or Stats mid-raid forgets the raid, and back within dusk starts a second — logged 2026-10-27 (during CLN-13, part 1; by the code, not run)
+
+**What the code does.** The 1 Hz directors' own state — the raid's flag and cooldown, the skeletons' and the camp
+guards' timers — is four refs of the `Enemies` component (`components/combat/Enemies.tsx`; the directors themselves are
+in `game/directors/` since CLN-13), so it lives for one mount of the game scene. The pause menu's Options and Stats
+replace the game screen (`App.tsx` draws one screen at a time: `GameScreen`, its canvas and `Enemies` unmount), and
+coming back mounts a fresh set: no raid on, no cooldown. The raiders themselves are in the enemy store, and still
+there. So when the last of them goes, nothing resolves the raid — no "The raid is beaten back!", no spoils, no
+experience — and the ram's and the ladder's `active` flags, which only that resolution (or a new session) clears, stay
+set: a ladder still "active" keeps the next raid from bringing one. And the clock stands still while the scene is
+away, so back within the dusk window (0.70–0.78 of the day: 57.6 s of a 12-minute day) and resumed, the first tick
+finds dusk, four buildings and no raid on — and starts a second raid on top of the first; its one reward then pays
+when both are gone. The opposite case is CLN-04's (CLEANUP_PLAN.md): a scripted `loadFromSave` with the scene still
+mounted keeps the old raid's flag, and the cleared store pays that raid's reward.
+
+**To do.** Measure it on `main` first (pause in a raid's first minute → Options → back → Resume: count the raiders,
+the ram's and ladder's flags and the rewards). The fix: the directors' state as module state in `game/directors/`
+(published as `window.__kkdirectors`, as the refs are now), reset at a session start (`onSessionReset`) rather than at
+a remount — a raid then outlives a visit to Options, and a load ends one without paying for it.

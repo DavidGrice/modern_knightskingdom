@@ -348,7 +348,7 @@ export const createBuildToolsSlice: SliceCreator<BuildToolsSlice> = (set, get) =
       set({ waterworks: list, digRect: null, dirty: true });
       st.addItems({ gold: -pre.cost });
       // no nav call here on purpose: NavGrid.rebuild() is polled at 1Hz from
-      // Enemies.tsx and now watches `waterworks.rev` as a second input beside
+      // game/directors/navMaintenance.ts and now watches `waterworks.rev` as a second input beside
       // the buildings array's identity, so the water is in the grid within the
       // second without this action reaching into the pathfinder.
       audio.play('treasure', 0.55);

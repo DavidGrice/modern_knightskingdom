@@ -120,7 +120,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       const wasOpen = st.gateOpen[buildingId] ?? true;
       // buildings is also re-spread (its own entries are unchanged) so the
       // 1Hz `rebuildNav(useGameStore.getState().buildings)` poll in
-      // Enemies.tsx — which only re-stamps on a reference change — actually
+      // game/directors/navMaintenance.ts — which only re-stamps on a reference change — actually
       // notices a gate toggle. gateOpen is a separate field from
       // PlacedBuilding itself, so without this the nav grid would keep
       // treating a just-opened/closed gate as whatever it was before,

@@ -63,7 +63,7 @@ export interface EnemyData {
    *  player was actually standing in when spawn() ran (every spawn call site
    *  gates on being in the right place first) — UNLESS spawn()'s own
    *  `worldOverride` param is passed, which wins instead (Wave 18 #5
-   *  bugfix: Enemies.tsx's raid trigger fires even while the player is away
+   *  bugfix: the raid trigger (game/directors/raidDirector.ts) fires even while the player is away
    *  at a destination, since every raid spawn position is anchored to
    *  roadEntry()/HOME_X/HOME_Z rather than the player's own live position —
    *  it passes `null` explicitly so a raider is still tagged home, not

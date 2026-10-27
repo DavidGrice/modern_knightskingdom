@@ -92,8 +92,8 @@ const ALLY_KILL_XP = 15;
  * tally, the experience, the purse, the line the player reads, and last whatever the kill sets in motion.
  *
  * Princess Storm is the one enemy this never kills: see the first lines of the body. And it is not for an enemy that
- * simply falls with nobody to credit (a raider whose wall comes down under it, skeletons at dawn: Enemies.tsx sets
- * `state = 'dying'` itself for those).
+ * simply falls with nobody to credit (a raider whose wall comes down under it, skeletons at dawn: Enemies.tsx and
+ * game/directors/nightSkeletons.ts set `state = 'dying'` themselves for those).
  */
 export function resolveEnemyKill(e: EnemyData, cause: KillCause): void {
   if (e.mob.state === 'dying') return; // already settled — a death is only ever paid out once

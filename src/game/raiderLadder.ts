@@ -76,13 +76,14 @@ export const raiderLadderState = {
   /** where a climbing raider ends up: the wall-walk itself */
   topX: 0, topY: 0, topZ: 0,
   /** mob ids (as strings) currently assigned a climb slot (addendum #8),
-   *  capped at MAX_CLIMBERS — Enemies.tsx prunes an entry once that raider
-   *  dies, is removed, or finishes its climb. */
+   *  capped at MAX_CLIMBERS — an entry is pruned once that raider dies or is
+   *  removed (game/directors/raidDirector.ts's pruneLadderClimbers), or once
+   *  its climb ends, over the top or off a fallen wall (Enemies.tsx). */
   climbers: [] as string[],
 };
 
 /** Plants a ladder against `socketId`'s own wall-walk — the caller (the raid
- *  trigger, Enemies.tsx) has already confirmed this socket is built and
+ *  trigger, game/directors/raidDirector.ts) has already confirmed this socket is built and
  *  carries a walkway; this recomputes that same check defensively rather
  *  than trusting it, and is a no-op if it somehow no longer holds.
  *

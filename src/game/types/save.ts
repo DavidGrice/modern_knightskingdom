@@ -164,7 +164,7 @@ export interface SaveGame {
    *  (gameStore.ts's freeCedric) can flip it back to false for a scaling
    *  rematch. Every existing Cedric-arc gate (cedricSiege.ts's
    *  cedricArcEligible, CedricCamp.tsx, the challenge_cedric interact target,
-   *  Enemies.tsx's camp guards) already reads this reactively, so flipping it
+   *  the camp guards in game/directors/campGuards.ts) already reads this reactively, so flipping it
    *  back re-shows all of them with no further changes. */
   defeatedCedric?: boolean;
   /** Wave 38 (A1) · lifetime times he's been captured — 0 before the first
