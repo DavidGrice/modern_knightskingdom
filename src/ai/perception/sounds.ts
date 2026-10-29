@@ -12,7 +12,7 @@
 // between two of its ticks must still be there when the next one comes round.
 //
 // Zero imports beyond playerState (a plain leaf module, the same one-way read
-// notice.ts/Enemies.tsx/combat.ts already make of it) so that `game/combat.ts`
+// notice.ts, game/enemyAi/ and combat.ts already make of it) so that `game/combat.ts`
 // can push into this file without adding a single new edge to the import graph
 // the AI system already has to be careful about — the same "dependency-free
 // leaf both sides import" role `game/carts.ts` already plays (PROJECT_CONTEXT

@@ -7,7 +7,7 @@
 //
 // IDENTITY (Q1, investigated against the live donor catalog before writing
 // this): `minifiggenericgood00` is the right donor — checked every claimed
-// headDonor/bodyDonor in data/npcs.ts and Enemies.tsx's CONFIGS first. Every
+// headDonor/bodyDonor in data/npcs.ts and data/enemies.ts's KIND_FIGURE first. Every
 // named court NPC (king/queen/richard/john/storm) and every combat-mob family
 // (weezil/gilbertbad/skeleton/cedric) is already claimed; the only donor still
 // open is this one, already worn by Alric, Beda, Fenwick and the traveling
@@ -21,20 +21,20 @@
 // halberd+shield. That is wrong, and demonstrably so: `minifiggenericgood00`'s
 // halberd+shield are 'prop'-kind parts, parented straight to the BODY joint at
 // their ORIGINAL baked position rather than re-hung alongside the arm
-// (lib/rig/rehang.ts's rehangArm) — precisely the bug Enemies.tsx's own
+// (lib/rig/rehang.ts's rehangArm) — precisely the bug EnemyFigure.tsx's own
 // 2026-07-28 comment documents finding and fixing for Gilbert (a floating axe
 // once his arm settled to its neutral hang). Every armed figure in this game
 // already avoids that by keeping `keepProps` false and wearing a REAL,
 // separately-portalled weapon instead (Defenders.tsx's sword_shield loadout;
-// Enemies.tsx's own bandits/Gilbert/royal knights) — see components/world/
+// EnemyFigure.tsx's own bandits/Gilbert/royal knights) — see components/world/
 // Companion.tsx, which equips Tam with HeldSword+ArmShield the same way,
 // rather than reusing a molded prop that would silently reintroduce a bug
 // this codebase already found and fixed elsewhere.
 import type { CharacterConfig } from '../types';
 
 /** The fixed id used everywhere Tam needs one: agentManager.spawn/get,
- *  companionCombatState, PlayerController's interact check, Enemies.tsx's
- *  companionTarget branch. Never a roster villager id (those are 'v<n>',
+ *  companionCombatState, PlayerController's interact check, the enemies'
+ *  Tam target (game/enemyAi/targeting.ts's tamInReach). Never a roster villager id (those are 'v<n>',
  *  the store's seq.villager, store/storeCounters.ts) — Tam is never pushed into st.villagers (see
  *  gameStore's recruitCompanion), so there is no collision to guard against. */
 export const COMPANION_ID = 'companion_tam';

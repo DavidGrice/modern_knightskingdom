@@ -26,7 +26,7 @@
 //   - No `hasLineOfSight()` check. Checked, not assumed: neither
 //     engage_threat nor engage_threat_villager — this action's own two
 //     stated models — call it at all; LOS in this codebase gates RANGED
-//     attacks only (Enemies.tsx's ranged mobs, Defenders.tsx's bow loadout,
+//     attacks only (game/enemyAi's ranged mobs, Defenders.tsx's bow loadout,
 //     combat.ts's bolts, perception's VisionSensor). assist_leader is melee
 //     (reach 1.8m, identical to both models), so there is nothing at that
 //     range for LOS to gate. If a later wave gives Tam a ranged option, that
@@ -58,7 +58,7 @@ import { MeleeEngageActivity, threatOf, type MeleeFighter } from './meleeEngage'
  *  machine drop a chase that has carried him too far from the player; the
  *  `within_leash` consideration below is the half that stops it being picked
  *  straight back up. Tam's own HP/downed record (game/companion.ts) is owned
- *  by Enemies.tsx's damage path. */
+ *  by the enemies' blows (game/enemyAi/blows.ts). */
 const TAM: MeleeFighter = {
   config: COMBAT.engageCompanion,
   isDowned: (agent) => registerCompanionCombat(agent.id).state === 'downed',

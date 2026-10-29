@@ -51,7 +51,7 @@ const BOW_RANGE = 16;
 // never actually referenced its own former local copy (see that export's
 // own comment), so there is nothing here for it to replace.
 
-/** Wave 19 · same push-back `Enemies.tsx` gives a raider (its `ds.x/z` scratch
+/** Wave 19 · same push-back game/enemyAi/movement.ts gives a raider (its `ds.x/z` scratch
  *  state is shaped the same way, unlike the player's camera-relative
  *  resolver) — pond circle first, then any player-dug waterworks rectangle.
  *  Previously nothing at all: this file stepped a defender straight at a post
@@ -406,12 +406,12 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     }
 
     // (AI wave 2) enemies now genuinely target and strike defenders from
-    // their own AI (Enemies.tsx) — the old passive "retaliation tax" that
+    // their own AI (game/enemyAi/) — the old passive "retaliation tax" that
     // approximated being hit back is gone; tower elevation still protects,
     // because ground enemies skip elevated defenders entirely
 
     // Wave 57 (F6): a small, local push-apart so a shared engagement doesn't
-    // stack multiple defenders on the same point — mirrors Enemies.tsx's own
+    // stack multiple defenders on the same point — mirrors game/enemyAi/movement.ts's own
     // pack-separation formula exactly ((dir)*(R-d)*0.5), just with a
     // loadout-varied radius: melee holds a tight shieldwall just past its own
     // MELEE_RANGE=1.8, bow fans into a looser skirmish line (it already has
@@ -423,7 +423,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     // ghost in it that this loop would keep pushing against forever. Reached
     // only once a defender has a live `target` (patrol/follow/rest/tower-
     // watch all `return` earlier above), so this is combat-only by
-    // construction, same gating Enemies.tsx's own version uses
+    // construction, same gating the enemies' own version (game/enemyAi/step.ts) uses
     // (`state === 'chase' || 'attack'`).
     const SEP_R = loadout === 'bow' ? 4.0 : 2.0;
     for (const other of allDefenders) {

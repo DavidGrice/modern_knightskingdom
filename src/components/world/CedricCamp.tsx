@@ -5,8 +5,8 @@
 // later challenge has him "up to something" with sawing sounds (an
 // attack tower under construction), and the campaign's ending line is
 // "we'll soon have Cedric safely behind bars." Revealed after Knight's Arms
-// (see CEDRIC_REVEAL_QUEST); the fight itself is handled by Enemies.tsx
-// (kind 'cedric') and gameStore's markCedricDefeated — this component is the
+// (see CEDRIC_REVEAL_QUEST); the fight itself is handled by the enemies' AI
+// (game/enemyAi/, kind 'cedric') and gameStore's markCedricDefeated — this component is the
 // static camp dressing plus the idle boss / jailed-after-defeat figures.
 import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -64,7 +64,7 @@ export default function CedricCamp() {
   });
   // drives the idle boss AND the jailed-after-defeat figure below with a
   // local ambient idle-clip cycle rather than a permanent frozen restpose —
-  // Enemies.tsx already owns his real *fight* animation once combat starts,
+  // his enemy figure (EnemyFigure.tsx, its clip chosen by game/enemyAi/step.ts) already owns his real *fight* animation once combat starts,
   // this is only his pre/post-fight idle pose. The two JSX blocks below are
   // mutually exclusive (alive XOR defeated), so one hook instance safely
   // drives whichever figure is actually mounted.

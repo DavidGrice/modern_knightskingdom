@@ -97,7 +97,7 @@ export const FOLLOW_LEADER: Action = {
     },
     {
       // Wave 25 companion-vulnerability wiring's own gate: while downed
-      // (Enemies.tsx's companionTarget branch), Tam neither follows nor
+      // (game/enemyAi/blows.ts's blowAtTam), Tam neither follows nor
       // fights — he lies still and auto-recovers, the same
       // `not_downed`-gates-everything shape engage_threat_villager already
       // documents. registerCompanionCombat lazily creates the record on

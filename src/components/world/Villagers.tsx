@@ -107,7 +107,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
   if (vc.hp > vc.maxHp) vc.hp = vc.maxHp;
 
   // Wave 31 · the canonical home/destination ternary (already proven in
-  // Enemies.tsx/Companion.tsx) applied for real here: a settlement resident
+  // the enemies' frame, now game/enemyAi/frame.ts, and Companion.tsx) applied for real here: a settlement resident
   // (villager.world set) already rendered at a claimed destination plot
   // before this wave, and NEITHER ground function was ever called for them —
   // every settlement villager floated/sank on any non-flat destination bake

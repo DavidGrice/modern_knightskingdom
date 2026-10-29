@@ -275,7 +275,7 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
 
     // the Armory (equipment system): a shared homestead pool of spare gear,
     // separate from the player's own Satchel. Stocked by raid/dungeon loot
-    // (see Enemies.tsx) or donated here from the Satchel; drawn down when a
+    // (see game/directors/) or donated here from the Satchel; drawn down when a
     // villager equips a piece, refunded on unequip — so the same 3 helmets
     // just move between "in the armory" and "on someone's head".
     openVillagerEquip: (villagerId) => {

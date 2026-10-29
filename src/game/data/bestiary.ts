@@ -1,7 +1,7 @@
 // Requested 2026-07-30: "journal entries about strengths, weaknesses, etc."
 // for the Collection Book — real notes about how a fight actually goes, not
 // just a Vigour number. Every line below describes a REAL mechanical hook
-// already coded (`Enemies.tsx`'s own AI branches, `combat.ts`'s attack
+// already coded (`game/enemyAi/`'s own AI branches, `combat.ts`'s attack
 // tables), not invented flavor — see each entry's own comment for where the
 // mechanic it describes actually lives.
 import type { EnemyKind } from '../combat';
@@ -22,7 +22,7 @@ export const BESTIARY_LORE: Record<EnemyKind, BestiaryLore> = {
   },
   // ~40% roll ranged at spawn (combat.ts's spawn()); the rest carry the
   // halberd. Both variants break and flee once battered to 2 HP or less
-  // (Enemies.tsx's own morale check)
+  // (game/enemyAi/movement.ts's own morale check)
   bandit: {
     strength: 'About two in five carry a crossbow and hold their distance instead of closing — do not assume every bandit comes to melee range.',
     weakness: 'Breaks and runs once battered down to 2 Vigour or less. A beaten raiding party thins out on its own.',
@@ -64,7 +64,7 @@ export const BESTIARY_LORE: Record<EnemyKind, BestiaryLore> = {
   // not a scannable foe. Kept here only so the Record stays total.
   storm: { strength: '', weakness: '' },
   // Wave 37 (A3 remainder) · KIND_HP.caster = 6, the lowest Vigour in the
-  // book after storm's own 1-hit duel — but CASTER_RANGE = 16 (Enemies.tsx)
+  // book after storm's own 1-hit duel — but CASTER_RANGE = 16 (game/enemyAi/engage.ts)
   // is the longest reach any raider has, and fireSpellBolt is a real,
   // visible travelling projectile rather than a silent hit-scan
   caster: {
@@ -78,7 +78,7 @@ export const BESTIARY_LORE: Record<EnemyKind, BestiaryLore> = {
     weakness: 'The block only covers its front. Step to its flank or its back and the reduction is gone entirely.',
   },
   // rides in with Cedric's War Party and mans a real oc6098b1 catapult
-  // (Enemies.tsx) — never chases, but the d<1.8 melee branch still fires
+  // (game/enemyAi/) — never chases, but the d<1.8 melee branch still fires
   // first if you walk right up, so it is a real, killable fight
   siegeCrew: {
     strength: "Sets up on a real catapult and works it against your homestead on its own timer, unattended, from well outside your own reach.",

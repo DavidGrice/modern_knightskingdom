@@ -56,7 +56,7 @@ export interface BuildSlice {
   toggleGate: (buildingId: string) => void;
   /** Wave 57 (F5): trailing `leaveRuin` — true only from a dragon's
    *  breath (game/dragonfire.ts). Every other caller
-   *  (siege.ts, CedricSiege.tsx, Enemies.tsx) omits it and keeps today's
+   *  (siege.ts, CedricSiege.tsx, game/enemyAi/blows.ts) omits it and keeps today's
    *  delete+half-refund behavior exactly. */
   damageBuilding: (id: string, amount: number, cause?: string, leaveRuin?: boolean) => void;
   settleCart: (id: string) => void;

@@ -37,7 +37,7 @@
 // perspective: flee_to_safety (survival, 10) still wins outright during a
 // real raid and nothing here touches that. This wave's investigation explored
 // giving this action raid-priority instead (one above survival) and rejected
-// it: real raiders approach gradually (Enemies.tsx's own road walk-in), so the
+// it: real raiders approach gradually (game/enemyAi/movement.ts's road walk-in), so the
 // one window that override would need — a villager already adjacent to a
 // raider inside flee's own 2s minDuration — essentially never occurs, for real
 // architectural risk (the first-ever priority above the survival ceiling).
@@ -86,7 +86,7 @@ function nearEnoughToFight(agent: Agent): boolean {
  *  `isDowned` is the same test the `not_downed` gate below makes, repeated by
  *  the state machine on every update (see meleeEngage.ts for why the gate
  *  alone is not enough). This villager's own HP/downed record
- *  (game/villagerCombat.ts) is owned by Enemies.tsx's damage path. */
+ *  (game/villagerCombat.ts) is owned by the enemies' blows (game/enemyAi/blows.ts). */
 const VILLAGER: MeleeFighter = {
   config: COMBAT.engageVillager,
   isDowned: (agent) => registerVillagerCombat(agent.id).state === 'downed',

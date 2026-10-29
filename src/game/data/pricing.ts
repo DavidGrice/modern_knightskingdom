@@ -11,7 +11,7 @@ export type Haggler = { wit: number; silverTongue: boolean; honestWeight: boolea
 
 /** Each point of Wit haggles this much (Wave 23). */
 export const HAGGLE_PER_WIT = 0.04;
-/** The Silver Tongue trade-off perk (its downside: Storm strikes faster — components/combat/Enemies.tsx). */
+/** The Silver Tongue trade-off perk (its downside: Storm strikes faster — game/enemyAi/blows.ts's fireAtPlayer). */
 export const SILVER_TONGUE_HAGGLE = 0.15;
 /** The Honest Weight perk (Wave 52): the same in both directions, with no downside. */
 export const HONEST_WEIGHT_HAGGLE = 0.08;

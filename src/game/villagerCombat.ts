@@ -97,7 +97,7 @@ export function registerVillagerCombat(id: string): VillagerCombatState {
  *  holds its record from a useMemo and the reasoner's considerations register the
  *  same entry lazily, so deleting keys here would split the two onto different
  *  objects. A reused id ('v2' in the next save) must not come back wounded or
- *  downed; an entry for an id that is gone is inert (Enemies.tsx additionally
+ *  downed; an entry for an id that is gone is inert (game/enemyAi/targeting.ts additionally
  *  requires the AI's own engage state, dropped by agentManager.clear()). */
 export function resetVillagerCombat(): void {
   for (const id in villagerCombatState) {

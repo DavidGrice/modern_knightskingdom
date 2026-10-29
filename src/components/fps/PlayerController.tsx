@@ -1269,7 +1269,7 @@ export default function PlayerController() {
       st.greetCompanion();
     } else if (t.kind === 'dungeon_relic') {
       // Wave 13 · direct mutation on the shared dungeonState leaf module,
-      // same convention Enemies.tsx already uses for room.cleared/spawned —
+      // same convention the crypt's director (game/directors/dungeonDirector.ts) already uses for room.cleared/spawned —
       // there is no store-side copy of dungeon room state to keep in sync.
       const layout = dungeonState.layout;
       const room = layout?.rooms.find((r) => String(r.index) === t.id);

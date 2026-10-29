@@ -87,7 +87,7 @@ export class MeleeEngageActivity implements Activity {
 
   update(agent: Agent, dt: number, now: number): ActivityStatus {
     const cfg = this.fighter.config;
-    // A blow landed (Enemies.tsx) between this tick's scoring and this
+    // A blow landed (game/enemyAi/blows.ts) between this tick's scoring and this
     // Activity's own next think — each action's `not_downed` gate only stops a
     // NEW engage from starting, it cannot reach back and cancel one already
     // mid-swing this same tick. SUCCESS, not RUNNING: ending cleanly here is
@@ -181,7 +181,7 @@ export class MeleeEngageActivity implements Activity {
     // No reservation, no work signal, no carried load touched — same as
     // flee_to_safety/take_cover. The fighter's own HP record (defenderState,
     // villagerCombat, companion) is owned by whoever damages it — Defenders.tsx
-    // and Enemies.tsx — and is not this activity's to unwind.
+    // and game/enemyAi/blows.ts — and is not this activity's to unwind.
   }
 
   private approach(agent: Agent, t: Belief): void {

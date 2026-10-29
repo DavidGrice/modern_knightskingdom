@@ -7,7 +7,7 @@
 // `Math.random` is one stream — a helper that took the kind as an argument would swap two draws at one of them. Each
 // caller therefore keeps its own kind draw where it always was and calls this where its angle line stood.
 //
-// NOT for the rings in Enemies.tsx / CedricSiege.tsx: those put the cosine on x and the sine on z, so routing them
+// NOT for the rings in game/directors/ / CedricSiege.tsx: those put the cosine on x and the sine on z, so routing them
 // through here would move every such spawn to a different point.
 
 /** A uniformly random point on the circle of radius `r` about (`ox`, `oz`): sine on x, cosine on z.

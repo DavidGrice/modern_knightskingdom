@@ -181,7 +181,7 @@ const HOSTILE_BOLT_HIT_RADIUS = 0.6;
  * back to ANOTHER invisible hit-scan.
  *
  * Sibling to fireBolt/fireArrow above, but takes `damage` as a parameter —
- * Enemies.tsx's own AI branch owns the actual number (mirrors how RANGED_DMG
+ * game/enemyAi/'s own AI owns the actual number (blows.ts's CASTER_SPELL_DMG — mirrors how RANGED_DMG
  * lives beside the ranged-bandit AI that fires it, not in this module).
  */
 export function fireSpellBolt(e: EnemyData, damage: number): void {
@@ -274,7 +274,7 @@ export function stepBolt(b: Bolt, dt: number): boolean {
     // a duel with Storm is settled sword-to-sword, not from range
     if (e.kind === 'storm') continue;
     // Wave 36 (A3): a mounted raider's rig is lifted MOUNT_SEAT_Y off the
-    // ground (Enemies.tsx's own saddle wrap) — the registered per-part boxes
+    // ground (EnemyFigure.tsx's own saddle wrap) — the registered per-part boxes
     // are still measured in the figure's own LOCAL frame, so without this a
     // shot aimed at the visible rider tested against an empty hitbox sitting
     // where a standing foe's would be, a full saddle-height too low.

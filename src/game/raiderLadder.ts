@@ -5,7 +5,7 @@
 // this mirrors). Spawned occasionally alongside a bandit/royal raid once the
 // home keep has at least one finished wall-walk to put it against, it
 // trundles in from outside the wall and plants itself there, then a small
-// number of raiders (Enemies.tsx's own 'climbing' EnemyMob state) climb it to
+// number of raiders (game/enemyAi/climb.ts's 'climbing' EnemyMob state) climb it to
 // reach — and actually threaten — a battlement that was, until this wave,
 // unconditional, permanent safety for a keep-stationed defender.
 //
@@ -64,8 +64,8 @@ export const raiderLadderState = {
   hp: LADDER_MAX_HP,
   wrecked: false,
   wreckT: 0,
-  /** reached baseX/baseZ and stopped — Enemies.tsx's own cross-component
-   *  signal (same pattern cedricSiege.ts's own header names) for "raiders
+  /** reached baseX/baseZ and stopped — the cross-component
+   *  signal game/enemyAi/climb.ts's ladderPull reads (same pattern cedricSiege.ts's own header names) for "raiders
    *  may start climbing" */
   planted: false,
   targetSocketId: '',
@@ -78,7 +78,7 @@ export const raiderLadderState = {
   /** mob ids (as strings) currently assigned a climb slot (addendum #8),
    *  capped at MAX_CLIMBERS — an entry is pruned once that raider dies or is
    *  removed (game/directors/raidDirector.ts's pruneLadderClimbers), or once
-   *  its climb ends, over the top or off a fallen wall (Enemies.tsx). */
+   *  its climb ends, over the top or off a fallen wall (game/enemyAi/climb.ts). */
   climbers: [] as string[],
 };
 
@@ -102,7 +102,7 @@ export function resetRaiderLadder(socketId: string) {
   const keepY = keep.y ?? 0;
   // outward normal for this socket — yaw 0 faces -Z, the SAME convention
   // KeepSocket's own doc comment and every atan2(-nx,-nz) yaw recovery in
-  // this codebase already use (PlayerController.tsx, Enemies.tsx).
+  // this codebase already use (PlayerController.tsx, game/enemyAi/).
   const nx = -Math.sin(socket.yaw);
   const nz = -Math.cos(socket.yaw);
   const half = socket.kind === 'corner' ? WALK_CORNER_HALF : WALK_DEEP_HALF;
@@ -126,7 +126,7 @@ export function resetRaiderLadder(socketId: string) {
   raiderLadderState.climbers = [];
 }
 
-// ---- the climb: where a raider on the ladder is (Enemies.tsx's 'climbing'
+// ---- the climb: where a raider on the ladder is (game/enemyAi/climb.ts's 'climbing'
 // state moves him by this; who climbs, and what becomes of him, is its) ----
 
 /** stage one: up the rungs — x/z hold at the foot of the rungs, only y rises */

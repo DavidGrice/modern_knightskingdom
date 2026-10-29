@@ -24,7 +24,7 @@
 // work the elevation pass is scoped around, and is the honest follow-up here.
 //
 // Wave 19: Defenders.tsx now gets the same push-back — a `keepOutOfWater(ds)`
-// helper, mirroring Enemies.tsx's per-mob push (its own `ds.x/z` scratch state
+// helper, mirroring game/enemyAi/movement.ts's per-mob push (its own `ds.x/z` scratch state
 // is shaped like a mob's, not the player's camera-relative resolver), called
 // after every branch that actually moves a defender. The parity gap this
 // paragraph used to document (no water check at all, natural POND included)

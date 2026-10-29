@@ -56,7 +56,7 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
     // existing hold-block (genre-correct scope, and every ranged/caster/
     // siege damage path lacks an attacker reference to stagger anyway — see
     // opts.attacker's own comment). `opts.melee` is only ever set by
-    // Enemies.tsx's own melee-vs-player call site.
+    // game/enemyAi/blows.ts's own melee-vs-player call site (fireAtPlayer).
     const parried = !!opts?.melee && (performance.now() - combatState.blockPressedAt) <= PARRY_WINDOW_MS;
     if (parried) {
       dmg = 0;
@@ -65,7 +65,7 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
       audio.play('brick_collide', 1, false); // full volume, no detune — a sharper clang than the held-block hit
       if (opts?.attacker) {
         const a = opts.attacker;
-        // reuses EnemyMob.attackCd as a stagger for free (Enemies.tsx only
+        // reuses EnemyMob.attackCd as a stagger for free (the enemies' AI, game/enemyAi/, only
         // ever resets it to a SMALLER value when it reaches <=0 — forcing it
         // up from out here is never clobbered) — same trick the combo
         // finisher (melee.ts's landMeleeHit) uses, zero new AI-state machine either place.

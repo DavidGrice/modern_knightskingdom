@@ -213,8 +213,8 @@ function deriveThreat(agent: Agent, st: PerceptionState, now: number, dt: number
 
 /** §6.3's "time since last damage" input, as a real entry point.
  *
- *  Real caller as of Wave 21 (2026-08-28, `Enemies.tsx`'s `villagerTarget`
- *  damage branch) — an ordinary villager who chose to fight
+ *  Real caller as of Wave 21 (2026-08-28, then `Enemies.tsx`'s `villagerTarget`
+ *  damage branch, now game/enemyAi/blows.ts's blowAtVillager) — an ordinary villager who chose to fight
  *  (`engage_threat_villager`) now has real HP (`game/villagerCombat.ts`) and
  *  can be damaged, so this line finally has something to report for.
  *

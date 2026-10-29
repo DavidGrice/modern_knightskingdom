@@ -2,7 +2,7 @@
 // Cedric's Siege: the gates that decide when Cedric's homestead siege can
 // roll, when the existing camp-duel trigger has earned the right to become
 // his real final stand instead of one more fight he walks away from (see
-// combat.ts's `finalStand` flag and Enemies.tsx's flee-guard), and — Wave 38
+// combat.ts's `finalStand` flag and game/enemyAi/movement.ts's flee-guard), and — Wave 38
 // (A1) — when a jailed Cedric has served enough time to break free for a
 // scaling rematch (`cedricJailbreakAllowed` below; see store/slices/storySlice.ts's
 // freeCedric/markCedricDefeated for what "jailed" now actually means).

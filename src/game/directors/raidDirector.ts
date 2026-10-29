@@ -97,8 +97,8 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
     // popping into existence on a ring around the homestead — spawned
     // loosely clustered around the same road entry point newcomers and
     // the merchant already walk in from (roadEntry()), each individually
-    // routed home via Enemies.tsx's own approaching walk (see its
-    // per-frame block). a0 (below) still picks the ram's own spot —
+    // routed home via the enemies' own walk in from the road
+    // (game/enemyAi/movement.ts's walkIn). a0 (below) still picks the ram's own spot —
     // see that call's own comment for why it's unchanged.
     const entry = roadEntry();
     function roadSpawnPos(i: number): [number, number] {

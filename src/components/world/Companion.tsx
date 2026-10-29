@@ -19,7 +19,7 @@
 // research pass. See game/data/companion.ts's header for the full argument;
 // in short, `minifiggenericgood00`'s own molded halberd+shield are
 // 'prop'-kind parts that float once rehangArm re-hangs the arm holding them
-// (the exact bug Enemies.tsx's own 2026-07-28 comment documents finding and
+// (the exact bug EnemyFigure.tsx's own 2026-07-28 comment documents finding and
 // fixing for Gilbert). Every armed figure in this game already avoids that by
 // keeping `keepProps` false (RiggedFigure's own default) and wearing a REAL,
 // separately-portalled weapon instead.

@@ -1,10 +1,10 @@
 'use client';
 // Visual + AI for the raiders' own siege ladder (see game/raiderLadder.ts):
 // trundles in from outside the target keep wall-walk and plants itself
-// there, then holds — Enemies.tsx's own 'climbing' EnemyMob state is what
+// there, then holds — game/enemyAi/climb.ts's 'climbing' EnemyMob state is what
 // actually sends raiders up it; this component only owns the ladder PROP
 // itself, mirroring RaiderRam.tsx's own split (that file owns the ram prop,
-// Enemies.tsx's raider AI does the actual fighting).
+// game/enemyAi/'s raider AI does the actual fighting).
 //
 // Drawn from the Siege Stair's own GLB through PropModel: the very piece the
 // player can place (`oc6096-5`, data/buildables), drawn the way Buildings.tsx
@@ -20,7 +20,7 @@
 // It can be broken before or during a climb — combat/structures.ts's
 // hitRaiderProp takes melee swings and bolts (game/raiderProps.ts's
 // damageRaiderProp), and a wrecked ladder tips over and burns out instead of
-// vanishing on the frame its HP hit zero, same as the ram. Enemies.tsx's own
+// vanishing on the frame its HP hit zero, same as the ram. game/enemyAi/climb.ts's own
 // 'climbing' handler drops any raider still on it the instant `wrecked` goes
 // true (or the wall itself comes down under it) — see that handler's own
 // comment.

@@ -52,7 +52,7 @@ export function isWatchHours(time: number): boolean {
 // drift NORTH as the land tiers grow — up to 14 on Z at the max tier, a full
 // WANDER_RADIUS (Villagers.tsx) away from true origin — which is not a
 // change anything downstream asked for: every one of HOME_X/HOME_Z's
-// consumers (Defenders.tsx, RaiderRam.tsx, Enemies.tsx, ai/actions/flee.ts,
+// consumers (Defenders.tsx, RaiderRam.tsx, game/enemyAi/, ai/actions/flee.ts,
 // ai/actions/takeCover.ts, settlementAnchor/villagerHomeSpot below) wants the
 // homestead's own centre, not a byproduct of how wide the fence happens to be
 // this tier. Hardcoded to what the formula always meant historically.
