@@ -482,8 +482,7 @@ export const WORLD_DESTINATION_BY_ID: Record<string, WorldDestination> =
 // Scene-isolation rearchitecture (2026-08-20) — the destinations whose
 // content renders through DestinationScope.tsx's own origin-offset <group>
 // instead of the flat/absolute top-level components (Buildings, Npc,
-// TemplatePopulation, CourtDressing) every other destination still uses
-// unchanged. Stage 1 (2026-08-20) proved this on template-01 alone; Stage 2
+// TemplatePopulation) every other destination still uses unchanged. Stage 1 (2026-08-20) proved this on template-01 alone; Stage 2
 // (2026-08-21) grew it to templates 02-08. Stage 3 (2026-08-21) looked at
 // dungeon/arena and found neither belongs here — both are unclaimable
 // (see TemplateWorld.tsx's dungeon/arena special-cases), so there is no

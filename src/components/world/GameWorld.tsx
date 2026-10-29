@@ -29,7 +29,6 @@ import Road from './Road';
 import Emplacements from './Emplacements';
 import CedricCamp from './CedricCamp';
 import BattleDome from './BattleDome';
-import CourtDressing from './CourtDressing';
 import TemplatePopulation from './TemplatePopulation';
 import GuildHalls from './GuildHalls';
 import DragonOmen from './DragonOmen';
@@ -121,7 +120,6 @@ export default function GameWorld() {
         {!destination && <MerchantCamp />}
         <CedricCamp />
         <BattleDome />
-        <CourtDressing />
         <TemplatePopulation />
         <DestinationScope />
         <GuildHalls />

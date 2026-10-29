@@ -4,10 +4,12 @@
 // template_0N_layout.json`, distilled at build time into
 // `src/game/data/mapPopulation.generated.json` by `scripts/prepare-assets.mjs`
 // — see that script's own header comment for the coordinate-transform
-// derivation and its caveats). Same mount pattern as `CourtDressing.tsx`
-// (a top-level sibling in `GameWorld.tsx`, absolute world coordinates, only
-// active while actually visiting the destination) — this is meant to grow
-// into that file's data-driven successor, not compete with it.
+// derivation and its caveats). Same mount pattern as `GuildHalls.tsx` and
+// `CedricCamp.tsx` (a top-level sibling in `GameWorld.tsx`, absolute world
+// coordinates, only active while actually visiting the destination), and as
+// `CourtDressing.tsx`'s own before its dressing moved inside
+// DestinationScope.tsx — this is meant to grow into that file's data-driven
+// successor, not compete with it.
 //
 // The coordinate transform is VERIFIED (2026-08-03, see prepare-assets.mjs's
 // own comment for the proof) and content now actually spawns (real content

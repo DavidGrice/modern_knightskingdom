@@ -7,7 +7,7 @@
 // as the templates, and claimable unlike dungeon/arena. template-09 (the
 // homestead), dungeon, arena, and home/null remain unaffected: their content
 // keeps rendering through the same flat, absolute-coordinate top-level
-// components (Buildings, Npc, TemplatePopulation, CourtDressing) this file's
+// components (Buildings, Npc, TemplatePopulation) this file's
 // own Destination* siblings were carved out of — dungeon/arena have nothing
 // to scope in the first place, since neither is claimable.
 //
