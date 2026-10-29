@@ -23,7 +23,7 @@ interface EnemyMob {
   alertT?: number;
   /** N79 (requested 2026-07-28): spawned at the road's entry point rather
    *  than popping into existence, and still walking in toward the
-   *  homestead — Enemies.tsx routes this via the nav grid instead of the
+   *  homestead — game/enemyAi/movement.ts's walkIn routes this via the nav grid instead of the
    *  normal wander/chase FSM until it clears itself close to home. */
   approaching?: boolean;
   /** Wave 58 (H4): mid-ascent progress on a siege ladder, seconds since this
@@ -35,8 +35,8 @@ interface EnemyMob {
   climbT?: number;
   /** Wave 58 (H4): true once this raider has hauled itself onto a keep
    *  wall-walk via the siege ladder. Recomputed live every frame from
-   *  `ladderSocketId` against the real, current keep (Enemies.tsx's own
-   *  addendum-#3 recheck), so a wall knocked down by an UNRELATED siege hit
+   *  `ladderSocketId` against the real, current keep (game/enemyAi/climb.ts's
+   *  walkwayStands, the addendum-#3 recheck), so a wall knocked down by an UNRELATED siege hit
    *  drops this raider too, not just a defender. */
   elevated?: boolean;
   /** Wave 58 (H4): the wall-walk's own real height once elevated — the same
@@ -113,11 +113,11 @@ export interface EnemyData {
    *  own camp — every OTHER spawn of kind 'cedric' (a raid-leader cameo, an
    *  ordinary early camp duel) defaults this false, which is what makes him
    *  flee rather than die for good outside that one fight (see the flee-guard
-   *  in Enemies.tsx). Meaningless for any other kind. */
+   *  in game/enemyAi/movement.ts). Meaningless for any other kind. */
   finalStand?: boolean;
   /** Requested 2026-07-30: raiders shouldn't ALL be melee-only. Rolled once
    *  at spawn for bandits (see spawn() below) — a ranged bandit holds at
-   *  range and hit-scans instead of closing to melee (Enemies.tsx), and
+   *  range and hit-scans instead of closing to melee (game/enemyAi/), and
    *  swaps its held prop from the halberd to the crossbow the same donor
    *  rig already carries. Meaningless for any other kind. */
   ranged?: boolean;
@@ -131,7 +131,7 @@ export interface EnemyData {
    *  the one manual turret with a real swinging-arm rig AND an explicit
    *  `isManualTurret` flag — see labCapabilities.ts's WALL_FIRE_OVERRIDES),
    *  designed to extend to oc6098b2/oc6032b1 later with no structural
-   *  change (Enemies.tsx's own render/AI already reads this generically via
+   *  change (EnemyFigure.tsx and game/enemyAi/blows.ts already read this generically via
    *  labOccupyMode/labCanFire rather than branching on the id). Meaningless
    *  for any other kind. */
   siegeAsset?: 'oc6098b1';
@@ -165,7 +165,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
     // Wave 38 (A1): Cedric now reads the shared boss curve instead of a flat
     // 1 — applies to every 'cedric' spawn (final stand, the pre-final-stand
     // camp duel, the raid-leader cameo), harmless for the latter two since he
-    // still flees at the same flat CEDRIC_FLEE_HP (Enemies.tsx), just takes a
+    // still flees at the same flat CEDRIC_FLEE_HP (game/enemyAi/movement.ts), just takes a
     // few more hits to get there at high tier. Storm stays flat 1: a 1-HP
     // duel has nothing to scale (see bossEncounter.ts's own header comment).
     const scale = (kind === 'storm' ? 1 : kind === 'cedric' ? bossTierScale('cedric') : raidStrength()) * extraScale;

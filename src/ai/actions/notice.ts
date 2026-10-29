@@ -11,7 +11,7 @@
 // documented divergence, PHASE_STATUS.md), and nothing here needs line-of-
 // sight or memory: a plain squared-distance check against playerState is
 // the same one-directional read every other AI/combat file already uses
-// (see combat.ts/Enemies.tsx's own distToPlayer), not a new sensor.
+// (see game/enemyAi/targeting.ts's own distToPlayer), not a new sensor.
 import { playerState } from '@/game/playerState';
 import type { Agent } from '../core/Agent';
 import type { Action, Activity, ActivityStatus, Context } from '../core/Reasoner';

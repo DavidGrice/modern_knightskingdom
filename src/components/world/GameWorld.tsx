@@ -155,7 +155,7 @@ export default function GameWorld() {
         <RaiderRam />
         {/* Wave 58 (H4) · same always-mounted reasoning as RaiderRam just
             above — its own useFrame is the only place raiderLadderState
-            advances toward the target wall and Enemies.tsx's own per-mob
+            advances toward the target wall and game/enemyAi/climb.ts's per-mob
             'climbing' state is the only place raiders actually climb it;
             gating this on destination would silently freeze both mid-raid
             while the player is away. */}

@@ -95,7 +95,7 @@ export function resolveAim(
    *  live, so the caller (which has the real Villager.job) says so. */
   villagerIds: { id: string; isDefender: boolean }[] = [],
   /** Wave 36 (A3): a mounted raider's rig sits MOUNT_SEAT_Y off the ground
-   *  (Enemies.tsx's own saddle wrap) — this module stays a dependency-free
+   *  (EnemyFigure.tsx's own saddle wrap) — this module stays a dependency-free
    *  leaf (importing combat.ts's MOUNT_SEAT_Y here would cycle, the same
    *  reason `enemies`/`maxHpOf` above are passed in rather than imported),
    *  so the caller supplies the answer exactly like it already does for

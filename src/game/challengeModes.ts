@@ -85,7 +85,7 @@ export const gatherChallengeState: GatherChallengeState = {
  *  same "no real per-diorama floor data, so keep placement generic" call
  *  ArenaScene.tsx's own primitives-only design already made. Absolute world
  *  coordinates (dest.origin + offset), matching every other absolute-space
- *  system that touches a challenge ground (Enemies.tsx mob positions,
+ *  system that touches a challenge ground (enemy positions, game/enemyAi/,
  *  the arena's own ring spawns) — NOT local-to-origin the way
  *  DestinationScope.tsx's claimed-building children are, since this is read
  *  by flat, top-level components (ChallengeRunner.tsx), not ones nested

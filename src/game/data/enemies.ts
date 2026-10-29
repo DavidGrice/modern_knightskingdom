@@ -1,12 +1,14 @@
 // CLN-11 · split out of game/combat.ts unchanged: what an enemy kind IS — its health, label, the XP it is worth,
 // how hard and how often it hits, and what it may be carrying. Pure data; combat.ts re-exports the public names.
-import type { ItemId } from '../types';
+// CLN-13 · and how hard it batters a wall, what it looks like, and its voice when it falls (were Enemies.tsx's).
+import type { CharacterConfig, ItemId } from '../types';
+import type { SoundName } from '@/lib/audioCatalog';
 
 // 'royal' = the crown's knights, raiding only players who pledged to Cedric
 // (Phase 19's alliance branch) — sturdier than a bandit, softer than Gilbert.
 // 'mountedRaider' (Wave 36, A3) = Cedric's own war party riding his two
-// tethered chargers (l7339231/l7339232, CedricCamp.tsx) — see Enemies.tsx's
-// own render tail for the mount.
+// tethered chargers (l7339231/l7339232, CedricCamp.tsx) — see EnemyFigure.tsx
+// for the mount.
 // Wave 37 (A3 remainder) · the last three of the roster's A3 item: 'caster'
 // (a ranged spellcaster — see fireSpellBolt, combat/projectiles.ts), 'shieldedElite' (blocks
 // most frontal damage — see isFrontalHit, combat/shield.ts), 'siegeCrew' (mans a real
@@ -65,6 +67,15 @@ export const ATTACK_DMG: Record<EnemyKind, number> = {
 export const ATTACK_CD: Record<EnemyKind, number> = {
   skeleton: 1.6, bandit: 1.6, gilbert: 1.5, cedric: 1.3, storm: 1.1, royal: 1.4, mountedRaider: 1.3,
   caster: 1.6, shieldedElite: 1.5, siegeCrew: 1.6,
+};
+
+/** J51 follow-up: structural damage per hit against a keep piece — a
+ *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
+ *  pool), closer to what the player's own ram/cannon already deal it (a kind
+ *  with no entry deals 8 — enemyAi/blows.ts's batterKeep) */
+export const RAID_SIEGE_DMG: Partial<Record<EnemyKind, number>> = {
+  bandit: 9, gilbert: 12, cedric: 18, royal: 12, mountedRaider: 11,
+  caster: 6, shieldedElite: 14, siegeCrew: 12,
 };
 
 /** One possible item in an enemy's purse. `chance` is rolled independently per
@@ -140,4 +151,92 @@ export const LOOT_TABLES: Record<EnemyKind, LootEntry[]> = {
     { item: 'plank', min: 2, max: 4, chance: 0.7 },
     { item: 'gold', min: 3, max: 8, chance: 0.6 },
   ],
+};
+
+/** what each kind looks like: the minifig donor its figure is built from and its colours (a RiggedFigure config) —
+ *  drawn by EnemyFigure.tsx, named in the line a battered wall gives (enemyAi/blows.ts), warmed by preload.ts */
+export const KIND_FIGURE: Record<EnemyKind, CharacterConfig> = {
+  skeleton: {
+    name: 'Skeleton', headDonor: 'minifigskeleton00', bodyDonor: 'minifigskeleton00',
+    armColor: 150, handColor: 150, legColor: 150, hipColor: 150,
+  },
+  bandit: {
+    name: 'Bandit', headDonor: 'minifigweezil00', bodyDonor: 'minifigweezil00',
+    armColor: 38, handColor: 18, legColor: 38, hipColor: 24,
+  },
+  // Gilbert the Bad: the raid leader — his own donor carries the halberd
+  // mold (see lib/weaponParts.ts), and he's stationed at Cedric's camp too.
+  gilbert: {
+    name: 'Gilbert the Bad', headDonor: 'minifiggilbertbad01', bodyDonor: 'minifiggilbertbad01',
+    armColor: 38, handColor: 18, legColor: 38, hipColor: 24,
+  },
+  cedric: {
+    name: 'Cedric the Bull', headDonor: 'minifigcedricbull00', bodyDonor: 'minifigcedricbull00',
+    armColor: 34, handColor: 18, legColor: 38, hipColor: 34,
+  },
+  storm: {
+    name: 'Princess Storm', headDonor: 'minifigprincessstorm00', bodyDonor: 'minifigprincessstorm00',
+    armColor: 24, handColor: 18, legColor: 150, hipColor: 24,
+  },
+  // the crown's anonymous knights (Phase 19 alliance raids on a Cedric-sworn
+  // player) — a Richard donor variant OTHER than 00 (the named NPC's own),
+  // in King Leo's own royal blue/white/yellow, so the wave unmistakably
+  // reads as "the King's men", not another bandit pack. Was '01' — found
+  // investigating the Gilbert floating-hand report and checking every
+  // donor's rig data here fresh: '01' is a MOUNTED-COMBAT export (every
+  // one of its part_roles.json entries is prefixed `rider_`/`horse_`,
+  // meaning classifyByRigMap correctly refuses all of them as "not this
+  // figure's own body" per its own mount-exclusion rule), so royal knights
+  // silently fell back to the old spatial-guessing classifier the verified
+  // rig maps exist specifically to replace — the exact failure mode behind
+  // Gilbert's own bug, just from a donor mismatch instead of a kept prop.
+  // '02' is a real standing-minifig rig (verified, no mount prefixes) and a
+  // different face from Richard's own '00', so the "not Richard" intent
+  // still holds.
+  royal: {
+    name: 'Royal Knight', headDonor: 'minifigrichardstrong02', bodyDonor: 'minifigrichardstrong02',
+    armColor: 26, handColor: 18, legColor: 150, hipColor: 26,
+  },
+  // Wave 36 (A3): one of Cedric's own war party, riding his tethered chargers
+  // (see EnemyFigure.tsx's mount). minifiggilbertbad02 is a real,
+  // verified, previously-unused donor variant that molds a spear+shield —
+  // fitting for couched-lance cavalry — though the mold itself is never kept
+  // (keepProps={false} in EnemyFigure.tsx, same as every other enemy): the rider carries
+  // a real, separately-portalled HeldSpear/ArmShield instead.
+  mountedRaider: {
+    name: 'Mounted Raider', headDonor: 'minifiggilbertbad02', bodyDonor: 'minifiggilbertbad02',
+    armColor: 38, handColor: 18, legColor: 38, hipColor: 24,
+  },
+  // Wave 37 (A3 remainder) · minifigweezil01 is a real, verified, previously-
+  // unused donor variant (crossbow+bolt mold, never kept — keepProps={false},
+  // EnemyFigure.tsx) — not a creator option (FACE_OPTIONS/CREST_OPTIONS only offer the
+  // '00' variant of each named family) and not a villager look (VILLAGER_LOOKS
+  // never uses it either). A violet family from the real runtime palette
+  // (indices 80-83, not the [255,0,255] filler padding the rest of the array)
+  // is what reads as "not a mundane fighter" without inventing a new asset.
+  caster: {
+    name: 'Hedge Witch', headDonor: 'minifigweezil01', bodyDonor: 'minifigweezil01',
+    armColor: 82, handColor: 18, legColor: 83, hipColor: 38,
+  },
+  // minifigcedricbull04 (battle axe+shield mold) — real, verified, unused by
+  // any other entry here, not a creator option, not a villager look. A
+  // dark maroon/near-black "veteran" scheme distinct from every other kind's
+  // palette in this table.
+  shieldedElite: {
+    name: 'Shieldbearer', headDonor: 'minifigcedricbull04', bodyDonor: 'minifigcedricbull04',
+    armColor: 23, handColor: 18, legColor: 38, hipColor: 23,
+  },
+  // minifiggilbertbad03 (crossbow+bolt+shield mold) — real, verified, unused,
+  // not a creator option, not a villager look. Rides along inside Cedric's
+  // War Party (CedricSiege.tsx) — "one of Gilbert's own veterans assigned to
+  // the gun." A leather/soot engineer palette, all real indices.
+  siegeCrew: {
+    name: 'Siege Engineer', headDonor: 'minifiggilbertbad03', bodyDonor: 'minifiggilbertbad03',
+    armColor: 74, handColor: 18, legColor: 75, hipColor: 46,
+  },
+};
+
+/** a distinct voice bark on defeat, where the original bank has one (Deed-worthy antagonists only) */
+export const DEATH_BARK: Partial<Record<EnemyKind, SoundName>> = {
+  bandit: 'random_weezil', gilbert: 'random_gilbert', cedric: 'random_cedric',
 };

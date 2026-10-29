@@ -10,7 +10,7 @@ import type { ResourceNodeState } from '@/game/types';
 // Wave 31 · the one ground-height rule every group below shares — a node
 // knows its own region (ResourceNodeState.world, already used for the
 // instance-separation filter in the default export below), so this is the
-// same canonical ternary Enemies.tsx/Companion.tsx already use, not a new
+// same canonical ternary game/enemyAi/frame.ts's groundUnder and Companion.tsx already use, not a new
 // pattern. Closes a pre-existing float-on-slope bug on destinations too (see
 // InstancedProps.tsx's own doc on InstancedNode.y).
 function nodeGroundY(n: ResourceNodeState): number {

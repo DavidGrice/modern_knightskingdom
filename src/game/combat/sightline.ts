@@ -1,4 +1,4 @@
-// Which target a shooter looses at — a raider with a crossbow (components/combat/Enemies.tsx), a guard with a bow
+// Which target a shooter looses at — a raider with a crossbow (game/enemyAi/targeting.ts), a guard with a bow
 // (components/world/Defenders.tsx) — when the one its rules pick stands behind something. A shot lands only on a clear
 // sightline (nav/lineOfSight.ts), and a shooter that stood in range of a target it could not see waited there for good:
 // a crossbowman and a bowman with a wall between them stood off, and the raid with them (ROADMAP.md, "a crossbowman

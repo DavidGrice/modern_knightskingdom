@@ -76,7 +76,7 @@ function WarParty({ onDone }: { onDone: (routed: boolean) => void }) {
     if (t.current >= SIEGE_SECONDS) { finish(false); return; }
 
     // repel check: the whole war party is gone — he broke and fled (see the
-    // finalStand-gated flee guard in Enemies.tsx), same as "all raiders gone"
+    // finalStand-gated flee guard in game/enemyAi/movement.ts), same as "all raiders gone"
     // already means for an ordinary raid
     const raiders = useEnemyStore.getState().enemies.filter((e) => e.raid);
     if (raiders.length === 0) { finish(true); return; }
@@ -240,8 +240,8 @@ export default function CedricSiege() {
         }
         // Wave 37 (A3 remainder) · one of Cedric's own crew sets up on a
         // real oc6098b1 catapult and works it against the homestead
-        // independently — see combat.ts's EnemyKind + Enemies.tsx's own
-        // siege-crew AI branch. Spawned already IN PLACE (approaching=false)
+        // independently — see combat.ts's EnemyKind + game/enemyAi/blows.ts's own
+        // siege-crew shot (fireEngine). Spawned already IN PLACE (approaching=false)
         // rather than walking in from the road like the rest of the party —
         // it's here to man the gun, not join the charge.
         useEnemyStore.getState().spawn('siegeCrew', entry.x + 7, entry.z + 7, true, undefined, false);

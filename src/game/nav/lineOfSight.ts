@@ -115,10 +115,11 @@ function segmentHitsBox(
  * header), not the flattened 2D nav grid, so an elevated shot over a
  * wall's own footprint reads correctly. `region` follows the same "null
  * means home" convention as everywhere else in the nav module (NavGridOptions.
- * region, Agent.region, PlacedBuilding.world) — Defenders.tsx and Enemies.
- * tsx's own home-only call sites can simply omit it.
+ * region, Agent.region, PlacedBuilding.world) — Defenders.tsx's own home-only
+ * call sites can simply omit it (the enemies' AI, game/enemyAi/, passes each
+ * enemy's own world).
  *
- * The one shared LOS check for ranged combat: Defenders.tsx, Enemies.tsx and
+ * The one shared LOS check for ranged combat: Defenders.tsx, game/enemyAi/ and
  * combat.ts's stepBolt() all call this rather than each rolling its own,
  * and any future ranged-combat caller should reach for it too rather than
  * inventing a fourth ad hoc version that could drift from the rest.

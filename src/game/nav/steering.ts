@@ -100,10 +100,10 @@ const _avoid = { nx: 0, nz: 0 };
 /**
  * NPC_AI_SPEC §7.5 — the separation-steering math itself, exported as a real,
  * reusable function rather than a private closure specifically so a FUTURE
- * wave can wire this identical, already-tuned formula into `Enemies.tsx`/
- * `Defenders.tsx` without redesigning anything. Neither is covered by THIS
- * wave: both bypass `navSteer` entirely today (`Enemies.tsx` calls
- * `findPath`/`rebuildNav` directly and already runs its own ad hoc
+ * wave can wire this identical, already-tuned formula into the enemies' AI
+ * (`game/enemyAi/`)/`Defenders.tsx` without redesigning anything. Neither is covered by THIS
+ * wave: both bypass `navSteer` entirely today (the enemies' AI calls
+ * `findPath` directly — `rebuildNav` is game/directors/navMaintenance.ts's — and already runs its own ad hoc
  * pack-separation among enemies only; `Defenders.tsx` has no separation at
  * all) — migrating either onto this is real, separately-reviewable work this
  * bundle deliberately does not take on. See this wave's own plan for the

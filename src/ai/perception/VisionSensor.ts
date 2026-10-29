@@ -48,7 +48,7 @@ let candCount = 0;
  *  Both ENDPOINTS are skipped on purpose. An agent can legitimately stand on
  *  a cell the nav grid calls blocked (obstacles are inflated by AGENT_RADIUS,
  *  so standing right against a wall reads as blocked), and a mob very much
- *  can — Enemies.tsx steers with its own collision rules, not the nav grid's.
+ *  can — an enemy steers with its own collision rules (game/enemyAi/movement.ts), not the nav grid's.
  *  Testing the endpoints would make a raider pressed against your fence
  *  permanently invisible, which is the worst possible failure for a sensor
  *  whose whole job is noticing raiders. */
@@ -118,7 +118,7 @@ function collectCandidates(agent: Agent, range2: number): void {
     if (e.mob.state === 'dying') continue;
     // Princess Storm is nobody's hostile but the player's. Her duel is first
     // blood between the two of them, and her own side already keeps it that
-    // way (Enemies.tsx never lets her target a defender, Tam or a villager).
+    // way (game/enemyAi/targeting.ts never lets her target a defender, Tam or a villager).
     // Seen like any other mob, she was a threat to answer: Tam charged her the
     // moment the duel began, and his blow ended it as an ordinary kill.
     if (e.kind === 'storm') continue;
@@ -166,7 +166,7 @@ export function updateVision(agent: Agent, st: PerceptionState, now: number, dt:
 
   // forward vector for the cone test. Locomotion.ts writes yaw as
   // `atan2(-nx, -nz)` over the direction of travel, so forward is
-  // (-sin yaw, -cos yaw) — the same convention Villagers.tsx and Enemies.tsx
+  // (-sin yaw, -cos yaw) — the same convention Villagers.tsx and game/enemyAi/
   // both use; getting this backwards would give every NPC eyes in the back of
   // its head and no way to tell from the numbers alone.
   const fx = -Math.sin(agent.yaw);

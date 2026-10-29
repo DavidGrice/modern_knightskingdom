@@ -9,15 +9,13 @@ import { useGLTF } from '@react-three/drei';
 import { BUILDABLES } from './data/buildables';
 import { loadDonor } from '@/lib/minifig';
 import { loadDragonRig } from '@/components/world/DragonOmen';
+import { KIND_FIGURE } from './data/enemies';
 
-// every enemy kind's minifig donor (Enemies.tsx's own CONFIGS) — these are
-// OBJ+MTL, not GLTF, so they warm through the same `loadDonor` cache the
-// live spawn code itself calls, not `useGLTF.preload`
-const ENEMY_DONORS = [
-  'minifigskeleton00', 'minifigweezil00', 'minifiggilbertbad01',
-  'minifigcedricbull00', 'minifigprincessstorm00', 'minifigrichardstrong02',
-  'minifiggilbertbad02', 'minifigweezil01', 'minifigcedricbull04', 'minifiggilbertbad03',
-];
+// every enemy kind's minifig donor (game/data/enemies.ts's KIND_FIGURE, the
+// figures EnemyFigure.tsx draws — taken from there, so a new kind is warmed
+// too) — these are OBJ+MTL, not GLTF, so they warm through the same
+// `loadDonor` cache the live spawn code itself calls, not `useGLTF.preload`
+const ENEMY_DONORS = [...new Set(Object.values(KIND_FIGURE).flatMap((c) => [c.headDonor, c.bodyDonor]))];
 
 let warmed = false;
 

@@ -5,7 +5,7 @@
 // BlackDragonSiege.tsx's own now-retired local formula. Storm's Battle Dome
 // deliberately has no BossId here: she's a 1-HP "first hit ends it" duel
 // with no tier gate at all, and her own reputation-driven reaction-speed
-// curve (Enemies.tsx) is already her real "gets harder" answer — force-
+// curve (game/enemyAi/: blows.ts's cooldown, movement.ts's speed) is already her real "gets harder" answer — force-
 // fitting her would break the mechanic, not generalize it.
 //
 // Leaf module, same role as cedricSiege.ts/raiderRam.ts: reads difficulty.ts

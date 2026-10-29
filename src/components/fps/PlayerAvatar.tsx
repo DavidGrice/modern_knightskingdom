@@ -55,7 +55,7 @@ export default function PlayerAvatar() {
       g.position.set(playerState.x, playerState.y, playerState.z);
       // face the roll's own direction instead of camera yaw while dodging,
       // so a sideways/backward roll visibly turns the body instead of
-      // moonwalking — same movement-facing convention Enemies.tsx's own AI
+      // moonwalking — same movement-facing convention the enemies' own AI (game/enemyAi/)
       // already uses (atan2(-dx, -dz) off a normalized direction).
       const facingYaw = nowDodging
         ? Math.atan2(-combatState.dodgeDir.x, -combatState.dodgeDir.z)

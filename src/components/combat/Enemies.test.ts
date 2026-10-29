@@ -48,6 +48,8 @@ vi.mock('../character/RiggedFigure', () => ({ default: 'RiggedFigure' }));
 vi.mock('../world/RiggedProp', () => ({ default: 'RiggedProp', fireProp: () => {} }));
 vi.mock('./HealthBillboard', () => ({ default: 'HealthBillboard' }));
 vi.mock('../fps/PlayerController', () => ({ default: 'PlayerController', playerState: H.player }));
+// the frame (game/enemyAi/) reads the player from the module PlayerController re-exports it from
+vi.mock('@/game/playerState', async (original) => ({ ...(await original<object>()), playerState: H.player }));
 vi.mock('../world/TemplateWorld', () => ({ homeGroundY: H.ground, destinationGroundY: () => 7 }));
 
 import Enemies from './Enemies';

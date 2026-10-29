@@ -92,7 +92,7 @@ const ALLY_KILL_XP = 15;
  * tally, the experience, the purse, the line the player reads, and last whatever the kill sets in motion.
  *
  * Princess Storm is the one enemy this never kills: see the first lines of the body. And it is not for an enemy that
- * simply falls with nobody to credit (a raider whose wall comes down under it, skeletons at dawn: Enemies.tsx and
+ * simply falls with nobody to credit (a raider whose wall comes down under it, skeletons at dawn: game/enemyAi/ and
  * game/directors/nightSkeletons.ts set `state = 'dying'` themselves for those).
  */
 export function resolveEnemyKill(e: EnemyData, cause: KillCause): void {
@@ -127,7 +127,7 @@ export function resolveEnemyKill(e: EnemyData, cause: KillCause): void {
   if (rules.line) st.notify(rules.line(e.kind, haul, 'villager' in cause ? cause.villager.name : ''), rules.gold);
   // Cedric's Siege: only the sanctioned final stand ever permanently
   // defeats him — every other spawn of his kind flees well before 0 HP
-  // (see Enemies.tsx's flee-guard), so reaching this branch with
+  // (see game/enemyAi/movement.ts's flee-guard), so reaching this branch with
   // finalStand unset should be effectively unreachable, but the gate stays
   // as the deliberate second line of defense against that assumption.
   // Wave 50 (C2): the legendary-halberd roll is computed HERE (this file

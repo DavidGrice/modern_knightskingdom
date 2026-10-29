@@ -11,7 +11,7 @@ export interface Downable {
   hp: number;
   maxHp: number;
   state: 'ok' | 'downed';
-  /** Date.now() ms — stamped at the blow that downed them (Enemies.tsx) */
+  /** Date.now() ms — stamped at the blow that downed them (game/enemyAi/blows.ts) */
   downedUntil: number;
 }
 

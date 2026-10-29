@@ -37,10 +37,11 @@ export const RAIDER_PROPS: readonly BreakableProp[] = [
     wreckedLine: "The raiders' ram is wrecked! Salvaged 4× Wood Log, 2× Plank, 1× Iron Bar.",
   },
   {
-    // Wave 58 (H4) · the siege ladder. Any raider still mid-climb or fighting
-    // from the wall-walk it reached falls the instant
-    // `raiderLadderState.wrecked` goes true (Enemies.tsx's own 'climbing'/
-    // elevated live-recheck handles that, not anything here).
+    // Wave 58 (H4) · the siege ladder. Any raider still mid-climb falls the
+    // instant `raiderLadderState.wrecked` goes true (game/enemyAi/climb.ts's
+    // climb handles that, not anything here); one already up on the wall-walk
+    // stays up as long as his piece of wall stands (the frame's walkwayStands
+    // recheck, game/enemyAi/step.ts).
     state: raiderLadderState,
     radius: LADDER_RADIUS,
     // centred at half its own 3.2m height rather than the ram's low 0.9m:

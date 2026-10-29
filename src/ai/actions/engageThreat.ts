@@ -51,8 +51,8 @@
 // combat system players notice — already exists and is reviewable in isolation.
 //
 // It also gives `perception/Senses.ts`'s `reportAgentDamaged()` its intended
-// caller shape: the moment a defender has an Agent, `Enemies.tsx`'s existing
-// `defTarget.hp -= ...` site is the one line that makes §6.3's damage term
+// caller shape: the moment a defender has an Agent, the enemies' existing
+// `defTarget.hp -= ...` site (now game/enemyAi/blows.ts's blowAtGuard) is the one line that makes §6.3's damage term
 // live. Not wired here, because writing into a shipped combat file for a call
 // that provably cannot resolve today (`agentManager.get(defenderId)` is always
 // undefined) buys nothing and adds an import edge to `Enemies.tsx` that cannot
@@ -60,7 +60,7 @@
 //
 // Wired for real as of Wave 41: `agentManager.get(defenderId)` no longer
 // resolves to `undefined` (a real `defenderObserver` agent exists), so
-// `Enemies.tsx`'s `defTarget` branch now calls `reportAgentDamaged(defId,
+// the enemies' guard blow (game/enemyAi/blows.ts) now calls `reportAgentDamaged(defId,
 // agentManager.now)` right beside the `defTarget.hp -=` line this paragraph
 // describes — the same one-line addition the villagerTarget/companionTarget
 // branches already made in Waves 21/25. That is the ENTIRE behavioral change

@@ -22,7 +22,7 @@ export interface DefenderState {
 export const defenderState: Record<string, DefenderState> = {};
 
 /** Real time knocked out before returning to the fight. Shared by a downed
- *  defender (this file, via Enemies.tsx's own `defTarget.downedUntil` write)
+ *  defender (this file, via game/enemyAi/blows.ts's own `guard.downedUntil` write)
  *  and, as of Wave 21, a downed ordinary villager (game/villagerCombat.ts) —
  *  one number instead of two duplicated literals. Extracted from
  *  Defenders.tsx's own local `RECOVER_MS`, which turned out to be dead code
@@ -89,7 +89,7 @@ export function registerDefender(id: string, postX: number, postY: number, postZ
 }
 
 /** CLN-04 · session start (newGame / new-game-plus / loadFromSave). `defenderState`
- *  is never garbage-collected and Enemies.tsx targets EVERY entry in it, so a
+ *  is never garbage-collected and the enemies' AI (game/enemyAi/targeting.ts) targets EVERY entry in it, so a
  *  defender left over from the last game kept absorbing raiders as an invisible
  *  ghost, and a reused id came back wounded/downed at its old position.
  *
