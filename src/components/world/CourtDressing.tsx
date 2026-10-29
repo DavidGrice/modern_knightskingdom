@@ -15,57 +15,17 @@
 // storage props, same molds reused elsewhere as Workbench/Stockpile/Barrel),
 // so only the anchor point and the doc comments needed to move, not the
 // dressing itself.
-import { Suspense, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import { useGameStore } from '@/game/store/gameStore';
-import { sampleTemplateGroundY } from './TemplateWorld';
+import { Suspense } from 'react';
 import { NPC_KING } from '@/game/data/world';
 import { NPC_BY_ID } from '@/game/data/npcs';
 import { TOURNEY_LISTS } from '@/game/data/tourney';
-import { SCOPED_DESTINATIONS, type WorldDestination } from '@/game/data/worlds';
+import { type WorldDestination } from '@/game/data/worlds';
 import PropModel from './PropModel';
 import { Torch } from './Buildings';
+import { Grounded, Pennant, ZERO_OFFSET } from './SceneDressing';
 
 const AC = '/assets/props/castle_accessories';
 const SCEN = '/assets/props/scenery';
-
-// origin-offset for a piece rendered inside DestinationScope.tsx's own
-// group (already translated by dest.origin) — every existing call site
-// (this file's own default export, GuildHalls.tsx's import of this same
-// Grounded) passes nothing and keeps today's absolute-position behavior
-// byte-for-byte.
-const ZERO_OFFSET = { x: 0, z: 0 };
-
-/** a child group that rides the bake terrain at its own spot, per frame
- *  (the bake streams in async, so a one-shot sample would race the load).
- *  `sampleTemplateGroundY(x, z)` stays the full absolute value regardless of
- *  `originOffset` — a raycast against mountedRoot is nesting-agnostic (see
- *  TemplateWorld.tsx); only the final position write below is local. */
-export function Grounded({ x, z, lift = 0, originOffset = ZERO_OFFSET, children }: { x: number; z: number; lift?: number; originOffset?: { x: number; z: number }; children: React.ReactNode }) {
-  const group = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (group.current) group.current.position.y = sampleTemplateGroundY(x, z) + lift;
-  });
-  return <group ref={group} position={[x - originOffset.x, 0, z - originOffset.z]}>{children}</group>;
-}
-
-/** pennant pole — the same simple procedural flag treatment as ClaimFlag,
- *  in tourney colors */
-export function Pennant({ color }: { color: string }) {
-  return (
-    <group>
-      <mesh position-y={1.5} castShadow>
-        <cylinderGeometry args={[0.05, 0.06, 3, 6]} />
-        <meshStandardMaterial color="#6b4a2a" roughness={1} />
-      </mesh>
-      <mesh position={[0.4, 2.6, 0]} rotation-y={Math.PI / 2}>
-        <planeGeometry args={[0.8, 0.5]} />
-        <meshStandardMaterial color={color} side={THREE.DoubleSide} />
-      </mesh>
-    </group>
-  );
-}
 
 /** King Leo & Leonora's open-air court: a stone dais bearing the real
  *  throne mold, flanked by the Keep interior's mirrored crest banners and
@@ -147,26 +107,13 @@ function QuartermasterStores({ originOffset = ZERO_OFFSET }: { originOffset?: { 
   );
 }
 
-// Stage 2 (2026-08-21): every destination that ever had dressing here
-// (template-01/02/03) is now in SCOPED_DESTINATIONS, so this default export
-// is permanently inert — the `destination === 'template-02'`/`'template-03'`
-// branches it used to carry are gone, not just unreachable (same call the
-// old 'template-01' branch got in Stage 1). Left mounted in GameWorld.tsx
-// as a harmless no-op rather than pulled, since nothing depends on it being
-// gone and removing it is a separate, unrelated cleanup.
-export default function CourtDressing() {
-  const destination = useGameStore((s) => s.destination);
-  if (destination && SCOPED_DESTINATIONS.has(destination)) return null;
-  return null;
-}
-
 /** Scene-isolation rearchitecture · renders whichever SCOPED_DESTINATIONS
  *  member's dressing exists, with `dest.origin` subtracted at each piece's
  *  final position write (via each function's own `originOffset` threading
- *  through Grounded above) — meant to be mounted inside DestinationScope.tsx's
+ *  through Grounded, SceneDressing.tsx) — meant to be mounted inside DestinationScope.tsx's
  *  own origin-offset group. Stage 1 (2026-08-20) added template-01; Stage 2
  *  (2026-08-21) added template-02/template-03 (TourneyLists/RiverCargo, moved
- *  here from the default export above). template-01 grew a second piece
+ *  here from this file's old default export, since deleted — CLN-25). template-01 grew a second piece
  *  (2026-08-25): John's stores followed him here from template-03 (see
  *  QuartermasterStores's own comment), which is why that destination's own
  *  case below dropped — nobody lives at The River Landing anymore for it to

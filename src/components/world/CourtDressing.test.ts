@@ -9,7 +9,8 @@ vi.mock('./PropModel', () => ({ default: 'PropModel' }));
 vi.mock('./Buildings', () => ({ Torch: 'Torch' }));
 
 import { Suspense } from 'react';
-import { DestinationCourtDressing, Grounded, Pennant } from './CourtDressing';
+import { DestinationCourtDressing } from './CourtDressing';
+import { Grounded, Pennant } from './SceneDressing';
 import { TOURNEY_LISTS } from '@/game/data/tourney';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 

@@ -10,7 +10,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { BUILDABLE_BY_ID, labAssetId, solidOffsetRotated } from '@/game/data/buildables';
 import RiggedProp from './RiggedProp';
 import { hasAnimatedRig } from '@/lib/propRig';
-import ConstructionSiteModel from './ConstructionSite';
+import ConstructionSiteModel, { SurveyorStakes } from './ConstructionSite';
 import LabFlame from './LabFlame';
 import PropModel from './PropModel';
 import { isBuilt } from '@/game/types';
@@ -381,9 +381,6 @@ function ConstructionSite({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding
   // scale too — see BuildingMesh's identical `scale` read below for why this
   // is visual-only and reads exactly the same field.
   const scale = b.scale ?? 1;
-  const stakes: [number, number][] = [
-    [-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2],
-  ];
   if (def.model) {
     return (
       <group position={[b.x - originOffset.x, y, b.z - originOffset.z]} rotation-y={yaw} scale={scale}>
@@ -401,12 +398,7 @@ function ConstructionSite({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding
         <meshBasicMaterial color="#e8c141" transparent opacity={0.14} depthWrite={false} />
       </mesh>
       {/* surveyor's stakes at each corner */}
-      {stakes.map(([px, pz], i) => (
-        <mesh key={i} position={[px, 0.3, pz]} castShadow>
-          <cylinderGeometry args={[0.035, 0.05, 0.6, 5]} />
-          <meshStandardMaterial color="#8a6234" roughness={1} />
-        </mesh>
-      ))}
+      <SurveyorStakes w={w} d={d} />
       {/* the solid work-in-progress, rising from the ground with each swing */}
       {progress > 0.01 && (
         <mesh position-y={(h * progress) / 2} castShadow receiveShadow>

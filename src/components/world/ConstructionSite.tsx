@@ -101,9 +101,6 @@ export default function ConstructionSiteModel({
   scale?: number;
 }) {
   const [w, h, d] = size;
-  const stakes: [number, number][] = [
-    [-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2],
-  ];
   return (
     <group>
       {/* the plan: the real shape, in outline */}
@@ -113,12 +110,25 @@ export default function ConstructionSiteModel({
         <RisingModel url={url} height={h} topY={worldY + h * progress * scale} wire={false} />
       )}
       {/* surveyor's stakes, so an unstarted site still reads as claimed ground */}
+      <SurveyorStakes w={w} d={d} />
+    </group>
+  );
+}
+
+/** A surveyor's stake at each corner of a `w` × `d` footprint — an unstarted site still reads as claimed ground. The
+ *  model site above and Buildings.tsx's site for a primitive piece both stake out with it. */
+export function SurveyorStakes({ w, d }: { w: number; d: number }) {
+  const stakes: [number, number][] = [
+    [-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2],
+  ];
+  return (
+    <>
       {stakes.map(([px, pz], i) => (
         <mesh key={i} position={[px, 0.3, pz]} castShadow>
           <cylinderGeometry args={[0.035, 0.05, 0.6, 5]} />
           <meshStandardMaterial color="#8a6234" roughness={1} />
         </mesh>
       ))}
-    </group>
+    </>
   );
 }

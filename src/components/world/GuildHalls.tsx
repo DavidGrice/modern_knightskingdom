@@ -7,7 +7,7 @@
 import { Suspense } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { GUILD_BY_WORLD } from '@/game/data/guilds';
-import { Grounded, Pennant } from './CourtDressing';
+import { Grounded, Pennant } from './SceneDressing';
 import PropModel from './PropModel';
 
 const SCEN = '/assets/props/scenery';
