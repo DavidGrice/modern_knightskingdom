@@ -122,7 +122,7 @@ export default function GameScreen() {
           // I41 · hold to open the order radial. It is NOT a panel: opening a
           // panel releases pointer lock, and giving a routine order should
           // not interrupt mouse-look at all. Held open here, steered by the
-          // mouse in PlayerController, committed on release below.
+          // mouse (components/fps/input/usePointerLock.ts), committed on release below.
           if (!st.paused && !st.buildMode && st.panel === 'none' && !commandWheel.open) {
             openWheel(DEFENDER_ORDER_COUNT);
           }

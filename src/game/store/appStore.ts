@@ -62,8 +62,9 @@ interface Settings {
   /** Wave 33: the 8 GAMEPAD_BUTTONS actions (gamepadInput.ts), now
    *  rebindable via Options > Keybinds > Gamepad — same table-of-indices
    *  shape as `keybinds` above, just button indices instead of KeyboardEvent
-   *  codes. PlayerController's own jump/interact/sprint/d-pad stay out of
-   *  this table entirely (see gamepadInput.ts's header). */
+   *  codes. The movement poll's d-pad (pollGamepad, components/fps/input/
+   *  pads.ts) stays out of this table entirely (see gamepadInput.ts's
+   *  header); jump/interact/sprint joined it in Wave 61. */
   gamepadButtons: Record<string, number>;
   /** Wave 15: which device's prompt text/glyphs the HUD should show.
    *  'auto' (default) follows whichever device actually produced the last

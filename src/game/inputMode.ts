@@ -11,8 +11,9 @@
 //    device presence (a gamepad sitting connected but untouched, or a touch
 //    device whose player is using a paired keyboard, shouldn't flip this).
 //
-// Written from: PlayerController's keydown listener + pollGamepad (real
-// button/axis motion) + CombatController's mousedown + TouchControls' own
+// Written from: the player's keydown listener and pollGamepad
+// (components/fps/input/usePlayerInput.ts, pads.ts — real button/axis
+// motion) + CombatController's mousedown + TouchControls' own
 // touchstart. Read by HUD.tsx's interact prompt and Panels.tsx's cheat
 // sheet via resolveInputDevice().
 import { useGameStore } from './store/gameStore';
@@ -40,7 +41,7 @@ export function resolveInputDevice(mode: 'auto' | InputDevice, active: InputDevi
 }
 
 // the on-screen/physical control that actually drives "interact" for each
-// device — X is PlayerController's pollGamepad button 2; keyboard's bound
+// device — X is pollGamepad's button 2 (components/fps/input/pads.ts); keyboard's bound
 // key and touch's own on-screen button both happen to already read "E"
 // (TouchControls.tsx's Interact circle is literally labelled E), so there's
 // only one real fork here.

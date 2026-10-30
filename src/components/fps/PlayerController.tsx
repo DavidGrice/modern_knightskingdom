@@ -12,8 +12,7 @@ import {
 import { NPC_BY_ID } from '@/game/data/npcs';
 import { audio } from '@/lib/audio';
 import { playerState } from '@/game/playerState';
-import { touchState } from '@/game/touchInput';
-import { noteInputDevice, resolveInputDevice, interactLabel, clickHoldLabel } from '@/game/inputMode';
+import { resolveInputDevice, interactLabel, clickHoldLabel } from '@/game/inputMode';
 import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer, tryDodge, DODGE_SPEED } from '@/game/combat';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { sweepWorld, tickWorldFrame, WORLD_SWEEP_S } from '@/game/worldTick';
@@ -26,14 +25,16 @@ import { homeGroundY } from '../world/TemplateWorld';
 import { aimState, resolveAim } from '@/game/targeting';
 import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine } from '@/game/crew';
-import { commandWheel, steerWheel } from '@/game/commandWheel';
-import { pointerLockActive, releaseGameLock, requestGameLock } from '@/game/pointerLock';
 import { exposeDebug } from '@/lib/debugHooks';
 import { findTarget } from '@/game/interaction/findTarget';
 import { performAction } from '@/game/interaction/performAction';
 import { floorUnder, _terrainOut } from '@/game/playerPhysics/floor';
 import { collide } from '@/game/playerPhysics/collide';
 import { fall } from '@/game/playerPhysics/vertical';
+import { usePointerLock } from './input/usePointerLock';
+import { usePlayerInput } from './input/usePlayerInput';
+import { pollPads } from './input/pads';
+import { keyboardLook } from './input/look';
 
 
 /** scratch for projecting the aim target's head to screen space */
@@ -59,119 +60,6 @@ const _camLookDirV = new THREE.Vector3();
 const _camPosV = new THREE.Vector3();
 const _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _lookAtV = new THREE.Vector3();
-
-const STICK_DEADZONE = 0.25;
-
-// Standard-mapping gamepad -> the same action codes keyboard uses, written
-// into a separate `pad` record (not `keys`) so a stick returning to neutral
-// can't be confused with "the keyboard key was never pressed" — the two
-// sources are OR'd together at read time (see `isDown` in the component).
-//
-// Wave 61 (H1) · jump/interact/sprint's button indices now come from
-// `gpBtn` (the live, possibly-rebound settings.gamepadButtons table —
-// data/gamepadInput.ts) instead of being literal 0/2/5 here, the same
-// pattern CombatController.tsx's attack/block/swap/dodge reads already use.
-// D-pad -> movement stays a literal index on purpose (see that file's header
-// comment for why movement itself isn't part of the rebind table).
-function pollGamepad(
-  pad: Record<string, boolean>,
-  kb: Record<string, string>,
-  gpBtn: Record<string, number>,
-  yaw: { current: number },
-  pitch: { current: number },
-  invertY: boolean,
-  dt: number,
-) {
-  const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
-  const gp = pads?.[0];
-  if (!gp) {
-    // Wave 15: a mid-session disconnect (or simply no pad ever connected)
-    // must not leave whatever this SAME pad record wrote last frame stuck
-    // "held" — pad[...] is OR'd with the keyboard at read time (isDown(),
-    // below), so a stale true here would keep moving/jumping/sprinting the
-    // player with no controller attached at all. Cleared explicitly every
-    // frame there's no gamepad rather than relying solely on the
-    // 'gamepaddisconnected' event (see the connect/disconnect effect below)
-    // — this self-heals even if that event is ever delayed or missed.
-    pad[kb.moveForward] = false;
-    pad[kb.moveBack] = false;
-    pad[kb.moveLeft] = false;
-    pad[kb.moveRight] = false;
-    pad[kb.jump] = false;
-    pad[kb.interact] = false;
-    pad[kb.sprint] = false;
-    return;
-  }
-  const [lx, ly, rx, ry] = gp.axes;
-  const dpadUp = gp.buttons[12]?.pressed;
-  const dpadDown = gp.buttons[13]?.pressed;
-  const dpadLeft = gp.buttons[14]?.pressed;
-  const dpadRight = gp.buttons[15]?.pressed;
-
-  // Wave 15: a gamepad merely being CONNECTED shouldn't flip the HUD into
-  // gamepad prompts — only the player actually touching it should. Checked
-  // against every button/axis (not just the ones this function itself
-  // consumes) so CombatController's RT/LT/Y and GamepadMenuController's
-  // Start/B/LB/Back/L-stick reads all count too, from this one place.
-  const anyAxis = [lx, ly, rx, ry].some((v) => Math.abs(v ?? 0) > STICK_DEADZONE);
-  const anyButton = gp.buttons.some((b) => b.pressed);
-  if (anyAxis || anyButton) noteInputDevice('gamepad');
-
-  pad[kb.moveForward] = (ly ?? 0) < -STICK_DEADZONE || !!dpadUp;
-  pad[kb.moveBack] = (ly ?? 0) > STICK_DEADZONE || !!dpadDown;
-  pad[kb.moveLeft] = (lx ?? 0) < -STICK_DEADZONE || !!dpadLeft;
-  pad[kb.moveRight] = (lx ?? 0) > STICK_DEADZONE || !!dpadRight;
-  pad[kb.jump] = !!gp.buttons[gpBtn.jump]?.pressed; // default A
-  pad[kb.interact] = !!gp.buttons[gpBtn.interact]?.pressed; // default X (held, matches "Hold E")
-  pad[kb.sprint] = !!gp.buttons[gpBtn.sprint]?.pressed; // default RB
-
-  // right stick -> look, analog (unlike the digital arrow-key look)
-  const turn = 2.4 * dt;
-  if (Math.abs(rx ?? 0) > STICK_DEADZONE) yaw.current -= rx * turn;
-  if (Math.abs(ry ?? 0) > STICK_DEADZONE) {
-    const d = ry * turn * (invertY ? -1 : 1);
-    pitch.current = THREE.MathUtils.clamp(pitch.current - d, -1.45, 1.45);
-  }
-}
-
-// Mobile-friendly pass (2026-07-20): TouchControls.tsx (a 2D HUD overlay, a
-// separate React tree from this Canvas-side component) writes into
-// game/touchInput.ts's leaf module every touch event; this reads it back
-// each frame exactly like pollGamepad reads a real Gamepad — same `pad`
-// record, same yaw/pitch refs, so every downstream isDown()/movement/look
-// check already works with zero further changes.
-function pollTouch(
-  pad: Record<string, boolean>,
-  kb: Record<string, string>,
-  yaw: { current: number },
-  pitch: { current: number },
-  invertY: boolean,
-) {
-  if (!touchState.active) return;
-  const dz = 0.3; // virtual-stick deadzone — thumbs drift more than a real analog stick
-  // OR-merge, not overwrite: pollGamepad already ran this frame, and on a
-  // hybrid device (touch + a connected gamepad) a `false` touch channel must
-  // not clear a `true` the gamepad just set for the same action.
-  pad[kb.moveForward] = pad[kb.moveForward] || touchState.moveY < -dz;
-  pad[kb.moveBack] = pad[kb.moveBack] || touchState.moveY > dz;
-  pad[kb.moveLeft] = pad[kb.moveLeft] || touchState.moveX < -dz;
-  pad[kb.moveRight] = pad[kb.moveRight] || touchState.moveX > dz;
-  pad[kb.jump] = pad[kb.jump] || touchState.jump;
-  pad[kb.interact] = pad[kb.interact] || touchState.interact;
-  pad[kb.sprint] = pad[kb.sprint] || touchState.sprint;
-
-  // look-drag deltas are per-event accumulations since last frame (mirrors
-  // mouse movementX/Y) — apply with the same sensitivity formula the mouse
-  // path uses, then consume (zero) them so they don't compound next frame
-  if (touchState.lookDX !== 0 || touchState.lookDY !== 0) {
-    const sens = 0.0022 * useAppStore.getState().settings.mouseSensitivity * 2;
-    yaw.current -= touchState.lookDX * sens;
-    const dy = touchState.lookDY * sens * (invertY ? -1 : 1);
-    pitch.current = THREE.MathUtils.clamp(pitch.current - dy, -1.45, 1.45);
-    touchState.lookDX = 0;
-    touchState.lookDY = 0;
-  }
-}
 
 export { playerState };
 
@@ -204,8 +92,6 @@ export default function PlayerController() {
   const vel = useRef(new THREE.Vector3());
   const yaw = useRef(playerState.yaw);   // yaw 0 faces the homestead (-Z from spawn)
   const pitch = useRef(playerState.pitch);
-  const keys = useRef<Record<string, boolean>>({});
-  const pad = useRef<Record<string, boolean>>({});
   const grounded = useRef(true);
   // Wave 12 · was the player standing on bare ground last frame, rather than on
   // something built? The ledge test in the frame loop needs the PREVIOUS
@@ -216,7 +102,6 @@ export default function PlayerController() {
   // block still apply), not a per-frame call, which would spam the hit
   // sound/screen-flash 60x/sec
   const arenaDamageTimer = useRef(1);
-  const locked = useRef(false);
   const holdTime = useRef(0);
   const crewCooldown = useRef(0);
   const aimTimer = useRef(0);
@@ -233,144 +118,11 @@ export default function PlayerController() {
   const stepTimer = useRef(0);
   const stationTimer = useRef(0);
   const talkCooldown = useRef(0);
-  /** the retrying pointer-lock request, shared with the panel watcher below */
-  const lockRef = useRef<(() => void) | null>(null);
-  const lockCleanup = useRef<(() => void) | null>(null);
 
-  // ---- pointer lock + mouse look ----
-  //
-  // Losing the pointer used to mean losing mouse-look until you remembered to
-  // click the world again: the lock was only ever requested from a click, so
-  // every panel you closed, every pause you came back from, dropped you into a
-  // dead camera. That is the immersion break — not the panel itself, but the
-  // silence afterwards.
-  //
-  // The rule now is intent-based: whenever the game is in PLAY (not paused, no
-  // panel, not in build view) the controller WANTS the lock, and it keeps
-  // asking until it has it. Two things make that non-trivial, and both are
-  // handled below rather than hoped about:
-  //   · a browser refuses `requestPointerLock` for about a second after the
-  //     user pressed Esc to leave it, and fails SILENTLY through
-  //     `pointerlockerror` — so an immediate re-request after closing a panel
-  //     with Esc is exactly the case that does not work;
-  //   · the request needs the document focused, which it is not while an
-  //     alert or a devtools pane has it.
-  // So a failed attempt schedules another rather than giving up.
-  useEffect(() => {
-    const el = gl.domElement;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-
-    const wantsLock = () => {
-      const st = useGameStore.getState();
-      return !st.paused && !st.buildMode && st.panel === 'none';
-    };
-    const tryLock = () => {
-      if (retry) { clearTimeout(retry); retry = null; }
-      if (!wantsLock() || pointerLockActive(el)) return;
-      // NEVER take the pointer while the player is somewhere else. The first
-      // cut of this retried on a timer, on pointerlockerror and on window
-      // focus, which meant clicking into another window — a browser tab, a
-      // chat — handed the pointer straight back to the game and trapped it
-      // there. Wanting the lock is not the same as being entitled to it.
-      if (!document.hasFocus()) return;
-      // (game/pointerLock.ts: a browser under automation gets a virtual lock, never the real one)
-      try {
-        requestGameLock(el);
-      } catch { /* the next click will do it */ }
-    };
-    lockRef.current = tryLock;
-
-    const onClick = () => tryLock();
-    const onLockChange = () => {
-      locked.current = pointerLockActive(el);
-      // deliberately nothing here. Losing the pointer is often the player
-      // LEAVING — alt-tab, a click into another window — and grabbing it
-      // back is the behaviour that made the game feel like it would not let
-      // go. A click on the world takes it again, which is the gesture the
-      // player already knows.
-    };
-    lockCleanup.current = () => { if (retry) clearTimeout(retry); };
-    const onMove = (e: MouseEvent) => {
-      if (!locked.current) return;
-      // I41 · while the order radial is held open, the pointer steers the
-      // WHEEL rather than the camera — which is the whole point: the lock is
-      // never released, so giving an order does not punch a hole in
-      // mouse-look the way opening a modal did.
-      if (commandWheel.open) { steerWheel(e.movementX, e.movementY); return; }
-      const sens = 0.0022 * useAppStore.getState().settings.mouseSensitivity * 2;
-      yaw.current -= e.movementX * sens;
-      const dy = e.movementY * sens * (useAppStore.getState().settings.invertY ? -1 : 1);
-      pitch.current = THREE.MathUtils.clamp(pitch.current - dy, -1.45, 1.45);
-    };
-    el.addEventListener('click', onClick);
-    document.addEventListener('pointerlockchange', onLockChange);
-    document.addEventListener('mousemove', onMove);
-    return () => {
-      el.removeEventListener('click', onClick);
-      document.removeEventListener('pointerlockchange', onLockChange);
-      document.removeEventListener('mousemove', onMove);
-      lockCleanup.current?.();
-      if (pointerLockActive(el)) releaseGameLock();
-    };
-  }, [gl]);
-
-  // Release the pointer when something genuinely needs the cursor — and TAKE
-  // IT BACK the moment that thing is done. The retaking is the half that was
-  // missing: closing a panel used to leave the camera dead until you clicked.
-  useEffect(() => {
-    let blocked = false;
-    const unsub = useGameStore.subscribe((st) => {
-      const nowBlocked = st.paused || st.panel !== 'none' || st.buildMode;
-      if (nowBlocked) releaseGameLock();
-      if (blocked && !nowBlocked) {
-        // Closing a panel is the one transition the game itself drives, so it
-        // is the one place worth asking unprompted — once, and only if the
-        // window still has focus. If the browser refuses (its post-Esc
-        // cooldown), a click takes it back.
-        setTimeout(() => lockRef.current?.(), 120);
-      }
-      blocked = nowBlocked;
-    });
-    return unsub;
-  }, []);
-
-  // ---- keyboard ----
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => { keys.current[e.code] = true; noteInputDevice('keyboard'); };
-    const up = (e: KeyboardEvent) => { keys.current[e.code] = false; };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
-  }, []);
-
-  // ---- gamepad connect/disconnect ----
-  // Wave 15: navigator.getGamepads() is polled cold every frame elsewhere
-  // (pollGamepad above, and CombatController/GamepadMenuController's own
-  // reads) rather than cached from these events, so nothing here is load-
-  // bearing for correctness — pollGamepad's own `!gp` branch already self-
-  // heals a stale hold the frame after a disconnect regardless of whether
-  // this event ever fires. What these two listeners buy: a visible cue that
-  // a controller was recognised at all (nothing else in the UI shows
-  // connection state), and clearing `pad` immediately on disconnect instead
-  // of waiting up to one frame for the poll loop to notice.
-  useEffect(() => {
-    const onConnect = (e: GamepadEvent) => {
-      useGameStore.getState().notify(`🎮 Controller connected: ${e.gamepad.id}`);
-    };
-    const onDisconnect = (e: GamepadEvent) => {
-      pad.current = {};
-      useGameStore.getState().notify(`🎮 Controller disconnected: ${e.gamepad.id}`);
-    };
-    window.addEventListener('gamepadconnected', onConnect);
-    window.addEventListener('gamepaddisconnected', onDisconnect);
-    return () => {
-      window.removeEventListener('gamepadconnected', onConnect);
-      window.removeEventListener('gamepaddisconnected', onDisconnect);
-    };
-  }, []);
+  // the pointer lock with mouse look, then the keyboard and the gamepad (CLN-26: input/usePointerLock.ts,
+  // input/usePlayerInput.ts) — their effects in the order they always ran
+  usePointerLock(gl, yaw, pitch);
+  const { keys, pad } = usePlayerInput();
 
   // fov: settings value, squeezed while aiming the crossbow
   useFrame((_, dt) => {
@@ -393,10 +145,7 @@ export default function PlayerController() {
     const frozen = st.paused || st.buildMode || st.panel !== 'none' || !!st.ceremony;
     const kb = useAppStore.getState().settings.keybinds;
     const isDown = (code: string) => keys.current[code] || pad.current[code];
-    if (!frozen) {
-      pollGamepad(pad.current, kb, useAppStore.getState().settings.gamepadButtons, yaw, pitch, useAppStore.getState().settings.invertY, dt);
-      pollTouch(pad.current, kb, yaw, pitch, useAppStore.getState().settings.invertY);
-    } else pad.current = {};
+    pollPads(frozen, pad, kb, yaw, pitch, dt);
 
     // knocked out -> carried back to camp (set by the combat system)
     if (combatState.teleportTo) {
@@ -418,12 +167,7 @@ export default function PlayerController() {
     camera.rotation.set(pitch.current, yaw.current, 0);
 
     if (!frozen) {
-      // keyboard camera turning (arrow keys), in addition to mouse look
-      const turn = 2.0 * dt;
-      if (keys.current[kb.lookLeft]) yaw.current += turn;
-      if (keys.current[kb.lookRight]) yaw.current -= turn;
-      if (keys.current[kb.lookUp]) pitch.current = THREE.MathUtils.clamp(pitch.current + turn, -1.45, 1.45);
-      if (keys.current[kb.lookDown]) pitch.current = THREE.MathUtils.clamp(pitch.current - turn, -1.45, 1.45);
+      keyboardLook(keys, kb, yaw, pitch, dt);
       camera.rotation.set(pitch.current, yaw.current, 0);
       if (st.photoMode) {
         // Wave 40 (A6) · a dodge queued while free-flying (photo mode has no

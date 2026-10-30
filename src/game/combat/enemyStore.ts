@@ -230,7 +230,8 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
 // already imports nothing from the combat modules, and they already import
 // useGameStore the other way. Tracking the previous value in a closure
 // (rather than reading zustand's second `prevState` argument) mirrors
-// PlayerController.tsx's own pointer-lock subscriber for the same reason:
+// the player's pointer-lock panel watcher (components/fps/input/usePointerLock.ts)
+// for the same reason:
 // simplest thing that works, one clear precedent in this codebase already.
 let lastEnemyWorld: string | null = null;
 useGameStore.subscribe((s) => {
