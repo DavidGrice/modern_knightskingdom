@@ -6,7 +6,7 @@
 //
 // A PROTOTYPE, bounded to two quadrants on purpose. The homestead has been
 // unconditionally flat since Phase 20, and not merely by convention: the
-// player's own `floorHeightAt` (PlayerController.tsx) opened with a literal
+// player's own `floorHeightAt` (game/playerPhysics/floor.ts) opened with a literal
 // `let floor = 0` and only ever raised it from placed buildings; the home
 // meadow bake registers itself as nothing gameplay can sample, and until
 // Wave 12 only a mounted DESTINATION did (TemplateWorld.tsx); `activeBuildRegion`
@@ -136,7 +136,7 @@ export const TERRAIN_REGIONS = TERRAIN_REGIONS_DATA as unknown as TerrainRegion[
 export const DOWNS_SINK = 0.9;
 
 /** The steepest ground the player's own movement resolver stays glued to.
- *  PlayerController leaves `grounded` (and starts falling) the moment the floor
+ *  the player's fall (game/playerPhysics/vertical.ts) leaves `grounded` (and starts falling) the moment the floor
  *  drops more than 0.08m below its feet in a single frame; sprinting at 7 m/s
  *  that is a gradient of 0.69 at 60fps but only 0.34 at 30. Every region's
  *  authored field is held under the 30fps figure, so running downhill is a

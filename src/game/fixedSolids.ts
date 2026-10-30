@@ -1,7 +1,7 @@
 // The walls the world puts up itself, as solids for the code that asks what stops a walker.
 //
 // Everything a player builds is a PlacedBuilding in the store, and three readers turn those into obstacles with
-// collisionBoxesFor: the player's own collision at home (PlayerController.tsx), the navigation grid (nav/grid.ts's
+// collisionBoxesFor: the player's own collision at home (game/playerPhysics/collide.ts), the navigation grid (nav/grid.ts's
 // rebuild) and line of sight (nav/lineOfSight.ts). The merchant's camp is not built by the player — its five pieces of
 // castle wall are a table, MERCHANT_CAMP_WALLS (data/trade.ts), drawn by MerchantCamp.tsx — and none of the three
 // read it, so the walls stopped nobody: a player walked straight through any of them, the grid had none of their

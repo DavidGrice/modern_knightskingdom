@@ -21,7 +21,7 @@ export const POND = { x: 52, z: 42, radius: 8 };
 // A short wooden dock from the old shore-side fishing sign running along
 // the pond's edge, so fishing means standing at the water's edge looking
 // out over it rather than interacting with a signpost on dry land (see
-// ResourceNodes.tsx's FishingSpot and PlayerController's pond-collision
+// ResourceNodes.tsx's FishingSpot and the player's pond-collision (game/playerPhysics/collide.ts)
 // corridor exception). Both ends sit at the same ~8.5m radius from POND's
 // center (right at the bank) — a straight radial dock plunged toward the
 // pond's middle instead (old endpoint sat at radius ~4, well inside the

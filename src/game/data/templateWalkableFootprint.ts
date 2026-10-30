@@ -9,7 +9,7 @@
 // A LEAF MODULE, deliberately: imports only the generated JSON and
 // WorldDestination's type from worlds.ts — never anything under
 // components/world/*. TemplateWorld.tsx needs to consume this (the ground
-// filler disc) while PlayerController.tsx/Minimap.tsx also need it directly,
+// filler disc) while game/playerPhysics/collide.ts/Minimap.tsx also need it directly,
 // so importing back from TemplateWorld.tsx here would create a cycle for the
 // exact reason DestinationScope.tsx's own header comment already flags for
 // the same shape of problem.

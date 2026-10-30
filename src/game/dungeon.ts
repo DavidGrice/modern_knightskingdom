@@ -3,7 +3,7 @@
 // every descent — kept in a mutable leaf module (not the zustand store, and
 // not persisted) since it's ephemeral generated-world state, exactly like
 // `raiderRamState`/`cartState` — DungeonScene.tsx reads it to render,
-// PlayerController.tsx reads it for wall collision, the crypt's director
+// game/playerPhysics/collide.ts reads it for wall collision, the crypt's director
 // (game/directors/dungeonDirector.ts) reads/writes room-cleared state as spawned enemies die.
 //
 // Redesigned from the original single-line-of-square-rooms version: that
@@ -195,7 +195,7 @@ export interface DungeonLayout {
  *  also 8m-wide and would read as a striking "ancient, crumbling crypt"
  *  theme: both are flagged `hasHole` (WALL_HOLE in data/buildables.ts) and
  *  read as walk-through breaches everywhere else they're placed. The
- *  Crypt's own collision (below, and PlayerController.tsx / navgrid.ts)
+ *  Crypt's own collision (below, and game/playerPhysics/collide.ts / navgrid.ts)
  *  always resolves a wall slot as one full solid box regardless of which
  *  mesh is drawn there — a visibly-breached wall that still stops you cold
  *  would be a real, confusing bug, not just a cosmetic swap. `mc006` has no

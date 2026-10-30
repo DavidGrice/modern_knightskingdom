@@ -122,7 +122,7 @@ export function partsFor(kind: SocketKind): KeepPart[] {
 // a defender at exactly that height, which is why archers on the wall have
 // looked right for waves. What never existed was anything for the PLAYER to
 // stand on up there: the raised pieces are not PlacedBuildings (they live only
-// in KeepState), so PlayerController's floorHeightAt loop over `st.buildings`
+// in KeepState), so floorHeightAt's loop over `st.buildings` (game/playerPhysics/floor.ts)
 // cannot see them and gravity pulls straight through to the courtyard.
 //
 // Footprints come from the socket layout at the top of this file rather than a
