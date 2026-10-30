@@ -40,7 +40,7 @@ const MERCHANT_KEEP_PROPS = false;
 // toggle keyed off merchantPresent(time) — present one frame, gone the next.
 // He now walks in from down the road and back out, same as any other actor
 // using navSteer. The trading window (merchantPresent, read by
-// PlayerController's interact check and Minimap's icon — see both files) is
+// findTarget's interact check, game/interaction/, and Minimap's icon — see both files) is
 // UNCHANGED and stays keyed to the fixed MERCHANT_SPOT constant, so nothing
 // there needs to know this file changed: the walk happens entirely in a
 // buffer just outside that window, and position is pinned to MERCHANT_SPOT
@@ -304,7 +304,7 @@ export default function Merchant() {
 
     if (stage === 'present') {
       // pinned exactly on MERCHANT_SPOT — this is the contract
-      // PlayerController/Minimap rely on (see the note above)
+      // findTarget (game/interaction/) and Minimap rely on (see the note above)
       s.x = MERCHANT_SPOT.x;
       s.z = MERCHANT_SPOT.z;
       s.yaw = MERCHANT_SPOT.yaw;

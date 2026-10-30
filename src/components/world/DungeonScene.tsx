@@ -43,7 +43,7 @@ const CAPTIVE_RUN_DIST = 6;
 const CAPTIVE_WALK_SPEED = 2.6;
 const CAPTIVE_RUN_SPEED = 4.8;
 
-// Wave 48 (B9) · the escort captive, freed via PlayerController.tsx's
+// Wave 48 (B9) · the escort captive, freed via game/interaction/performAction.ts's
 // 'dungeon_captive' interact (dungeon.ts's DungeonRoom.objective doc). Unlike
 // RelicMarker above (purely static, a `.visible` toggle), this one moves —
 // styled after Defenders.tsx's DefenderFigure per-frame pattern (ref + a
@@ -91,7 +91,7 @@ function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: nu
     // delivery (Math.hypot against layout.entryPos, gated on
     // dungeon.ts's ESCORT_EXTRACTION_RADIUS) — this component owns movement,
     // that one owns the clear decision, exactly like spawned/cleared already
-    // split between dungeonDirector.ts and PlayerController.tsx.
+    // split between dungeonDirector.ts and game/interaction/performAction.ts.
     room.captiveX = agent.x;
     room.captiveZ = agent.z;
     g.position.set(agent.x - ox, 0, agent.z - oz);
@@ -109,7 +109,7 @@ function CaptiveFigure({ room, ox, oz }: { room: DungeonRoom; ox: number; oz: nu
 
 // Wave 13 · the relic a 'retrieve' room asks the player to take (see
 // dungeon.ts's DungeonRoom.objective doc). `relicTaken` is a plain mutation
-// on the shared dungeonState object (PlayerController.tsx's 'dungeon_relic'
+// on the shared dungeonState object (game/interaction/performAction.ts's 'dungeon_relic'
 // interact flips it, the exact same "leaf module the frame loop reads"
 // pattern dungeonDirector.ts already uses for `cleared`/`spawned`), so visibility
 // is driven by useFrame reading it directly rather than React state —

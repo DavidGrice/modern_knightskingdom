@@ -25,7 +25,7 @@ export function isCourtHours(time: number): boolean {
 /** whether an NPC is both revealed AND, for one with its own `courtHours`
  *  gate, actually in session right now. Used wherever a check needs to know
  *  if this NPC is really there to talk to this instant, not just whether
- *  they've ever appeared — PlayerController's destination interact loop and
+ *  they've ever appeared — findTarget's destination interact loop (game/interaction/) and
  *  Minimap's own NPC-dot loop (both already run every frame off a live
  *  `worldEnv.time` read, so the gate is genuinely reactive there — see each
  *  file's own call site). */

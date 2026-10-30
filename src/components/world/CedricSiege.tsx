@@ -3,7 +3,7 @@
 // unlocked (game/cedricSiege.ts's tier gate), a nightly roll can bring his
 // FULL war party — and his siege engines — down on the homestead, mirroring
 // DragonSiegeController.tsx's own nightly-roll shape exactly. Weathering this never
-// jails him: only his final stand (PlayerController.tsx's challenge_cedric
+// jails him: only his final stand (game/interaction/performAction.ts's challenge_cedric
 // handler, upgraded once cedricFinalStandReady) does that — see combat.ts's
 // `finalStand` flag, which is what keeps him alive to fight another night
 // here. Wave 38 (A1): jailing him isn't permanent any more either — this

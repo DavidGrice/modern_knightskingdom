@@ -50,7 +50,7 @@ export type ItemId =
   // consumed per recolour — see `SaveGame.dyes`.
   | 'dye_woad' | 'dye_madder' | 'dye_tyrian' | 'dye_bark'
   // Wave 5: filled at the brook, poured on a cultivated plot. Not crafted —
-  // the water IS the acquisition (see PlayerController's 'draw_water').
+  // the water IS the acquisition (see game/interaction/performAction.ts's 'draw_water').
   | 'water_bucket'
   // Wave 9 · the two carrier tiers, finally acquirable. Deliberately spelled
   // the SAME as `CarrierTier`'s own two members so the item and the worn tier

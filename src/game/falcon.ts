@@ -17,12 +17,12 @@
 // — but only for the one piece of state that actually needs it. The bird's
 // live world position is computed fresh every frame inside Wildlife.tsx's
 // own useFrame and normally would never leave that component; it has to
-// leave it here because PlayerController's interact system needs to know
+// leave it here because the player's interact system (game/interaction/) needs to know
 // where the (still-flying, never landing) bird currently is to offer "call
 // it down" at all — a walk-up range check doesn't mean anything for a target
 // that never stops moving and isn't reachable at ground level. `falconTamed`
 // itself is deliberately NOT mirrored here the way `ridingState.active` is:
-// nothing outside this module's one reader (PlayerController, which already
+// nothing outside this module's one reader (game/interaction/findTarget.ts, which already
 // has the real store state in hand via `st.falconTamed`) needs it on a given
 // frame, and a second copy of a single boolean would only be one more place
 // for the two to drift out of step.
@@ -30,7 +30,7 @@ import type { ResourceNodeState } from './types';
 
 /** The bird's current rendered world position, written every frame by
  *  Wildlife.tsx's Falcon() whether it is still wild or already tamed. Read
- *  by PlayerController to score the "Whistle for the Falcon" interact — see
+ *  by findTarget (game/interaction/) to score the "Whistle for the Falcon" interact — see
  *  FALCON_CALL_RANGE below. Never written to before the first frame renders;
  *  the values below are just a plausible starting guess (the wild loop's own
  *  centre) so nothing reads garbage in the one frame before that. */

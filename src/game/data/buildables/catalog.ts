@@ -559,7 +559,7 @@ const SIEGE: Buildable[] = [
   // scale one is 3.2m, which clears a keep's wall walk (3.6 / 4.2 with a
   // pull-up) but not a placed 5.28m castle wall. Two lashed together do —
   // and the climb reads the whole stacked column's top, so stacking is a real
-  // answer rather than decoration (see climbTargetFor in PlayerController).
+  // answer rather than decoration (see game/interaction/climb.ts's climbTargetFor).
   { id: 'oc6096-5', name: 'Siege Stair', thumb: `${B}/oc6096-5.png`, model: `${B}/oc6096-5.glb`,
     category: 'siege', size: [2.4, 3.2, 2], snap: 1, stackable: true,
     cost: { stone: 3, wood: 8, plank: 4 }, buildXp: 20, requiresUnlock: 'building2' },
@@ -655,7 +655,7 @@ const SIEGE: Buildable[] = [
   // consumers anywhere in this codebase (game/crew.ts's own comment: the
   // real siege engines are all `canDrive:false`). So these wire into the
   // exact same hardcoded push_cart/hitch_cart mechanism warcart/bladecart
-  // already use (PlayerController.tsx) rather than a new "driving"
+  // already use (game/interaction/findTarget.ts's prompts, PlayerController.tsx's drag) rather than a new "driving"
   // mechanic — oc6096-1 has a literal battering_head/ram_horns rig, so it
   // pushes; oc6032b3 is a mobile catapult/crossbow rig, not a ram, so it
   // hitches (fireable-while-stationary is a real, separate future item, not

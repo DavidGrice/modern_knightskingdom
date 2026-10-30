@@ -121,7 +121,7 @@ export default function Viewmodel() {
   const tool = useMemo(() => {
     // L62 (rest) · charging Richard couches the TOURNEY lance over whatever
     // else you'd otherwise be holding — the "Couch your lance!" prompt
-    // (PlayerController's own joust interaction) implies exactly this
+    // (the player's own joust interaction, game/interaction/) implies exactly this
     // posture. Still first in the chain, and deliberately so: the pass is a
     // scripted duel that hands you its own lance. Wave 7 only narrowed WHEN
     // that is true (see the poll above) — outside Richard's field a mounted

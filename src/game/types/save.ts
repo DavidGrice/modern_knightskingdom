@@ -87,12 +87,12 @@ export interface SaveGame {
   stabled?: string[];
   mounts?: Record<string, string>;
   /** Wave 13 · the falcon companion has been tamed (see game/falcon.ts and
-   *  PlayerController's 'call_falcon' interact). Unlike a horse this is a
+   *  game/interaction/'s 'call_falcon' interact). Unlike a horse this is a
    *  single always-on companion, not a roster, so one boolean is the whole
    *  of its saved state. Absent/false = still the wild, decorative bird. */
   falconTamed?: boolean;
   /** Wave 25 · Tam, the companion squire (game/data/companion.ts and
-   *  PlayerController's 'talk_companion' interact), has been recruited via
+   *  game/interaction/'s 'talk_companion' interact), has been recruited via
    *  Richard's own 'r_squire' side quest. Same single-boolean shape as
    *  falconTamed above, for the same reason: one always-on companion, not a
    *  roster — Tam is never pushed into `villagers` (see gameStore's

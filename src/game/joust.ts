@@ -3,7 +3,7 @@
 //
 // The tourney lance is not a weapon the player owns, crafts or equips: it is
 // a prop for exactly one scripted duel — Richard's pass at the Tourney
-// Grounds (PlayerController's 'joust' interaction → gameStore.joustRichard,
+// Grounds (game/interaction/'s 'joust' interaction → gameStore.joustRichard,
 // a pure numeric outcome that never touches useEnemyStore). Viewmodel.tsx
 // nonetheless used to swap to it on `ridingState.active && galloping` alone,
 // so ANY mounted player holding Shift saw a couched lance while their sword,
@@ -58,7 +58,7 @@ function distToRichard(st: JoustContext, px: number, pz: number): number | null 
   // this the prompt and the couched lance would both fire off bare
   // coordinates in a world where no Richard is rendered at all — the inline
   // check this module replaced had the same hole. Same residency test
-  // PlayerController's own NPC loop and npcs.ts's `scheduledCourtNpcs`
+  // findTarget's own NPC loop (game/interaction/) and npcs.ts's `scheduledCourtNpcs`
   // already use (`(n.world ?? null) === (destination ?? null)`).
   if ((richard.world ?? null) !== (st.destination ?? null)) return null;
   return Math.hypot(richard.x - px, richard.z - pz);

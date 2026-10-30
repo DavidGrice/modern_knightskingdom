@@ -11,7 +11,7 @@ export function onBattlement(): boolean {
   return playerState.y > EYE_HEIGHT + 0.15;
 }
 
-/** `Target.kind` values (PlayerController.tsx) driven by holding the attack
+/** `Target.kind` values (game/interaction/types.ts's InteractKind) driven by holding the attack
  *  button (`combatState.lmbDown`) instead of firing a normal swing/shot —
  *  construction sites originally, gathering ('tree'/'rock'/'fishing'/'herb')
  *  added 2026-07-30 for mechanical consistency with how attacking already

@@ -52,7 +52,7 @@ export interface Target {
    *  absent for a node with none (starter area, open-water fishing,
    *  road-verge trees — all worked without a deed by design) and always
    *  absent for a building target. Threaded through so gather_resource can
-   *  gate on deed ownership the same way PlayerController already does —
+   *  gate on deed ownership the same way findTarget (game/interaction/) already does —
    *  see that action's own `target_usable` consideration. */
   ground?: string;
 }

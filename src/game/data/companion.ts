@@ -33,7 +33,7 @@
 import type { CharacterConfig } from '../types';
 
 /** The fixed id used everywhere Tam needs one: agentManager.spawn/get,
- *  companionCombatState, PlayerController's interact check, the enemies'
+ *  companionCombatState, findTarget's interact check (game/interaction/), the enemies'
  *  Tam target (game/enemyAi/targeting.ts's tamInReach). Never a roster villager id (those are 'v<n>',
  *  the store's seq.villager, store/storeCounters.ts) — Tam is never pushed into st.villagers (see
  *  gameStore's recruitCompanion), so there is no collision to guard against. */
@@ -53,7 +53,7 @@ export const TAM_CONFIG: CharacterConfig = {
  *  PLAYER's own rank name, and an NPC-facing title needs to read as a role,
  *  not collide with the player's own. Referenced by flavor text only; Tam has
  *  no NpcDef of his own for a UI to render this label from (see
- *  PlayerController's 'talk_companion' interact for why). */
+ *  game/interaction/'s 'talk_companion' interact for why). */
 export const TAM_TITLE = 'Your Squire';
 
 /** Picked at random by greetCompanion() (store/slices/companionSlice.ts). Flavor-only, not a

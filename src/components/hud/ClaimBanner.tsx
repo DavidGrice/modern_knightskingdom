@@ -1,6 +1,6 @@
 'use client';
 // A small standalone HUD prompt (Phase 13) — deliberately not part of the
-// hold-E interaction system in PlayerController.tsx, which already has an
+// hold-E interaction system (game/interaction/, run by PlayerController.tsx), which already has an
 // unconditional early-return for "E always returns home" while visiting a
 // destination; bolting claiming onto that same key risked regressing a
 // well-tested existing affordance. Claiming just needs the player's current

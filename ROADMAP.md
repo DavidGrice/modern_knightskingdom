@@ -8742,3 +8742,14 @@ mounted keeps the old raid's flag, and the cleared store pays that raid's reward
 the ram's and ladder's flags and the rewards). The fix: the directors' state as module state in `game/directors/`
 (published as `window.__kkdirectors`, as the refs are now), reset at a session start (`onSessionReset`) rather than at
 a remount — a raid then outlives a visit to Options, and a load ends one without paying for it.
+
+## Seen, not looked into: React error #177 ("Cannot commit the same tree as before") once in a live probe — logged 2026-10-29 (during CLN-26, part 1)
+
+One run of CLN-26's interaction probe on a production build of the change (`cln26_probe.mjs`: the player stood at a few
+things at home and acting on each — a held click on a tree, a herb, the fishing spot and a construction site, E at the
+signpost and at a campfire) reported a page error, "Minified React error #177": React's invariant that a commit is never
+asked to commit the tree it already has (`finishedWork === root.current` in commitRoot — the same check is in
+react-dom's client and in react-three-fiber's own reconciler, and the minified message does not say which). It did not
+come back in three more runs of the same build of the change, nor in four runs of main; and the change does not alter
+when or how anything renders — the interaction code it moved is called from the same frame callback, at the same point,
+as before. Logged in case it shows up again: a development build would give the full message and the stack.
