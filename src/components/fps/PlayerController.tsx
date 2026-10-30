@@ -6,14 +6,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore } from '@/game/store/gameStore';
-import { CLAIM_RADIUS, heightOf, labAssetId, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
 import {
-  EYE_HEIGHT, FISHING_DOCK, KEEP_CHEST_POS, KEEP_INTERIOR, PLAYER_RADIUS,
-  POND, SPAWN, WORLD_HALF,
+  EYE_HEIGHT, SPAWN,
 } from '@/game/data/world';
-import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
 import { NPC_BY_ID } from '@/game/data/npcs';
-import { INTERIORS, pocketFor } from '@/game/data/interiors';
 import { audio } from '@/lib/audio';
 import { playerState } from '@/game/playerState';
 import { touchState } from '@/game/touchInput';
@@ -25,23 +21,19 @@ import { ridingState, dismountHorse } from '@/game/riding';
 import { fireCannon, ramCheck } from '@/game/siege';
 import { cartState, cartLivePos } from '@/game/carts';
 import { statsAccum } from '@/game/statsAccum';
-import { dungeonState } from '@/game/dungeon';
-import { isBuilt, isDoorLike } from '@/game/types';
 import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
-import { pushOutOfWater } from '@/game/waterworks';
-import { destinationGroundY, homeGroundY, getBakeOffset, getMountedRegion, TEMPLATE_WORLD_SCALE } from '../world/TemplateWorld';
-import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
-import { labCanStandOn } from '@/game/data/labCapabilities';
+import { homeGroundY } from '../world/TemplateWorld';
 import { aimState, resolveAim } from '@/game/targeting';
-import { keepWalkwayAt } from '@/game/data/keep';
 import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine } from '@/game/crew';
-import { fixedSolids } from '@/game/fixedSolids';
 import { commandWheel, steerWheel } from '@/game/commandWheel';
 import { pointerLockActive, releaseGameLock, requestGameLock } from '@/game/pointerLock';
 import { exposeDebug } from '@/lib/debugHooks';
 import { findTarget } from '@/game/interaction/findTarget';
 import { performAction } from '@/game/interaction/performAction';
+import { floorUnder, _terrainOut } from '@/game/playerPhysics/floor';
+import { collide } from '@/game/playerPhysics/collide';
+import { fall } from '@/game/playerPhysics/vertical';
 
 
 /** scratch for projecting the aim target's head to screen space */
@@ -67,12 +59,7 @@ const _camLookDirV = new THREE.Vector3();
 const _camPosV = new THREE.Vector3();
 const _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _lookAtV = new THREE.Vector3();
-/** Wave 12 · floorHeightAt's terrain out-param (see its signature). Same
- *  never-stored-past-the-statement-that-reads-it contract as the vectors
- *  above, and safe for the same reason: PlayerController is a singleton. */
-const _terrainOut = { y: 0 };
 
-const STEP_UP = 0.55; // max ledge height climbed without jumping
 const STICK_DEADZONE = 0.25;
 
 // Standard-mapping gamepad -> the same action codes keyboard uses, written
@@ -188,65 +175,6 @@ function pollTouch(
 
 export { playerState };
 
-/** Wave 8 · a wall walk's own step allowance, deliberately larger than
- *  STEP_UP. The keep's ring is not one level: a Corner Turret's walk sits at
- *  4.2 and the Crenellated Wall it meets at 3.6 (data/keep.ts), a 0.6m lip
- *  that the ordinary 0.55 ledge rule would refuse — leaving a player who
- *  climbed onto the wall unable to walk round their own castle, which is the
- *  entire point of being up there. */
-const WALKWAY_STEP = 0.8;
-
-/** highest structure top at (x, z) that the player can stand on given their feet height */
-function floorHeightAt(
-  st: ReturnType<typeof useGameStore.getState>,
-  x: number,
-  z: number,
-  feetY: number,
-  // Wave 12 · optional out-param for the bare-ground height this resolved
-  // against, so the caller can tell "standing on the earth" from "standing on
-  // something someone built" without paying for a second terrain probe. Same
-  // shape as climbTargetFor's own `info` out-param, and for the same reason:
-  // one extra fact for one caller, without changing the return type every
-  // other call site would then have to unpack.
-  terrain?: { y: number },
-): number {
-  // Wave 12 · the ground itself, at last. This used to be a literal `let
-  // floor = 0` — the single line that made the homestead flat by construction
-  // rather than by convention, since nothing below it ever looked at terrain.
-  // `homeGroundY` is 0 everywhere except inside a TERRAIN_REGIONS entry
-  // (game/data/terrainRegions.ts — Wave 31: the North Downs plus West Fell),
-  // so this is exactly the old behaviour with those boxes carved out of it.
-  //
-  // Terrain is the BASELINE, not a candidate: a building top has to be within
-  // STEP_UP to be climbed onto, but you cannot fail to step onto the earth.
-  // Everything below still compares against `floor`, so a crate standing on
-  // the hillside is measured from the hillside, and a crate at the bottom of
-  // it is correctly ignored while you are on top.
-  let floor = homeGroundY(x, z);
-  if (terrain) terrain.y = floor;
-  for (const b of st.buildings) {
-    if (!isBuilt(b)) continue; // a construction-site ghost holds no one's weight
-    // the rig lab checked, per asset, whether a minifig can actually stand on
-    // a piece — a catapult's arm or a powder barrel is not a floor. Anything
-    // the lab didn't chart keeps the old "everything is standable" default.
-    if (!labCanStandOn(labAssetId(b.type), true)) continue;
-    const [sx, sz] = sizeFor(b.type, b.rot);
-    if (Math.abs(b.x - x) > sx / 2 + PLAYER_RADIUS * 0.6) continue;
-    if (Math.abs(b.z - z) > sz / 2 + PLAYER_RADIUS * 0.6) continue;
-    const top = (b.y ?? 0) + heightOf(b.type);
-    if (top <= feetY + STEP_UP && top > floor) floor = top;
-  }
-  // Wave 8 · the keep's wall walk. Defenders have stood at `KeepPart.walkway`
-  // for waves (Defenders.tsx posts them there), but the raised pieces are not
-  // PlacedBuildings — they live only in `st.keep` — so the loop above cannot
-  // see them and the player fell straight through to the courtyard. This is
-  // the only reason the battlement was unreachable; with a floor up there,
-  // gravity, walking off the edge and combat.ts's own onBattlement() bonus all
-  // work with no further special-casing anywhere.
-  const walk = keepWalkwayAt(st.keep, x, z);
-  if (walk > floor && walk <= feetY + WALKWAY_STEP) floor = walk;
-  return floor;
-}
 
 export default function PlayerController() {
   const camera = useThree((s) => s.camera);
@@ -612,269 +540,11 @@ export default function PlayerController() {
       let nx = p.x + _dirV.x * speed * dt;
       let nz = p.z + _dirV.z * speed * dt;
 
-      // collisions: buildings (AABB, unless we can step onto or walk under
-      // them), trees & rocks (circles), pond, world bounds — or, inside a
-      // generalised interior (data/interiors.ts), that room's own walls
-      // (and, specifically inside the Keep, its bespoke furniture) instead
+      // collisions (game/playerPhysics/collide.ts): placed pieces, trees and
+      // rocks, the pond and water, the world's edge — or an interior's walls
       const eyeOff = riding ? EYE_HEIGHT + 0.85 : EYE_HEIGHT;
       const feetY = p.y - eyeOff;
-      if (st.interior) {
-        const insideBuilding = st.buildings.find((b) => b.id === st.interior);
-        const def = insideBuilding ? INTERIORS[insideBuilding.type] : null;
-        if (def && insideBuilding) {
-          const pocket = pocketFor(insideBuilding.type, insideBuilding.id);
-          const ix = def.halfX - 0.6;
-          const iz = def.halfZ - 0.6;
-          nx = THREE.MathUtils.clamp(nx, pocket.x - ix, pocket.x + ix);
-          nz = THREE.MathUtils.clamp(nz, pocket.z - iz, pocket.z + iz);
-          // the Keep's own bespoke obstacles: the throne (back wall) and the
-          // treasure chest (corner) — both fixed at KEEP_INTERIOR's own
-          // world position, since that pocket never moves
-          if (insideBuilding.type === 'keep') {
-            for (const [ox, oz, r] of [
-              [KEEP_INTERIOR.x, KEEP_INTERIOR.z + KEEP_INTERIOR.halfZ - 1.2, 1.1],
-              [KEEP_CHEST_POS.x, KEEP_CHEST_POS.z, 0.7],
-            ] as const) {
-              const dx = nx - ox;
-              const dz = nz - oz;
-              const d2 = dx * dx + dz * dz;
-              if (d2 < r * r && d2 > 1e-6) {
-                const d = Math.sqrt(d2);
-                nx = ox + (dx / d) * r;
-                nz = oz + (dz / d) * r;
-              }
-            }
-          }
-        }
-      } else if (st.destination) {
-        // template worlds: no fine per-object collision against the merged
-        // bake, just a bound on where the player can wander to. Real
-        // terrain boundaries (2026-08-21): clamps against the actual
-        // classified walkable ground (templateWalkableFootprint.ts) when
-        // this destination has any, nearest-point-in-the-rects'-union — see
-        // that module's own header for the coordinate transform. A
-        // destination with no classified rects yet (challenges, dungeon,
-        // arena, any future template) falls all the way back to the
-        // original circular bound around dest.origin, byte-for-byte
-        // unchanged from before this pass.
-        //
-        // GATED ON A CONFIRMED MOUNT (getMountedRegion() === st.destination,
-        // the same guard Minimap.tsx's own raster already uses): live-tested
-        // and caught a real race otherwise — `st.destination` flips the
-        // instant travelTo() calls set(), but TemplateWorldRoot's async GLB
-        // (NormalizedTemplateScene's useGLTF, suspended) can take several
-        // frames longer to resolve, and getBakeOffset() holds a STALE
-        // previous-destination offset (or (0,0,0) pre-first-load) the whole
-        // time. Clamping against rects built from that wrong offset landed
-        // the player hundreds of units from the real intended spot on the
-        // very first frame, then never self-corrected once the real offset
-        // arrived — the wrongly-clamped point usually already sat inside
-        // the NOW-correctly-offset rects too, so the per-frame "already
-        // inside, no-op" fast path silently locked in the wrong answer
-        // forever. Skipping the clamp entirely for those first few
-        // pre-mount frames is safe: pendingTeleport (below `p = pos.current`
-        // is read) already placed the player at a deliberately-chosen valid
-        // point, and no real player input can have accumulated in the
-        // handful of frames a same-scene mount takes.
-        const dest = WORLD_DESTINATION_BY_ID[st.destination];
-        if (dest && getMountedRegion() === st.destination) {
-          const scaleCompensation = (dest.worldScale ?? TEMPLATE_WORLD_SCALE) / TEMPLATE_WORLD_SCALE;
-          const rects = resolveWorldWalkableRects(dest, getBakeOffset(), scaleCompensation);
-          // a player's OWN claimed plot (claimWorld/foundSettlement) is
-          // centered wherever they were STANDING at claim time — see
-          // activeBuildRegion's own doc comment — which the classification
-          // pass had no way to know about in advance, unlike the resident
-          // NPCs' fixed hand-authored positions this same pass re-verified
-          // directly. A claim landing in the same near-origin gap the
-          // NPCs did (worlds.ts's TEMPLATE_ARRIVAL_SPAWN comment already
-          // documents dest.origin sits far outside every classified union)
-          // would otherwise get fenced away from the player's own building
-          // on their very next visit — so the claim's own CLAIM_RADIUS
-          // footprint (buildables.ts, the same square its build region
-          // already uses) is always unioned in here too, not just the
-          // classified rects. Cheap: at most one extra rect, one destination
-          // can have at most one claim. Gated on `rects` already being
-          // non-null (real classified data exists for this destination) —
-          // a destination with NO classified rects at all (a challenge
-          // ground; the generation script only ever covers template-01..09)
-          // must keep falling all the way through to the untouched circular
-          // fallback below, not collapse down to a bare 28-unit claim-only
-          // box that would be a big step DOWN from the old full-radius
-          // wander bound for anyone who claimed one of those.
-          const claim = st.claimedWorlds[st.destination];
-          const allRects = rects && claim
-            ? [...rects, { minX: claim.x - CLAIM_RADIUS, maxX: claim.x + CLAIM_RADIUS, minZ: claim.z - CLAIM_RADIUS, maxZ: claim.z + CLAIM_RADIUS }]
-            : rects;
-          if (allRects && allRects.length) {
-            // nearest point in the union: per-axis clamp to one rect's own
-            // bounds IS that rect's nearest point (0 distance when (nx,nz)
-            // already sits inside it) — so a position already on walkable
-            // ground comes back completely unchanged (its containing rect
-            // wins the reduction with d2=0), and the winner is always
-            // inside SOME rect, so the player can never be pushed outside
-            // the union. The generation script pads every rect by a small
-            // epsilon so two meant-to-be-adjacent rects overlap rather than
-            // leave a sub-precision gap — crossing that seam never clamps
-            // at all, full walking speed straight through.
-            let bestX = nx, bestZ = nz, bestD2 = Infinity;
-            for (const r of allRects) {
-              const cx = THREE.MathUtils.clamp(nx, r.minX, r.maxX);
-              const cz = THREE.MathUtils.clamp(nz, r.minZ, r.maxZ);
-              const ddx = nx - cx;
-              const ddz = nz - cz;
-              const d2 = ddx * ddx + ddz * ddz;
-              if (d2 < bestD2) { bestD2 = d2; bestX = cx; bestZ = cz; }
-            }
-            nx = bestX;
-            nz = bestZ;
-          } else {
-            const dx = nx - dest.origin.x;
-            const dz = nz - dest.origin.z;
-            const d = Math.hypot(dx, dz);
-            if (d > dest.radius) {
-              nx = dest.origin.x + (dx / d) * dest.radius;
-              nz = dest.origin.z + (dz / d) * dest.radius;
-            }
-          }
-        }
-        // the Sealed Crypt (Phase 17) is the one destination with real walls
-        // to actually bump into — a generated maze should feel like one
-        if (st.destination === 'dungeon' && dungeonState.layout) {
-          const layout = dungeonState.layout;
-          for (const w of layout.walls) {
-            // Wave 13 · a layout can roll a second wall mesh (wallStyle) —
-            // both real WALL_STYLES entries share the same 8m-wide/2.x-deep
-            // footprint family, so this stays correct for either.
-            const [sx, sz] = sizeFor(layout.wallStyle, w.rot);
-            const hx = sx / 2 + PLAYER_RADIUS;
-            const hz = sz / 2 + PLAYER_RADIUS;
-            const dx2 = nx - w.x;
-            const dz2 = nz - w.z;
-            if (Math.abs(dx2) < hx && Math.abs(dz2) < hz) {
-              const px = hx - Math.abs(dx2);
-              const pz = hz - Math.abs(dz2);
-              if (px < pz) nx = w.x + Math.sign(dx2 || 1) * hx;
-              else nz = w.z + Math.sign(dz2 || 1) * hz;
-            }
-          }
-        }
-      } else {
-        // the player's buildings, and the walls the world puts up itself (the
-        // merchant's camp — game/fixedSolids.ts): the same boxes, the same push
-        for (const list of [st.buildings, fixedSolids(null)]) for (const b of list) {
-          if (!isBuilt(b)) continue; // walk freely through a ghost outline
-          // raised gate / opened door — passable (Wave 8: one predicate, see
-          // isDoorLike; the nav grid and the raiders read the same rule)
-          if (isDoorLike(b.type) && (st.gateOpen[b.id] ?? true)) continue;
-          // the Keep's own PlacedBuilding entry exists purely for interact-
-          // detection (foundKeep, gameStore.ts) — its real footprint is a
-          // flat courtyard plate (KeepAssembly.tsx) with no collision of its
-          // own; the individual raised pieces don't have real collision yet
-          // either (a separate, already-flagged gap — "J51 has no damage or
-          // move behaviour" — not something to half-fake here)
-          if (b.type === 'keep') continue;
-          const base = b.y ?? 0;
-          const dx = nx - b.x;
-          const dz = nz - b.z;
-          // real wall collision: pieces in WALL_CORE split into a narrow
-          // "core" box (where a walking player's own body actually is) plus
-          // a full-footprint box for whatever's above it — the mc-series
-          // prefabs' projecting galleries/corbelled ledges no longer stop
-          // the player at the widest point anywhere on the piece. Everything
-          // else gets exactly one box spanning its full height, unchanged.
-          for (const box of collisionBoxesFor(b.type, b.rot)) {
-            // a box may sit off the building's own centre (a breached wall's
-            // core is two pillars flanking the gap) — test against ITS centre
-            const cx = b.x + (box.ox ?? 0);
-            const cz = b.z + (box.oz ?? 0);
-            const bdx = nx - cx;
-            const bdz = nz - cz;
-            const hx = box.hx + PLAYER_RADIUS;
-            const hz = box.hz + PLAYER_RADIUS;
-            if (Math.abs(bdx) >= hx || Math.abs(bdz) >= hz) continue;
-            const boxBase = base + box.yBase;
-            const boxTop = base + box.yTop;
-            const canStepOnto = !riding && boxTop <= feetY + STEP_UP;
-            const passesOverhead = boxBase >= feetY + 1.8;
-            if (canStepOnto || passesOverhead) continue;
-            const px = hx - Math.abs(bdx);
-            const pz = hz - Math.abs(bdz);
-            if (px < pz) nx = cx + Math.sign(bdx || 1) * hx;
-            else nz = cz + Math.sign(bdz || 1) * hz;
-            break; // one blocking box is enough; re-derive dx/dz next building
-          }
-        }
-        for (const n of st.nodes) {
-          // herbs are a 0.35m ground prop (ResourceNodes.tsx's HerbGroup) —
-          // walkable like fishing spots, not a physical obstacle. Reported
-          // 2026-07-28 as an invisible wall around every herb patch: this
-          // loop gave them the SAME 1.1-radius block as a boulder (the
-          // `: 1.1` fallback below was meant for rocks, not "everything
-          // that isn't a tree").
-          if (n.respawnAt !== null || n.kind === 'fishing' || n.kind === 'herb') continue;
-          const r = (n.kind === 'tree' ? 0.55 : 1.1) * n.scale + PLAYER_RADIUS;
-          const dx = nx - n.x;
-          const dz = nz - n.z;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < r * r && d2 > 1e-6) {
-            const d = Math.sqrt(d2);
-            nx = n.x + (dx / d) * r;
-            nz = n.z + (dz / d) * r;
-          }
-        }
-        {
-          // the fishing dock is allowed to run out over the water — skip the
-          // pond push-back for anyone standing in its narrow corridor
-          const ddx = FISHING_DOCK.endX - FISHING_DOCK.startX;
-          const ddz = FISHING_DOCK.endZ - FISHING_DOCK.startZ;
-          const dockLen2 = ddx * ddx + ddz * ddz;
-          const t = THREE.MathUtils.clamp(
-            ((nx - FISHING_DOCK.startX) * ddx + (nz - FISHING_DOCK.startZ) * ddz) / dockLen2,
-            0, 1,
-          );
-          const nearestX = FISHING_DOCK.startX + ddx * t;
-          const nearestZ = FISHING_DOCK.startZ + ddz * t;
-          const onDock = Math.hypot(nx - nearestX, nz - nearestZ) < FISHING_DOCK.halfWidth;
-          if (!onDock) {
-            const dx = nx - POND.x;
-            const dz = nz - POND.z;
-            const r = POND.radius - 0.4;
-            const d2 = dx * dx + dz * dz;
-            if (d2 < r * r && d2 > 1e-6) {
-              const d = Math.sqrt(d2);
-              nx = POND.x + (dx / d) * r;
-              nz = POND.z + (dz / d) * r;
-            }
-          }
-        }
-        {
-          // Wave 12 · and out of any waterway you have had cut. Direct
-          // rectangle math in the movement resolver, deliberately alongside
-          // the pond's circle above rather than routed through navBlocked():
-          // the player is not a nav-grid walker, and the pond has always
-          // stopped them here, so the water they dug themselves must stop them
-          // in exactly the same place and in exactly the same way.
-          const out = pushOutOfWater(nx, nz, PLAYER_RADIUS);
-          nx = out.x;
-          nz = out.z;
-        }
-        {
-          // the keep's great hall is a permanent sealed fixture — bump into
-          // it from outside like any other solid structure (no walk-in door)
-          const hx = KEEP_INTERIOR.halfX + 0.4 + PLAYER_RADIUS;
-          const hz = KEEP_INTERIOR.halfZ + 0.4 + PLAYER_RADIUS;
-          const dx = nx - KEEP_INTERIOR.x;
-          const dz = nz - KEEP_INTERIOR.z;
-          if (Math.abs(dx) < hx && Math.abs(dz) < hz) {
-            const px = hx - Math.abs(dx);
-            const pz = hz - Math.abs(dz);
-            if (px < pz) nx = KEEP_INTERIOR.x + Math.sign(dx || 1) * hx;
-            else nz = KEEP_INTERIOR.z + Math.sign(dz || 1) * hz;
-          }
-        }
-        nx = THREE.MathUtils.clamp(nx, -WORLD_HALF + 2, WORLD_HALF - 2);
-        nz = THREE.MathUtils.clamp(nz, -WORLD_HALF + 2, WORLD_HALF - 2);
-      }
+      ({ nx, nz } = collide(st, riding, feetY, nx, nz));
       p.x = nx;
       p.z = nz;
 
@@ -899,39 +569,7 @@ export default function PlayerController() {
       // deliberately NOT put through floorHeightAt (a horse does not step onto
       // a barrel), but "no structures" is not "no terrain" — leaving this at 0
       // would have ridden the player straight through the hillside.
-      let floorY: number;
-      if (st.destination) {
-        // SAME stale-mount race as the horizontal walkable-rect clamp above
-        // (see its own comment for the full mechanism) — but live-caught as
-        // its OWN, worse bug (2026-08-21): destinationGroundY ultimately
-        // raycasts whatever `mountedRoot` currently holds with NO check that
-        // it belongs to `st.destination`, unlike the horizontal clamp which
-        // already gates on `getMountedRegion() === st.destination`. During
-        // the handful of frames after travelTo() flips st.destination but
-        // before the new bake's async GLB has actually mounted, this was
-        // sampling the OLD, still-mounted destination's geometry at the NEW
-        // destination's raw world coordinates — landing on top of whatever
-        // happened to be there on the old bake (live-traced: up to 234.7
-        // units into the air, template-04 -> template-05), which the smooth
-        // ground-lerp below would then glide the player up to. Once the real
-        // bake mounted a frame or two later, the real (much lower) floorY
-        // dropped grounded.current back to false and the player free-fell
-        // several real seconds back down to actual ground — self-healing,
-        // but a jarring, broken-looking launch right at arrival. Guarded the
-        // same way: for these few frames, hold floorY at the player's OWN
-        // current eye-relative height instead of sampling anything — that
-        // makes groundEye equal p.y below, a no-op for every branch of the
-        // gravity resolve until the real bake confirms and destinationGroundY
-        // is trustworthy again. Exactly as safe as the horizontal guard's own
-        // reasoning: pendingTeleport already placed p.y at a deliberately
-        // chosen eye height for the new destination, and no real fall can
-        // have accumulated in the handful of frames a same-scene mount takes.
-        floorY = getMountedRegion() === st.destination ? destinationGroundY(p.x, p.z) : p.y - eyeOff;
-      } else if (riding) {
-        floorY = _terrainOut.y = homeGroundY(p.x, p.z);
-      } else {
-        floorY = floorHeightAt(st, p.x, p.z, p.y - eyeOff, _terrainOut);
-      }
+      const floorY = floorUnder(st, p, riding, eyeOff);
       const groundEye = floorY + eyeOff;
       // Wave 12 · is the thing holding us up the GROUND, or something standing
       // on it? Only the ledge test below cares, and only at home — a
@@ -945,33 +583,7 @@ export default function PlayerController() {
         vel.current.y = 5;
         grounded.current = false;
       }
-      if (!grounded.current) {
-        vel.current.y -= 14 * dt;
-        p.y += vel.current.y * dt;
-        if (vel.current.y <= 0 && p.y <= groundEye) {
-          p.y = groundEye;
-          vel.current.y = 0;
-          grounded.current = true;
-        }
-      } else if (p.y > groundEye + 0.08 && !slopeUnderfoot) {
-        // walked off an edge — Wave 12: unless the GROUND is what dropped, and
-        // it was ground last frame too. This is a LEDGE test, and terrain has
-        // no ledges; it slopes. The follow-lerp below trails a descent by
-        // roughly (vertical speed / 12), which is 0.11m at nothing more than a
-        // walk down the North Downs — unqualified, the test fired on every
-        // single frame of the descent and the player bounced down the hill in
-        // a stutter of little falls instead of running down it. A slope now
-        // falls through to that lerp and stays grounded. BOTH frames have to be
-        // open ground: stepping down off a crate is a real step down (that
-        // floor genuinely ended one frame ago) and a battlement must still drop
-        // you. The one thing it also smooths is dismounting — same ground
-        // before and after, only the eye height changed — which used to be a
-        // short involuntary fall and is now the ease that mounting always was.
-        grounded.current = false;
-        vel.current.y = 0;
-      } else if (Math.abs(p.y - groundEye) > 0.005) {
-        p.y += (groundEye - p.y) * Math.min(1, dt * 12);
-      }
+      fall(p, vel, grounded, dt, groundEye, slopeUnderfoot);
 
       // footsteps / hoofbeats
       if (riding) {

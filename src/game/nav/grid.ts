@@ -42,7 +42,7 @@ export const HOME_HALF = navgridConfig.home.halfExtent;
 const AGENT_RADIUS = 0.55;
 
 /** a box only blocks if it actually intersects the band a walker occupies */
-const WALK_LOW = 0.55;   // matches PlayerController's STEP_UP: lower is a kerb
+const WALK_LOW = 0.55;   // matches game/playerPhysics/floor.ts's STEP_UP: lower is a kerb
 const WALK_HIGH = 1.7;   // above this it is an overhang you pass beneath
 
 /** Requested 2026-07-30: A* prefers a road cell over open ground by this
@@ -110,7 +110,7 @@ export function forEachObstacleBox(
     const buildingRegion = isHomeBuilding(b) ? null : (b.world ?? null);
     if (buildingRegion !== region) continue;
     // iteration 2.10 — an open gate has zero collision, matching
-    // PlayerController.tsx's own player-collision loop exactly
+    // game/playerPhysics/collide.ts's own player-collision loop exactly
     // (`b.type === 'gate' && (gateOpen[b.id] ?? true) => passable`).
     // Found while verifying §2.5's "gate vs wall" checklist item: this
     // check was simply absent before, so every gate — open or closed —

@@ -5,7 +5,7 @@
 // signpost. `origin` parks each one far outside the home world (which spans
 // only ±WORLD_HALF) so travel is a plain teleport with no scene-swap, and
 // `radius` bounds how far the player can wander from its center (see
-// PlayerController's third collision branch). The base scale (see
+// the player's third collision branch, game/playerPhysics/collide.ts). The base scale (see
 // TEMPLATE_WORLD_SCALE in TemplateWorld.tsx) enlarges the raw physical
 // LEGO-brick-scale bakes (a minifig is ~54mm in the exported units) up to
 // this game's human-scale minifigs — a single constant, not per-scene
@@ -40,7 +40,7 @@
 // 2026-08-19: crossing a destination on foot still took too long even after
 // Wave 17 #5 above — that pass only retuned DEST_WORLD_SCALE, how big the
 // diorama LOOKS, and never touched `radius`, the walkable-circle bound
-// PlayerController's wander clamp actually enforces (third collision
+// the player's wander clamp (game/playerPhysics/collide.ts) actually enforces (third collision
 // branch). At 4 units/sec walk speed, template-01's old radius 210 meant
 // 105 seconds to cross the full diameter. Cut every template-01..08 radius
 // by the same 0.5x this file's own prior passes use to keep a change this
@@ -80,7 +80,7 @@
 // record of that 2026-08-19 derivation; it's not re-checked against the new
 // positions because `radius` is (per this file's own 2026-08-19 comment
 // elsewhere) no longer the real wander bound for templates 01-08 — that's
-// PlayerController's clamp against the real walkable-rect union
+// the player's clamp (game/playerPhysics/collide.ts) against the real walkable-rect union
 // (templateWalkableFootprint.ts) — so a stale floor number here is inert,
 // not a live bug.
 import type { ItemId } from '../types';
@@ -273,8 +273,8 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
 // Real terrain boundaries (2026-08-21): travelTo()'s own arrival spawn used
 // to be derived live from `dest.origin.z - dest.radius * 0.5` — a formula
 // that only ever made sense while `radius` was a real circular wander bound
-// AND `dest.origin` itself sat on real, walkable ground. PlayerController's
-// clamp now resolves against real classified walkable rects instead
+// AND `dest.origin` itself sat on real, walkable ground. The player's
+// clamp (game/playerPhysics/collide.ts) now resolves against real classified walkable rects instead
 // (templateWalkableFootprint.ts), so both assumptions needed checking
 // against the actual live data before hardcoding anything.
 //
