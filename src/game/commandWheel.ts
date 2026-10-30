@@ -10,9 +10,9 @@ import { exposeDebug } from '@/lib/debugHooks';
 // you cannot tune away. The fix is not to release the pointer at all: hold
 // the key, flick the mouse toward the order you want, release to commit.
 //
-// A mutable leaf module because the input side lives in PlayerController's
-// frame/mouse handlers (inside the R3F tree) and the drawing lives in the DOM
-// HUD, exactly like touchInput and combatState.
+// A mutable leaf module because the input side lives in the player's mouse
+// handler (components/fps/input/usePointerLock.ts, inside the R3F tree) and the
+// drawing lives in the DOM HUD, exactly like touchInput and combatState.
 export const commandWheel = {
   /** the key is being held; the radial is up and steering the mouse */
   open: false,

@@ -8753,3 +8753,14 @@ react-dom's client and in react-three-fiber's own reconciler, and the minified m
 come back in three more runs of the same build of the change, nor in four runs of main; and the change does not alter
 when or how anything renders — the interaction code it moved is called from the same frame callback, at the same point,
 as before. Logged in case it shows up again: a development build would give the full message and the stack.
+
+## Dead code: the pointer lock's `retry` and `lockCleanup` — logged 2026-10-30 (CLN-26, part 3's review)
+
+`usePointerLock` (`components/fps/input/usePointerLock.ts`; PlayerController.tsx's until CLN-26) declares
+`let retry: ReturnType<typeof setTimeout> | null = null`, clears it at the top of `tryLock` and again through
+`lockCleanup` when the effect is torn down — but nothing sets it, and nothing has since the source import of 2026-07-27:
+the retry on a timer it was for is the "first cut" that `tryLock`'s own comment describes as taken out. So `retry`, its
+two clears and the `lockCleanup` ref (whose only job is the second) do nothing. Their comments, which still described a
+request that retried until it had the pointer, were corrected in CLN-26 part 3; the code was left as it was, that part
+being a move. **To do:** delete `retry`, both clears, `lockCleanup` and its call in the effect's cleanup — no change in
+behaviour, and provable without running anything (a variable that is only ever null).

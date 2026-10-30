@@ -1,9 +1,9 @@
 // Wave 15: standard-mapping Gamepad button indices used OUTSIDE
-// PlayerController.tsx's own movement/look poll (pollGamepad there already
-// owns axes 0-3 (sticks) and d-pad 12-15 — see that file's header comment for
+// the player's own movement/look poll (pollGamepad, components/fps/input/pads.ts,
+// already owns axes 0-3 (sticks) and d-pad 12-15 — see its header comment for
 // the full picture). Centralised here so CombatController's attack/block/
 // swap reads, GamepadMenuController's panel/pause/confirm reads, and
-// PlayerController's own jump/interact/sprint reads all share ONE source of
+// pollGamepad's own jump/interact/sprint reads all share ONE source of
 // truth instead of re-guessing the same magic numbers in three places.
 //
 // Wave 33: the first 8 actions below became user-rebindable (see
@@ -26,7 +26,7 @@
 // coupled to that key. So jump/interact/sprint simply join this table as
 // three more rebindable actions (a straight copy of the pattern
 // CombatController's attack/block/swap/dodge already proved), and
-// PlayerController reads `gpBtn.jump/interact/sprint` instead of 0/2/5 —
+// pollGamepad (components/fps/input/pads.ts) reads `gpBtn.jump/interact/sprint` instead of 0/2/5 —
 // zero changes to keybinds.ts, isDown, or the keyboard rebinding system.
 // `confirm` also joins here in the same wave, for GamepadMenuController's new
 // in-panel roving-focus system (see that file) — A confirms/activates
@@ -52,7 +52,7 @@ export const DEFAULT_GAMEPAD_BUTTONS: Record<GamepadAction, number> = {
   block: 6, // LT — aim a readied ranged weapon, else raise a shield
   swapWeapon: 3, // Y — mirrors keyboard Q (GameScreen.tsx's cycleWeapon())
   // Wave 40 (A6) · the only standard-mapping button left unclaimed by either
-  // this table or PlayerController's own RESERVED_GAMEPAD_BUTTONS below.
+  // this table or the movement poll's own RESERVED_GAMEPAD_BUTTONS below.
   dodge: 11, // R-Stick Click
 
   // menu nav (GamepadMenuController.tsx) — open/close plus (Wave 61) a real
@@ -76,7 +76,7 @@ export const DEFAULT_GAMEPAD_BUTTONS: Record<GamepadAction, number> = {
 } as const;
 
 /** Still genuinely untouchable: the d-pad, wired unconditionally into
- *  PlayerController's movement poll (see that file's pollGamepad) and
+ *  the player's movement poll (pollGamepad, components/fps/input/pads.ts) and
  *  deliberately never made an independent, rebindable action (see this
  *  file's header comment for why). */
 export const RESERVED_GAMEPAD_BUTTONS = new Set([12, 13, 14, 15]);

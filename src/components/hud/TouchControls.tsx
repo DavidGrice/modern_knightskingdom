@@ -5,8 +5,8 @@
 // (Sprint/Jump/Block/Interact/Attack). Feature-detected — renders nothing on
 // a desktop without touch support, so this is purely additive alongside
 // keyboard/mouse/gamepad. Writes into game/touchInput.ts's leaf module; reads
-// nothing back (PlayerController.tsx, a separate React tree under the
-// Canvas, is the only consumer — same bridge pattern as playerState/
+// nothing back (PlayerController.tsx — its input/pads.ts — a separate React
+// tree under the Canvas, is the only consumer — same bridge pattern as playerState/
 // combatState).
 //
 // Wave 15 (2026-08-17): Block/Attack added as plain held-state booleans,

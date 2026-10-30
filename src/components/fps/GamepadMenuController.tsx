@@ -10,8 +10,8 @@
 // Panels.tsx's switch has no case for it) showed the overwhelming majority of
 // their actionable controls are ALREADY real `<button>` elements — natively
 // Tab/Shift-Tab-focusable and Enter/Space-activatable the instant pointer
-// lock releases (PlayerController's pointer-lock effect calls
-// `releaseGameLock()` the moment any panel opens). That already
+// lock releases (the player's pointer-lock panel watcher, input/usePointerLock.ts,
+// calls `releaseGameLock()` the moment any panel opens). That already
 // worked today, silently, just invisibly (no focus-visible ring) and
 // unreachable by a gamepad specifically, since a gamepad press synthesizes
 // no DOM event at all. So rather than a bespoke system per panel, this is one
@@ -90,7 +90,7 @@ export default function GamepadMenuController() {
     // by hand, same convention CombatController's touch/pad blocks use. A
     // missing gp (never connected, or disconnected mid-session) reads every
     // button as not-pressed, which self-heals a stuck edge within one frame
-    // exactly like PlayerController's own pollGamepad does for movement.
+    // exactly like the player's own pollGamepad (input/pads.ts) does for movement.
     const edge = (i: number) => {
       const down = !!gp?.buttons[i]?.pressed;
       now[i] = down;

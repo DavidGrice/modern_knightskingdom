@@ -6,7 +6,8 @@ import { exposeDebug } from '@/lib/debugHooks';
 // same convention as playerState/combatState/worldEnv — TouchControls.tsx
 // (a 2D HUD overlay) writes into this every frame from touch events;
 // PlayerController.tsx (a 3D/R3F component, a separate React tree) reads it
-// each frame exactly like it already reads a real Gamepad in pollGamepad,
+// each frame (pollTouch, in its input/pads.ts) exactly like it already reads a
+// real Gamepad in pollGamepad,
 // feeding the same `pad` record and the same yaw/pitch refs. Neither side
 // imports the other — this module is the bridge, avoiding any cross-tree
 // prop-drilling between the Canvas and the HUD.
@@ -14,8 +15,9 @@ export const touchState = {
   active: false,       // a touch-capable device — detected once, drives whether TouchControls renders at all
   moveX: 0, moveY: 0,  // virtual joystick, both -1..1 (moveY: -1 = forward, matching stick-up)
   // look deltas are PER-EVENT drag amounts accumulated since the last frame
-  // consumed them (mirrors mouse movementX/Y) — PlayerController zeroes
-  // these out itself after applying them, same as it does for the mouse.
+  // consumed them (mirrors mouse movementX/Y) — pollTouch (PlayerController's
+  // input/pads.ts) applies them with the mouse's own sensitivity (look.ts's
+  // lookSensitivity), then zeroes them itself.
   lookDX: 0, lookDY: 0,
   jump: false,
   interact: false,

@@ -203,14 +203,14 @@ export default function CombatController() {
     // below).
     // No pointerLockActive() check here either, for the same reason
     // the touch block skips it — a controller's right stick already drives
-    // the camera with zero pointer-lock dependency (PlayerController's
-    // pollGamepad), so gating the fire button on mouse lock would silently
+    // the camera with zero pointer-lock dependency (pollGamepad,
+    // components/fps/input/pads.ts), so gating the fire button on mouse lock would silently
     // no-op gamepad combat in the default fps camera mode.
     // getGamepads() is read cold (never cached) so a mid-session disconnect
     // self-heals within one frame: gp becomes null/undefined,
     // gp?.buttons[i]?.pressed reads false, and the "up" edge below fires and
-    // releases whatever was held — the same self-healing PlayerController's
-    // own pollGamepad relies on for movement.
+    // releases whatever was held — the same self-healing the player's own
+    // pollGamepad (components/fps/input/pads.ts) relies on for movement.
     {
       const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
       const gp = pads?.[0];
