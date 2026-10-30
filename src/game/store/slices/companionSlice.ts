@@ -18,11 +18,11 @@ export interface CompanionSlice {
    *  Called from turnInSideQuest() when Richard's 'r_squire' errand is
    *  turned in. */
   recruitCompanion: () => void;
-  /** Wave 25 · Tam's own flavor-greet interact (PlayerController's
+  /** Wave 25 · Tam's own flavor-greet interact (game/interaction/'s
    *  'talk_companion' kind) — a random line from COMPANION_LINES, the
    *  content-level equivalent of an NpcDef's own `lines` array without
    *  dragging in DialoguePanel's stationary-NPC machinery (see
-   *  PlayerController's own interact comment for why). */
+   *  performAction's own comment for why, game/interaction/). */
   greetCompanion: () => void;
 
   /** Wave 54 (E2) · Tam's own combat-XP gain, mirroring `gainDefenderXp`

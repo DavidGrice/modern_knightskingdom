@@ -16,7 +16,7 @@ export function dungeonDirector(st: GameState): boolean {
     for (const room of layout.rooms) {
       if (room.objective === 'none') continue;
       // Wave 13 · 'retrieve' rooms have no enemies at all — they're
-      // cleared by PlayerController's relic pickup instead, so this
+      // cleared by the player's relic pickup (game/interaction/performAction.ts) instead, so this
       // spawn/watch block only applies to 'combat' rooms. Their state
       // still folds into the allCleared check below either way.
       // Wave 48 (B9) · 'escort' shares the SAME one-shot spawn-once guard

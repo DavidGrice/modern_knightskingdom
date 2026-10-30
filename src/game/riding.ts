@@ -41,8 +41,8 @@ export function registerHorse(id: string, url: string, x: number, z: number, wor
  *  and the ground of one reaches well past the next (Richard's steed on its
  *  tilt field stands on ground The King's Approach lets a player walk on
  *  too). So what draws a grazing horse and what offers one both ask this:
- *  Wildlife.tsx draws it only here, and PlayerController's two "Ride Horse"
- *  loops offer it only here (horseOnOffer, below). The same residency test
+ *  Wildlife.tsx draws it only here, and findTarget's two "Ride Horse"
+ *  loops (game/interaction/) offer it only here (horseOnOffer, below). The same residency test
  *  joust.ts makes for Richard himself. */
 export function horseIsHere(h: { world: string | null }, destination: string | null | undefined): boolean {
   return h.world === (destination ?? null);
@@ -50,7 +50,7 @@ export function horseIsHere(h: { world: string | null }, destination: string | n
 
 /** Can the player, in `destination`, get on this horse — leaving aside how
  *  near it is? One that nobody is riding and that lives here. Both of
- *  PlayerController's "Ride Horse" loops ask this and then measure. */
+ *  findTarget's "Ride Horse" loops (game/interaction/) ask this and then measure. */
 export function horseOnOffer(h: { mounted: boolean; world: string | null }, destination: string | null | undefined): boolean {
   return !h.mounted && horseIsHere(h, destination);
 }
@@ -65,8 +65,8 @@ export const stabledHorses = {
   assigned: {} as Record<string, string>,
 };
 
-/** Can this horse be taken into the homestead's stable (PlayerController's
- *  dismount beside a built Stable)? One of the homestead's own herd, and only
+/** Can this horse be taken into the homestead's stable (performAction's
+ *  dismount beside a built Stable, game/interaction/)? One of the homestead's own herd, and only
  *  once. A horse that lives at a destination is somebody's: Richard's steed
  *  stays his, whatever is built beside his lists — stabled, it would be
  *  saved as the homestead's and could be handed to a defender. (No ordinary

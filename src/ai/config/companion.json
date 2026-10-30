@@ -6,7 +6,7 @@
     "",
     "stopDistance 2.0 keeps Tam a companion's polite half-pace back rather",
     "than jostling the player's own collision radius (PLAYER_RADIUS 0.45,",
-    "components/fps/PlayerController.tsx) — comfortably outside it, inside",
+    "game/data/world.ts) — comfortably outside it, inside",
     "conversational range.",
     "",
     "runDistance 6 is the point a WALKING companion would otherwise visibly",

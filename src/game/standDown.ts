@@ -1,6 +1,6 @@
 // What the player is in the middle of, ended where he stands: the saddle, the crew position of a siege engine, a ram
 // he is pushing or a cart he is towing. Each is a mutable leaf module the frame loop drives (riding.ts, crew.ts,
-// carts.ts), and each normally ends with the interact key, in PlayerController.
+// carts.ts), and each normally ends with the interact key (game/interaction/performAction.ts).
 //
 // The knighting is the one thing that carries the player to another scene whatever he is doing (gameStore's
 // beginCeremony travels him to The King's Approach when a rank is reached). The travel board and "Return Home" are not

@@ -38,7 +38,7 @@ export const INTERIORS: Record<string, InteriorDef> = {
   // system launched with. `forge` and `market_stall` were the plan's own
   // first picks and both turned out unsafe on inspection: the forge's
   // station consider() sits right after this same block in
-  // PlayerController's if/continue chain, so an interior entry would
+  // findTarget's if/continue chain (game/interaction/findTarget.ts), so an interior entry would
   // permanently shadow "Use the Forge" (dead code, not a tie); the market
   // stall's own trade prompt is a separate consider() call that would lose
   // the tie against this block's earlier registration every frame. Picked
@@ -48,7 +48,7 @@ export const INTERIORS: Record<string, InteriorDef> = {
   // slot with anything else.
   //
   // enterRange bug (post-ship verify pass) · the first cut of these four sat
-  // near each building's declared `size` half-extent, but PlayerController's
+  // near each building's declared `size` half-extent, but findTarget's
   // consider() compares straight-line distance to the building's own centre
   // against enterRange, and the player is stopped well short of that centre
   // by REAL collision — `collisionBoxesFor` (buildables.ts), not the
@@ -57,7 +57,7 @@ export const INTERIORS: Record<string, InteriorDef> = {
   // to the FULL declared bounding box (half sx/2, half sz/2), and `tower`'s
   // real voxelised shape is a hollow ring whose ground-level walls are
   // flush with that same bounding box — in every case bigger than the old
-  // enterRange once the player's own PLAYER_RADIUS (0.45, PlayerController)
+  // enterRange once the player's own PLAYER_RADIUS (0.45, game/data/world.ts)
   // is added on top, so the door prompt could never appear from a real
   // walk-up. Each value below is now `max(halfX, halfZ) + PLAYER_RADIUS`
   // over the ACTUAL collision footprint (not the interior room's halfX/

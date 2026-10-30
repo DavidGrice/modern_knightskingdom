@@ -40,7 +40,7 @@ export const FISHING_DOCK = {
 // The brook, from the pond's northeast edge out to the spring mound. Was two
 // local consts inside Stream() (now HomeMeadowWater.tsx) until Wave 5 needed the same line
 // outside a 'use client' component — filling a pail is an interaction, and
-// PlayerController has to know where the water actually runs. Stream()
+// the interaction system (game/interaction/findTarget.ts) has to know where the water actually runs. Stream()
 // draws from these exact values, so the strip and the interact can't drift.
 export const BROOK = {
   startX: POND.x + 6.5, startZ: POND.z + 3, // pond-edge end
@@ -62,6 +62,11 @@ export const BROOK = {
 export const NPC_KING = { ...resolveWorldAnchor(WORLD_ANCHOR.king), yaw: Math.PI };
 
 export const INTERACT_RANGE = 3.4;
+// the player's own collision radius — PlayerController.tsx's until CLN-26 moved it here, beside the other
+// player-scale numbers. Exported (Wave 59, H3) so HomeMeadowWater.tsx's real dug-water hole can dev-assert
+// its own hole-margin against the actual, live constant rather than a
+// remembered copy of the number.
+export const PLAYER_RADIUS = 0.45;
 export const STATION_RANGE = 4.5;
 // Wave 17 #2 · fishing needs a tighter bubble than the general INTERACT_RANGE.
 // The pond's south shore sits only ~2m past the east road's rendered tile
@@ -79,7 +84,7 @@ export const FISH_CAST_RANGE = 1.5;
 // those 4 rooms (Watch Tower, Jail Cell, Jewel Tower — data/interiors.ts's
 // own halfX/halfZ) are small enough that the full 3.4m range reaches every
 // wall from a centrally-placed resident, so the plain "Leave the X" fallback
-// (PlayerController's findTarget, checked right after the resident) could
+// (game/interaction/findTarget.ts, checked right after the resident) could
 // never win anywhere in the room — live-verified during that wave's own
 // verify pass (every corner of all 3 rooms returned "Talk to <resident>",
 // never the exit prompt). The worst-case real, movement-clamped floor space

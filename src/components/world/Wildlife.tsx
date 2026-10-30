@@ -157,7 +157,7 @@ function Falcon() {
   const group = useRef<THREE.Group>(null);
   const t = useRef(Math.random() * 100);
   const soundIn = useRef(15);
-  // Wave 13 · once tamed (PlayerController's 'call_falcon' interact, in range
+  // Wave 13 · once tamed (game/interaction/'s 'call_falcon' interact, in range
   // of game/falcon.ts's own live position and offered only while untamed)
   // the bird stops circling the world origin and circles the PLAYER instead
   // — the only behavior change taming makes. See game/falcon.ts's header for

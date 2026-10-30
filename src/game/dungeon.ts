@@ -94,14 +94,14 @@ export interface DungeonRoom {
    *  enemyCount of enemyKind, cleared flips when the last one dies
    *  (game/directors/dungeonDirector.ts). 'retrieve' is the first alternative: no enemies at all, a
    *  Sealed Reliquary sits at the room's centre (DungeonScene.tsx), and
-   *  cleared flips the moment the player takes it (PlayerController.tsx's
+   *  cleared flips the moment the player takes it (game/interaction/performAction.ts's
    *  'dungeon_relic' interact) instead of the last enemy dying.
    *
    *  Wave 48 (B9) · two more, each a genuinely different completion
    *  condition, not a reskin of the two above:
    *  'escort' — a captive stands at the room's centre, guarded by
    *  enemyCount (always 1) of enemyKind. Freeing them
-   *  (PlayerController.tsx's 'dungeon_captive' interact) sets
+   *  (game/interaction/performAction.ts's 'dungeon_captive' interact) sets
    *  `captiveFreed`, after which DungeonScene.tsx's CaptiveFigure follows
    *  the player every frame via navSteer and writes its live position into
    *  captiveX/captiveZ. `cleared` flips only once the freed captive is
@@ -134,7 +134,7 @@ export interface DungeonRoom {
    *  DungeonStatus.tsx/dungeonDirector.ts already read as a pure completion flag. */
   relicTaken: boolean;
   /** Wave 48 (B9) · only meaningful for objective:'escort'. True once
-   *  PlayerController.tsx's 'dungeon_captive' interact frees the captive —
+   *  game/interaction/performAction.ts's 'dungeon_captive' interact frees the captive —
    *  before that DungeonScene.tsx's CaptiveFigure renders stationary at
    *  (cx, cz); after, it follows the player via navSteer every frame. */
   captiveFreed: boolean;

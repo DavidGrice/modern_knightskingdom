@@ -11,7 +11,7 @@ import { exposeDebug } from '@/lib/debugHooks';
 // — like quintain.ts's quintainSpins, tracked outside the store while active
 // so dragging one around doesn't spam zustand every frame; only committed
 // back to the placed building's stored x/z once let go (gameStore's
-// settleCart, invoked from PlayerController's push_cart/hitch_cart handling).
+// settleCart, invoked from performAction's push_cart/hitch_cart handling, game/interaction/).
 export const cartState = {
   pushingId: null as string | null,
   hitchedId: null as string | null,

@@ -64,7 +64,7 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       // a real PlacedBuilding, `type: 'keep'`, alongside the socket-tracking
       // `st.keep` state — a genuinely pre-existing gap found generalising the
       // interior system: nothing ever added one, so the interact-detection
-      // loop's own `b.type === 'keep'` check (PlayerController.tsx) could
+      // loop's own `b.type === 'keep'` check (game/interaction/findTarget.ts) could
       // never actually match anything, and "Enter the Keep" was unreachable
       // regardless of this refactor. Built immediately — the FOUNDATION reads
       // as already laid the moment it's placed; the individual socket pieces

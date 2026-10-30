@@ -281,7 +281,7 @@ function JewelTowerDressing({ def }: { def: InteriorDef }) {
 // the same Corwin/Cutter/Perrin/Aldous appears no matter which physical
 // Storehouse/Jail Cell/Watch Tower/Jewel Tower the player just walked into
 // (see that table's own header comment for why). `localX`/`localZ`/`yaw`
-// are the SAME numbers PlayerController's own interact-range check uses, so
+// are the SAME numbers findTarget's own interact-range check (game/interaction/) uses, so
 // the rendered figure and the "Talk to X" prompt can never drift apart.
 function ResidentFigure({ buildingType }: { buildingType: string }) {
   const resident = INTERIOR_RESIDENTS[buildingType];

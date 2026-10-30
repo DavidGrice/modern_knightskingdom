@@ -1,7 +1,7 @@
 'use client';
 // A raider-planted siege ladder: the AI-driven counterpart to the player's
 // own placeable Siege Stair (`oc6096-5`, buildables.ts — see
-// PlayerController's own `climbTargetFor` for the player's climb mechanic
+// game/interaction/climb.ts's own `climbTargetFor` for the player's climb mechanic
 // this mirrors). Spawned occasionally alongside a bandit/royal raid once the
 // home keep has at least one finished wall-walk to put it against, it
 // trundles in from outside the wall and plants itself there, then a small
@@ -134,8 +134,8 @@ export const CLIMB_STAGE1_S = 1.4;
 /** stage two: the final haul over the parapet (addendum #5) — x/z moves from
  *  the rungs onto the walkway itself while y finishes the last PULL_UP metres */
 export const CLIMB_STAGE2_S = 0.5;
-/** mirrors PlayerController's own PULL_UP constant (kept independent rather
- *  than imported, so this isn't coupled to a component's internal constant)
+/** mirrors game/interaction/climb.ts's own PULL_UP constant (kept independent rather
+ *  than imported, so the raiders' climb isn't coupled to the player's)
  *  — the same real number, so a raider clears the SAME 3.6m/4.2m wall-walk
  *  heights a single Siege Stair already lets the player clear (see that
  *  file's own climbTargetFor). */

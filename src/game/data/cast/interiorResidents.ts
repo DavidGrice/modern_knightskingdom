@@ -22,7 +22,7 @@ import type { NpcDef } from './types';
 //   invent a reassignment mechanism, for no real benefit.
 //
 // - NOT added to NPCS itself: `Npc.tsx`'s render filter, `scheduledCourtNpcs`,
-//   `poisForDestination`, and PlayerController's own home-only NPC interact
+//   `poisForDestination`, and findTarget's own home-only NPC interact
 //   loop all iterate NPCS unconditionally. A resident's only meaningful
 //   position is `pocketFor(type, buildingId)` — coordinates in the same
 //   shared "empty corner of the map" space interiors.ts's own pocketFor
@@ -35,14 +35,14 @@ import type { NpcDef } from './types';
 //
 // - x/z/yaw on each npc below are unused sentinels (0) — see `localX`/
 //   `localZ`/`yaw` instead, resolved against whichever building instance's
-//   own pocket is currently entered (PlayerController.tsx's `findTarget`,
+//   own pocket is currently entered (game/interaction/findTarget.ts's `findTarget`,
 //   BuildingInteriorRoom.tsx's render).
 export interface InteriorResident {
   npc: NpcDef;
   /** local offset from the room's own pocket center (data/interiors.ts's
    *  pocketFor) — the SAME point drives both the rendered figure's stand
    *  spot (BuildingInteriorRoom.tsx) and the interact-distance check
-   *  (PlayerController.tsx), so they can never drift apart. */
+   *  (game/interaction/findTarget.ts), so they can never drift apart. */
   localX: number;
   localZ: number;
   yaw: number;

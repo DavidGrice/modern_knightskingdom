@@ -144,7 +144,7 @@ export const GATHER_RESOURCE: Action = {
     {
       // Reported 2026-07-30: AI villagers were harvesting nodes on grounds
       // the player hadn't unlocked yet — this Action never checked deed
-      // ownership at all, unlike PlayerController's own interact prompt
+      // ownership at all, unlike the player's own interact prompt (game/interaction/findTarget.ts)
       // (`groundOpen(gr, st.landTier)`), the exact "player-side gate never
       // ported to the AI path" shape already flagged elsewhere in this
       // project. A node with no `ground` (starter area, open-water fishing,

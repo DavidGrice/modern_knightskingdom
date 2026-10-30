@@ -203,7 +203,7 @@ function applyLocalOverrides(caps: Record<string, LabCapability>) {
   // ANY predicate in this file, and `labCanFire` only ever checks
   // `traits.vehicle?.canFire ?? interaction.canFire` — so `oc6096b4` (which
   // isn't the hardcoded `b.type === 'cannon'` bypass Emplacements.tsx/
-  // PlayerController.tsx special-case) never actually auto-fires or
+  // game/interaction/findTarget.ts special-case) never actually auto-fires or
   // manually fires today, unlike its 8 SIEGE siblings. Adding the same real
   // `traits.vehicle` shape the working siege engines use — additively,
   // alongside their existing `traits.wall` data, which nothing here removes

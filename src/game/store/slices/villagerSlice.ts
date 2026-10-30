@@ -227,8 +227,8 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
       // Npc.tsx's CourtNpc registers into `npcMobs` on mount but never
       // cleans up on unmount (same gap villagerMobs's own comment above
       // already found and fixed for arrival) — once `villagers` excludes
-      // this id, Npc.tsx stops rendering him and PlayerController's own
-      // interact check already skips him too, but `npcMobs[npcId]` was left
+      // this id, Npc.tsx stops rendering him and findTarget's own
+      // interact check (game/interaction/) already skips him too, but `npcMobs[npcId]` was left
       // behind at his static post forever. targeting.ts's `resolveAim` has
       // no concept of "already recruited" (it's a leaf module fed raw
       // `npcMobs` entries) and kept raycasting a friendly cylinder there,

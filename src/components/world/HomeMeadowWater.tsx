@@ -11,7 +11,7 @@ import { BROOK } from '@/game/data/world';
 import {
   BANK_Y, MAX_WATERWORKS, PIT_DEPTH, WATER_BANK, WATER_Y,
 } from '@/game/waterworks';
-import { PLAYER_RADIUS } from '@/components/fps/PlayerController';
+import { PLAYER_RADIUS } from '@/game/data/world';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { worldEnv, seasonOf } from '@/game/env';
