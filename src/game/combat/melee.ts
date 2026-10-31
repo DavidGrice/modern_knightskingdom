@@ -29,7 +29,8 @@ import { hitRaiderProp, RAIDER_PROPS } from './structures';
  * visible cue is a forced `playerState.speed` bump that the EXISTING
  * run-cycle (third person) and speed-driven bob/sway (first-person
  * viewmodel) already react to, plus the existing FOV smoother widening a
- * touch further — see PlayerController's own dodge wiring.
+ * touch further — see the Wave 40 (A6) notes in components/fps/publishPlayerState.ts
+ * (the speed) and cameraRig.ts's useFovEase (the FOV).
  */
 export function tryDodge(dirX: number, dirZ: number): boolean {
   const now = performance.now();

@@ -143,7 +143,7 @@ export const WALK_DEEP_HALF = 1.2;   // …and 2.4m across it
  *  socket's own `walkway` height above the foundation) — Wave 31 folds in
  *  the foundation's own elevation (`keep.y`) only at the very end, and only
  *  when a real walkway actually applies. The "no walkway" sentinel must stay
- *  EXACTLY 0: callers (PlayerController.tsx) depend on that meaning "no
+ *  EXACTLY 0: callers (game/playerPhysics/floor.ts's floorHeightAt, game/interaction/climb.ts) depend on that meaning "no
  *  override" — `(keep.y ?? 0) + 0` would turn a merely-elevated foundation
  *  with no walkway into a phantom knee-high step everywhere inside it. */
 export function keepWalkwayAt(keep: KeepState | null | undefined, x: number, z: number): number {

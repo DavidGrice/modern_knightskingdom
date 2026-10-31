@@ -98,7 +98,7 @@ export const createWorldSlice: SliceCreator<WorldSlice> = (set, get) => {
       // Otherwise: a frozen, known-good spawn point (TEMPLATE_ARRIVAL_SPAWN,
       // worlds.ts — see its own comment) for the 8 destinations real
       // walkable-rect data now covers, so day-one arrival never lands
-      // somewhere the new rect-union clamp (PlayerController.tsx) would
+      // somewhere the new rect-union clamp (game/playerPhysics/collide.ts) would
       // immediately snap away from; any destination without an entry there
       // (challenges, dungeon/arena bypass this formula entirely) keeps the
       // original radius-derived landing spot unchanged.

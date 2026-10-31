@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 import { BATTLE_DOME } from './data/world';
 
-// The mounted template scene's root, for PlayerController to raycast against
+// The mounted template scene's root, for the player's floor
+// (game/playerPhysics/floor.ts, via destinationGroundY) to raycast against
 // (terrain height varies a lot across these bakes — a hillside castle spans
 // 12m+ of vertical relief — so a fixed eye height would bury the camera in
 // a hillside; see sampleTemplateGroundY, used in place of floorHeightAt

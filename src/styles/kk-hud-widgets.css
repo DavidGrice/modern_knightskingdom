@@ -11,7 +11,8 @@
 
 .kk-aim {
   /* K61 · pinned over the target's head: left/top stay at the origin and
-     PlayerController's projected screen point arrives as a transform, so
+     the projected screen point (pinNameplate, components/fps/aimReadout.ts,
+     via aimState.screen) arrives as a transform, so
      moving the plate never touches layout */
   position: absolute;
   left: 0;

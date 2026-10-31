@@ -90,7 +90,7 @@ export default function MountedHorse() {
           reused here even though the figure is invisible below).
           Local offset, so it rides correctly regardless of BODY_FORWARD.
           Invisible, not removed (2026-08-03): riding always renders
-          first-person now (PlayerController.tsx forces it regardless of the
+          first-person now (placeCamera, components/fps/cameraRig.ts, forces it regardless of the
           stored camera-mode preference, same reasoning PlayerAvatar.tsx's
           own on-foot avatar already uses for hiding while riding) — left
           visible, this sits only 0.15 units in front of and 0.55 up from

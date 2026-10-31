@@ -154,7 +154,7 @@ export default function DungeonScene() {
   // ResourceNodes.tsx's TreeGroup), rather than one PropModel-driven GLB
   // clone+draw-call per wall segment. Flagged for real by Wave 16's
   // profiling pass (dungeon.ts's own item (b) note). Collision is unaffected
-  // — navgrid.ts/PlayerController.tsx read `layout.walls` directly, not the
+  // — game/nav/registry.ts and game/playerPhysics/collide.ts read `layout.walls` directly, not the
   // rendered mesh. Real frustum culling stays ON (InstancedProp's default) —
   // a whole descent's walls span multiple rooms out to the 96-unit reach
   // limit, nothing like the small compact patches that opt out of it; see

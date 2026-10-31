@@ -253,7 +253,8 @@ export default function Minimap() {
         // rect (same gold the old single circle used); falls back to the
         // original stroked circle, byte-for-byte, for any destination
         // without classified data yet (challenges, dungeon, arena, a future
-        // template) OR — same guard as PlayerController.tsx's own clamp,
+        // template) OR — same guard as the player's own clamp (collide.ts in
+        // game/playerPhysics/),
         // see its comment for the live-caught race this avoids — for the
         // first few frames after travelTo() before this destination's async
         // GLB (and thus its real getBakeOffset()) has actually resolved;

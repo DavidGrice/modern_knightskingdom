@@ -5,8 +5,8 @@
 // (fixedSolids.ts), water and the terrain the walkers keep off — for a walker no fatter than its AGENT_RADIUS. The
 // merchant is wider: he leads his cart and team, two horses abreast, 1.84 m across, along his own track
 // (Merchant.tsx), and things stand along his road that the grid does not hold at all: the village's two huts and the
-// signpost, drawn and solid for nobody, and the trees and rocks, solid for the player only (PlayerController.tsx's
-// trunk and boulder circles). That the grid lets every walker through them is a fault of its own (ROADMAP.md, "the
+// signpost, drawn and solid for nobody, and the trees and rocks, solid for the player only (the trunk and boulder
+// circles in game/playerPhysics/collide.ts). That the grid lets every walker through them is a fault of its own (ROADMAP.md, "the
 // village's huts and the signpost stop nobody, and the trees and rocks stop only the player") — but a team must not be
 // seen passing through a hut or a tree, so his way is planned round them, as well as wide.
 import { SIGNPOST, SIGNPOST_HALF, VILLAGE_HUT_HALF, VILLAGE_HUTS } from '../data/world';
@@ -27,7 +27,7 @@ let kept: { nodes: unknown; list: WideSolid[] } | null = null;
 
 /** The solids a wide walker keeps clear of in `region` (null: the homestead) besides what the grid holds — at home the
  *  village's huts and the signpost (data/world.ts), and the trees and rocks standing there now, each a circle of the
- *  radius the player is stopped at (PlayerController.tsx: 0.55 × its scale a tree, 1.1 × its scale a rock); nowhere
+ *  radius the player is stopped at (game/playerPhysics/collide.ts: 0.55 × its scale a tree, 1.1 × its scale a rock); nowhere
  *  else, any. The same list while what it holds is the same — the store makes its nodes afresh at every swing at a
  *  tree or a rock, and at every herb picked, which change nothing here — so that what keeps a mask made from it makes
  *  it again only when the trees and rocks standing at home change: one felled or grown back, a plot of them planted
