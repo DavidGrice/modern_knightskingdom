@@ -8776,7 +8776,7 @@ the timer). Then `tsc`, the unit tests, and live on production builds of `main` 
 CLN-26 part 3's pointer-lock probe — a click taking the pointer, the order wheel, a panel and Escape, build mode and
 back (the unmount the deleted cleanup call ran in): identical, `main` against itself too.
 
-## Bug: on home's hills, what you walk up to is offered only when you look down at it — logged 2026-10-30 (during CLN-26, part 4; by the code, not run)
+## Bug (latent): on home's hills, what you walk up to would be offered only when you look down at it — logged 2026-10-30 (during CLN-26, part 4; by the code), MEASURED 2026-10-31: nothing to meet it today
 
 `findTarget`'s scored sweep at home (`game/interaction/findTarget.ts`, `consider(x, z, y, …)`) aims at each candidate's
 point at a fixed height above sea level — a horse at 1.1 m, a tree at 1.2, a rock or a herb at 0.8, a person at 1.3 —
@@ -8790,3 +8790,14 @@ not meet it: the horse it mounted grazed on level ground (feet at 0 m) and was o
 **To do:** measure it on `main` on a hilltop (a tree or a horse up on the Downs: the prompt with a level view, and the
 pitch it takes to get one), then measure each candidate from the ground under it — `homeGroundY(x, z) +` its height, at
 home — and verify the same way.
+
+**Measured on `main`** (a production build of 104ac52, 2026-10-31, `scripts/cln-tools/hills_measure.mjs`): the fault is
+real in the code and unreachable in the game as it stands. Home's ground rises only on its two knolls (The North Downs,
+centred at (0, −94), 6.4 m at its top; West Fell at (−100, −94), 5.6 m — `data/terrainRegions.generated.json`), and
+nothing a player can act on stands there: no tree, rock or herb grows on either; neither lies inside any land tier's
+build region (the largest, Barony, reaches z = −40 to the north; the Downs begin at z = −60, and West Fell is out at
+x = −100), so a campfire will not place within 14 m of the Downs' top; and the four home horses graze the flat (their
+feet at 0 m). A campfire on flat ground was offered with a level view, as it should be. So every candidate the sweep
+meets stands at ground 0, where the fixed heights and the ground-relative ones agree. **Kept** as a latent fault: the
+fix above (measure each candidate from the ground under it — a placed piece from its own `b.y`) goes in the day anything
+a player can act on is put on a hill — a land tier that reaches the Downs, a node or a horse placed there.
