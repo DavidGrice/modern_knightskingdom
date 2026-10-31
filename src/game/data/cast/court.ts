@@ -292,8 +292,8 @@ export const COURT_NPCS: NpcDef[] = [
     // (BattleDome.tsx's oc6095b5/oc6095b4) — local (0, -324.667), so the
     // challenger now visibly crosses the bridge to reach her instead of
     // finding her a step inside the gap. `yaw` stays Math.PI (NOT flipped to
-    // 0): confirmed live against both PlayerController's own "yaw 0 looks
-    // -Z" comment and Npc.tsx's own desired-facing formula
+    // 0): confirmed live against both crewEngine's own "yaw 0 looks
+    // -Z" comment (game/playerPhysics/locomotion.ts) and Npc.tsx's own desired-facing formula
     // (`atan2(-dx,-dz)`, which gives yaw=Math.PI for a +Z-facing target) that
     // yaw=Math.PI is what makes her face +Z — i.e. still toward the entrance
     // gap/bridge, same direction as before the move, just from the opposite

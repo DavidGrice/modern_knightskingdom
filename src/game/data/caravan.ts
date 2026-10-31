@@ -2,7 +2,7 @@
 // arbitrage run between two OWNED settlements. Named `caravan.ts` (distinct
 // from the existing `game/carts.ts`, which is the warcart/bladecart siege
 // props — a battering ram and a blade cart, both `category: 'defense'` in
-// buildables.ts, dragged around by hand via PlayerController's push_cart/
+// buildables.ts, dragged around by hand via the player's push_cart/
 // hitch_cart — confirmed live to have nothing to do with trade, same
 // conclusion deliveryQuests.ts's own header already reached independently).
 //

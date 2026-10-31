@@ -2,7 +2,8 @@
 
 // Horse riding state: which wild horse is mounted and shared horse mobs.
 // Horse positions are mutated in place (no store churn); the Wildlife horses
-// and the PlayerController both read/write these objects.
+// and the player's own code (game/interaction/'s findTarget and performAction,
+// game/playerPhysics/locomotion.ts) both read/write these objects.
 
 import { exposeDebug } from '@/lib/debugHooks';
 
@@ -132,7 +133,9 @@ export function dismountHorse(px: number, pz: number, yaw: number) {
 /** CLN-04 · session start. The saddle is not part of a save, so a loaded or new
  *  game must not begin mounted on the last session's horse. In place (no key is
  *  deleted): Wildlife.tsx holds each horse's `horses[id]` object from a useMemo,
- *  and MountedHorse/PlayerController only read `ridingState` fields. */
+ *  and MountedHorse and the player's code (game/playerPhysics/locomotion.ts,
+ *  game/interaction/, components/fps/publishPlayerState.ts, cameraRig.ts)
+ *  only read `ridingState` fields. */
 export function resetRiding(): void {
   ridingState.active = false;
   ridingState.horseId = null;

@@ -655,7 +655,7 @@ const SIEGE: Buildable[] = [
   // consumers anywhere in this codebase (game/crew.ts's own comment: the
   // real siege engines are all `canDrive:false`). So these wire into the
   // exact same hardcoded push_cart/hitch_cart mechanism warcart/bladecart
-  // already use (game/interaction/findTarget.ts's prompts, PlayerController.tsx's drag) rather than a new "driving"
+  // already use (game/interaction/findTarget.ts's prompts, game/playerPhysics/locomotion.ts's drag) rather than a new "driving"
   // mechanic — oc6096-1 has a literal battering_head/ram_horns rig, so it
   // pushes; oc6032b3 is a mobile catapult/crossbow rig, not a ram, so it
   // hitches (fireable-while-stationary is a real, separate future item, not

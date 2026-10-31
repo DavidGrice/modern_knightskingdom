@@ -478,7 +478,7 @@ function VillagerFigure({ villager }: { villager: Villager }) {
         s.x += nx * speed * dt;
         s.z += nz * speed * dt;
         // yaw -> facing is (-sin, -cos) by this codebase's convention
-        // (PlayerController/combat.ts), so recovering yaw from a movement
+        // (game/playerPhysics/locomotion.ts, game/combat/melee.ts), so recovering yaw from a movement
         // direction needs the negated atan2 — the un-negated version had
         // villagers walking backwards the same way Enemies.tsx's mobs did.
         const desired = Math.atan2(-nx, -nz);

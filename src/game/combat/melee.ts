@@ -23,7 +23,7 @@ import { hitRaiderProp, RAIDER_PROPS } from './structures';
 /**
  * One stamina-costed burst of displacement + i-frames. Decides WHETHER a
  * roll starts and which way it points; the actual movement is applied by
- * PlayerController's on-foot branch (the same collision-clamped nx/nz code, game/playerPhysics/collide.ts,
+ * the on-foot step (walk, game/playerPhysics/locomotion.ts — the same collision-clamped nx/nz code, collide.ts,
  * every ordinary step already resolves through, so a roll can't clip through
  * a wall — it's a bigger step, not a teleport). No fabricated animation: the
  * visible cue is a forced `playerState.speed` bump that the EXISTING

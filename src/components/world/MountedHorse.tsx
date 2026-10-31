@@ -25,7 +25,8 @@ import RiggedFigure from '../character/RiggedFigure';
  * and see nothing else of it.
  */
 const BODY_FORWARD = 1.05;
-/** `playerState.y` is the rider's FEET/ground level (PlayerController adds
+/** `playerState.y` is the rider's FEET/ground level (walk, in
+ *  game/playerPhysics/locomotion.ts, adds
  *  EYE_HEIGHT, plus 0.85 more while mounted), so the horse simply stands on
  *  it — the saddle lands where the raised camera already is. */
 const DROP = 0;

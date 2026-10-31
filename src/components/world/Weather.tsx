@@ -1,7 +1,7 @@
 'use client';
 // Weather: occasional rain spells with a particle field around the camera,
 // the original rain loop, and lightning flashes with the storm sound. Rain
-// also makes the fish bite (see PlayerController). In winter the same spell
+// also makes the fish bite (see game/fishing.ts's startFishing). In winter the same spell
 // and particle system renders as snow instead (recolored, larger, slower
 // fall, no lightning) — a separate, independent "mist" spell (Phase 15)
 // pulls in `scene.fog`'s near/far distance (see DayNight.tsx) for a proper

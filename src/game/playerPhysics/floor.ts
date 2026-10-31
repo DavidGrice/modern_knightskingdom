@@ -24,9 +24,9 @@ export const STEP_UP = 0.55; // max ledge height climbed without jumping
 export const WALKWAY_STEP = 0.8;
 
 /** Wave 12 · floorHeightAt's terrain out-param (see its signature). Same
- *  never-stored-past-the-statement-that-reads-it contract as PlayerController.tsx's
- *  scratch vectors, and safe for the same reason: PlayerController is a singleton.
- *  Exported: the frame reads it again after floorUnder (is the floor open ground?). */
+ *  never-stored-past-the-statement-that-reads-it contract as the movement's
+ *  scratch vectors (locomotion.ts), and safe for the same reason: PlayerController is a singleton.
+ *  Exported: walk (locomotion.ts) reads it again after floorUnder (is the floor open ground?). */
 export const _terrainOut = { y: 0 };
 
 /** highest structure top at (x, z) that the player can stand on given their feet height */

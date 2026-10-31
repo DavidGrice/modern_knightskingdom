@@ -78,8 +78,8 @@ export function collide(st: ReturnType<typeof useGameStore.getState>, riding: bo
     // the NOW-correctly-offset rects too, so the per-frame "already
     // inside, no-op" fast path silently locked in the wrong answer
     // forever. Skipping the clamp entirely for those first few
-    // pre-mount frames is safe: pendingTeleport (applied at the top of
-    // PlayerController.tsx's frame, before `p = pos.current` is read) already placed the player at a deliberately-chosen valid
+    // pre-mount frames is safe: pendingTeleport (applied by relocate at the top of
+    // PlayerController.tsx's frame, before walk reads `p = pos.current`) already placed the player at a deliberately-chosen valid
     // point, and no real player input can have accumulated in the
     // handful of frames a same-scene mount takes.
     const dest = WORLD_DESTINATION_BY_ID[st.destination];

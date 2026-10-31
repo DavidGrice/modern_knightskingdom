@@ -51,7 +51,7 @@ export function interactLabel(device: InputDevice): string {
 
 // the hold-to-gather/build prompt: on keyboard/mouse this is a held LMB
 // ("Click" — combat.ts's CLICK_HELD_TARGET_KINDS), but gamepad/touch were
-// never given a separate hold-input for it (PlayerController.tsx's
+// never given a separate hold-input for it (game/interaction/holdToAct.ts's
 // `heldInput` — search that name for why) — they still gather by holding
 // their ordinary Interact button, so the prompt has to say THAT, not
 // "Click", or it would point at a control that does nothing here.

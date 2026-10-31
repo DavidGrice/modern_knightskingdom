@@ -20,7 +20,8 @@ export const cartLivePos: Record<string, { x: number; z: number }> = {};
 
 /** CLN-04 · session start (newGame / new-game-plus / loadFromSave). A ram being
  *  pushed or a cart being hitched is session-tactical player state that is
- *  never saved: PlayerController re-reads `cartState` every frame and glues
+ *  never saved: the player's step (walk, game/playerPhysics/locomotion.ts)
+ *  re-reads `cartState` every frame and glues
  *  `cartLivePos[id]` to the player, so leaving it set kept the player holding
  *  the old session's cart after Save & Return + Continue (a ghost "Let go of the
  *  Ram" prompt, the cart drawn at the spawn point while its stored building sat

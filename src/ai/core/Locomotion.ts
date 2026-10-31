@@ -36,7 +36,7 @@ const RUN_SPEED = 1.6; // m/s — matches Villagers.tsx's existing raid-flee pac
 // (a villager's own wander pace / raid-flee pace) and follow_leader/
 // assist_leader wrongly inherited them by using the same 'walk'/'run' MOVE_TO
 // vocabulary — but the thing a companion actually has to keep pace with is
-// the PLAYER (PlayerController.tsx's own base walk 4 m/s / sprint 7 m/s), not
+// the PLAYER (game/playerPhysics/locomotion.ts's walk 4 m/s / sprint 7 m/s), not
 // a fellow NPC, and 1.6 m/s can never catch either: verified live, the follow
 // gap grew without bound (5.4 -> 22.6 units over 8s) at exactly 4.0-1.6=2.4
 // m/s of net separation. Set with real margin above the player's SPRINT (not
@@ -144,7 +144,7 @@ clearHooks.push(() => { steerState.clear(); anchorCache.clear(); });
 
 function faceToward(agent: Agent, tx: number, tz: number, dt: number): void {
   // yaw -> facing is (-sin, -cos) by this codebase's convention
-  // (PlayerController.tsx/combat.ts/Villagers.tsx's own wander branch)
+  // (game/playerPhysics/locomotion.ts, game/combat/melee.ts, Villagers.tsx's own wander branch)
   const desired = Math.atan2(-(tx - agent.position.x), -(tz - agent.position.z));
   const diff = wrapAngle(desired - agent.yaw);
   agent.yaw += diff * Math.min(1, dt * FACE_TURN_RATE);

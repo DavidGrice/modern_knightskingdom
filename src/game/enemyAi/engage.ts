@@ -55,7 +55,7 @@ export function closeIn(m: Mob, dt: number, way: () => { nx: number; nz: number 
   m.x += nx * pace * dt;
   m.z += nz * pace * dt;
   // yaw -> facing direction is (-sin, -cos) everywhere else in this
-  // codebase (see PlayerController/combat.ts), so recovering yaw from
+  // codebase (see game/playerPhysics/locomotion.ts, game/combat/melee.ts), so recovering yaw from
   // a movement direction needs the negated atan2, not a bare one.
   m.yaw = Math.atan2(-nx, -nz);
 }

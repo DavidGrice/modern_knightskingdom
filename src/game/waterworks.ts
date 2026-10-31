@@ -9,7 +9,7 @@
 // Leaf module, deliberately, exactly like road.ts and navTerrain.ts: the store
 // owns the list and every consumer reads it from here, so nothing that needs to
 // know where the water is has to import the store (navTerrain must not, and
-// PlayerController/Enemies read it every frame). `waterworks.list` is the live
+// the player's collision, game/playerPhysics/collide.ts, and Enemies read it every frame). `waterworks.list` is the live
 // truth while playing and the store keeps it in step through `setWaterworks` —
 // the same "leaf module is what the frame loop reads" arrangement riding.ts's
 // `stabledHorses` already uses for the mounted-patrol AI.

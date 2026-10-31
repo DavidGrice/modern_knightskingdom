@@ -57,14 +57,14 @@ function startAttack(st: GameState) {
   const ranged = rangedReady(st);
   combatState.lmbDown = true;
   // aiming at an unbuilt construction site, or a gatherable node: the
-  // hold drives hammer/tool progress (PlayerController's hold-to-act
-  // loop, keyed off lmbDown) instead of a normal attack swing — holding
+  // hold drives hammer/tool progress (the hold-to-act in
+  // game/interaction/holdToAct.ts, keyed off lmbDown) instead of a normal attack swing — holding
   // the attack input to build or gather, matching the same "click and
   // hold" feel as the aerial build-mode placement (requested 2026-07-30,
   // "for mechanical consistency" with the way attacking already works)
   if (CLICK_HELD_TARGET_KINDS.has(st.targetKind ?? '')) return;
   // crewing a siege engine: the attack button looses the ENGINE, not
-  // your sword (PlayerController's crew block reads lmbDown)
+  // your sword (crewEngine, game/playerPhysics/locomotion.ts, reads lmbDown)
   if (crewState.engineId) return;
   if (ranged && bow) {
     combatState.drawStart = performance.now();
@@ -144,8 +144,8 @@ export default function CombatController() {
   // edge-detect — mirrors GameScreen.tsx's own action-lookup pattern
   // (isRebindListening's Options-screen guard, e.repeat to ignore OS key
   // repeat while held). Mounted/crewing has no roll — checked here rather
-  // than only in PlayerController's consumer, so the flag never even queues
-  // for those states — and PlayerController's consumer checks again anyway
+  // than only in the consumer (walk, game/playerPhysics/locomotion.ts), so the flag never even queues
+  // for those states — and that consumer checks again anyway
   // as the authoritative gate.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

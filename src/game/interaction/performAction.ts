@@ -149,8 +149,8 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
     // actually launches is unclear — so this is framed as a player
     // jump-boost rather than firing a projectile from a specific part,
     // sidestepping that uncertainty entirely. Reuses the exact same
-    // fall/landing physics a normal jump already has (PlayerController.tsx's own
-    // `vel.current.y = 5` on a grounded jump), just a taller arc.
+    // fall/landing physics a normal jump already has (walk's own
+    // `vel.current.y = 5` on a grounded jump, game/playerPhysics/locomotion.ts), just a taller arc.
     vel.current.y = 11;
     grounded.current = false;
     st.notify('You spring into the air!');

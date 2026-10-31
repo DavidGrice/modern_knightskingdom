@@ -102,7 +102,7 @@ export function resetRaiderLadder(socketId: string) {
   const keepY = keep.y ?? 0;
   // outward normal for this socket — yaw 0 faces -Z, the SAME convention
   // KeepSocket's own doc comment and every atan2(-nx,-nz) yaw recovery in
-  // this codebase already use (PlayerController.tsx, game/enemyAi/).
+  // this codebase already use (game/playerPhysics/locomotion.ts, game/enemyAi/).
   const nx = -Math.sin(socket.yaw);
   const nz = -Math.cos(socket.yaw);
   const half = socket.kind === 'corner' ? WALK_CORNER_HALF : WALK_DEEP_HALF;

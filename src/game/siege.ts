@@ -181,7 +181,7 @@ export function detonate(charge: PlacedBuilding) {
 exposeDebug('__kkDetonate', detonate);
 
 // ---- the pushable battering ram (see game/carts.ts for the shared
-// push/hitch state both this and PlayerController read/write) ----
+// push/hitch state both this and the player's step, game/playerPhysics/locomotion.ts, read/write) ----
 let lastRamHitAt = 0;
 
 /** the battering ram bashes whatever it's shoved into: a shut gate is forced

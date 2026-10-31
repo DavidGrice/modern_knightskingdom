@@ -14,7 +14,7 @@ import { FIDGET_CLIPS } from '@/ai/actions/ambient';
 import { pick } from '@/lib/rng';
 
 /** scratch for the LOD distance check below — module-scope like every other
- *  per-frame scratch object in this codebase (see PlayerController.tsx) */
+ *  per-frame scratch object in this codebase (see game/playerPhysics/locomotion.ts) */
 const _worldPos = new THREE.Vector3();
 /** Bugfix (2026-08-19) · the cutoff used to be measured against
  *  `camera.position`, which in third person is not the player at all — it's
