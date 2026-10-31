@@ -75,8 +75,9 @@ export function cedricFinalStandReady(st: GameState): boolean {
 
 /** Spawn Cedric for the camp duel — the ordinary skirmish he still walks
  *  away from, or (once cedricFinalStandReady) the real final stand with its
- *  own escort. Shared by both places that trigger the duel (PlayerController's
- *  direct-spawn branch, Panels.tsx's ParleyPanel) so they can't drift apart.
+ *  own escort. Called from ParleyPanel.tsx alone since Wave 56 (every
+ *  challenge goes through the parley first; the direct-spawn branch
+ *  PlayerController once had is gone).
  *  Returns whether this spawn was the final stand, for the caller's own
  *  flavor text. */
 export function startCedricDuel(st: GameState): boolean {

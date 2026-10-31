@@ -17,7 +17,7 @@ export function onBattlement(): boolean {
  *  added 2026-07-30 for mechanical consistency with how attacking already
  *  works. The single source both `CombatController`'s mousedown guard (don't
  *  ALSO swing/fire when the hold is meant for the tool in hand) and
- *  `PlayerController`'s own prompt/held-input logic read from. */
+ *  holdToAct's own prompt/held-input logic (game/interaction/holdToAct.ts) read from. */
 export const CLICK_HELD_TARGET_KINDS = new Set(['construct', 'tree', 'rock', 'fishing', 'herb']);
 
 export const combatState = {
@@ -30,7 +30,7 @@ export const combatState = {
   /** on-foot sprinting (Shift + moving) — spends stamina the same way galloping does */
   sprinting: false,
   /** LMB currently held (2026-07-20) — set by CombatController's own mousedown/
-   *  mouseup listeners, read by PlayerController's hold-to-act loop so
+   *  mouseup listeners, read by the hold-to-act (game/interaction/holdToAct.ts) so
    *  construction can be driven by holding the attack button instead of E */
   lmbDown: false,
   weapon: 'melee' as 'melee' | 'ranged',
@@ -47,7 +47,7 @@ export const combatState = {
   flash: 0,
   /** performance.now() of the last attack swing (viewmodel animation) */
   attackAt: 0,
-  /** set by damage logic; PlayerController teleports and clears it */
+  /** set by damage logic; relocate (game/playerPhysics/locomotion.ts) teleports and clears it */
   teleportTo: null as [number, number] | null,
 
   // ---- Wave 40 (A6) · real melee depth: dodge-roll, parry timing, i-frames,
@@ -60,7 +60,7 @@ export const combatState = {
    *  press-edge across mouse/touch/gamepad. */
   blockPressedAt: 0,
   /** set by CombatController's input dispatch (keydown/touch/gamepad edge),
-   *  consumed once by PlayerController's on-foot movement branch */
+   *  consumed once by the on-foot step (walk, game/playerPhysics/locomotion.ts) */
   dodgeQueued: false,
   /** world-space unit vector, captured at trigger time by tryDodge() */
   dodgeDir: { x: 0, z: -1 },

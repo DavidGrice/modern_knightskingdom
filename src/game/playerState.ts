@@ -11,7 +11,8 @@ export const playerState = {
   x: 0, y: 0, z: 26, yaw: 0, pitch: 0,
   speed: 0, grounded: true, acting: false, riding: false,
   /** set by systems that need to relocate the player (e.g. keep enter/exit);
-   * PlayerController applies it once per frame and clears it. */
+   * relocate (game/playerPhysics/locomotion.ts), at the top of PlayerController's
+   * frame, applies it once per frame and clears it. */
   pendingTeleport: null as { x: number; z: number; yaw?: number } | null,
 };
 

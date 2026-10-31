@@ -358,7 +358,7 @@ const SURVIVE_CHANCE = 0.15;
 
 /** Wave 48 (B9) · 'survive' timer/cadence, and 'escort' delivery radius —
  *  kept here with this generator's other tuning constants (RETRIEVE_CHANCE
- *  above) rather than local to dungeonDirector.ts/PlayerController.tsx, so a future
+ *  above) rather than local to dungeonDirector.ts, so a future
  *  balance pass has one place to edit. 6m verified against room geometry
  *  (SIZE_CLASSES' half-extents are 4/8/12, so this safely covers even the
  *  smallest 8x8 entry room plus a stride into its doorway) and against

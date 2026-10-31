@@ -68,7 +68,8 @@ function reachRangeFor(type: string, rot: number): number {
   return Math.max(INTERACT_RANGE, Math.max(sx, sz) / 2 + PLAYER_RADIUS + 0.5);
 }
 
-/** What findTarget reads from PlayerController: the camera (where the player faces) and the player's position. */
+/** What findTarget reads from its caller (holdToAct, handing on PlayerController's): the camera (where the player faces)
+ *  and the player's position. */
 export interface TargetCtx {
   camera: THREE.Camera;
   pos: { current: THREE.Vector3 };
@@ -178,7 +179,7 @@ export function findTarget(ctx: TargetCtx, st: ReturnType<typeof useGameStore.ge
       // per-frame g.visible toggle) — without this, "Talk to King Leo"
       // could still be offered at his empty post at night. This whole
       // findTarget() call already runs every real frame (see its call site,
-      // PlayerController.tsx's frame), so worldEnv.time is genuinely reactive here, unlike a
+      // holdToAct, run from PlayerController's frame), so worldEnv.time is genuinely reactive here, unlike a
       // render-time filter — see npcs.ts's isNpcPresent doc.
       if (!isNpcPresent(n, st.completedQuests, worldEnv.time)) continue;
       const mob = npcMobs[n.id];
@@ -263,7 +264,7 @@ export function findTarget(ctx: TargetCtx, st: ReturnType<typeof useGameStore.ge
   // you're currently facing (the cart follows you, so "look at it" isn't
   // a meaningful requirement the way it is for a stationary target)
   // crewing an engine: E always steps down (firing is the attack button,
-  // see the crew block in PlayerController.tsx's frame loop), so nothing else competes for it
+  // see crewEngine, game/playerPhysics/locomotion.ts), so nothing else competes for it
   if (crewState.engineId) {
     const eb = st.buildings.find((x) => x.id === crewState.engineId);
     return {

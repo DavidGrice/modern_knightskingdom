@@ -456,8 +456,8 @@ function BuildingMesh({ b, originOffset = ZERO_OFFSET }: { b: PlacedBuilding; or
     return <group position={[px, y, pz]} rotation-y={yaw} scale={scale}><WindowFixture id={b.id} /></group>;
   }
   // Wave 35 (G5) · oc6096-1/oc6032b3 push/hitch through the same
-  // PlayerController mechanism as warcart/bladecart (cartState/cartLivePos,
-  // game/carts.ts) and need the SAME live-position render path, or the
+  // mechanism as warcart/bladecart (cartState/cartLivePos, game/carts.ts;
+  // the player's drag in game/playerPhysics/locomotion.ts) and need the SAME live-position render path, or the
   // mesh would stay frozen at its placed b.x/b.z while cartState tracks it
   // moving — CartMesh already reads cartLivePos generically, keyed by
   // building id, so routing here is the only change this needs.

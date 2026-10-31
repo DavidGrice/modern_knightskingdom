@@ -6,7 +6,7 @@
 // Wave 12 · this went from one lane with a stub branch to a NETWORK reaching
 // all six resource grounds. It is worth being clear that the road was never
 // decoration even before that: `onRoad()` below feeds the player's
-// ROAD_SPEED_MULT (PlayerController) and navgrid.ts discounts road cells for
+// ROAD_SPEED_MULT (game/playerPhysics/locomotion.ts) and navgrid.ts discounts road cells for
 // A* (ROAD_STEP_MULT), so laying a leg toward a ground makes walking to that
 // ground genuinely faster and makes NPCs genuinely prefer it — no new pathing
 // concept was needed for the extension, only new cells.

@@ -164,7 +164,7 @@ export default function TouchControls() {
           🛡
         </button>
         {/* Wave 40 (A6): a discrete tap, not a hold — no held/edge state
-            needed, just queue a roll for PlayerController's on-foot branch
+            needed, just queue a roll for the on-foot step (walk, game/playerPhysics/locomotion.ts)
             to consume, same as the keyboard/gamepad dispatch. */}
         <button
           className="touch-btn touch-btn-dodge"

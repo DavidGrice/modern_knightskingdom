@@ -17,7 +17,7 @@
     "ai/core/Locomotion.ts's own companion-only cap — NOT the villager-tuned",
     "WALK_SPEED (0.9) / RUN_SPEED (1.6) this comment originally (and",
     "wrongly) compared against each other. Those two never had the player's",
-    "own real speed (PlayerController.tsx's 4 m/s walk / 7 m/s sprint) in the",
+    "own real speed (game/playerPhysics/locomotion.ts's 4 m/s walk / 7 m/s sprint) in the",
     "comparison at all, which is exactly how a companion who can only ever",
     "hit 1.6 m/s shipped behind a player whose slowest gait is 4.",
     "",
