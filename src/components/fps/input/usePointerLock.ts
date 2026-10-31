@@ -17,7 +17,6 @@ export function usePointerLock(gl: THREE.WebGLRenderer, yaw: { current: number }
   const locked = useRef(false);
   /** the pointer-lock request (tryLock), shared with the panel watcher below */
   const lockRef = useRef<(() => void) | null>(null);
-  const lockCleanup = useRef<(() => void) | null>(null);
 
   // ---- pointer lock + mouse look ----
   //
@@ -39,18 +38,15 @@ export function usePointerLock(gl: THREE.WebGLRenderer, yaw: { current: number }
   //   · the request needs the document focused, which it is not while an
   //     alert or a devtools pane has it.
   // Either way the next click on the world takes it (tryLock says why nothing
-  // grabs it back unprompted). (`retry` below is never set: the timer it was
-  // for went with the first cut tryLock describes — see ROADMAP.md.)
+  // grabs it back unprompted).
   useEffect(() => {
     const el = gl.domElement;
-    let retry: ReturnType<typeof setTimeout> | null = null;
 
     const wantsLock = () => {
       const st = useGameStore.getState();
       return !st.paused && !st.buildMode && st.panel === 'none';
     };
     const tryLock = () => {
-      if (retry) { clearTimeout(retry); retry = null; }
       if (!wantsLock() || pointerLockActive(el)) return;
       // NEVER take the pointer while the player is somewhere else. The first
       // cut of this retried on a timer, on pointerlockerror and on window
@@ -74,7 +70,6 @@ export function usePointerLock(gl: THREE.WebGLRenderer, yaw: { current: number }
       // go. A click on the world takes it again, which is the gesture the
       // player already knows.
     };
-    lockCleanup.current = () => { if (retry) clearTimeout(retry); };
     const onMove = (e: MouseEvent) => {
       if (!locked.current) return;
       // I41 · while the order radial is held open, the pointer steers the
@@ -94,7 +89,6 @@ export function usePointerLock(gl: THREE.WebGLRenderer, yaw: { current: number }
       el.removeEventListener('click', onClick);
       document.removeEventListener('pointerlockchange', onLockChange);
       document.removeEventListener('mousemove', onMove);
-      lockCleanup.current?.();
       if (pointerLockActive(el)) releaseGameLock();
     };
   }, [gl]);

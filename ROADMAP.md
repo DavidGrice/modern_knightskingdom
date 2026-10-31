@@ -8754,7 +8754,7 @@ come back in three more runs of the same build of the change, nor in four runs o
 when or how anything renders — the interaction code it moved is called from the same frame callback, at the same point,
 as before. Logged in case it shows up again: a development build would give the full message and the stack.
 
-## Dead code: the pointer lock's `retry` and `lockCleanup` — logged 2026-10-30 (CLN-26, part 3's review)
+## Dead code: the pointer lock's `retry` and `lockCleanup` — logged 2026-10-30 (CLN-26, part 3's review), DELETED 2026-10-31
 
 `usePointerLock` (`components/fps/input/usePointerLock.ts`; PlayerController.tsx's until CLN-26) declares
 `let retry: ReturnType<typeof setTimeout> | null = null`, clears it at the top of `tryLock` and again through
@@ -8764,6 +8764,17 @@ two clears and the `lockCleanup` ref (whose only job is the second) do nothing. 
 request that retried until it had the pointer, were corrected in CLN-26 part 3; the code was left as it was, that part
 being a move. **To do:** delete `retry`, both clears, `lockCleanup` and its call in the effect's cleanup — no change in
 behaviour, and provable without running anything (a variable that is only ever null).
+
+**Done.** The five statements are gone — `retry`'s declaration and its clear at the top of `tryLock`, `lockCleanup`'s
+declaration, its assignment and its call in the effect's cleanup — and so is the comment that flagged them.
+
+**Verified** without running anything first: `scripts/cln-tools/cln_retry_check.cjs` reads `main`'s file and finds
+`retry` declared null, assigned only null, and read only as `if (retry)` and inside such branches (so they never ran),
+`lockCleanup` occurring only as its declaration, that one assignment and that one call; and the changed file is
+`main`'s minus exactly those five statements, token for token (mutation controls 6/6, among them a `main` that did arm
+the timer). Then `tsc`, the unit tests, and live on production builds of `main` and the change side by side with
+CLN-26 part 3's pointer-lock probe — a click taking the pointer, the order wheel, a panel and Escape, build mode and
+back (the unmount the deleted cleanup call ran in): identical, `main` against itself too.
 
 ## Bug: on home's hills, what you walk up to is offered only when you look down at it — logged 2026-10-30 (during CLN-26, part 4; by the code, not run)
 
