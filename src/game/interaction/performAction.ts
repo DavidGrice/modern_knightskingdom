@@ -56,7 +56,7 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
     audio.play('whinny', 0.7);
     // Wave 7 fix · this used to `st.setCameraMode('third')`, a leftover from
     // when riding really was a chase cam. Riding has forced FIRST person
-    // since L62 (see the camera block at the end of PlayerController.tsx's frame, and
+    // since L62 (see placeCamera, components/fps/cameraRig.ts, and
     // MountedHorse.tsx's own comment), so all the flip still did was
     // (a) blank the FPS viewmodel — a mounted player saw no weapon in hand
     // at all, which hid every mounted pose there is — and (b) silently

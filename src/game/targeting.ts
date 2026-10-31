@@ -6,8 +6,9 @@
 // scan that records a foe into the collection book. One shared resolve, so
 // all three always agree about what you are looking at.
 //
-// A mutable leaf module: written by PlayerController's frame loop, read by
-// DOM HUD components, exactly like playerState and combatState.
+// A mutable leaf module: written by PlayerController's frame loop
+// (components/fps/aimReadout.ts), read by DOM HUD components, exactly like
+// playerState and combatState.
 import { hitTestCharacter, hitboxes } from './hitbox';
 import { npcMobs } from './npcMobs';
 import { villagerMobs } from './villagerMobs';
@@ -38,8 +39,9 @@ export interface AimTarget {
 
 export const aimState = {
   target: null as AimTarget | null,
-  /** the target's head, projected to CSS pixels by PlayerController (which is
-   *  the only place that holds the camera). `vis` is false when the head is
+  /** the target's head, projected to CSS pixels by pinNameplate
+   *  (components/fps/aimReadout.ts, run from PlayerController's frame, which
+   *  has the camera). `vis` is false when the head is
    *  behind the camera or off-screen. The HUD is plain DOM in a different
    *  React tree, so it reads this rather than doing its own projection. */
   screen: { x: 0, y: 0, vis: false },

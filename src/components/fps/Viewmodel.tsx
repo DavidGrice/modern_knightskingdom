@@ -223,8 +223,8 @@ export default function Viewmodel() {
   const shieldSide = labHands(character?.bodyDonor).shield === 'left' ? -1 : 1;
 
   // Wave 7 fix · riding is ALWAYS first person, whatever the stored camera
-  // preference says (PlayerController forces the eye camera while
-  // `ridingState.active`, because MountedHorse.tsx puts the horse's neck
+  // preference says (placeCamera, components/fps/cameraRig.ts, forces the
+  // eye camera while `ridingState.active`, because MountedHorse.tsx puts the horse's neck
   // ahead of that camera on purpose). Gating this on the stored mode alone
   // meant a player who had chosen third person on foot climbed into the
   // saddle and got a first-person view with empty hands — no sword, no

@@ -81,7 +81,7 @@ interface NavGridOptions {
   /** window mode only (§2.3): the largest per-cell height step a walker can
    *  climb. A neighbour pair whose rasterized `|Δy|` exceeds this is
    *  unlinked during search, same as a blocked cell. Deliberately just above
-   *  PlayerController's own ~0.55 m step height, so agent traversal matches
+   *  the player's own ~0.55 m step height (STEP_UP, game/playerPhysics/floor.ts), so agent traversal matches
    *  what the player can climb. Unset (fixed/home grids) means no height
    *  field is ever built and this check never fires. */
   maxStep?: number;

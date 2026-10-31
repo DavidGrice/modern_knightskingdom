@@ -302,8 +302,8 @@ export const WORLD_DESTINATIONS: WorldDestination[] = [
 //
 // So instead: for each of the 8 templates, this is the OLD formula's own
 // target point, projected to the nearest point in the real rect union
-// (the exact nearest-point-in-union reduction PlayerController's clamp
-// itself uses), then nudged ~3 world units off that boundary toward the
+// (the exact nearest-point-in-union reduction the player's clamp,
+// game/playerPhysics/collide.ts, itself uses), then nudged ~3 world units off that boundary toward the
 // containing rect's own center (capped at 40% of that rect's own
 // half-extent, so a slender rect can't be overshot) — landing just inside
 // real ground rather than exactly on its edge line. A frozen snapshot either

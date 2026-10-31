@@ -40,7 +40,8 @@ interface JoustContext {
   destination: string | null;
 }
 
-// `playerState` is only written near the END of PlayerController's frame,
+// `playerState` is only written near the END of PlayerController's frame
+// (publishPlayerState.ts),
 // after its own prompt pass has already run — so the prompt passes its live
 // `pos.current` in explicitly rather than reading a value one frame stale,
 // which is exactly what the inline check it replaced did. Everyone else

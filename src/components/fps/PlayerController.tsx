@@ -9,11 +9,10 @@ import { useGameStore } from '@/game/store/gameStore';
 import {
   EYE_HEIGHT, SPAWN,
 } from '@/game/data/world';
-import { NPC_BY_ID } from '@/game/data/npcs';
 import { audio } from '@/lib/audio';
 import { playerState } from '@/game/playerState';
 import { resolveInputDevice, interactLabel, clickHoldLabel } from '@/game/inputMode';
-import { combatState, useEnemyStore, CLICK_HELD_TARGET_KINDS, damagePlayer, tryDodge, DODGE_SPEED } from '@/game/combat';
+import { combatState, CLICK_HELD_TARGET_KINDS, damagePlayer, tryDodge, DODGE_SPEED } from '@/game/combat';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { sweepWorld, tickWorldFrame, WORLD_SWEEP_S } from '@/game/worldTick';
 import { ridingState, dismountHorse } from '@/game/riding';
@@ -21,9 +20,6 @@ import { fireCannon, ramCheck } from '@/game/siege';
 import { cartState, cartLivePos } from '@/game/carts';
 import { statsAccum } from '@/game/statsAccum';
 import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
-import { homeGroundY } from '../world/TemplateWorld';
-import { aimState, resolveAim } from '@/game/targeting';
-import { KIND_LABEL, maxHpOf, MOUNT_SEAT_Y, type EnemyKind } from '@/game/combat';
 import { crewEyeHeight, crewState, leaveEngine } from '@/game/crew';
 import { exposeDebug } from '@/lib/debugHooks';
 import { findTarget } from '@/game/interaction/findTarget';
@@ -35,31 +31,26 @@ import { usePointerLock } from './input/usePointerLock';
 import { usePlayerInput } from './input/usePlayerInput';
 import { pollPads } from './input/pads';
 import { keyboardLook } from './input/look';
+import { publishPlayerState } from './publishPlayerState';
+import { readAim, pinNameplate } from './aimReadout';
+import { useFovEase, placeCamera } from './cameraRig';
 
-
-/** scratch for projecting the aim target's head to screen space */
-const plateV = new THREE.Vector3();
 
 // Requested 2026-07-31: real per-frame GC pressure — `findTarget()`'s
 // `consider()` closure ran once per interact candidate (every resource node/
 // NPC/horse in range) and allocated a fresh Vector3 each call (its two
 // scratch vectors went with it to game/interaction/findTarget.ts); the
 // third-person camera-follow math allocated several more every frame,
-// unthrottled. Reused scratch objects instead, same convention `plateV`
-// above already established. None of these are ever stored past the
+// unthrottled. Reused scratch objects instead, the convention `plateV`
+// (aimReadout.ts's now) had established; the camera-follow ones went to
+// cameraRig.ts with the camera. None of these are ever stored past the
 // statement that reads them — safe given PlayerController is a singleton,
-// the same precondition `plateV` already relies on.
+// the same precondition `plateV` relies on.
 const _camDirV = new THREE.Vector3();
 const _rightV = new THREE.Vector3();
 const _moveV = new THREE.Vector3();
 const _dirV = new THREE.Vector3();
 const _upV = new THREE.Vector3(0, 1, 0);
-const _aimFwdV = new THREE.Vector3();
-const _eyeV = new THREE.Vector3();
-const _camLookDirV = new THREE.Vector3();
-const _camPosV = new THREE.Vector3();
-const _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-const _lookAtV = new THREE.Vector3();
 
 export { playerState };
 
@@ -124,20 +115,8 @@ export default function PlayerController() {
   usePointerLock(gl, yaw, pitch);
   const { keys, pad } = usePlayerInput();
 
-  // fov: settings value, squeezed while aiming the crossbow
-  useFrame((_, dt) => {
-    const cam = camera as THREE.PerspectiveCamera;
-    if (!cam.isPerspectiveCamera) return;
-    // Wave 40 (A6) · a small FOV punch while a dodge burst is active, reusing
-    // this exact smoother rather than a new one — the same "reuse the FOV
-    // ease" precedent this ternary already set for aiming.
-    const dodgingNow = performance.now() < combatState.dodgeUntil;
-    const target = combatState.aiming ? settings.fov * 0.62 : dodgingNow ? settings.fov * 1.07 : settings.fov;
-    if (Math.abs(cam.fov - target) > 0.1) {
-      cam.fov += (target - cam.fov) * Math.min(1, dt * 10);
-      cam.updateProjectionMatrix();
-    }
-  });
+  // fov: settings value, squeezed while aiming a ranged weapon (CLN-26: cameraRig.ts)
+  useFovEase(camera, settings);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
@@ -431,92 +410,12 @@ export default function PlayerController() {
       holdTarget.current = null;
     }
 
-    // publish transform for the avatar / viewmodel
-    const moving =
-      !frozen &&
-      ((isDown(kb.moveForward) || isDown(kb.moveLeft) || isDown(kb.moveBack) || isDown(kb.moveRight)) ?? false);
-    playerState.x = pos.current.x;
-    playerState.y = pos.current.y - (ridingState.active ? EYE_HEIGHT + 0.85 : EYE_HEIGHT);
-    playerState.z = pos.current.z;
-    playerState.yaw = yaw.current;
-    playerState.pitch = pitch.current;
-    // Wave 40 (A6) · a forced speed scalar during a dodge burst — the
-    // existing run-cycle clip selector (playerState.speed > 5 in
-    // PlayerAvatar.tsx) and the viewmodel's speed-driven bob/sway
-    // (Viewmodel.tsx) both react to this for free, no fabricated clip.
-    playerState.speed = performance.now() < combatState.dodgeUntil ? 14 : moving ? (isDown(kb.sprint) ? 7 : 4) : 0;
-    playerState.grounded = grounded.current;
-    playerState.acting = st.actionProgress !== null;
-    playerState.riding = ridingState.active;
-
-    // what the crosshair is on — one resolve feeding the aim readout, the
-    // crosshair's colour and the collection-book scan, so all three always
-    // agree. Throttled: the ray is cheap but there is no reason to redo it
-    // every frame for a DOM overlay that repaints far slower.
-    aimTimer.current -= dt;
-    if (aimTimer.current <= 0) {
-      aimTimer.current = 0.1;
-      if (frozen) {
-        aimState.target = null;
-      } else {
-        camera.getWorldDirection(_aimFwdV);
-        aimState.target = resolveAim(
-          camera.position.x, camera.position.y, camera.position.z,
-          _aimFwdV.x, _aimFwdV.y, _aimFwdV.z,
-          useEnemyStore.getState().enemies,
-          (k) => KIND_LABEL[k as EnemyKind] ?? k,
-          (k) => maxHpOf(k as EnemyKind),
-          (id) => NPC_BY_ID[id]?.name ?? 'Stranger',
-          (id) => st.villagers.find((v) => v.id === id)?.name ?? 'Villager',
-          (k) => st.bestiary.includes(k),
-          st.villagers.map((v) => ({ id: v.id, isDefender: v.job === 'defender' })),
-          // Wave 36 (A3): a mounted raider's rig sits a saddle-height off the
-          // ground — see resolveAim's own comment on this param
-          (k) => (k === 'mountedRaider' ? MOUNT_SEAT_Y : 0),
-        );
-      }
-    }
-
-    // Pin the nameplate over the target's head. Projected EVERY frame, not on
-    // the 10 Hz aim throttle, so the plate tracks the figure smoothly while
-    // you turn rather than swimming after them.
-    const aimed = aimState.target;
-    if (aimed) {
-      plateV.set(aimed.x, aimed.height + 0.45, aimed.z).project(camera);
-      const el = gl.domElement;
-      aimState.screen.x = (plateV.x * 0.5 + 0.5) * el.clientWidth;
-      aimState.screen.y = (-plateV.y * 0.5 + 0.5) * el.clientHeight;
-      aimState.screen.vis = plateV.z < 1;
-    } else {
-      aimState.screen.vis = false;
-    }
-
-    // camera: first person at the eyes, third person orbiting behind.
-    // Mounted always forces first person regardless of the general on-foot
-    // preference — MountedHorse.tsx positions the horse's body/neck
-    // BODY_FORWARD units ahead of the camera specifically so a first-person
-    // view looks out over its mane; a third-person chase cam here would
-    // just show the rider from behind, defeating that entirely.
-    if (st.cameraMode === 'third' && !ridingState.active) {
-      _eyeV.set(pos.current.x, pos.current.y - 0.2, pos.current.z);
-      _camEuler.set(pitch.current, yaw.current, 0, 'YXZ');
-      _camLookDirV.set(0, 0, -1).applyEuler(_camEuler);
-      _camPosV.copy(_eyeV).addScaledVector(_camLookDirV, -4.6);
-      _camPosV.y += 0.9;
-      // Wave 12 · the chase camera's own "don't sink into the floor" clamp was
-      // a bare 0.35 — a flat-world assumption, and a visible one the moment
-      // there is a hill: looking down the slope swings the camera behind and
-      // BELOW the player, and 0.35 above sea level is several metres inside the
-      // North Downs. Clamped against the ground under the CAMERA rather than
-      // under the player, which is where it is actually trying not to be.
-      const camFloor = homeGroundY(_camPosV.x, _camPosV.z) + 0.35;
-      if (_camPosV.y < camFloor) _camPosV.y = camFloor;
-      camera.position.copy(_camPosV);
-      _lookAtV.copy(_eyeV).addScaledVector(_camLookDirV, 2.5);
-      camera.lookAt(_lookAtV);
-    } else {
-      camera.position.copy(pos.current);
-    }
+    // publish the player, read the aim and pin its nameplate, place the camera (CLN-26: publishPlayerState.ts,
+    // aimReadout.ts, cameraRig.ts)
+    publishPlayerState(st, frozen, kb, isDown, pos, yaw, pitch, grounded);
+    readAim(st, camera, aimTimer, frozen, dt);
+    pinNameplate(camera, gl);
+    placeCamera(st, camera, pos, yaw, pitch);
   });
 
   return null;

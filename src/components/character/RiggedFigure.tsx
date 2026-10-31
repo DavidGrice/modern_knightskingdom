@@ -19,13 +19,14 @@ const _worldPos = new THREE.Vector3();
 /** Bugfix (2026-08-19) · the cutoff used to be measured against
  *  `camera.position`, which in third person is not the player at all — it's
  *  the chase camera's boom-arm position, ~4.6 units off on whichever side is
- *  opposite the look direction (see PlayerController.tsx). Turning to face a
+ *  opposite the look direction (see placeCamera, components/fps/cameraRig.ts). Turning to face a
  *  fixed point swings the camera to the FAR side of the player relative to
  *  it, which could swing the measured distance by up to ~9.2 units just from
  *  looking around — enough to cull an NPC sitting near the cutoff exactly
  *  when the player centers them in view. `playerState` is the player's real,
- *  camera-independent body position (PlayerController writes it from
- *  `pos.current`, never from `camera.position`), so distance now only
+ *  camera-independent body position (PlayerController's frame writes it
+ *  from `pos.current` — components/fps/publishPlayerState.ts — never from
+ *  `camera.position`), so distance now only
  *  changes when the player actually moves. */
 const _playerPos = new THREE.Vector3();
 

@@ -132,7 +132,7 @@ function TemplateGroundDisc({ dest }: { dest: WorldDestination }) {
     const mesh = meshRef.current;
     if (!mesh) return;
     let radius = dest.radius + 4;
-    // same mount guard as PlayerController.tsx's own clamp and Minimap.tsx's
+    // same mount guard as the player's own clamp (game/playerPhysics/collide.ts) and Minimap.tsx's
     // own rect overlay (see the former's comment for the live-caught race):
     // getBakeOffset() holds a stale/zero value until THIS destination's own
     // async GLB has actually resolved, so sizing off real rects before that

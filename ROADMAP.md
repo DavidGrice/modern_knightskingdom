@@ -8764,3 +8764,18 @@ two clears and the `lockCleanup` ref (whose only job is the second) do nothing. 
 request that retried until it had the pointer, were corrected in CLN-26 part 3; the code was left as it was, that part
 being a move. **To do:** delete `retry`, both clears, `lockCleanup` and its call in the effect's cleanup — no change in
 behaviour, and provable without running anything (a variable that is only ever null).
+
+## Bug: on home's hills, what you walk up to is offered only when you look down at it — logged 2026-10-30 (during CLN-26, part 4; by the code, not run)
+
+`findTarget`'s scored sweep at home (`game/interaction/findTarget.ts`, `consider(x, z, y, …)`) aims at each candidate's
+point at a fixed height above sea level — a horse at 1.1 m, a tree at 1.2, a rock or a herb at 0.8, a person at 1.3 —
+and offers it only inside a cone of about 63° around the view (`dot ≥ 0.45`). But since home has had terrain (Wave 12),
+the player's eye rides the ground: on a hill G metres up it is at G + 1.6, while those points stay where they were, under
+the hill. A level view then loses a horse 1.4 m away once G passes about 2.3 m, a tree 2 m away at about 3.6 m, a rock or
+a herb at 3.2 m, a person 2.5 m away at 4.7 m — and home's hills rise several metres. So up on the Downs, walking up to a
+horse, a tree or a villager brings no prompt until the player looks down at it. One candidate is measured right already:
+a ladder's climb-down point stands on the piece's own base (`(b.y ?? 0) + heightOf(b.type)`). CLN-26 part 4's probe did
+not meet it: the horse it mounted grazed on level ground (feet at 0 m) and was offered with a level view, as it should be.
+**To do:** measure it on `main` on a hilltop (a tree or a horse up on the Downs: the prompt with a level view, and the
+pitch it takes to get one), then measure each candidate from the ground under it — `homeGroundY(x, z) +` its height, at
+home — and verify the same way.

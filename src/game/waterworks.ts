@@ -197,7 +197,7 @@ export function waterAt(x: number, z: number, margin = 0): WaterFeature | null {
 
 /** Shove a point out of any waterway it has ended up inside, along whichever
  *  edge it is nearest — the same minimum-penetration rect resolve
- *  PlayerController already uses for the keep's great hall, rather than the
+ *  the player's collision (game/playerPhysics/collide.ts) already uses for the keep's great hall, rather than the
  *  radial push POND needs for being a circle.
  *
  *  Returns a SHARED scratch object: read `.x`/`.z` immediately, never keep the

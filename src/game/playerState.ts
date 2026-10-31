@@ -1,6 +1,7 @@
 'use client';
 // Live player transform, shared across systems without store churn.
-// Written by PlayerController every frame; read by the avatar, viewmodel,
+// Written by PlayerController's frame (components/fps/publishPlayerState.ts)
+// every frame; read by the avatar, viewmodel,
 // combat, wildlife, minimap and riding systems.
 
 import { SPAWN } from './data/world';
