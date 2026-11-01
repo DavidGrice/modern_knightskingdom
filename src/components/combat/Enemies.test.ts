@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 
 // The raiders' components called as plain functions, on just enough of React to keep a component's refs and state
@@ -56,6 +56,8 @@ import Enemies from './Enemies';
 import { useEnemyStore, type EnemyData } from '@/game/combat';
 import { useGameStore } from '@/game/store/gameStore';
 import { climbPose, ladderFoot, raiderLadderState, resetRaiderLadder, type ClimbPose } from '@/game/raiderLadder';
+import { worldEnv } from '@/game/env';
+import { audio } from '@/lib/audio';
 
 const HERO = { name: 'Test', headDonor: 'x', bodyDonor: 'x', armColor: 0, handColor: 0, legColor: 0, hipColor: 0 };
 
@@ -263,5 +265,40 @@ describe('while the player builds — the raiders stand still', () => {
     onWalk.frame();
     expect(walker.at()).toEqual([60, H.ground(60, 35), 35]);
     expect(onWalk.at()).toEqual([l.topX, l.topY, l.topZ]);
+  });
+});
+
+describe('a raid, when the game scene is unmounted behind Options or Stats and mounted again', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('is still on: the new mount starts no second raid at dusk, and resolves the first once, with its spoils', () => {
+    vi.spyOn(Math, 'random').mockImplementation(() => 0.999); // no ram, no ladder, no Armory drop
+    vi.spyOn(audio, 'play').mockImplementation((() => null) as never);
+    vi.spyOn(audio, 'playVoice').mockImplementation((() => undefined) as never);
+    const notes: string[] = [];
+    const st = useGameStore.getState();
+    useGameStore.setState({
+      buildings: [0, 1, 2, 3].map((i) => ({ id: 'w' + i, type: 'wall' as const, x: 30 + i * 4, z: 30, rot: 0, built: 1 })),
+      unlocks: [...st.unlocks, 'mining'],
+      notify: (text: string) => { notes.push(text); },
+    });
+    worldEnv.time = 0.71; // dusk, the raid's window
+    const raiders = () => useEnemyStore.getState().enemies.filter((e) => e.raid);
+    const scene = instance(Enemies as unknown as (p: object) => unknown, {});
+    scene.render();
+    scene.frame(1);
+    expect(raiders()).toHaveLength(3);
+
+    // Options and back: the game screen, its canvas and Enemies unmount, and a fresh Enemies is mounted
+    const again = instance(Enemies as unknown as (p: object) => unknown, {});
+    again.render();
+    again.frame(1);
+    expect(raiders()).toHaveLength(3);
+
+    useEnemyStore.getState().clear();
+    again.frame(1);
+    expect(notes.filter((n) => n.startsWith('The raid is beaten back!'))).toHaveLength(1);
+    const after = useGameStore.getState();
+    expect([after.inventory.plank ?? 0, after.inventory.stone ?? 0, after.inventory.iron_ore ?? 0, after.xp.combat]).toEqual([4, 4, 2, 60]);
   });
 });

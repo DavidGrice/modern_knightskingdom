@@ -11,6 +11,7 @@ import { bestChestplateOwned } from '../data/armor';
 import { PERK_FX } from '../data/effects';
 import { worldEnv } from '../env';
 import { fortDamageReduction } from '../fort';
+import { raidActive, raidLost } from '../directors/state';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { noiseBeliefId } from '@/ai/perception/Belief';
 import { PARRY_IFRAME_MS, PARRY_KNOCKBACK, PARRY_STAGGER_S, PARRY_STAMINA_COST, PARRY_WINDOW_MS } from '../data/melee';
@@ -140,7 +141,12 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
     // called off, and any dungeon-room fight is abandoned along with the
     // layout reset above (an orphaned dungeon-room enemy surviving a
     // discarded layout was already a latent gap this incidentally closes).
-    useEnemyStore.getState().clear();
+    // F-17 · a raid called off with raiders still standing was not beaten back: the raid director, finding none left
+    // on its next tick, used to pay its spoils. It is told the raid was lost — whether he fell at home or away (the
+    // clear takes the home raid either way).
+    const enemies = useEnemyStore.getState();
+    if (raidActive.current && enemies.enemies.some((e) => e.raid && e.mob.state !== 'dying')) raidLost.current = true;
+    enemies.clear();
     worldEnv.time = 0.27; // just before sunrise
     st.notify('You were knocked out and carried back to camp… you wake at dawn.', true);
     audio.play('horn', 0.5);

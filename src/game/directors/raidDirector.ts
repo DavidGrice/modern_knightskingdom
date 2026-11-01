@@ -1,6 +1,7 @@
 // CLN-13 · the dusk raid on the homestead: started once the homestead is established (bandits led by Gilbert or
 // Cedric — or, for a player sworn to Cedric, the crown's knights — sometimes with a ram or a siege ladder), and
-// resolved, with its spoils, when the last raider is gone; and the siege ladder's climb slots freed as raiders fall.
+// resolved when the last raider is gone — with its spoils, unless the player's knock-out called it off; and the siege
+// ladder's climb slots freed as raiders fall.
 import type { EnemyData, EnemyKind } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { isHomeBuilding, type ItemId } from '@/game/types';
@@ -41,7 +42,7 @@ export function pruneLadderClimbers(list: EnemyData[]): void {
   }
 }
 
-export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, raidCooldown: Counter, raidActive: Flag): void {
+export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, raidCooldown: Counter, raidActive: Flag, raidLost: Flag): void {
   // bandit raids at dusk once the homestead is established. Wave 18 #5
   // bugfix: deliberately NOT gated on `st.destination` (unlike the
   // skeleton rise, nightSkeletons.ts) — every position this block touches is anchored
@@ -67,20 +68,28 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
     raidActive.current = false;
     raiderRamState.active = false;
     raiderLadderState.active = false; // Wave 58 (H4) · same singleton cleanup as the ram
-    st.notify('The raid is beaten back! The bandits dropped their spoils.', true);
-    st.addItems({ plank: 4, stone: 4, iron_ore: 2 }, 'grant');
-    st.addXp('combat', 60);
-    // a driven-off raider sometimes leaves gear behind — straight into the
-    // Armory, ready to outfit the garrison that just held the line (real
-    // weapons now drop here too, not just armor, since the Armory arms
-    // defenders' loadouts as well as their helmet/chestplate)
-    if (Math.random() < 0.4) {
-      const drops: ItemId[] = ['helmet', 'chestplate', 'sword', 'shield', 'crossbow'];
-      const piece = pick(drops);
-      st.grantArmory(piece, 1);
-      st.notify(`A fallen raider's ${ITEMS[piece].name.toLowerCase()} is added to the Armory.`, true);
+    // F-17 · no raiders left is not always a raid beaten back: a knock-out clears the field with them still standing
+    // (combat/playerDamage.ts), and it used to pay this very reward on the next tick. A raid lost pays nothing; the
+    // cooldown it started with runs on, as a won raid's does. What else a lost raid costs is G-07's (FEATURE_PLAN.md).
+    if (raidLost.current) {
+      raidLost.current = false;
+      st.notify('The raiders had the field. They are gone by dawn, and they left nothing behind.', true);
+    } else {
+      st.notify('The raid is beaten back! The bandits dropped their spoils.', true);
+      st.addItems({ plank: 4, stone: 4, iron_ore: 2 }, 'grant');
+      st.addXp('combat', 60);
+      // a driven-off raider sometimes leaves gear behind — straight into the
+      // Armory, ready to outfit the garrison that just held the line (real
+      // weapons now drop here too, not just armor, since the Armory arms
+      // defenders' loadouts as well as their helmet/chestplate)
+      if (Math.random() < 0.4) {
+        const drops: ItemId[] = ['helmet', 'chestplate', 'sword', 'shield', 'crossbow'];
+        const piece = pick(drops);
+        st.grantArmory(piece, 1);
+        st.notify(`A fallen raider's ${ITEMS[piece].name.toLowerCase()} is added to the Armory.`, true);
+      }
+      if (!st.destination) audio.play('horn', 0.8);
     }
-    if (!st.destination) audio.play('horn', 0.8);
   }
   if (
     !raidActive.current &&

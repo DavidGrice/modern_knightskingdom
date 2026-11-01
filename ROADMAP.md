@@ -8725,25 +8725,57 @@ fails with the lines taken out), and live on production builds of `main` and the
 fix, three seconds into each knighting he is at The King's Approach with build mode off, the crypt reset and no arena
 run.
 
-## Bug: Options or Stats mid-raid forgets the raid, and back within dusk starts a second — logged 2026-10-27 (during CLN-13, part 1; by the code, not run)
+## Bugfix: Options or Stats mid-raid forgot the raid, and back within dusk started a second — FOUND 2026-10-27 (during CLN-13, part 1; by the code), FIXED 2026-10-31
 
-**What the code does.** The 1 Hz directors' own state — the raid's flag and cooldown, the skeletons' and the camp
-guards' timers — is four refs of the `Enemies` component (`components/combat/Enemies.tsx`; the directors themselves are
-in `game/directors/` since CLN-13), so it lives for one mount of the game scene. The pause menu's Options and Stats
-replace the game screen (`App.tsx` draws one screen at a time: `GameScreen`, its canvas and `Enemies` unmount), and
-coming back mounts a fresh set: no raid on, no cooldown. The raiders themselves are in the enemy store, and still
-there. So when the last of them goes, nothing resolves the raid — no "The raid is beaten back!", no spoils, no
-experience — and the ram's and the ladder's `active` flags, which only that resolution (or a new session) clears, stay
-set: a ladder still "active" keeps the next raid from bringing one. And the clock stands still while the scene is
-away, so back within the dusk window (0.70–0.78 of the day: 57.6 s of a 12-minute day) and resumed, the first tick
-finds dusk, four buildings and no raid on — and starts a second raid on top of the first; its one reward then pays
-when both are gone. The opposite case is CLN-04's (CLEANUP_PLAN.md): a scripted `loadFromSave` with the scene still
-mounted keeps the old raid's flag, and the cleared store pays that raid's reward.
+**The fault.** The 1 Hz directors' own state — the raid's flag and cooldown, the skeletons' and the camp guards' timers,
+and the tick's own countdown — was five refs of the `Enemies` component (`components/combat/Enemies.tsx`; the directors
+themselves are in `game/directors/` since CLN-13), so it lived for one mount of the game scene. The pause menu's Options
+and Stats replace the game screen (`App.tsx` draws one screen at a time: `GameScreen`, its canvas and `Enemies`
+unmount), and coming back mounted a fresh set: no raid on, no cooldown. The raiders themselves are in the enemy store (a
+module store), and still there. So when the last of them went, nothing resolved the raid — no "The raid is beaten
+back!", no spoils, no experience — and the ram's and the ladder's `active` flags, which only that resolution (or a new
+session) clears, stayed set: a ladder still "active" keeps the next raid from bringing one. And the clock stands still
+while the scene is away, so back within the dusk window (0.70–0.78 of the day) the first tick found dusk, four
+buildings and no raid on, and started a second raid on top of the first. The opposite case is CLN-04's: a `loadFromSave`
+with the scene still mounted kept the old raid's flag, and the cleared store paid that raid's reward. Measured on `main`
+(the production build of c5ef826, whose `src` is `main`'s, 2026-10-31, `scripts/cln-tools/w621_raid_state.mjs`: a raid
+of the game's own making — a keep with a wall-walk, four pieces, mining, dusk held — that brought a ram and a ladder):
+Options and Back after the dusk window, then Resume — the store still held the 3 raiders, but the directors read
+`raidActive false, raidCooldown 0`; with every raider then removed, 3.5 s on, there was no toast, no spoils (plank,
+stone, iron ore and combat XP all +0), and the ram and the ladder were still `active`. Stats and Back inside the dusk
+window — the first tick after Resume started a second raid: 6 raiders, the "Gilbert the Bad leads a raid" toast twice;
+with all of them removed, one reward paid for the two.
 
-**To do.** Measure it on `main` first (pause in a raid's first minute → Options → back → Resume: count the raiders,
-the ram's and ladder's flags and the rewards). The fix: the directors' state as module state in `game/directors/`
-(published as `window.__kkdirectors`, as the refs are now), reset at a session start (`onSessionReset`) rather than at
-a remount — a raid then outlives a visit to Options, and a load ends one without paying for it.
+**The fix.** The directors' state is module state now (`game/directors/state.ts`: the tick's countdown, the camp
+guards' and the skeletons' timers, the raid's flag and cooldown, and F-17's `raidLost`, each a `{ current }` cell of the
+same shape the refs had), handed to the directors exactly as the refs were. It starts afresh at a session start, through
+`onSessionReset` (`store/sessionHooks.ts`) as the enemy store does — not at a remount. A raid then outlives a visit to
+Options or Stats, and a new game, New Game+ or a load ends one without paying for it. `window.__kkdirectors` is published
+from that module with the same cells (and `raidLost` beside them), so existing probes read it as before. The skeletons'
+and the camp guards' timers, which reset to 6 s at every mount before, now carry over a remount and reset at a session
+start; neither relied on the remount (each only gates the next spawn).
+
+**Verified** with `tsc`, the unit tests — a new one in `components/combat/Enemies.test.ts` (the scene mounted, a raid
+started at dusk, a second mount as Options and back makes it, and a tick there: no second raid, and the first resolved
+once with its spoils), which fails with the refs put back in `Enemies` (6 raiders); and one in
+`game/directors/raidDirector.test.ts` (a session start ends a raid under way and pays nothing), which fails with the
+`onSessionReset` registration taken out — the import graph (the same cycles as `main`), and live on production builds of
+`main` and the fix side by side with `w621_raid_state.mjs` — the evidence pass, 2026-10-31: `main` on port 3101 (the
+production build of c5ef826, build id `7BXexr_fO6KZduIOF8QKr`, script digest `bc1e66ead1be`), the fix on 3102 (build id
+`_7NDsh2SPc5zdwJo1_kCK`, digest `e1e1534bd23c`), each run once, page errors 0 in all six runs. Options and Back after
+the dusk window, then Resume: on `main` the directors read `raidActive false, raidCooldown 0` with the 3 raiders still in
+the store, and with every raider removed, 3.5 s on, no toast, plank/stone/iron ore/combat XP +0/+0/+0/+0, the ram and
+the ladder still `active`; on the fix `raidActive true, raidCooldown 1076`, the same 3 raiders, and with them removed one
+"The raid is beaten back!", +4/+4/+2/+60 (and an Armory piece, the 40% roll), the ram and the ladder down, the cooldown
+running on (1073). Stats and Back inside the dusk window: on `main` 6 raiders and the "Gilbert the Bad leads a raid"
+toast twice, then one reward (+4/+4/+2/+60) for the two raids; on the fix 3 raiders, the toast once, then one reward
+(+4/+4/+2/+60), ram and ladder down. Everything else the probe reads matched — the raid as begun (3 raiders: Gilbert and
+two bandits, a ram and a ladder, cooldown 1080), the screens themselves, the other toasts. Mutation controls, each taken
+out alone and restored (`git diff` of the tree byte-identical before and after, md5 `97011ce6…`, and each source file's
+md5 as before): the refs put back in `Enemies` (the remount test fails, 6 raiders for 3); the `onSessionReset`
+registration taken out (the session-start test fails, `[false, 1077, true]` for `[false, 0, false]`). **Not measured
+live:** a save loaded with the scene up (the unit test starts a new game, which runs the same session-reset hook a load does), and the skeletons' and camp guards' timers across a
+remount.
 
 ## Seen, not looked into: React error #177 ("Cannot commit the same tree as before") once in a live probe — logged 2026-10-29 (during CLN-26, part 1)
 
@@ -8803,3 +8835,40 @@ feet at 0 m). A campfire on flat ground was offered with a level view, as it sho
 meets stands at ground 0, where the fixed heights and the ground-relative ones agree. **Kept** as a latent fault: the
 fix above (measure each candidate from the ground under it — a placed piece from its own `b.y`) goes in the day anything
 a player can act on is put on a hill — a land tier that reaches the Downs, a node or a horse placed there.
+
+## Bugfix: a knock-out mid-raid paid the raid out as a victory — FOUND 2026-10-31 (in the verification of FEATURE_PLAN.md, by G-07's verifier), FIXED 2026-10-31
+
+**The fault.** A knock-out (`combat/playerDamage.ts`) clears the enemy store — the raid that felled the player is called
+off — and jumps the clock to dawn, but left the raid's flag set. So the raid director's next tick
+(`game/directors/raidDirector.ts`) found a raid on and no raiders, and resolved it as beaten back: "The raid is beaten
+back! The bandits dropped their spoils.", plank 4, stone 4, iron ore 2, 60 combat XP and a 40% chance of a piece for
+the Armory — a reward for losing, and a live exploit (let a raid knock you out, collect). The same clear takes a home raid
+when the player falls away from home (the Sealed Crypt), with the same payout. Measured on `main` (the production build
+of c5ef826, 2026-10-31, `scripts/cln-tools/w621_raid_state.mjs ko`: a raid of the game's own making, then the game's own
+`__kkDamagePlayer(99999)`): 3.5 s after the knock-out, at dawn, the "beaten back" toast had come and the spoils were paid
+— plank +4, stone +4, iron ore +2, combat XP +60.
+
+**The fix.** The knock-out tells the raid director the raid was lost: if a raid is on and any raider is still standing
+(not already falling) when it clears the field, it sets the directors' `raidLost` cell (`game/directors/state.ts`,
+BUG-8726's fix). The director's resolve step, finding no raiders, then pays nothing: it says "The raiders had the field.
+They are gone by dawn, and they left nothing behind.", clears the flag, stands the ram and the ladder down, and leaves
+the cooldown the raid started with running, as a won raid's does. A raid whose raiders were all already falling when the
+player went down was beaten back, and still pays. It is set whether he fell at home or away — FEATURE_PLAN.md's F-17 said
+away knock-outs were to be left as they were, but the clear takes the home raid in both, so leaving the away one would
+have kept the exploit; the arena's knock-out returns before the clear and is unchanged. What a lost raid costs beyond the
+reward it no longer pays is G-07's (FEATURE_PLAN.md).
+
+**Verified** with `tsc` and the unit tests — new ones in `game/directors/raidDirector.test.ts`: a knock-out mid-raid
+pays nothing (no items, no XP, nothing in the Armory with the dice set to drop a piece), says "The raiders had the field"
+once, ends the raid and the ram and ladder, and leaves the cooldown running; it fails with the knock-out's `raidLost` line
+taken out, and with the resolve step's lost branch taken out. A knock-out once every raider is falling still pays the
+win (it fails with the knock-out's "not already falling" test taken out: +0 for +4/+4/+2/+60). Live on production builds
+of `main` and the fix side by side with `w621_raid_state.mjs ko` — the evidence pass, 2026-10-31, on the same two builds
+as BUG-8726's above (`main` on 3101, build `7BXexr_fO6KZduIOF8QKr`; the fix on 3102, build `_7NDsh2SPc5zdwJo1_kCK`), page
+errors 0: 3.5 s after the knock-out, both at dawn (time 0.27) with the knock-out's own toast, the field clear, the raid
+over and the ram and the ladder down, the cooldown running on (1077). On `main` "The raid is beaten back!" came, plank
++4, stone +4, iron ore +2, combat XP +60, an Armory piece (the 40% roll), and the XP earned the "Nightwatch" deed
+("Defeat a creature of the night") with nothing defeated; on the fix "The raiders had the field…" once, +0 on all five,
+no deed, `raidLost` cleared. Mutation controls restored as above. **Not measured live:** a knock-out away from home
+(the Sealed Crypt) with a home raid on (no unit test either: it rests on the code, the same clear), and the case of
+every raider already falling (the unit test only).

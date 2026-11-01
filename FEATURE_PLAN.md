@@ -32,8 +32,15 @@ what is verified. For each wave, the method the cleanup proved:
 
 Kept current per PR, newest last, so a fresh session never has to reverse-engineer state from `git log`.
 
-- **Plan merged** (docs only): this file; in ROADMAP, a pointer here, OPEN-053, OPEN-071 and OPEN-080 retagged closed
+- **#286 — plan merged** (docs only): this file; in ROADMAP, a pointer here, OPEN-053, OPEN-071 and OPEN-080 retagged closed
   (they closed during the cleanup), OPEN-004 unblocked and OPEN-013's premise corrected; CLEANUP_PLAN.md marked complete.
+- **#287 — Wave 62.1** (F-01, F-17): the directors' state is module state (`game/directors/state.ts`), reset at a session
+  start, not at a remount — a raid outlives Options/Stats, and a load ends one unpaid (BUG-8726); a knock-out with raiders
+  standing marks the raid lost, and it resolves with no reward ("The raiders had the field"). Premises held, two adapted:
+  the cooldown already starts with the raid, so a lost raid keeps it running rather than starting one; and an away
+  knock-out marks the raid lost too, since its clear takes the home raid as well. ROADMAP: BUG-8726 retagged fixed, F-17
+  logged fixed. Measured on main: Options after dusk left 3 raiders unresolved and the ram and ladder active; Stats within
+  dusk started a second raid (6 raiders); a knock-out paid plank/stone/iron ore 4/4/2 and 60 XP.
 
 ## Owner decisions
 
