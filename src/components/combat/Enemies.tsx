@@ -16,7 +16,7 @@ import { dungeonDirector } from '@/game/directors/dungeonDirector';
 import { campGuardDirector } from '@/game/directors/campGuards';
 import { nightSkeletonDirector } from '@/game/directors/nightSkeletons';
 import { pruneLadderClimbers, raidDirector } from '@/game/directors/raidDirector';
-import { exposeDebug } from '@/lib/debugHooks';
+import { campGuardTimer, directorTick, raidActive, raidCooldown, raidLost, skelTimer } from '@/game/directors/state';
 import { stepEnemy } from '@/game/enemyAi/step';
 import { speedOf } from '@/game/enemyAi/movement';
 import EnemyFigure from './EnemyFigure';
@@ -115,21 +115,13 @@ export default function Enemies() {
     return w === null || w === (destination ?? null);
   });
   const spawn = useEnemyStore((s) => s.spawn);
-  const tick = useRef(0);
-  const skelTimer = useRef(6);
-  const raidCooldown = useRef(0);
-  const raidActive = useRef(false);
-  const campGuardTimer = useRef(6);
-  // test hook (window.__kkdirectors): the directors' own timers and the raid flag — the refs themselves, so a probe
-  // reads (and can set) what the next tick will see
-  useEffect(() => {
-    exposeDebug('__kkdirectors', { skelTimer, raidCooldown, raidActive, campGuardTimer });
-  }, []);
 
+  // the directors' timers and the raid's flags are module state (game/directors/state.ts), not refs of this
+  // component: a raid outlives the scene's unmount behind Options or Stats
   useFrame((_, dt) => {
-    tick.current -= dt;
-    if (tick.current > 0) return;
-    tick.current = 1; // 1 Hz is plenty for spawning decisions
+    directorTick.current -= dt;
+    if (directorTick.current > 0) return;
+    directorTick.current = 1; // 1 Hz is plenty for spawning decisions
     // the directors (game/directors/), in the order this tick always ran them: the navigation grids, then — with
     // the game running — the siege ladder's freed slots, the Sealed Crypt (which, while the player is inside, is all
     // there is), Cedric's camp guards, the night's skeletons and the dusk raid
@@ -141,7 +133,7 @@ export default function Enemies() {
     if (dungeonDirector(st)) return; // skip the homestead-only spawn systems below entirely while inside
     campGuardDirector(st, list, spawn, campGuardTimer);
     nightSkeletonDirector(st, list, spawn, skelTimer);
-    raidDirector(st, list, spawn, raidCooldown, raidActive);
+    raidDirector(st, list, spawn, raidCooldown, raidActive, raidLost);
   });
 
   return (

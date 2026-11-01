@@ -18,7 +18,6 @@
 //   ai/core/Locomotion:      __kkloco          ai/core/Memory:           __kkmemory
 //   ai/core/Reasoner:        __kkreason        ai/core/TargetRegistry:   __kktargets
 //   ai/perception/index:     __kkperception    ai/perception/sounds:     __kksounds
-//   components/combat/Enemies: __kkdirectors
 //   components/fps/PlayerController: __kkscene, __kkcam
 //   components/world/CedricSiege: __kkCedricSiege   DragonSiegeController: __kkSiege, __kkBlackSiege
 //   components/world/Merchant: __kkmerchant, __kkmerchantRig, __kkmerchantTeam, __kkmerchantWay
@@ -30,6 +29,7 @@
 //   game/collisionShapes: __kkshapes           game/commandWheel: __kkwheel
 //   game/companion: __kkcompanioncombat        game/crew: __kkcrew
 //   game/defenders: __kkdefenders, __kkorders  game/difficulty: __kkdiff
+//   game/directors/state: __kkdirectors
 //   game/dragonAir: __kkdragonAir, __kkdragonAirBlack
 //   game/dungeon: __kkdungeon    game/env: __kkenv    game/fishing: __kkfish    game/hitbox: __kkhitbox
 //   game/fort: __kkfort, __kkfortCheck         game/navgrid: __kknav       game/npcMobs: __kknpcs
