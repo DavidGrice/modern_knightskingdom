@@ -2,6 +2,7 @@
 // CLN-14 · how a template bake is scaled, flipped and recentred, moved verbatim out of
 // components/world/TemplateWorld.tsx (which re-exports it). React-free: three only.
 import * as THREE from 'three';
+import { cutOutCardMaterial } from '@/lib/cardCutout';
 
 // The source .glb already carries a baked-in ×0.1 from the extraction's
 // obj2gltfHelper.mjs conversion (its MM_TO_WORLD_SCALE), on top of the raw
@@ -182,6 +183,41 @@ function applyTreeMeshOrientationFix(scene: THREE.Object3D, destId?: string): vo
   });
 }
 
+// CARD TREES (wave 62.4, BUG-8219): the decorative tree rows are flat cards — upright quads printed with a tree or
+// a grass tuft on a white, pure-red or grey background that the original game keyed out (lib/cardCutout.ts). The
+// bakes kept the sprites but not the key, so every card drew as an opaque rectangle. Each card sprite is one material,
+// so one mesh of the bake, found by the same `isMesh` traversal index as TREE_MESH_ORIENTATION_FIX above (it equals the
+// glTF primitive index, mesh_0_<n>). Measured on main by scripts/cln-tools/cln22_cards_probe.mjs (every textured mesh
+// whose triangles all stand upright and whose texture is green on a one-colour background) and checked against the
+// .glb files: 30 meshes in 8 destinations, none in the six challenge grounds. The sprite each one draws, from the
+// original extraction: spr180 / spr183 (white: round tree / conifer), spr178 / spr179 and spr181 / spr182 (the same
+// on red), spr171 / spr172 / spr197 (a pair of both, on red), spr191 (a grass tuft, on grey).
+const CARD_TREE_MESHES: Record<string, number[]> = {
+  'template-01': [58, 59, 60, 61, 62, 63], // 183, 180, 197, 181, 179, 178
+  'template-02': [40, 41], // 183, 180
+  'template-03': [27, 29, 31], // 183, 171, 180
+  'template-04': [40, 41, 42, 43, 44, 45], // 181, 179, 183, 180, 197, 172
+  'template-05': [41, 44, 46, 49], // 180, 171, 172, 183
+  'template-06': [76, 77, 78, 79, 80, 81], // 197, 171, 183, 180, 181, 178
+  'template-07': [31], // 191
+  'template-08': [1, 2], // 183, 180
+};
+
+/** cut `CARD_TREE_MESHES`' cards out of a freshly cloned bake — on `scene` alone, like the orientation fix (the
+ *  clone shares its materials with the cached GLTF, which is why cutOutCardMaterial is a no-op the second time) */
+function applyCardTreeCutouts(scene: THREE.Object3D, destId?: string): void {
+  const targets = destId ? CARD_TREE_MESHES[destId] : undefined;
+  if (!targets) return;
+  let i = 0;
+  scene.traverse((obj) => {
+    if (!(obj as THREE.Mesh).isMesh) return;
+    if (!targets.includes(i++)) return;
+    const mesh = obj as THREE.Mesh;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) cutOutCardMaterial(m as THREE.MeshStandardMaterial);
+  });
+}
+
 /** normalize a whole-map template bake: fixed scale, centered on X/Z, ground
  *  at y=0, shadows + normals + double-sided materials. Shared by destination
  *  rendering below and the home world's own Far Meadow terrain (Phase 20 —
@@ -221,10 +257,12 @@ function applyTreeMeshOrientationFix(scene: THREE.Object3D, destId?: string): vo
  *  `destId` (default `undefined`): looks up `TREE_MESH_ORIENTATION_FIX`
  *  below for a per-mesh correction — see that constant's own comment for
  *  why a handful of individual submeshes need a SECOND, targeted fix on
- *  top of the whole-bake `flipY` above. */
+ *  top of the whole-bake `flipY` above — and `CARD_TREE_MESHES` for the
+ *  card trees whose background is cut out. */
 export function normalizeTemplateBake(scene: THREE.Object3D, scale: number = TEMPLATE_WORLD_SCALE, groundAnchor: 'bboxMin' | 'origin' = 'bboxMin', flipY: boolean = false, destId?: string): { group: THREE.Group; offset: THREE.Vector3 } {
   const inner = scene.clone(true);
   applyTreeMeshOrientationFix(inner, destId);
+  applyCardTreeCutouts(inner, destId);
   const holder = new THREE.Group();
   holder.add(inner);
   holder.scale.set(scale, flipY ? -scale : scale, scale);
