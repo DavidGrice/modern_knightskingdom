@@ -41,6 +41,17 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   knock-out marks the raid lost too, since its clear takes the home raid as well. ROADMAP: BUG-8726 retagged fixed, F-17
   logged fixed. Measured on main: Options after dusk left 3 raiders unresolved and the ram and ladder active; Stats within
   dusk started a second raid (6 raiders); a knock-out paid plank/stone/iron ore 4/4/2 and 60 XP.
+- **#288 — Wave 62.2** (F-02, F-13): one list of what the world stands, by world (`game/fixedSolids.ts`: the camp's
+  walls, `drawnSolids` — the huts as turned boxes and the signpost — and `standingSolids` — the trees and rocks as
+  circles), read by the player's collision, the grid and line of sight; the huts and the signpost now stop the player,
+  every walker the grid or a raider's path step drives, and a sightline (BUG-8614). Trees and rocks stay out of the grid, as F-02 allowed: measured on main,
+  stamping them sent 24 of 49 trees' and 12 of 13 rocks' gatherers to a cell 1.9-3.3 m off and left a rock with no
+  anchor — so walkers steer round them (`nav/steering.ts`'s `steerRound`, in `navSteer` and the raiders' path steps).
+  The huts' stamp blocked Beda's cell: she stands at (-35.5, 41.5) now. The merchant's wide mask reads the same lists,
+  his ways unchanged. F-13: the collision passes over the cart the player pushes or has hitched (OPEN-025). ROADMAP:
+  BUG-8614 retagged fixed, OPEN-025 closed and logged fixed. Measured on main: the player walked through the huts and
+  the signpost in 12 of 12 walks, a `navSteer` walker through a trunk in 12 of 12, sightlines through both huts clear; a
+  pushed cart stopped him after 1.05 m.
 
 ## Owner decisions
 

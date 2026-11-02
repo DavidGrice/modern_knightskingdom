@@ -174,7 +174,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | ID | Status | Size | Item | What remains |
 |---|---|---|---|---|
 | OPEN-023 | STILL_OPEN | S | Relocated keep foundation always renders unrotated | Thread a keep.rot field through KeepAssembly's group rotation, socket coordinates, and finishMove; currently hardcoded to 0. |
-| OPEN-025 | STILL_OPEN | S | Cart 'glued' quirk: walking toward a just-grabbed cart yields zero net movement | Exempt the actively-pushed/hitched building's own collider from the player-collision loop, or read cartLivePos instead of stale b.x/b.z. |
+| OPEN-025 | CLOSED | S | Cart 'glued' quirk: walking toward a just-grabbed cart yields zero net movement | Closed by wave 62.2 (#288): the player's collision passes over the cart he pushes or has hitched (`playerPhysics/collide.ts`; "Bugfix: walking at a cart just taken up pinned the player where it had stood", at the end of this file). |
 | OPEN-026 | STILL_OPEN | M | No general building-repair mechanism for non-dragon damage | Generalize the dragon-only ruin/rebuild mechanic (or add a new heal action) to raider-ram/cannon/siege-ladder damage instead of deleting the building at 0 HP. |
 | OPEN-027 | STILL_OPEN | M | oc6098b1 chest-launcher payload mechanism unbuilt | hasChestLauncher/canLaunchChest capability data exists but there's no chest_arm/chest_basket rig role or projectile type; fires as an ordinary catapult today. |
 | OPEN-046 | STILL_OPEN | M | Build challenges lack a per-map specific-structure/set objective | Design+implement a per-map objective; still only a generic 'N pieces in 90s' target after the newer Gather/Defend/Joust minigames shipped for the other 5 grounds. |
@@ -8613,31 +8613,99 @@ check taken out), and on a production build of the fix: the merchant's whole day
 rest in its window. *Not measured live:* the race itself — it needs a clip's first load to be out at the moment another
 is asked for, which the unit tests set up and play seldom does.
 
-## Bug: the village's huts and the signpost stop nobody, and the trees and rocks stop only the player — logged 2026-10-20 (in the fix of the merchant's cart; measured for the merchant, by the code for the rest)
+## Bugfix: the village's huts and the signpost stopped nobody, and the trees and rocks stopped only the player — FOUND 2026-10-20 (in the fix of the merchant's cart; measured for the merchant, by the code for the rest), FIXED 2026-10-31
 
-**What the code does.** Alric's and Beda's huts (`StarterVillage.tsx`: the small castle-wall corner piece, mc001,
-drawn 2.6 m tall — 2.17 m square — and turned to face their corner, standing where `data/world.ts`'s `VILLAGE_HUTS`
-says) and the signpost (`Signpost.tsx`) are drawn, and nothing else knows them: not the player's collision
-(`PlayerController.tsx`: the store's buildings, the camp's walls, the keep's great hall, the trees and rocks, water and
-the world's edge), not the navigation grid every walker is steered by (`nav/grid.ts`: the store's buildings, the
-camp's walls, water and the terrain the walkers keep off), not line of sight (`nav/lineOfSight.ts`). The trees and
-rocks (the store's `nodes`) stop the player — a circle of 0.55 m times its scale about a trunk, of 1.1 m times its
-scale about a boulder — and no walker: the grid does not hold them.
+**The fault.** Alric's and Beda's huts (`StarterVillage.tsx`: the small castle-wall corner piece, mc001, drawn 2.6 m
+tall — 2.17 m square — and turned to face their corner, standing where `data/world.ts`'s `VILLAGE_HUTS` says) and the
+signpost (`Signpost.tsx`) were drawn, and nothing else knew them: not the player's collision
+(`playerPhysics/collide.ts`), not the navigation grid every walker is steered by (`nav/grid.ts`), not line of sight
+(`nav/lineOfSight.ts`). The trees and rocks (the store's `nodes`) stopped the player — a circle of 0.55 m times its
+scale about a trunk, of 1.1 m times its scale about a boulder — and no walker: the grid did not hold them, and nothing
+else steered a walker round them. Only the merchant kept clear of them all (`nav/wideSolids.ts`, the fix of his cart):
+measured for him on `main` at 6085c0f (2026-10-19, `cart_road_probe.mjs`, 12-minute day), before that fix, his centre
+was inside Beda's hut in 41 samples of his walks, inside Alric's in 17 and inside a roadside tree's circle in 11.
+Measured on `main` for the rest (the production build of 176ae05, `scripts/cln-tools/w622_walk.mjs` and
+`w622_measure.mjs`): the player, walked at each hut from four sides and at the signpost from four (W held 2 s from 4 m
+out), went through in all 12 walks — his centre up to 1.00 m inside Alric's hut, 1.08 m inside Beda's, across the
+board; the home grid was open at both huts' centres and the signpost's; sightlines at 1.2 m through both huts and at
+1.55 m through the board were clear; and a walker driven by the game's own `navSteer` past six trees, along each axis
+(12 walks), went through the trunk's circle in all 12 (14 to 18 samples inside, at 30 Hz, its least distance from the
+centre 0.04 to 0.23 m).
 
-**Measured** for the merchant on `main` (production build of 6085c0f, 2026-10-19, `cart_road_probe.mjs` at the default
-12-minute day, his place sampled every tenth of a second over his whole day): his own centre (a body 0.25 m across
-taken round it) was inside Beda's hut in 20 samples of his morning walk and 21 of his evening walk, inside Alric's in
-12 of his walk in and 5 of his walk out, and inside a roadside tree's circle (`verge3`, at (-46.77, 33.2)) in 11 of
-his walk out. The fix of his cart, above, plans his way round them — his alone (`nav/wideSolids.ts`).
+The measurement the fix was shaped by (`w622_measure.mjs`, same build): with the huts and the signpost stamped into the
+home grid as turned boxes grown by a walker's 0.55 m (`AGENT_RADIUS`), Alric's spot (-40, 38) stays open (3 of the 8
+cells round it blocked), but Beda's (-35, 42) is blocked, and 7 of the 8 round it; the stamps block 21, 24 and 8 cells.
+With the trees and rocks stamped too, as circles of the player's radius, the gatherers' anchors
+(`ai/core/AnchorResolution.ts`: eight points on a ring 1.3 m from a tree, 1.2 m from a rock, else the nearest open cell)
+— all 49 trees and 13 rocks on the ring on the grid as built, all eight points open — would fall back to the nearest
+open cell for 24 trees (1.86 to 3.29 m from the trunk, median 2.77) and 12 rocks (2.79 to 3.34 m), and one rock would
+have no anchor at all.
 
-**Not measured:** the player walking through the huts or the signpost; Alric, Beda, the villagers, the raiders and the
-defenders walking through them, or through the trees and the rocks — by the code, every walker the grid steers.
+**The fix.** One list of what the world stands in each world (`game/fixedSolids.ts`, keyed by region; home only for
+now), which the grid, line of sight, the walkers' steering and the merchant's mask read (the player's collision still takes the trees and rocks from the store, with the same radii): beside the merchant camp's walls (`fixedSolids`),
+`drawnSolids` — the two huts as turned boxes 2.6 m tall (the square each stands on, as the merchant's way already took
+them) and the signpost as a box the breadth of its board and the depth of its foot (`SIGNPOST_HALF`, 0.3 m; the board itself is 0.06 m), 1.86 m to the board's top (`SIGNPOST_TOP`) — and
+`standingSolids` — the trees and rocks standing now, as circles of the player's radius (moved from `wideSolids.ts`,
+kept as one list while what it holds is the same). The player's collision puts him back out of each turned box along
+its own nearer side, by his radius, unless his feet are above it. The grid stamps each turned box — every cell that
+comes within `AGENT_RADIUS` of it, the rule the merchant's wide mask already used (`stampSolid`, now shared),
+remembered by identity as the camp's walls are. Line of sight tests each turned box in its own frame, from the ground
+to its top. The trees and rocks stay out of the grid, as the measurement above says they must: walkers steer round
+them instead (`nav/steering.ts`'s `steerRound`) — the nearest one a walker would pass within its circle and
+`AGENT_RADIUS` of, once within 1.5 m of that room, turns it to the line that grazes the room on the side it already
+leans to; one it is walking up to (its goal within 1 m of the circle: a gatherer's anchor) does not. Every walker
+`navSteer` drives steers so (the AI's agents, the court, the defenders' blocked chase; in the Crypt there are no trees to steer round) but a wide one,
+whose way already keeps clear; and so does a raider's step along his path (`enemyAi/movement.ts`: the chase and the
+walk in from the road). The merchant's wide mask reads the shared lists (`wideSolids.ts`): the huts and the signpost in
+it as before, stamped again by the same rule over a grid that now holds them, so his ways are the same. Beda stands at
+(-35.5, 41.5) (`data/cast/village.ts`), half a metre further from her hut on each axis, on an open cell; the clear zone
+that keeps trees off her (`data/world.ts`'s `STARTER_VILLAGE_CLEAR`) is left at (-35, 42), which still covers her, so
+the trees seeded round it stand where they did. *Left as it was:* a hut is solid over the whole square it stands on,
+though the corner piece is drawn as an L; the signpost is solid from the ground over the board's breadth, though below
+the board only its pole stands (an arrow past the pole's side is stopped); a defender chasing in the open still goes
+straight at its mark (it steers only when its way is blocked), and a raider's flanking turn is applied after his
+steering (it fades to nothing within 5 m of his mark), so on a long chase it can still carry him into a trunk (logged below as its own item); and a raider who wanders or flees (`enemyAi/movement.ts`'s `wander`, `flee`) reads no solid at all, so he can still cross a hut or the signpost, as he can any placed piece.
 
-**To do.** Decide what each should stop. The huts are buildings, and should stop everyone; but making them solid for
-the walkers blocks cells round them that Alric's and Beda's own standing spots are in or beside (2.1 and 2.2 m from
-their huts' centres, where the grid blocks what comes within 0.55 m of a hut, a whole cell at a time), so measure what
-that does to the two of them first. The trees are what the gatherers walk up to. The data is there to build on: the
-huts' table, and the list of what the merchant keeps clear of.
+**Verified** with `tsc` and the unit tests — new: `nav/nav.test.ts` (the grid blocks each hut's centre and the
+signpost's and leaves Alric's and Beda's spots open, Beda's old one blocked; sightlines through each hut and the board
+blocked, over a hut and over the board clear, and one across the corner of an unturned square of a hut's size but clear
+of the hut as turned left clear), `playerPhysics/collide.test.ts` (a step into each turned hut put back out along its
+own nearer side by his radius; into the board put back out, and not when his feet are above it),
+`nav/steering.test.ts` (a walker turned to the line grazing a tree's or a rock's room, on the side it leans to;
+unchanged for a tree it walks up to, behind it, clear of it, out of range, felled or in another world; a walker driven
+by `navSteer` and a raider by his path step past a trunk and a boulder kept out of them, and arriving); and
+`nav/wide.test.ts` brought up to date (the boxes carry their tops; an ordinary way now goes round the huts and the
+signpost, nearer than a wide one). Each fails with its piece of the fix taken out — the grid's stamp, Beda's move, line
+of sight's turned boxes or their turn, the collision's push or its "above it", `navSteer`'s or the raider's
+`steerRound`, its walking-up test. The evidence pass, 2026-11-01, re-ran `tsc`, the unit tests (67 files, 526 tests)
+and `next build`, and took 19 pieces out one at a time (`scripts/cln-tools/w622_mutate.cjs`, vitest on `nav`,
+`playerPhysics` and `enemyAi`; the tree's `git diff` md5 `d3c1ea2e…` before and after, the two new test files with it
+`d9ee582d…`): 17 fail a test — the above, plus the push's choice of side, the signpost's top, the steer's side and its
+"behind it" test, the wide list without the huts. Two pass every test: `steerRound` in a raider's walk in from the road
+(`walkIn`) taken out, and `navSteer` steering a wide walker too; no unit test reaches either. Live, side by side on
+production builds — `main` on port 3101 (base-14 at 176ae05, build id `9dVv-x84l8R2iRzYT5ph3`, script digest
+`b797f05beff0`), the fix on 3102 (build id `462LkqK4UMwBwX5vn4aSg`, digest `ab39bdbbfbce`), each run once, page errors
+0 in every run. `w622_walk.mjs`: the player walked at each hut and the signpost from four sides — on `main` inside in 12
+of 12 and out the far side in 12 (1.00 to 1.07 m deep in Alric's hut, 1.00 to 1.03 m in Beda's, 0.05 to 0.15 m in the
+board); on the fix inside in 0 of 12, his centre never nearer than 0.45 m (his radius) — at a hut he slides round its
+turned side, at the signpost he stops. The home grid at the huts' centres and the signpost: open on `main`, blocked on
+the fix; Alric's spot open on both; Beda stands at (-35, 42) on `main`, (-35.50, 41.50) on the fix, open on both (her
+old spot blocked on the fix). Sightlines at 1.2 m through both huts and at 1.55 m through the board: clear on `main`,
+blocked on the fix; over a hut at 3.2 m clear on both. A walker driven by `navSteer` past six trees along each axis:
+on `main` inside the trunk's circle in 12 of 12 (14 to 18 samples, least distance 0.04 to 0.23 m); on the fix in 0,
+least distance 1.11 to 1.27 m, all 12 arriving (125 to 132 steps against 121 to 122). `w622_chase.mjs` (new): a bandit
+set down 5 m on one side of each hut, the signpost and two open trees, chasing the invulnerable player 5 m beyond it
+(two ways each, 6 s): on `main` his centre went inside in 9 of 10 chases (14 or 15 samples and 0.81 to 0.96 m deep in a
+hut, 2 samples at the signpost, 3 to 8 at the trees); on the fix in 0 of 10 (nearest 0.72 to 1.24 m off a hut, 0.80 to
+1.12 m off the board, 0.55 m beyond a trunk's circle) — and he reached the player (1.76 to 1.80 m) in all 20 runs of
+both. The court, sampled 60 s by day: a new game has only Alric and Beda, neither inside a hut, the board or a trunk on
+either build. `cart_road_probe.mjs` (12-minute day, morning and evening): the merchant's four ways identical on both;
+the team overlaps nothing and he is inside nothing in either; his samples lie at most 1.35 m from `main`'s track
+(`w622_road_cmp.cjs`, in his walk out) — two runs of `main` differ from each other by 1.13 m in the same stage, and two
+of the fix by 1.33 m (the implementer's), so this is the noise of real-time sampling. *Not measured live:* a villager
+or a gatherer walking (a new game has none), a raider's walk in from the road, an arrow actually loosed through a hut
+(only the line-of-sight query), and the corner piece's L or the pole under the board (the boxes are solid whole, as
+written above).
 
 ## Bug: the merchant's team trots at twice its cadence, and swings its tails as hind legs — logged 2026-10-20 (in the fix of the merchant's cart; by the code and the rig chart, not run)
 
@@ -8872,3 +8940,43 @@ over and the ram and the ladder down, the cooldown running on (1077). On `main` 
 no deed, `raidLost` cleared. Mutation controls restored as above. **Not measured live:** a knock-out away from home
 (the Sealed Crypt) with a home raid on (no unit test either: it rests on the code, the same clear), and the case of
 every raider already falling (the unit test only).
+
+## Bugfix: walking at a cart just taken up pinned the player where it had stood — FOUND 2026-09-04 (in the verification of Wave 35; OPEN-025 in the reconciled backlog), FIXED 2026-10-31
+
+**The fault.** A battering cart being pushed, or a blade cart hitched, goes with the player: his step
+(`playerPhysics/locomotion.ts`) writes its place every frame to `cartLivePos` (`game/carts.ts`), which is what is
+drawn, and its stored place (the building's `x`/`z`) is written only when it is let go (`settleCart`). The player's
+collision (`playerPhysics/collide.ts`) tested every built piece at its stored place, the cart he had just taken up too
+— so walking toward where it had stood, he was stopped against a cart that had moved on with him. Measured on `main`
+(the production build of 176ae05, `scripts/cln-tools/w622_walk.mjs`): a cart written into the store 2.4 m ahead of the
+player, taken up as the push or hitch action does, and W held 2 s — pushing the battering cart he went 1.05 m and
+stopped (at 42.95, the stored box's face and his radius); hitching the blade cart (alone in the store), 0.69 m.
+
+**The fix.** The collision's loop over the player's pieces passes over the one he is pushing or has hitched
+(`cartState.pushingId` / `hitchedId`): he drives it. *Left as it was* (FEATURE_PLAN.md's F-13): the navigation grid and
+the raiders still meet the cart at its stored place until it is let go — `cartLivePos` is read only by the drawing, the
+carts, the player's step and the build slice — and a cart's scale per piece (OPEN-060).
+
+**Verified** with `tsc` and the unit tests — new, in `playerPhysics/collide.test.ts`: a step into a battering cart's or
+a blade cart's stored box is put back out while it stands, and taken while it is pushed or hitched (fails with the skip
+taken out); another cart standing still stops him while he pushes one. The evidence pass, 2026-11-01: the skip taken
+out whole, or its `pushingId` half, or its `hitchedId` half, each fails that test (`w622_mutate.cjs`). Live, side by
+side on production builds — `main` on port 3101 (base-14 at 176ae05, build id `9dVv-x84l8R2iRzYT5ph3`), the fix on 3102
+(build id `462LkqK4UMwBwX5vn4aSg`), `w622_walk.mjs`, page errors 0: the battering cart pushed, W held 2 s, he went 1.05
+m on `main` (stopped at 42.95) and 8.20 m on the fix; the blade cart hitched, alone in the store, 0.69 m on `main` and
+8.13 m on the fix. *Not measured live:* the cart taken up through the game's own push and hitch actions (the probe sets
+`cartState` as they do), and what the raiders and the grid meet while a cart is held (left as it was).
+
+## Bug: on a long chase, a raider's flanking turn can still carry him into a trunk — logged 2026-11-02 (in the review of wave 62.2; by a simulation of the code, not run in the game)
+
+**What the code does.** A raider's chase (`enemyAi/step.ts`) turns him by `flank()` — up to 0.8 rad either way for a
+raider whose id taken modulo 7 is 0 or 6, fading to nothing within 5 m of his mark — after his path step has steered him
+round a tree or a rock (`enemyAi/movement.ts`'s `makePathStep`, which calls `nav/steering.ts`'s `steerRound` since wave
+62.2). So the turn can point him back at the trunk the steering was taking him round.
+
+**Measured** by the review, on copies of the two functions, not in the game: one trunk (radius 0.55 m) set at every point of
+a 0.25 m grid about a chase, with the raider 20 m and 26 m from the player: in 196 of 10,290 placements his centre came
+inside the trunk's circle (0.34 m from its centre at worst); with the flank taken out, in none; at 10 to 14 m, in none.
+No worse than before wave 62.2, when a chasing raider walked through every trunk in his way.
+
+**To do.** Apply the flank before the steering (or steer again after it), then measure a long chase live.

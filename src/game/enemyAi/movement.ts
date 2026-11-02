@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { useEnemyStore, type EnemyData } from '@/game/combat';
 import { useGameStore, type GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
-import { findPath } from '@/game/navgrid';
+import { findPath, steerRound } from '@/game/navgrid';
 import { isDoorLike } from '@/game/types';
 import { POND, WORLD_HALF } from '@/game/data/world';
 import { sizeFor } from '@/game/data/buildables';
@@ -78,7 +78,9 @@ export function makePathStep(path: Route, m: Mob, dt: number) {
       aimZ = pts[path.i].z;
     }
     const ad = Math.hypot(aimX - m.x, aimZ - m.z) || 1;
-    return { nx: (aimX - m.x) / ad, nz: (aimZ - m.z) / ad };
+    // round the trees and rocks on the way, which the path does not know (nav/steering.ts)
+    const { nx, nz } = steerRound(null, m.x, m.z, (aimX - m.x) / ad, (aimZ - m.z) / ad, tx, tz);
+    return { nx, nz };
   };
 }
 
@@ -119,8 +121,7 @@ export function walkIn(m: Mob, path: Route, dt: number, speed: number): void {
   }
   if (path.i < pts.length) { aimX = pts[path.i].x; aimZ = pts[path.i].z; }
   const ad = Math.hypot(aimX - m.x, aimZ - m.z) || 1;
-  const nx = (aimX - m.x) / ad;
-  const nz = (aimZ - m.z) / ad;
+  const { nx, nz } = steerRound(null, m.x, m.z, (aimX - m.x) / ad, (aimZ - m.z) / ad, HOME_X, HOME_Z);
   // Wave 34 (G6.6) · a raider walking in from roadEntry() is exactly
   // the "on the road" case ROAD_SPEED_MULT was made for — the
   // player already gets this boost on the same road, so a raider

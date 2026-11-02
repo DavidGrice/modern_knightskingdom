@@ -1,6 +1,8 @@
 'use client';
 // CLN-14 · path-following steering and local avoidance, moved verbatim out of game/navgrid.ts.
 import navgridConfig from '../../ai/config/navgrid.json';
+import { standingSolids, type SolidCircle } from '../fixedSolids';
+import { AGENT_RADIUS } from './grid';
 import { getNavGrid } from './registry';
 
 /** per-agent routing state, stashed on the agent object itself so callers
@@ -180,6 +182,58 @@ export function applyLocalAvoidance(agent: NavAgent, nx: number, nz: number): { 
   return _avoid;
 }
 
+// ---------------------------------------------------------------------------
+// The trees and the rocks (fixedSolids.ts's standingSolids) are not in the grid — stamped there they would send most
+// gatherers back from the trunk or boulder they work at (ROADMAP.md, "Bugfix: the village's huts and the signpost
+// stopped nobody") — so a walker steers round them instead, on its way to wherever it is going.
+// ---------------------------------------------------------------------------
+
+/** how far beyond the edge of the room a trunk or boulder needs (its circle and a walker's AGENT_RADIUS) a walker
+ *  begins to steer round it */
+const STEER_AHEAD = 1.5;
+/** a walker making for a point within this of a trunk's or boulder's circle is walking up to it, and does not steer
+ *  round it (a gatherer's anchor is 1.3 m from a tree's centre, 1.2 m from a rock's: ai/core/AnchorResolution.ts) */
+const WALKING_UP = 1;
+
+const _round = { nx: 0, nz: 0 };
+
+/**
+ * The unit direction (nx, nz) of a walker at (x, z) making for (tx, tz), turned round the nearest tree or rock
+ * standing in `region` that it would pass within AGENT_RADIUS of: once within STEER_AHEAD of that room, it makes for
+ * the line that just grazes it, on the side it already leans to — and from inside it, square to the centre and a
+ * little out. A tree or rock behind the walker, one its way passes clear of, and one it is walking up to change
+ * nothing. Like applyLocalAvoidance, one scratch object is handed back: read it before the next call.
+ */
+export function steerRound(
+  region: string | null, x: number, z: number, nx: number, nz: number, tx: number, tz: number,
+): { nx: number; nz: number } {
+  _round.nx = nx;
+  _round.nz = nz;
+  let near: SolidCircle | null = null;
+  let nearD = Infinity;
+  for (const c of standingSolids(region)) {
+    const px = c.x - x, pz = c.z - z;
+    const room = c.r + AGENT_RADIUS;
+    if (Math.abs(px) > room + STEER_AHEAD || Math.abs(pz) > room + STEER_AHEAD) continue;
+    const d = Math.hypot(px, pz);
+    if (d > room + STEER_AHEAD || d >= nearD) continue;
+    if (px * nx + pz * nz <= 0 || Math.abs(nx * pz - nz * px) >= room) continue;
+    if (Math.hypot(tx - c.x, tz - c.z) < c.r + WALKING_UP) continue;
+    near = c;
+    nearD = d;
+  }
+  if (!near) return _round;
+  const room = near.r + AGENT_RADIUS;
+  const ux = (near.x - x) / (nearD || 1), uz = (near.z - z) / (nearD || 1);
+  // turned from the way to its centre: by the angle that grazes the room, or past square while inside it
+  const a = nearD > room ? Math.asin(room / nearD) : Math.PI / 2 + (1 - nearD / room) * (Math.PI / 4);
+  const turn = ux * nz - uz * nx >= 0 ? a : -a;
+  const cos = Math.cos(turn), sin = Math.sin(turn);
+  _round.nx = ux * cos - uz * sin;
+  _round.nz = ux * sin + uz * cos;
+  return _round;
+}
+
 /**
  * Steering direction from `agent` toward (tx, tz), routed via the grid.
  *
@@ -236,6 +290,8 @@ export function navSteer(
     baseNx = (w.x - agent.x) / wd;
     baseNz = (w.z - agent.z) / wd;
   }
+  // round the trees and rocks — but a wide walker's way already keeps clear of them (wideSolids.ts)
+  if (!agent.wide) ({ nx: baseNx, nz: baseNz } = steerRound(agent.region ?? null, agent.x, agent.z, baseNx, baseNz, tx, tz));
   // Wave 42 (A7) — §7.5's separation steering, perturbing the DIRECTION only.
   // `dist` above is the real, unperturbed straight-line distance to the
   // actual goal, computed before this runs, so every caller's own "am I

@@ -44,7 +44,11 @@ export const VILLAGE_NPCS: NpcDef[] = [
       name: 'Beda', headDonor: 'minifiggenericgood00', bodyDonor: 'minifiggenericgood00',
       armColor: 30, handColor: 18, legColor: 38, hipColor: 24,
     },
-    x: -35, z: 42, yaw: Math.PI * 1.1,
+    // Half a metre further from her hut on each axis than (-35, 42), where she stood until it became solid: the grid
+    // blocks every cell that comes within a walker's 0.55 m of it, which took the cell she stood in (and 7 of the 8
+    // round it), and an Agent on a blocked cell is put on the nearest open one (ai/core/Locomotion.ts's onTierChange)
+    // — a jump (ROADMAP.md, "Bugfix: the village's huts and the signpost stopped nobody"). Her cell now is open.
+    x: -35.5, z: 41.5, yaw: Math.PI * 1.1,
     // nor is a miller carrying the bad-guy donor's crossbow
     keepProps: false,
     greetSound: 'villager',

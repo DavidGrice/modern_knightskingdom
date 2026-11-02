@@ -5,8 +5,8 @@ import * as THREE from 'three';
 import { collisionBoxesFor, type CollisionBox } from '../data/buildables';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '../types';
 import { activeTerrainExclusions, terrainBlocks } from '../navTerrain';
-import { fixedSolids } from '../fixedSolids';
-import { wideSolids, type WideSolid } from './wideSolids';
+import { drawnSolids, fixedSolids, type SolidBox, type WorldSolid } from '../fixedSolids';
+import { wideSolids } from './wideSolids';
 import { waterworks } from '../waterworks';
 import { getMountedRoot, getMountedRegion } from '../templateGround';
 import { useGameStore } from '../store/gameStore';
@@ -39,7 +39,7 @@ export const HOME_HALF = navgridConfig.home.halfExtent;
 
 /** how fat the walkers are; obstacles are inflated by this so a path never
  *  hugs a wall so tightly that the collision solver undoes it */
-const AGENT_RADIUS = 0.55;
+export const AGENT_RADIUS = 0.55;
 
 /** a box only blocks if it actually intersects the band a walker occupies */
 const WALK_LOW = 0.55;   // matches game/playerPhysics/floor.ts's STEP_UP: lower is a kerb
@@ -167,8 +167,11 @@ export class NavGrid {
   // list is a fresh one until the collision shapes file has been read and one
   // kept list after, so the first rebuild once it has been read re-stamps them.
   private builtFixed: PlacedBuilding[] | null = null;
+  // the fourth: what the world draws that is no placed piece (the village's huts and the signpost: fixedSolids.ts's
+  // drawnSolids) — one list for good today, remembered the same way for what is drawn later
+  private builtDrawn: SolidBox[] | null = null;
   // the mask a wide walker plans on (wideMask), with the obstacle mask and the solids it was made from
-  private wide: { from: Uint8Array; solids: WideSolid[]; mask: Uint8Array } | null = null;
+  private wide: { from: Uint8Array; solids: WorldSolid[]; mask: Uint8Array } | null = null;
 
   // Phase 2, iteration 2.5 — ground-height field, window-mode grids only.
   // null means "no height data yet" (nothing mounted, or nothing mounted
@@ -454,14 +457,18 @@ export class NavGrid {
    * call whenever the building list changes identity; a no-op if the array
    * is the same one last consumed AND no waterway has been dug or filled in
    * since (Wave 12 — see `builtWaterRev`) AND the walls the world puts up
-   * itself are the list last stamped (see `builtFixed`).
+   * itself, and what it draws, are the lists last stamped (see `builtFixed`,
+   * `builtDrawn`).
    */
   rebuild(buildings: PlacedBuilding[]): void {
     const fixed = fixedSolids(this.region);
-    if (this.builtFrom === buildings && this.builtWaterRev === waterworks.rev && this.builtFixed === fixed) return;
+    const drawn = drawnSolids(this.region);
+    if (this.builtFrom === buildings && this.builtWaterRev === waterworks.rev && this.builtFixed === fixed
+      && this.builtDrawn === drawn) return;
     this.builtFrom = buildings;
     this.builtWaterRev = waterworks.rev;
     this.builtFixed = fixed;
+    this.builtDrawn = drawn;
     this.blocked = new Uint8Array(this.dim * this.dim);
 
     // Wave 20 · the filter (built-only, region match, open-gate skip) now
@@ -489,6 +496,9 @@ export class NavGrid {
     };
     forEachObstacleBox(buildings, this.region, stamp);
     forEachObstacleBox(fixed, this.region, stamp);
+    // and the village's huts and the signpost, turned as they are drawn: each cell that comes within AGENT_RADIUS
+    // of one (both stand from the ground to above the walker band)
+    for (const s of drawn) this.stampSolid(this.blocked, s);
 
     // Phase 2, iteration 2.1 — stamp terrain exclusions (water) in AFTER
     // building obstacles, on top of them. Wave 12: the list is now the static
@@ -513,9 +523,8 @@ export class NavGrid {
 
   /**
    * The mask a wide walker plans on (findPath's `wide`; today the merchant, leading his team: Merchant.tsx): every cell
-   * the grid blocks, and every cell within AGENT_RADIUS of what such a walker also keeps clear of (wideSolids.ts) —
-   * found as a building's box is found, by its square's reach on each axis, a turned box's own two axes as well, and a
-   * circle's by its distance — and then every cell next to one of those, the eight round it. The centre of a cell
+   * the grid blocks, and every cell within AGENT_RADIUS of what such a walker also keeps clear of (wideSolids.ts:
+   * stampSolid) — and then every cell next to one of those, the eight round it. The centre of a cell
    * it leaves open is then at least a whole cell further from anything than the grid keeps a walker: 2.05 m or more
    * from a box (a cell is blocked when any of it comes within AGENT_RADIUS of one, and it is a metre across). Water
    * and the terrain the walkers keep off are grown the same cell. Made when first asked for, and again once the grid
@@ -526,7 +535,7 @@ export class NavGrid {
     if (this.wide && this.wide.from === this.blocked && this.wide.solids === solids) return this.wide.mask;
     const dim = this.dim;
     const near = this.blocked.slice();
-    for (const s of solids) this.stampWideSolid(near, s);
+    for (const s of solids) this.stampSolid(near, s);
     // grown by a cell: along each column (index i * dim + j: j runs along z), then along each row
     const cols = new Uint8Array(dim * dim);
     for (let i = 0; i < dim; i++) {
@@ -550,7 +559,7 @@ export class NavGrid {
    *  cell's square; a box by the gap between the two along each of the four axes they could be told apart on (the
    *  cell's two and the box's own two) — the largest of them, which for a box that is not turned is the grid's own
    *  rule for a building's box. */
-  private stampWideSolid(mask: Uint8Array, s: WideSolid): void {
+  private stampSolid(mask: Uint8Array, s: WorldSolid): void {
     const h = this.cellSize / 2;
     let ex: number, ez: number;
     let cos = 1, sin = 0;
