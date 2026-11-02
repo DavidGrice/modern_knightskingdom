@@ -52,6 +52,19 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   BUG-8614 retagged fixed, OPEN-025 closed and logged fixed. Measured on main: the player walked through the huts and
   the signpost in 12 of 12 walks, a `navSteer` walker through a trunk in 12 of 12, sightlines through both huts clear; a
   pushed cart stopped him after 1.05 m.
+- **#289 — Wave 62.3** (F-03, F-04): the merchant's team steps at a lone horse's cadence. RiggedProp's gait clock
+  moves on once a frame (`stepGait`); before, the standalone block and the team's block each advanced it, so the team
+  stepped at twice the cadence (BUG-8640). The rig chart's back-right roles for oc6095b3 are corrected in code
+  (`lib/rigParts.ts`'s `ROLE_FIXES`, keyed by asset id, laid over the generated chart by `partRolesFor`): two tails, two
+  upper legs, two lower legs. The tails swish per side. When his trading window opens the merchant now steps up the last
+  of his half metre at his own pace and turns over his first steps (`data/merchantDay.ts`'s `settleOnSpot`: three times
+  the angle left, a second; set on the spot within 1 cm) instead of snapping (BUG-8657). Premises held, with two
+  corrections. On main the turn is 97.8 degrees, not 155: the cart fix already brought him in from the west, as the
+  entry foresaw. And a merchant brought into his window by the clock (out of hiding, a load, a long frame) is still set
+  on his spot, because the ease alone would have walked him in from the road's end. ROADMAP: BUG-8640 and BUG-8657
+  retagged fixed. Measured on main (`w623_measure.mjs`, deterministic frames): every team leg at 2.00x RiggedProp's rate
+  for its speed (9.44 rad/s at gaitSpeed 1.4), a lone horse at 1.00x, and both tails swinging through a leg's 1.1 rad.
+  In the window's first frame he turned 97.8 degrees and hopped 0.488 m, and his team jumped 0.468 m.
 
 ## Owner decisions
 

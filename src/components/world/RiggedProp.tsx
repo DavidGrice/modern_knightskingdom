@@ -58,6 +58,16 @@ const spinQuat = new THREE.Quaternion();
 /** assets already reported as not drawn (development only) — once each is enough */
 const reportedUndrawn = new Set<string>();
 
+/** The walk cycle's clock moved on by a frame (`dt`): faster as the prop moves faster (`gaitSpeed`, metres a second),
+ *  for a standalone horse's four numbered legs and a team's named ones alike — and once a frame, whichever of the two
+ *  it drives. Each block advanced it on its own, and both run for the merchant's team while it moves, so the team
+ *  stepped at twice a standalone horse's cadence (ROADMAP.md, "the merchant's team trotted at twice its cadence"). A prop
+ *  with no legs is moved on only while it moves, as the standalone block always moved it. */
+export function stepGait(clock: number, dt: number, gaitSpeed: number, parts: Record<string, THREE.Group>): number {
+  if (gaitSpeed > 0.01 || parts['leg_upper#0'] || parts['horse_L_leg_FL_upper']) return clock + dt * (2.2 + gaitSpeed * 1.8);
+  return clock;
+}
+
 export default function RiggedProp({
   assetId,
   height,
@@ -210,9 +220,9 @@ export default function RiggedProp({
     // then left-to-right. A horse walks on DIAGONAL pairs, so legs 0 and 3
     // share a phase and 1 and 2 share the opposite one — that pairing is
     // what stops it looking like a pantomime hobby-horse.
+    gait.current = stepGait(gait.current, dt, gaitSpeed, rig.parts);
+    const amp = gaitSpeed > 0.05 ? Math.min(0.55, 0.18 + gaitSpeed * 0.32) : 0.05;
     if (gaitSpeed > 0.01 || rig.parts['leg_upper#0']) {
-      gait.current += dt * (2.2 + gaitSpeed * 1.8);
-      const amp = gaitSpeed > 0.05 ? Math.min(0.55, 0.18 + gaitSpeed * 0.32) : 0.05;
       for (let i = 0; i < 4; i++) {
         const phase = gait.current + (i === 0 || i === 3 ? 0 : Math.PI);
         const swing = Math.sin(phase) * amp;
@@ -250,10 +260,9 @@ export default function RiggedProp({
     // Reuses the exact same diagonal-trot math (FL+BR share a phase, FR+BL
     // the opposite one), just addressed by name instead of index, and both
     // horses share ONE gait clock since they're yoked to the same tow-bar
-    // and would look wrong stepping out of sync with each other.
+    // and would look wrong stepping out of sync with each other — the clock
+    // the block above steps by, moved on once above (stepGait).
     if (rig.parts['horse_L_leg_FL_upper']) {
-      gait.current += dt * (2.2 + gaitSpeed * 1.8);
-      const amp = gaitSpeed > 0.05 ? Math.min(0.55, 0.18 + gaitSpeed * 0.32) : 0.05;
       const DIAG: [string, number][] = [['FL', 0], ['BR', 0], ['FR', Math.PI], ['BL', Math.PI]];
       for (const side of ['horse_L', 'horse_R']) {
         for (const [leg, offset] of DIAG) {
@@ -275,6 +284,12 @@ export default function RiggedProp({
           if (!rest.current.has(head)) rest.current.set(head, head.rotation.x);
           const graze = gaitSpeed < 0.05 ? 0.4 + Math.sin(t.current * 0.6 + (side === 'horse_R' ? 1.3 : 0)) * 0.18 : 0;
           head.rotation.x = rest.current.get(head)! + graze;
+        }
+        // each tail swishes as a standalone horse's does, the right one a beat ahead (rigParts.ts names them)
+        const tail = rig.parts[`${side}_tail`];
+        if (tail) {
+          if (!rest.current.has(tail)) rest.current.set(tail, tail.rotation.y);
+          tail.rotation.y = rest.current.get(tail)! + Math.sin(t.current * 2.4 + (side === 'horse_R' ? 1.3 : 0)) * 0.3;
         }
       }
     }

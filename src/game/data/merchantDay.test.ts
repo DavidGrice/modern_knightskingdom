@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MERCHANT_TOP_SPEED, SCHEDULE_SLACK, TO_VILLAGE_BUFFER, TURN_REACH, VILLAGE_DWELL, VILLAGE_TO_SPOT_BUFFER, WALK_IN_HAND,
-  WALK_STOP, firstStepOf, legOf, merchantGait, merchantSpeed, merchantStage, nearestOnWay, pointsWalked, putOnSchedule,
-  scheduledPlace, secondsLeftAtPace, secondsLeftThrough, walkWay, walkWindow, wayThrough, type MerchantStage,
+  MERCHANT_TOP_SPEED, ON_SPOT, SCHEDULE_SLACK, TO_VILLAGE_BUFFER, TURN_REACH, VILLAGE_DWELL, VILLAGE_TO_SPOT_BUFFER,
+  WALK_IN_HAND, WALK_STOP, firstStepOf, legOf, merchantGait, merchantSpeed, merchantStage, nearestOnWay, pointsWalked,
+  putOnSchedule, scheduledPlace, secondsLeftAtPace, secondsLeftThrough, settleOnSpot, walkWay, walkWindow, wayThrough,
+  type MerchantStage,
 } from './merchantDay';
 
 const WALK_SPEED = 1.2; // Merchant.tsx's own pace, off the road
@@ -428,5 +429,55 @@ describe('at every length of day the Options offer (4 to 30 minutes)', () => {
     }
     // from 14 minutes on: the walk in, brought round his yard, fits its window with a tenth to spare from 13.32
     expect(unhurried).toBe(17);
+  });
+});
+
+describe('his stepping up to his spot as his trading window opens', () => {
+  const SPOT = { x: -76.8, z: 16, yaw: Math.PI }; // data/trade.ts's MERCHANT_SPOT
+  const DT = 1 / 64;
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  const deg = (a: number) => (Math.abs(wrap(a)) * 180) / Math.PI;
+
+  it('walks him the rest of the way and turns him to face the gate over his first steps, never in one frame', () => {
+    // where his walk in left him on main (w623_measure.mjs, 2026-11-02): 0.488 m west of it, facing -1.434 rad — set
+    // on it in the window's first frame, he turned 97.8 degrees and hopped 0.488 m
+    const him = { x: -77.284, z: 16.066, yaw: -1.434 };
+    let frames = 0;
+    let greatestTurn = 0;
+    let greatestStep = 0;
+    for (let f = 0; f < 128; f++) {
+      const was = { ...him };
+      const stepping = settleOnSpot(him, SPOT, WALK_SPEED, DT);
+      if (stepping) frames = f + 1;
+      greatestTurn = Math.max(greatestTurn, deg(him.yaw - was.yaw));
+      greatestStep = Math.max(greatestStep, Math.hypot(him.x - was.x, him.z - was.z));
+    }
+    // on his spot within half a second, at his own pace (the last step up to ON_SPOT more), and set exactly on it
+    expect(frames).toBe(25);
+    expect([him.x, him.z]).toEqual([SPOT.x, SPOT.z]);
+    expect(greatestStep).toBeLessThanOrEqual(WALK_SPEED * DT + ON_SPOT);
+    // three times the angle left, a second: 97.8 x 3 / 64 = 4.6 degrees in the first frame, and less after
+    expect(greatestTurn).toBeCloseTo(97.8 * 3 / 64, 1);
+    // after two seconds within three degrees of the gate (e^-6 of the turn)
+    expect(deg(him.yaw - SPOT.yaw)).toBeLessThan(3);
+  });
+
+  it('sets him on it once within ON_SPOT, and then leaves him there', () => {
+    const him = { x: SPOT.x - 0.5 * ON_SPOT, z: SPOT.z + 0.5 * ON_SPOT, yaw: SPOT.yaw };
+    expect(settleOnSpot(him, SPOT, WALK_SPEED, DT)).toBe(false);
+    expect(him).toEqual({ x: SPOT.x, z: SPOT.z, yaw: SPOT.yaw });
+    expect(settleOnSpot(him, SPOT, WALK_SPEED, DT)).toBe(false);
+    expect(him).toEqual({ x: SPOT.x, z: SPOT.z, yaw: SPOT.yaw });
+    // a step that would carry him to within ON_SPOT sets him on it rather than short of it
+    const near = { x: SPOT.x - WALK_SPEED * DT - 0.5 * ON_SPOT, z: SPOT.z, yaw: SPOT.yaw };
+    expect(settleOnSpot(near, SPOT, WALK_SPEED, DT)).toBe(false);
+    expect([near.x, near.z]).toEqual([SPOT.x, SPOT.z]);
+  });
+
+  it('turns him the short way round, across a half turn', () => {
+    // facing a tenth of a radian short of -pi, which is pi: the way there is that tenth, not nearly a whole turn back
+    const him = { x: SPOT.x, z: SPOT.z, yaw: -Math.PI + 0.1 };
+    settleOnSpot(him, SPOT, WALK_SPEED, DT);
+    expect(him.yaw).toBeCloseTo(-Math.PI + 0.1 - 0.1 * 3 * DT, 12);
   });
 });

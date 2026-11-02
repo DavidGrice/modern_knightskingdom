@@ -3,11 +3,14 @@ import * as THREE from 'three';
 
 // The component called as a plain function, on just enough of React to hold its state between calls: a slot per hook
 // and per instance; an effect run after the render that declared it when its deps changed, its clean-up run before
-// the next run and at unmount; and a setter that only stores (the test renders again when it wants to see the
-// result). The rig loader is stood in for: `H.rigs` says what each asset resolves to.
+// the next run and at unmount; a setter that only stores (the test renders again when it wants to see the result); and
+// the frame loop it hands useFrame, kept so that a test can run frames. The rig loader is stood in for: `H.rigs` says
+// what each asset resolves to.
 interface Effect { deps?: unknown[]; cleanup?: void | (() => void) }
 const H = vi.hoisted(() => ({
-  inst: null as null | { slots: unknown[]; i: number; pending: (() => void)[]; sets: number },
+  inst: null as null | {
+    slots: unknown[]; i: number; pending: (() => void)[]; sets: number; frame: null | ((state: unknown, dt: number) => void);
+  },
   rigs: {} as Record<string, unknown>,
 }));
 vi.mock('react', async (original) => {
@@ -41,17 +44,21 @@ vi.mock('react', async (original) => {
     },
   };
 });
-vi.mock('@react-three/fiber', () => ({ useFrame: () => {} }));
+vi.mock('@react-three/fiber', () => ({ useFrame: (fn: (state: unknown, dt: number) => void) => { H.inst!.frame = fn; } }));
 vi.mock('@/lib/propRig', () => ({ loadRiggedProp: async (id: string) => H.rigs[id] ?? null }));
 
-import RiggedProp from './RiggedProp';
+import RiggedProp, { stepGait } from './RiggedProp';
 
 type Props = Parameters<typeof RiggedProp>[0];
 interface El { type: unknown; props: Record<string, unknown> & { children?: El } }
 /** one instance: `render(props?)` calls the component (with new props, if given) and then runs the effects that
- *  render scheduled; `unmount()` runs every effect's clean-up; `sets()` counts the state it has set */
+ *  render scheduled; `frame(dt)` runs a frame of the loop its last render handed useFrame; `unmount()` runs every
+ *  effect's clean-up; `sets()` counts the state it has set */
 function mount(first: Props) {
-  const inst = { slots: [] as unknown[], i: 0, pending: [] as (() => void)[], sets: 0 };
+  const inst = {
+    slots: [] as unknown[], i: 0, pending: [] as (() => void)[], sets: 0,
+    frame: null as null | ((state: unknown, dt: number) => void),
+  };
   let props = first;
   const render = (next?: Props) => {
     if (next) props = next;
@@ -68,7 +75,7 @@ function mount(first: Props) {
       if (typeof cleanup === 'function') cleanup();
     }
   };
-  return { render, unmount, sets: () => inst.sets };
+  return { render, unmount, sets: () => inst.sets, frame: (dt: number) => inst.frame!(null, dt) };
 }
 /** let the loader's promise, and what hangs on it, run */
 const settle = async () => { for (let i = 0; i < 4; i++) await Promise.resolve(); };
@@ -81,6 +88,28 @@ function rigWithFlag() {
   return { group, parts: { flag } };
 }
 const drawnRig = (out: El | string | null) => (out as El).props.children!.props.object as THREE.Group;
+/** a rig of one group per role, as lib/propRig.ts hands back a horse's */
+function rigOf(roles: string[]) {
+  const group = new THREE.Group();
+  const parts: Record<string, THREE.Group> = {};
+  for (const role of roles) {
+    const g = new THREE.Group();
+    g.userData.role = role;
+    group.add(g);
+    parts[role] = g;
+  }
+  return { group, parts };
+}
+/** the part of a drawn rig (the instance's own copy) that plays a role */
+function partOf(out: El | string | null, role: string): THREE.Object3D {
+  let found: THREE.Object3D | null = null;
+  drawnRig(out).traverse((o) => { if (o.userData.role === role) found = o; });
+  return found!;
+}
+/** a standalone horse's legs, as lib/propRig.ts numbers them, and the merchant's team's, as the rig lab names them */
+const HORSE_LEGS = [0, 1, 2, 3].flatMap((i) => [`leg_upper#${i}`, `leg_lower#${i}`]);
+const TEAM_LEGS = ['horse_L', 'horse_R'].flatMap((side) =>
+  ['FL', 'FR', 'BL', 'BR'].flatMap((leg) => [`${side}_leg_${leg}_upper`, `${side}_leg_${leg}_lower`]));
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -222,5 +251,76 @@ describe('RiggedProp, unmounted before its load is back', () => {
     await settle();
     expect([rigged.sets(), rigless.sets()]).toEqual([0, 0]);
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('RiggedProp, walking a horse', () => {
+  it("steps the merchant's team at a standalone horse's cadence, at the same speed: one gait clock, moved on once a frame", async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0); // every clock starts at 0
+    H.rigs['zz-team'] = rigOf([...TEAM_LEGS, 'horse_L_tail', 'horse_R_tail']);
+    H.rigs['zz-horse'] = rigOf([...HORSE_LEGS, 'tail']);
+    const team = mount({ assetId: 'zz-team', height: 1.7, gaitSpeed: 1.4 });
+    const horse = mount({ assetId: 'zz-horse', height: 1.7, gaitSpeed: 1.4 });
+    team.render();
+    horse.render();
+    await settle();
+    const [teamOut, horseOut] = [team.render(), horse.render()];
+    for (let f = 0; f < 64; f++) {
+      team.frame(1 / 64);
+      horse.frame(1 / 64);
+    }
+    // a second at 1.4 m/s: the clock at 2.2 + 1.4 x 1.8 = 4.72 rad, an upper leg swung sin(4.72) x 0.55 — not 9.44 rad,
+    // where the team's own block moved it on again after the standalone horse's block
+    expect(partOf(teamOut, 'horse_L_leg_FL_upper').rotation.x).toBeCloseTo(Math.sin(4.72) * 0.55, 12);
+    // each of the team's legs as the standalone horse's on the same diagonal: FL with the front-left (#0), FR with the
+    // front-right (#1), BL with the back-left (#2), BR with the back-right (#3)
+    for (const side of ['horse_L', 'horse_R']) {
+      for (const [leg, i] of [['FL', 0], ['FR', 1], ['BL', 2], ['BR', 3]] as const) {
+        for (const half of ['upper', 'lower']) {
+          expect([side, leg, half, partOf(teamOut, `${side}_leg_${leg}_${half}`).rotation.x])
+            .toEqual([side, leg, half, partOf(horseOut, `leg_${half}#${i}`).rotation.x]);
+        }
+      }
+    }
+  });
+
+  it("swishes each of the team's tails as a standalone horse swishes its own, the right one a beat ahead", async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    H.rigs['zz-team-tails'] = rigOf([...TEAM_LEGS, 'horse_L_tail', 'horse_R_tail']);
+    H.rigs['zz-horse-tail'] = rigOf([...HORSE_LEGS, 'tail']);
+    for (const gaitSpeed of [0, 1.4]) {
+      const team = mount({ assetId: 'zz-team-tails', height: 1.7, gaitSpeed });
+      const horse = mount({ assetId: 'zz-horse-tail', height: 1.7, gaitSpeed });
+      team.render();
+      horse.render();
+      await settle();
+      const [teamOut, horseOut] = [team.render(), horse.render()];
+      for (let f = 0; f < 64; f++) {
+        team.frame(1 / 64);
+        horse.frame(1 / 64);
+      }
+      // a second on: sin(2.4) x 0.3 about its own y, and the right one sin(2.4 + 1.3) x 0.3 — never swung as a leg
+      const [left, right] = [partOf(teamOut, 'horse_L_tail'), partOf(teamOut, 'horse_R_tail')];
+      expect(left.rotation.y).toBeCloseTo(Math.sin(2.4) * 0.3, 12);
+      expect(left.rotation.y).toBe(partOf(horseOut, 'tail').rotation.y);
+      expect(right.rotation.y).toBeCloseTo(Math.sin(2.4 + 1.3) * 0.3, 12);
+      for (const tail of [left, right]) expect(tail.rotation.x).toBeCloseTo(0, 12);
+    }
+  });
+});
+
+describe('stepGait', () => {
+  const parts = (roles: string[]) => rigOf(roles).parts;
+  it('moves a walk cycle on by as much a frame for a team as for a standalone horse, faster as it moves faster', () => {
+    for (const gaitSpeed of [0, 0.9, 1.4]) {
+      const once = 0.5 + 0.1 * (2.2 + gaitSpeed * 1.8);
+      expect(stepGait(0.5, 0.1, gaitSpeed, parts(TEAM_LEGS))).toBeCloseTo(once, 12);
+      expect(stepGait(0.5, 0.1, gaitSpeed, parts(HORSE_LEGS))).toBeCloseTo(once, 12);
+    }
+  });
+
+  it('moves a prop with no legs on only while it moves', () => {
+    expect(stepGait(0.5, 0.1, 0, parts(['flag']))).toBe(0.5);
+    expect(stepGait(0.5, 0.1, 1, parts(['flag']))).toBeCloseTo(0.5 + 0.1 * 4, 12);
   });
 });

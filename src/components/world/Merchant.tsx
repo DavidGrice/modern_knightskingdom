@@ -11,7 +11,7 @@ import { roadEntry, roadSpeedMult } from '@/game/data/road';
 import { MERCHANT_SPOT } from '@/game/data/trade';
 import {
   TURN_REACH, WALK_STOP, firstStepOf, legOf, merchantGait, merchantSpeed, merchantStage, nearestOnWay, putOnSchedule,
-  scheduledPlace, secondsLeftAtPace, secondsLeftThrough, walkWindow, wayThrough, type MerchantStage,
+  scheduledPlace, secondsLeftAtPace, secondsLeftThrough, settleOnSpot, walkWindow, wayThrough, type MerchantStage,
 } from '@/game/data/merchantDay';
 import { laidBehind, teamBehind, teamOn, teamPose, towTeam, type TeamHooves } from '@/game/data/merchantTeam';
 import { WIDE_REACH } from '@/game/nav/steering';
@@ -44,8 +44,10 @@ const MERCHANT_KEEP_PROPS = false;
 // UNCHANGED and stays keyed to the fixed MERCHANT_SPOT constant, so nothing
 // there needs to know this file changed: the walk happens entirely in a
 // buffer just outside that window, and position is pinned to MERCHANT_SPOT
-// for the whole time he is actually interactable, regardless of whether the
-// walk-in has visually finished settling.
+// for the whole time he is actually interactable — but its first half second,
+// in which he steps up the last of the half metre his walk in stops him short
+// of it (data/merchantDay.ts's settleOnSpot): findTarget and the Minimap read
+// the constant, not him, so that half metre is nothing to either.
 // Wave 46 (B4) · MERCHANT_SPOT moved from the old shared starter-village
 // corner (34.4m from OFF_STAGE, entirely along the printed road at the
 // ROAD_SPEED_MULT-boosted 1.56 effective speed — 34.4/1.56 = 22.05s, which
@@ -291,6 +293,13 @@ export default function Merchant() {
       const outOfHiding = s.stage === 'away';
       const put = keepToSchedule(s, stage, outOfHiding);
       if (outOfHiding || put || (stage !== s.stage && jumped)) layTeam(s, stage, !put);
+      // brought into his window by the clock rather than by his walk in, he is set on his spot, facing its way, with his
+      // team laid behind it (layTeam): he steps up to it only at the end of a walk
+      if (stage === 'present' && (outOfHiding || jumped)) {
+        s.x = MERCHANT_SPOT.x;
+        s.z = MERCHANT_SPOT.z;
+        s.yaw = MERCHANT_SPOT.yaw;
+      }
       s.stage = stage;
     }
 
@@ -303,13 +312,16 @@ export default function Merchant() {
     g.visible = true;
 
     if (stage === 'present') {
-      // pinned exactly on MERCHANT_SPOT — this is the contract
-      // findTarget (game/interaction/) and Minimap rely on (see the note above)
-      s.x = MERCHANT_SPOT.x;
-      s.z = MERCHANT_SPOT.z;
-      s.yaw = MERCHANT_SPOT.yaw;
-      if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
-      if (gaitSpeed !== 0) setGaitSpeed(0);
+      // he steps up the rest of the way onto MERCHANT_SPOT, turning to face its way (data/merchantDay.ts's settleOnSpot),
+      // and stands exactly on it from then on — the contract findTarget (game/interaction/) and Minimap rely on (see the
+      // note above)
+      const pace = paceAt(s.x, s.z);
+      const stepping = settleOnSpot(s, MERCHANT_SPOT, pace, dt);
+      const want = stepping ? 'anim_c_walk' : 'anim_r_restpose';
+      if (clip !== want) setClip(want);
+      if (stepping && rig.current) rig.current.animator.timeScale = 1;
+      const gait = stepping ? Math.round(pace * 10) / 10 : 0;
+      if (gaitSpeed !== gait) setGaitSpeed(gait);
     } else if (stage === 'village_am' || stage === 'village_pm') {
       // Wave 53 (E4) · a real "passing through the village" beat — pinned
       // exactly on VILLAGE_STOP, same restpose/gaitSpeed-0 treatment as

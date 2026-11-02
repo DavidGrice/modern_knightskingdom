@@ -6,6 +6,7 @@
 // and MERCHANT_SPOT and his trading window (merchantPresent) in data/trade.ts.
 import { merchantPresent } from './trade';
 import navgridConfig from '../../ai/config/navgrid.json';
+import { wrapAngle } from '../../lib/math';
 
 // The walk becomes three legs each way instead of one: OFF_STAGE<->
 // VILLAGE_STOP, a dwell AT VILLAGE_STOP, then VILLAGE_STOP<->MERCHANT_SPOT.
@@ -75,6 +76,33 @@ type Point = { x: number; z: number };
 
 /** He ends a walk within this much of its end (Merchant.tsx's arrival rule: he walks on while further than this). */
 export const WALK_STOP = 0.5;
+/** Within this much of his spot, stepping up to it as his trading window opens (settleOnSpot), he is set on it. */
+export const ON_SPOT = 0.01;
+
+/** One frame (`dt`) of his stepping up to his spot (`spot`: data/trade.ts's MERCHANT_SPOT) as his trading window
+ *  opens, after a walk in that ends him anywhere within WALK_STOP of it: he walks the rest of the way at his own pace
+ *  (`pace`), and is set on it once within ON_SPOT — findTarget and the Minimap take him to stand there — and turns to
+ *  face the way it faces as his walk turns him (each second, three times the angle he still has to turn). He was set
+ *  on it, facing its way, in the window's first frame: a turn of about 100 degrees from one frame to the next, and a
+ *  hop of half a metre with his team towed after him (ROADMAP.md, "the merchant turned on the spot in one frame").
+ *  Whether he is still short of it. */
+export function settleOnSpot(
+  s: { x: number; z: number; yaw: number }, spot: Point & { yaw: number }, pace: number, dt: number,
+): boolean {
+  const dx = spot.x - s.x, dz = spot.z - s.z;
+  const d = Math.hypot(dx, dz);
+  const step = pace * dt;
+  if (d - step <= ON_SPOT) {
+    s.x = spot.x;
+    s.z = spot.z;
+  } else {
+    s.x += (dx / d) * step;
+    s.z += (dz / d) * step;
+  }
+  s.yaw += wrapAngle(spot.yaw - s.yaw) * Math.min(1, dt * 3);
+  return d - step > ON_SPOT;
+}
+
 /** He is past a point his walk turns him at once within this much of it (Merchant.tsx's WALK_STOPS), and makes for the
  *  next: as near as he comes to his way's other corners (nav/steering.ts's WIDE_REACH). */
 export const TURN_REACH = 0.5;
