@@ -65,6 +65,17 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   retagged fixed. Measured on main (`w623_measure.mjs`, deterministic frames): every team leg at 2.00x RiggedProp's rate
   for its speed (9.44 rad/s at gaitSpeed 1.4), a lone horse at 1.00x, and both tails swinging through a leg's 1.1 rad.
   In the window's first frame he turned 97.8 degrees and hopped 0.488 m, and his team jumped 0.468 m.
+- **#290 — Wave 62.4** (F-05): the card trees of eight destinations stand cut out instead of on opaque white or red
+  cards (BUG-8219). They are bake materials, not PropModel's or setBuild's: one per card sprite (spr171, spr172, spr178-183,
+  spr191, spr197), each a 3-channel PNG on one exact background colour the original game keyed out. `lib/cardCutout.ts` keys
+  the corner colour to alpha 0 (filled with the kept pixels' mean, so no fringe) on a DataTexture copy of the map,
+  alpha-tested at 0.5; `templateBake.ts`'s `CARD_TREE_MESHES` names the 30 meshes by destination, keyed by material,
+  so decals, glass and water are untouched. Premises held, with two corrections: the texture is not a greyscale mask
+  like l606400's and has no alpha to test, so PropModel's `fixAlphaMasks` was not lifted and a colour key was written
+  instead; and CLN-22's thin-mesh count misses the trees (a card primitive spans the whole map), so the probe counts
+  upright textured meshes with a green sprite on a one-colour background. ROADMAP: BUG-8219 retagged fixed; the trees
+  this uncovered standing upside down logged as a new entry. Measured on main (`cln22_cards_probe.mjs`, all 14
+  destinations): 30 card trees in 8 destinations (none at the challenge grounds), all 30 drawn opaque, 0% alpha.
 
 ## Owner decisions
 

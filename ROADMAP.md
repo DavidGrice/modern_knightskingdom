@@ -8218,23 +8218,92 @@ out, and the timing of his walks at a short day are logged below as bugs of thei
 village (`StarterVillage.tsx`) are drawn from literals of their own at yaws that are not quarter turns, which the box
 collision cannot follow, and still stop nobody.
 
-## Seen, not looked into: trees drawn on opaque white cards at the Tourney Grounds — logged 2026-10-12 (during CLN-22)
+## Bugfix: trees drawn on opaque white cards at the Tourney Grounds (and on red and grey ones at seven other destinations) — FOUND 2026-10-12 (during CLN-22), FIXED 2026-10-31
 
-**Seen in** the pictures CLN-22's live probes take (production build of `main` at cc30e97; `main_template-02.png`,
+**Seen in** the pictures CLN-22's live probes took (production build of `main` at cc30e97; `main_template-02.png`,
 `fence_from_richard.png`, kept with the tools in `out/cln22/ev`): at The Tourney Grounds several flat "card" trees
-are drawn as a green tree on a solid white rectangle, where the card's background should be cut away.
+were drawn as a green tree on a solid white rectangle, where the card's background should be cut away.
 
-**What was measured** (`cln22_cards_probe.mjs`): the scene there holds 17 textured meshes whose world-axis bounds are
-thinner than 8 cm one way (some of them lie flat on the ground; a card standing at an angle would not be counted,
-and a mesh with two textured materials would be counted twice).
-14 have a material that is neither transparent nor alpha-tested (`transparent: false`, `alphaTest: 0`); 3 are
-`transparent: true`. Which model each belongs to was not recorded.
+**The fault.** The decorative tree rows of the destination bakes are cards: upright quads printed with a tree or a
+grass tuft on a background of one exact colour, which the original game keyed out. The sprites are the original's
+(matched pixel for pixel against the extraction): spr180 / spr183 on white (a round tree, a conifer), spr178 / spr179
+and spr181 / spr182 (the same two on pure red), spr171 / spr172 / spr197 (both together, on red) and spr191 (a grass
+tuft, on grey). Every one is a 3-channel PNG with no alpha at all, in the bakes and in the extraction alike, and its
+background is exact: spr183 has 46,260 of its 65,536 pixels at 255,255,255, 347 of them in the gaps between the
+conifer's tiers. The glTF materials are `OPAQUE`, so three.js drew the whole rectangle. CLN-22's open questions, as
+they came out: the cards are drawn by the destination bake alone (`TemplateWorld` through `game/templateBake.ts`'s
+`normalizeTemplateBake`), not by TemplatePopulation's `PropModel` or by `setBuild`; each card sprite is its own
+material, so its own mesh of the bake (`mesh_0_<n>`, the primitive's index); CLN-22's 17 thin meshes were not the
+trees (a card primitive holds every card of its kind across the map, so its bounds are the map's, not thin) but
+decals, and its 3 `transparent` ones are the bakes' `BLEND` materials at opacity 0.749 (the stained-glass window,
+spr084, and a stud, spr001), as meant; and it is not `PropModel`'s `ALPHA_MASK_ASSETS` fault (a greyscale silhouette
+wired to base colour) but a colour key, so it takes a fix of its own. Measured on `main` (production build of 7c5b6d0,
+base-14, port 3101, build id `1aYFvD6Co-TK9B6Q4RC_Q`; `scripts/cln-tools/cln22_cards_probe.mjs`, extended to record
+each textured mesh's loader, material and whether its texture carries alpha below 1, and to count card TREES —
+textured meshes whose triangles all stand upright and whose texture is green on a one-colour background covering most
+of it), over all 14 destinations: 30 card-tree meshes in 8 destinations (template-01 6, -02 2, -03 3, -04 6, -05 4,
+-06 6, -07 1, -08 2; none in the six challenge grounds, none from any other loader), all 30 drawn opaque
+(`transparent: false`, `alphaTest: 0`, alpha below 1 on 0% of the texture). Seen from close at template-01 and
+template-06, the rows there stood on long white and red walls.
 
-**Not looked into:** which of the 17 are the trees, and which are meant to be opaque; whether their textures carry
-a cut-out in the alpha channel at all (every texture reports the same RGBA format whether or not it does); whether
-the other destinations show the same; why three materials differ; whether this is the fault
-`PropModel.tsx` already works round for three placed props (`ALPHA_MASK_ASSETS` / `fixAlphaMasks`), arriving by
-another loader.
+**The fix.** `lib/cardCutout.ts`: `keyOutCardBackground` keys a card's RGBA pixels in place — the key is the corner
+pixel's colour, and every pixel within 24 (|dr| + |dg| + |db|) of it gets alpha 0 and the mean colour of the pixels
+kept, so filtering at the cut-out's edge does not fringe it white or red. `cutOutCardMaterial` reads the map's image
+back through a canvas, keys it, and gives the material a DataTexture copy of the map (a canvas would premultiply the
+fill away; flipY, colour space, wrapping and filtering are copied from the original), alpha-tested at 0.5 and not
+blended; it is marked on the material, so a second pass over a material the cached GLTF shares is a no-op.
+`templateBake.ts`'s `CARD_TREE_MESHES` lists the 30 meshes by destination, by the same traversal index as
+`TREE_MESH_ORIENTATION_FIX`, and `normalizeTemplateBake` cuts them out after that fix. Keyed by material, never by a
+texture's look: decals and backdrops with a plain border (a shield on black, a stud on white, the stone strips on
+green), glass and water are left as they were. *Out of scope:* new textures.
+
+**Verified** with `tsc` and the unit tests (70 files, 545 tests). New tests: `lib/cardCutout.test.ts` — a white card
+is cut round its tree and only there; the key is whatever colour the corner is (a red card keeps its white and green,
+and a gap inside the tree is cut too); what is cut takes the mean colour kept; a background shifted within the
+tolerance is key and a colour past it is not; the material is alpha-tested at 0.5, not transparent, on a cut-out
+DataTexture copy set up as the map was, with the original pixels untouched; a second call changes nothing; a material
+with no map is left alone. `game/templateBake.test.ts` — on stand-in bakes, `normalizeTemplateBake` cuts out exactly
+`mesh_0_40` and `mesh_0_41` at template-02 (on the cached scene too, as the clone shares its materials), template-01's
+six and template-07's one, and nothing at challenge-1 or for the home meadow. Each piece was taken out alone and a test
+failed, then put back with `git diff` the same as before: the call in `normalizeTemplateBake` (2 tests failed), the
+alpha cut (4), the second-pass guard (1), the fill colour (1), the alpha test (3). The change's production build is
+clean. Live, the same probe on it (port 3102, build id `8jk2WalTgbi4GY2rsFAMm`): all 30 card trees cut out (drawn
+opaque: 0 of 30), each cut on the key's own share of its sprite as read from the files (70.6% for spr183 and spr181,
+68.0% for spr180, 68.2% for spr179, 48.0% for spr197, 53.9% for spr171, 54.2% for spr172, 67.4% for spr191), and every
+other count as on `main` (upright textured cards of every kind drawn opaque: 106 on `main`, 76 on the change — the 30
+less; thin textured meshes: 198, all drawn opaque, on both). d3d11 GPU screenshots (`--headless=new --use-angle=d3d11
+--mute-audio`) of CLN-22's two views, template-02 from its arrival point and beside Richard looking along his fence, on
+both builds (`scripts/cln-tools/out/w624/{main,change}_template-02_{arrival,from_richard}.png`, local): the white cards
+are gone and the trees stand cut out, with no white fringe; close looks at template-01 and template-06
+(`w624_card_look.mjs`, `out/w624/look_{main,change}_*.png`) show the white and red walls of cards replaced by cut-out
+rows, with no red fringe. **Evidence pass** (2026-11-02, independent of the above, everything re-run): `tsc` clean,
+70 files / 545 tests pass, the change's production build clean (rebuilt: build id `f2Pnqr2AiCh6aAwV_ircY`). Ten
+take-outs, each alone against the two new test files and put back from a copy, `git diff` plus the three new files
+hashed the same before and after (md5 `f282c6c4…`) and `cmp` identical: the call (2 tests failed), the alpha cut (4),
+the second-pass guard (1), the fill colour (1), the alpha test (3), template-02's row in `CARD_TREE_MESHES` made
+`[40, 42]` (1), the map's settings not copied (1), the key taken as plain white rather than the corner's colour (1),
+the original pixels keyed in place (1); the tolerance set to 0 failed NO test — the tolerance test builds its colours
+from the constant, so the value 24 itself is pinned by nothing (left as is: the sprites' keys are exact, and the live
+cut shares below match the files). Live, `main` (base-14, port 3101, `1aYFvD6Co-TK9B6Q4RC_Q`) against the change
+(port 3102), `cln22_cards_probe.mjs all` on each: card TREES 30, drawn opaque 30 on `main` and 0 on the change (the
+same 30 meshes, the same per-destination counts as above, all in the bake); upright textured cards drawn opaque 106
+and 76; thin textured meshes 198 on both; every thin or card row the same on both builds but for the 30 trees' flags
+and texture; no page errors. A second probe of my own, `w624_ev_bakemats.mjs` / `w624_ev_bakediff.cjs` (every bake
+mesh of the 14 destinations by name, with its material's draw flags and its map's cut share, and every textured
+mesh-material outside the bake as a multiset of flags): of 634 bake meshes exactly 30 differ, and they are
+`CARD_TREE_MESHES`, index for index (`alphaTest` 0 → 0.5, cut 0% → the shares above, an image map → a DataTexture, flipY
+false and sRGB on both; `transparent`, opacity, depthWrite and side unchanged); 0 differences outside the bake. (The
+cards probe once counted 105 textured mesh-materials at template-05 on `main` and 104 on the change; the bake-material
+run found every flag group outside the bake equal there, so it was timing, not the fix.) Screenshots, d3d11 GPU,
+headless, muted (`scripts/cln-tools/out/w624/ev/`, local): at template-02's arrival point the near-white pixels fall
+from 4065 to 304, and beside Richard from 50972 to 18 (`w624_ev_shotcmp.cjs`), the trees cut out with no white fringe;
+at template-06 (mesh 77, red key) the red and white cards are gone and the rows stand cut out. *Not measured:* the look
+of template-07's grey-keyed grass tufts (the close-look probe put the camera inside a hill; the material and its 67.4%
+cut were measured, the picture was not), the home meadow (no card trees in the table, not probed), frame cost, and
+shadows of the cut cards.
+
+**Left as found:** many card trees stand upside down — plain on `main` too, printed on their white cards, and plainer now the cards are gone (logged at the end of this
+file).
 
 ## Bugfix: the knighting carried the player off in the saddle, at an engine, or with a ram or a cart — FOUND 2026-10-13 (reviewing the tourney-lists fix), FIXED 2026-10-15
 
@@ -9071,3 +9140,19 @@ inside the trunk's circle (0.34 m from its centre at worst); with the flank take
 No worse than before wave 62.2, when a chasing raider walked through every trunk in his way.
 
 **To do.** Apply the flank before the steering (or steer again after it), then measure a long chase live.
+
+## Seen, not looked into: card trees drawn upside down at the Tourney Grounds and elsewhere — logged 2026-11-02 (in wave 62.4)
+
+**Seen in** the pictures wave 62.4's probes took once the card trees' backgrounds were cut out
+(`scripts/cln-tools/out/w624/change_template-02_arrival.png` and `change_template-02_from_richard.png`, local): at The
+Tourney Grounds the conifers stand on their points and the round trees on their crowns, with the base plate on top.
+On `main` the same trees are just as inverted, and it shows there too — the conifer beside Richard stands on its point on its white card (`main_template-02_from_richard.png`); the cut-out only makes it plainer. The close looks at template-01 and
+template-06 (`look_change_*.png`) seem to show the same in their rows.
+
+**What is known:** `game/templateBake.ts`'s `TREE_MESH_ORIENTATION_FIX` mirrors some card meshes about their own bounds
+(template-01's 60, template-03's 27 and 31, template-05's 41 and 49, template-06's 78-81); the rest of
+`CARD_TREE_MESHES` is not in it (template-01's 58, 59 and 61-63, template-02's 40 and 41, template-03's 29,
+template-04's 40-45, template-05's 44 and 46, template-06's 76 and 77, template-07's 31, template-08's 1 and 2).
+**Not looked into:** which of those are inverted (some may stand right), and whether flipping each card's texture
+coordinates would serve better than that table's mirror of a whole row's geometry about its bounds (which, as its own
+comment records, moves a row that is not centred in its box).
