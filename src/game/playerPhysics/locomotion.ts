@@ -172,7 +172,7 @@ export function walk(st: ReturnType<typeof useGameStore.getState>, kb: Record<st
   let nx = p.x + _dirV.x * speed * dt;
   let nz = p.z + _dirV.z * speed * dt;
 
-  // collisions (game/playerPhysics/collide.ts): placed pieces, trees and
+  // collisions (game/playerPhysics/collide.ts): placed pieces, the village's huts and the signpost, trees and
   // rocks, the pond and water, the world's edge — or an interior's walls
   const eyeOff = riding ? EYE_HEIGHT + 0.85 : EYE_HEIGHT;
   const feetY = p.y - eyeOff;

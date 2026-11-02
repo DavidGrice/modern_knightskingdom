@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { findPath, getNavGrid, getNavGridOrNull, hasLineOfSight, navBlocked, rebuildNav } from '../navgrid';
 import { useGameStore } from '../store/gameStore';
+import { SIGNPOST, VILLAGE_HUTS } from '../data/world';
+import { NPC_BY_ID } from '../data/npcs';
 import type { PlacedBuilding } from '../types';
 
 let n = 0;
@@ -54,6 +56,36 @@ describe('home nav grid', () => {
     expect(findPath(0, 0, 20, 20)).not.toBeNull();
     expect(findPath(0, 0, 5000, 5000)).toBeNull();
     expect(hasLineOfSight(0, 1.2, 0, 20, 1.2, 20)).toBe(true);
+  });
+});
+
+describe("the village's huts and the signpost", () => {
+  it('block the cells they stand on, and leave open the spots Alric and Beda stand at', () => {
+    build([]);
+    for (const h of VILLAGE_HUTS) expect(navBlocked(h.x, h.z)).toBe(true);
+    expect(navBlocked(SIGNPOST.x, SIGNPOST.z)).toBe(true);
+    // within a walker's radius of a side of the board, and clear of it a cell further on
+    expect(navBlocked(SIGNPOST.x + 0.9, SIGNPOST.z)).toBe(true);
+    expect(navBlocked(SIGNPOST.x + 2.2, SIGNPOST.z)).toBe(false);
+    const { farmer_alric: alric, miller_beda: beda } = NPC_BY_ID;
+    expect([alric.x, alric.z, navBlocked(alric.x, alric.z)]).toEqual([-40, 38, false]);
+    expect(navBlocked(beda.x, beda.z)).toBe(false);
+    // where Beda stood before her hut was solid: its cell is blocked now
+    expect(navBlocked(-35, 42)).toBe(true);
+  });
+
+  it('stop a sightline at walker height through them, as turned as they are drawn, and not one over a hut', () => {
+    build([]);
+    const [alric, beda] = VILLAGE_HUTS;
+    expect(hasLineOfSight(alric.x - 4, 1.2, alric.z, alric.x + 4, 1.2, alric.z)).toBe(false);
+    expect(hasLineOfSight(beda.x, 1.2, beda.z - 4, beda.x, 1.2, beda.z + 4)).toBe(false);
+    expect(hasLineOfSight(alric.x - 4, 3.2, alric.z, alric.x + 4, 3.2, alric.z)).toBe(true);
+    expect(hasLineOfSight(SIGNPOST.x, 1.55, SIGNPOST.z - 4, SIGNPOST.x, 1.55, SIGNPOST.z + 4)).toBe(false);
+    expect(hasLineOfSight(SIGNPOST.x, 2.2, SIGNPOST.z - 4, SIGNPOST.x, 2.2, SIGNPOST.z + 4)).toBe(true);
+    // a line 1.41 m off Alric's hut's centre, square to the way north-east of it: across the corner of an unturned
+    // square of its size (whose corner is 1.53 m out that way), clear of the hut turned by 0.2 pi (1.24 m out)
+    const along = (t: number) => [alric.x + 1 + t * Math.SQRT1_2, 1.2, alric.z + 1 - t * Math.SQRT1_2] as const;
+    expect(hasLineOfSight(...along(-3), ...along(3))).toBe(true);
   });
 });
 

@@ -1,7 +1,8 @@
 // CLN-26 · where the player's step may take them this frame: the frame's collision block, moved from
 // PlayerController.tsx as it was — inside a building its own room's walls (and the keep's furniture); at a
 // destination its walkable ground and placed pieces; at home placed pieces (stepped onto or walked under when they
-// can be), trees and rocks, the pond and water, the world's edge. It takes the step (nx, nz) and hands it back.
+// can be), the village's huts and the signpost, trees and rocks, the pond and water, the world's edge. It takes the
+// step (nx, nz) and hands it back.
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { CLAIM_RADIUS, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
@@ -16,13 +17,15 @@ import { isBuilt, isDoorLike } from '@/game/types';
 import { pushOutOfWater } from '@/game/waterworks';
 import { getBakeOffset, getMountedRegion, TEMPLATE_WORLD_SCALE } from '@/components/world/TemplateWorld';
 import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
-import { fixedSolids } from '@/game/fixedSolids';
+import { drawnSolids, fixedSolids } from '@/game/fixedSolids';
+import { cartState } from '@/game/carts';
 import { STEP_UP } from './floor';
 
 // collisions: buildings (AABB, unless we can step onto or walk under
-// them), trees & rocks (circles), pond, world bounds — or, inside a
-// generalised interior (data/interiors.ts), that room's own walls
-// (and, specifically inside the Keep, its bespoke furniture) instead
+// them), the village's huts and the signpost (turned boxes), trees &
+// rocks (circles), pond, world bounds — or, inside a generalised
+// interior (data/interiors.ts), that room's own walls (and,
+// specifically inside the Keep, its bespoke furniture) instead
 export function collide(st: ReturnType<typeof useGameStore.getState>, riding: boolean, feetY: number, nx: number, nz: number): { nx: number; nz: number } {
   if (st.interior) {
     const insideBuilding = st.buildings.find((b) => b.id === st.interior);
@@ -179,6 +182,9 @@ export function collide(st: ReturnType<typeof useGameStore.getState>, riding: bo
       // either (a separate, already-flagged gap — "J51 has no damage or
       // move behaviour" — not something to half-fake here)
       if (b.type === 'keep') continue;
+      // the cart being pushed or hitched goes with the player (game/carts.ts, cartLivePos): its stored place is where it
+      // stood when it was taken up, and stopping the player there pinned him against a cart that had moved on
+      if (b.id === cartState.pushingId || b.id === cartState.hitchedId) continue;
       const base = b.y ?? 0;
       const dx = nx - b.x;
       const dz = nz - b.z;
@@ -209,6 +215,24 @@ export function collide(st: ReturnType<typeof useGameStore.getState>, riding: bo
         else nz = cz + Math.sign(bdz || 1) * hz;
         break; // one blocking box is enough; re-derive dx/dz next building
       }
+    }
+    // the village's huts and the signpost (game/fixedSolids.ts's drawnSolids): turned boxes from the ground up, the
+    // same push in each one's own frame — +x along (cos, -sin), +z along (sin, cos) — unless the player is above it
+    for (const s of drawnSolids(null)) {
+      if (feetY >= s.top) continue;
+      const cos = Math.cos(s.yaw);
+      const sin = Math.sin(s.yaw);
+      const dx = nx - s.x;
+      const dz = nz - s.z;
+      let u = dx * cos - dz * sin;
+      let v = dx * sin + dz * cos;
+      const hx = s.hx + PLAYER_RADIUS;
+      const hz = s.hz + PLAYER_RADIUS;
+      if (Math.abs(u) >= hx || Math.abs(v) >= hz) continue;
+      if (hx - Math.abs(u) < hz - Math.abs(v)) u = Math.sign(u || 1) * hx;
+      else v = Math.sign(v || 1) * hz;
+      nx = s.x + u * cos + v * sin;
+      nz = s.z - u * sin + v * cos;
     }
     for (const n of st.nodes) {
       // herbs are a 0.35m ground prop (ResourceNodes.tsx's HerbGroup) —

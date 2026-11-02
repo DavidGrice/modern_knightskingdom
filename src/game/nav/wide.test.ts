@@ -113,15 +113,16 @@ describe('a way found for a wide walker', () => {
     expect(findPath(20.5, 8, 20.5, 20, undefined, true)).toEqual(ordinary);
   });
 
-  it("goes round the village's huts, the signpost and the standing trees and rocks at home, which an ordinary way walks through", () => {
+  it("goes round the village's huts and the signpost wider than an ordinary way, and round the standing trees and rocks at home, which an ordinary way walks through", () => {
     const [alric] = VILLAGE_HUTS;
     // across Alric's hut, west to east through its middle
     const ordinary = findPath(alric.x - 5, alric.z, alric.x + 5, alric.z)!;
     const wide = findPath(alric.x - 5, alric.z, alric.x + 5, alric.z, undefined, true)!;
     const offHut = (p: P) => toTurned(p, alric.x, alric.z, VILLAGE_HUT_HALF, alric.yaw);
     // (each way walked from its start: a way straight on is a single point, the end's own cell, and its corners alone
-    // would say nothing of where it went)
-    expect(Math.min(...along([{ x: alric.x - 5, z: alric.z }, ...ordinary]).map(offHut))).toBe(0);
+    // would say nothing of where it went) — the ordinary way round it too, the grid holding it (game/fixedSolids.ts's
+    // drawnSolids), but no further than a walker's radius
+    expect(Math.min(...along([{ x: alric.x - 5, z: alric.z }, ...ordinary]).map(offHut))).toBeGreaterThan(0.5);
     expect(wide).not.toEqual(ordinary);
     expect(Math.min(...wide.map(offHut))).toBeGreaterThan(1.8);
     expect(Math.min(...along([{ x: alric.x - 5, z: alric.z }, ...wide]).map(offHut))).toBeGreaterThan(1.3);
@@ -131,22 +132,22 @@ describe('a way found for a wide walker', () => {
     const grid = getNavGrid(null);
     expect([grid.isWalkable(-34.5, 40.5), grid.isWalkable(-34.5, 40.5, 0, true)]).toEqual([true, false]);
     expect([grid.isWalkable(-36.5, 40.5), grid.isWalkable(-36.5, 40.5, 0, true)]).toEqual([true, true]);
-    // and across it, west to east through its middle, each way walked from its start: the ordinary one through it
+    // and across it, west to east through its middle, each way walked from its start: the ordinary one round it, nearer
     const beda = VILLAGE_HUTS[1];
     const bedaFrom = { x: beda.x - 5, z: beda.z };
     const offBeda = (p: P) => toTurned(p, beda.x, beda.z, VILLAGE_HUT_HALF, beda.yaw);
     const ordinaryBeda = findPath(bedaFrom.x, bedaFrom.z, beda.x + 5, beda.z)!;
     const wideBeda = findPath(bedaFrom.x, bedaFrom.z, beda.x + 5, beda.z, undefined, true)!;
     expect(wideBeda).not.toEqual(ordinaryBeda);
-    expect(Math.min(...along([bedaFrom, ...ordinaryBeda]).map(offBeda))).toBe(0);
+    expect(Math.min(...along([bedaFrom, ...ordinaryBeda]).map(offBeda))).toBeGreaterThan(0.5);
     expect(Math.min(...along([bedaFrom, ...wideBeda]).map(offBeda))).toBeGreaterThan(1.3);
-    // past the signpost, south to north, each way walked from its start: the ordinary one through it
+    // past the signpost, south to north, each way walked from its start: the ordinary one round it, nearer
     const signFrom = { x: SIGNPOST.x, z: SIGNPOST.z - 5 };
     const ordinarySign = findPath(signFrom.x, signFrom.z, SIGNPOST.x, SIGNPOST.z + 5)!;
     const sign = findPath(signFrom.x, signFrom.z, SIGNPOST.x, SIGNPOST.z + 5, undefined, true)!;
     expect(sign).not.toEqual(ordinarySign);
     const offSign = (p: P) => toBox(p, SIGNPOST.x, SIGNPOST.z, 0.45, 0.15);
-    expect(Math.min(...along([signFrom, ...ordinarySign]).map(offSign))).toBe(0);
+    expect(Math.min(...along([signFrom, ...ordinarySign]).map(offSign))).toBeGreaterThan(0.5);
     expect(Math.min(...along([signFrom, ...sign]).map(offSign))).toBeGreaterThan(1.3);
     // a tree and a rock standing in the way, a tree felled and a tree of another place not
     build([], [
@@ -190,8 +191,8 @@ describe('what a wide walker keeps clear of besides what stops every walker', ()
       tree('away', 7, 8, { world: 'template-02' }), tree('h', 9, 10, { kind: 'herb' }), tree('f', 11, 12, { kind: 'fishing' })]);
     const list = wideSolids(null);
     expect(list.filter((s) => s.kind === 'box')).toEqual([
-      ...VILLAGE_HUTS.map((h) => ({ kind: 'box', x: h.x, z: h.z, hx: VILLAGE_HUT_HALF, hz: VILLAGE_HUT_HALF, yaw: h.yaw })),
-      { kind: 'box', x: SIGNPOST.x, z: SIGNPOST.z, hx: 0.45, hz: 0.15, yaw: 0 },
+      ...VILLAGE_HUTS.map((h) => ({ kind: 'box', x: h.x, z: h.z, hx: VILLAGE_HUT_HALF, hz: VILLAGE_HUT_HALF, yaw: h.yaw, top: 2.6 })),
+      { kind: 'box', x: SIGNPOST.x, z: SIGNPOST.z, hx: 0.45, hz: 0.15, yaw: 0, top: 1.55 + 0.31 },
     ]);
     expect(list.filter((s) => s.kind === 'circle')).toEqual([
       { kind: 'circle', x: 1, z: 2, r: 1.1 }, { kind: 'circle', x: 3, z: 4, r: 1.1 },

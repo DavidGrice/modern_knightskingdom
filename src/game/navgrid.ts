@@ -23,7 +23,7 @@ import { applyLocalAvoidance, navSteer, setLiveAgents } from './nav/steering';
 export { NavGrid } from './nav/grid';
 export { findPath, getNavGrid, getNavGridOrNull, navBlocked, rebuildNav } from './nav/registry';
 export { GROUND_LOS_Y, hasLineOfSight } from './nav/lineOfSight';
-export { navSteer, setLiveAgents } from './nav/steering';
+export { navSteer, setLiveAgents, steerRound } from './nav/steering';
 export type { NavAgent } from './nav/steering';
 
 exposeDebug('__kknav', {

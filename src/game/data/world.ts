@@ -121,11 +121,14 @@ export const NIGHT_GATHER_SPOT = { x: KEEP_INTERIOR.x, z: KEEP_INTERIOR.z - 14 }
 export const SIGNPOST = { x: -16, z: 36 };
 /** half the signpost's breadth and depth as drawn (Signpost.tsx: its board, 0.9 m across, on the pole's foot) */
 export const SIGNPOST_HALF = { x: 0.45, z: 0.15 };
+/** the top of the signpost's board as drawn (Signpost.tsx: 0.62 m tall, centred 1.55 m up) */
+export const SIGNPOST_TOP = 1.55 + 0.62 / 2;
 
 // Alric's and Beda's huts, drawn by StarterVillage.tsx: the small corner piece of castle wall (mc001) drawn 2.6 m tall,
-// turned to face their corner. Kept here as data, for the same reason as the clear zone below, so that the merchant's
-// way (nav/wideSolids.ts) can keep his team clear of them. VILLAGE_HUT_HALF is half the side of the square each stands
-// on: mc001 is 3.2 m square at its catalogue height of 3.84 m (data/buildables/catalog.ts), scaled to the hut's.
+// turned to face their corner. Kept here as data, for the same reason as the clear zone below, so that they can be
+// solid (game/fixedSolids.ts's drawnSolids, which the signpost is too) and the merchant's way (nav/wideSolids.ts) can
+// keep his team clear of them. VILLAGE_HUT_HALF is half the side of the square each stands on: mc001 is 3.2 m square
+// at its catalogue height of 3.84 m (data/buildables/catalog.ts), scaled to the hut's.
 export const VILLAGE_HUT_HEIGHT = 2.6;
 export const VILLAGE_HUT_HALF = (3.2 / 2) * (VILLAGE_HUT_HEIGHT / 3.84);
 export const VILLAGE_HUTS: { x: number; z: number; yaw: number }[] = [
@@ -150,7 +153,9 @@ export const STARTER_VILLAGE_CLEAR: { x: number; z: number; r: number }[] = [
   { x: VILLAGE_HUTS[0].x, z: VILLAGE_HUTS[0].z, r: 4.5 }, // Alric's hut (mc001.glb)
   { x: -40, z: 38, r: 3 },       // Alric himself (data/npcs.ts)
   { x: VILLAGE_HUTS[1].x, z: VILLAGE_HUTS[1].z, r: 4.5 }, // Beda's hut (mc001.glb)
-  { x: -35, z: 42, r: 3 },       // Beda herself (data/npcs.ts)
+  // Beda herself (data/cast/village.ts) — she stands half a metre off this on each axis since her hut became solid,
+  // well inside it still; it is left where it was, so the trees seeded round it stand where they did
+  { x: -35, z: 42, r: 3 },
 ];
 
 // Cedric the Bull's camp (Phase 20: relocated to The Rival Castle,

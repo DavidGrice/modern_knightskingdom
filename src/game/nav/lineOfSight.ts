@@ -2,7 +2,7 @@
 // CLN-14 · the shared 3D line-of-sight check for ranged combat and perception, moved verbatim out of game/navgrid.ts.
 import type { PlacedBuilding } from '../types';
 import type { CollisionBox } from '../data/buildables';
-import { fixedSolids } from '../fixedSolids';
+import { drawnSolids, fixedSolids, type SolidBox } from '../fixedSolids';
 import { useGameStore } from '../store/gameStore';
 import { forEachObstacleBox } from './grid';
 import { dungeonWallBuildings, ensureDungeonGrid } from './registry';
@@ -30,9 +30,10 @@ export const GROUND_LOS_Y = 1.2;
 // boxes" besides.
 // ---------------------------------------------------------------------------
 
-interface LosBox { cx: number; cz: number; hx: number; hz: number; yBase: number; yTop: number; }
+/** `turn`: a turned box's own +x in the world, (cos, -sin) of its yaw (the village's huts); absent, axis-aligned */
+interface LosBox { cx: number; cz: number; hx: number; hz: number; yBase: number; yTop: number; turn?: { cos: number; sin: number } }
 
-interface LosCache { builtFrom: PlacedBuilding[]; fixed: PlacedBuilding[]; boxes: LosBox[]; }
+interface LosCache { builtFrom: PlacedBuilding[]; fixed: PlacedBuilding[]; drawn: SolidBox[]; boxes: LosBox[]; }
 
 // One cache per region, each memoized on its own source array's identity —
 // exactly the way NavGrid.rebuild() memoizes on `builtFrom === buildings`.
@@ -61,8 +62,10 @@ function losBoxes(region: string | null): LosBox[] {
   // list the navigation grid stamps (game/fixedSolids.ts), remembered by its
   // identity the same way
   const fixed = fixedSolids(region);
+  // and what the world draws that is no placed piece (the village's huts and the signpost), turned as drawn
+  const drawn = drawnSolids(region);
   const cached = losCaches.get(key);
-  if (cached && cached.builtFrom === source && cached.fixed === fixed) return cached.boxes;
+  if (cached && cached.builtFrom === source && cached.fixed === fixed && cached.drawn === drawn) return cached.boxes;
 
   const boxes: LosBox[] = [];
   const add = (b: PlacedBuilding, box: CollisionBox) => {
@@ -77,20 +80,33 @@ function losBoxes(region: string | null): LosBox[] {
   };
   forEachObstacleBox(source, region, add);
   forEachObstacleBox(fixed, region, add);
-  losCaches.set(key, { builtFrom: source, fixed, boxes });
+  for (const s of drawn) {
+    const turn = s.yaw ? { cos: Math.cos(s.yaw), sin: Math.sin(s.yaw) } : undefined;
+    boxes.push({ cx: s.x, cz: s.z, hx: s.hx, hz: s.hz, yBase: 0, yTop: s.top, turn });
+  }
+  losCaches.set(key, { builtFrom: source, fixed, drawn, boxes });
   return boxes;
 }
 
 /** Segment (ox,oy,oz) + t·(dx,dy,dz), t∈[0,1], vs an axis-aligned box — the
- *  standard slab method. No AGENT_RADIUS padding: that is walker fatness,
- *  wrong for a thin arrow/bolt/sightline. */
+ *  standard slab method; a turned box in its own frame, the segment turned
+ *  into it. No AGENT_RADIUS padding: that is walker fatness, wrong for a thin
+ *  arrow/bolt/sightline. */
 function segmentHitsBox(
   ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, box: LosBox,
 ): boolean {
   let tMin = 0, tMax = 1;
+  let x0 = ox, z0 = oz, ddx = dx, ddz = dz, cx = box.cx, cz = box.cz;
+  if (box.turn) {
+    // from the box's centre, along its own axes: +x along (cos, -sin), +z along (sin, cos)
+    const { cos, sin } = box.turn;
+    [x0, z0] = [(ox - cx) * cos - (oz - cz) * sin, (ox - cx) * sin + (oz - cz) * cos];
+    [ddx, ddz] = [dx * cos - dz * sin, dx * sin + dz * cos];
+    cx = cz = 0;
+  }
   const axes: [number, number, number, number][] = [
-    [ox, dx, box.cx - box.hx, box.cx + box.hx],
-    [oz, dz, box.cz - box.hz, box.cz + box.hz],
+    [x0, ddx, cx - box.hx, cx + box.hx],
+    [z0, ddz, cz - box.hz, cz + box.hz],
     [oy, dy, box.yBase, box.yTop],
   ];
   for (const [o, d, lo, hi] of axes) {
