@@ -8707,33 +8707,124 @@ or a gatherer walking (a new game has none), a raider's walk in from the road, a
 (only the line-of-sight query), and the corner piece's L or the pole under the board (the boxes are solid whole, as
 written above).
 
-## Bug: the merchant's team trots at twice its cadence, and swings its tails as hind legs — logged 2026-10-20 (in the fix of the merchant's cart; by the code and the rig chart, not run)
+## Bugfix: the merchant's team trotted at twice its cadence, and swung its tails as hind legs — FOUND 2026-10-20 (in the fix of the merchant's cart; by the code and the rig chart), FIXED 2026-10-31
 
-**What the code does.** `RiggedProp.tsx` runs two blocks of walk cycle over the team. While its `gaitSpeed` is over
-0.01, the block for a standalone horse (`if (gaitSpeed > 0.01 || rig.parts['leg_upper#0'])`) advances the gait clock
-by `dt * (2.2 + gaitSpeed * 1.8)` and finds none of its legs; then the team's own block (`if
-(rig.parts['horse_L_leg_FL_upper'])`) advances the same clock again by as much and swings the team's legs by it — so
-while the merchant walks his team's legs swing at twice the cadence a standalone horse's do at the same speed (at
-rest only the team's block runs). And the rig lab's chart of the team (`public/assets/rigs/part_roles.json`, oc6095b3)
-names the two tails (`056_shape23`, `098_shape40`: their extents are those of the standalone horse's own tail,
-l7339200's `042_shape15`) `horse_L_leg_BR_upper` and `horse_R_leg_BR_upper`; the two pieces it names `..._BR_lower`
-(`041_shape17`, `083_shape36`) are the back-right upper legs, and the back-right lower legs (`044`, `086`) are charted
-`extra_0`. So each tail swings as a leg, and each horse's back-right lower leg does not move. Read from the code and
-from the chart against the model's bounds (computed in the reading of the cart fix, 2026-10-19), not watched.
+**The fault.** Two separate faults in how his team (oc6095b3) was animated. First, `RiggedProp.tsx` ran two walk-cycle
+blocks over the team. While its `gaitSpeed` was over 0.01, the block for a standalone horse (`if (gaitSpeed > 0.01 ||
+rig.parts['leg_upper#0'])`) moved the gait clock on by `dt * (2.2 + gaitSpeed * 1.8)` and found none of its legs. Then
+the team's own block (`if (rig.parts['horse_L_leg_FL_upper'])`) moved the same clock on again by the same amount. So
+while he walked, his team stepped at twice a standalone horse's cadence at the same speed. Standing, only the team's
+block ran. Second, the rig lab's chart (`public/assets/rigs/part_roles.json`, generated and gitignored) is wrong about
+each horse's back-right leg. It calls the tail (`056_shape23`, `098_shape40`) `horse_*_leg_BR_upper`, calls the
+back-right upper leg (`041_shape17`, `083_shape36`) `..._BR_lower`, and calls the back-right lower leg (`044_shape19`,
+`086_shape38`) `horse_*_extra_0`. So each tail swung as a leg, and each back-right lower leg stood still. The OBJ's own
+bounds (re-read 2026-11-02) confirm the reading. Each tail's bounds are the standalone horse's tail's (l7339200's
+`042_shape15`: 6.5 × 17.6 × 16.0 units, centred 65.0 back). Each back-right pair has the bounds of the back-left pair
+beside it, and the same shape numbers (shape17/19, shape36/38). Measured on `main` (the production build of ba63190,
+2026-11-02, `scripts/cln-tools/w623_measure.mjs` on deterministic 1/64 s frames: his walk in, from 0.256 of a 12-minute
+day, every frame). At a steady gaitSpeed of 1.4 (484 frames), each of the team's 16 charted leg parts swung at 9.44
+rad/s. That is 2.00× RiggedProp's 4.72 rad/s for that speed. A lone horse (Wildlife's horse0, l7339200), held walking at
+its 0.9 m/s, swung its `leg_upper#0` at 3.82 rad/s, exactly 1.00× its rate. Both tails, charted `..._BR_upper`, swung
+through a leg's full 1.1 rad.
 
-**To do.** Advance the gait clock once a frame; put the chart's three back-right roles right (or map them in code, with
-a note); then watch the team walk, beside a standalone horse at the same speed.
+**The fix.** The gait clock moves on once a frame, before either block runs. `RiggedProp.tsx`'s `stepGait` advances it
+at the same rate as before, for a standalone horse's numbered legs and a team's named ones alike, and both blocks read
+that clock. The chart's three wrong back-right roles are corrected in code, not in the generated JSON. `lib/rigParts.ts`
+has a `ROLE_FIXES` table keyed by asset id, with a note on why each entry is there, and `partRolesFor` lays it over
+oc6095b3's chart. That chart now names `horse_L_tail` / `horse_R_tail` and the right back-right upper and lower legs.
+Each tail swishes the way a standalone horse's does (`rotation.y`, `sin(t × 2.4) × 0.3`), the right one 1.3 rad ahead of
+the left, the same per-side offset its head's graze already uses. *Out of scope* (F-03): walk, trot and gallop driven by
+animation clips (deferred with G-35).
 
-## Seen, not looked into: the merchant turns on the spot in one frame when his trading window opens — logged 2026-10-20 (in the fix of the merchant's cart)
+**Verified** with `tsc` and the unit tests. New tests are in `lib/rigParts.test.ts`: with a stand-in for the generated
+chart, `partRolesFor('oc6095b3')` gives the six corrected roles, gives every role to only one part, and leaves the rest
+as charted; any other asset gets its chart unchanged. More are in `components/world/RiggedProp.test.ts`, whose test
+React now keeps the `useFrame` loop so frames can be run. A team and a standalone horse at 1.4 m/s, after 64 frames,
+swing every leg alike, at `sin(4.72) × 0.55`. The team's tails swish like the lone horse's tail, at rest and walking,
+and never about x. `stepGait` moves a team's clock on by exactly as much as a standalone horse's. Each piece was taken
+out alone and its test failed, then the fix was put back and `git diff` was the same as before
+(`scripts/cln-tools/w623_takeout.py`): the role fixes, the team block's second advance put back, the team left out of
+`stepGait`, and the tails' swish. The implementer ran the change's production build live once with the same probe. At a
+steady gaitSpeed of 1.3, every leg part swung at 4.54 rad/s, 1.00× the rate (each horse's FR and BL lower legs measured
+1.03×, and 2.03× on `main`: their swing folds one way only, which skews where it crosses its middle). Both tails swung at 2.4 rad/s through 0.6 rad. A d3d11 GPU screenshot of the
+team walking down the camp's west side was taken on each build (`scripts/cln-tools/out/w623/{main,change}_shot1-3.png`, local).
+*Evidence pass* (2026-11-02, independent of the above): `tsc` and the unit tests (68 files, 535 tests) pass, and the
+change's production build is clean. Nine single reverts of this fix (fifteen with BUG-8657's six), each made alone and restored byte for byte, were each
+failed by a unit test (`scripts/cln-tools/w623_ev_mutate.py`; `git diff`'s sha256 and the new test file's were the
+same before and after): the role fixes out whole, the tails' alone and the back-right lower legs' alone; the team's
+second advance put back, the team left out of `stepGait`, `stepGait` at double rate; the tails unswished, swung
+about x as a leg, and in step. Live, side by side on production builds — `main` (ba63190, base-14, port 3101, build id
+2-PoIpUcnJekBtlNwFEg9) and the change (port 3102, build id kZkYb31yTv_W5WIOfRsPL) — with `w623_ev.mjs` on
+deterministic 1/64 s frames, his walk in from 0.256 of a 12-minute day, each rate read as the peak of a DFT (not from
+crossings). Walking at a steady gaitSpeed of 1.4 (486 and 484 frames): on `main` all 16 team leg parts swung at
+9.44-9.45 rad/s, 2.00× RiggedProp's 4.72; on the change at 4.69-4.73 rad/s, 0.99-1.00×. The lone horse (horse0,
+l7339200, held walking at 0.9 m/s over the same frames) swung at 3.83 rad/s, 1.004× its own rate, on both builds. On
+`main` the chart's `horse_*_extra_0` (the real back-right lower legs) never moved, and the tails swung about x through
+1.1 rad as `..._BR_upper`; on the change no part is left uncharted as a leg, both back-right lower legs swing (0.44
+rad), and both `horse_*_tail` swing about y only, through 0.6 rad at 2.38-2.41 rad/s (the lone horse's tail: 2.39-2.44,
+the same 0.6). Standing (gaitSpeed 0, the team in his window, the lone horse held grazing, 416 frames) the two builds
+agree, as they should — only the team's block ran on `main` then: every team leg at 0.98-1.01× the 2.2 rad/s rate,
+the lone horse at 1.00×. Close d3d11 GPU pictures of the team walking from its rear quarter and its side
+(`w623_ev_shots.mjs`, `scripts/cln-tools/out/w623ev/`, local) show real multi-tone textures on both builds.
+*Not measured*: the team at a walking gaitSpeed equal to the lone horse's own 0.9 (the merchant never walks that slowly;
+the comparison is through the rate formula both share), and any other rigged prop (no other asset has a `ROLE_FIXES`
+entry or runs both blocks).
 
-`Merchant.tsx`'s branch for his trading window sets his facing to `MERCHANT_SPOT.yaw` (toward his camp's gate) from its
-first frame. On `main` (`cart_road_probe.mjs`'s samples, 2026-10-19, 12-minute day) he faces 0.43 rad at the last
-sample of his walk in and π at the first of his window: a turn of 155.5 degrees from one frame to the next. The cart
-fix above brings him to his spot from the west, and the turn is about 100 degrees. In the same frame the branch sets
-him on `MERCHANT_SPOT` itself, from wherever his walk in ended him — anywhere within `WALK_STOP`, half a metre, short
-of it — and his team, towed, is drawn after him that far. To do: let him turn over his last steps, or over the
-window's first second, as his walk turns him (an ease: each second, three times the angle he still has to turn), and
-walk him the rest of the way onto his spot rather than set him there.
+## Bugfix: the merchant turned on the spot in one frame when his trading window opened — FOUND 2026-10-20 (in the fix of the merchant's cart), FIXED 2026-10-31
+
+**The fault.** In `Merchant.tsx`, the branch for his trading window set him on `MERCHANT_SPOT` and turned him to face
+its way (toward his camp's gate) from its first frame. His walk in leaves him anywhere within `WALK_STOP` (half a metre)
+short of the spot, facing the way he walked. So the window's first frame turned him round in one frame, moved him onto
+the spot in one hop, and towed his team after him. When this was logged (before the cart fix) the turn was 155.5
+degrees. The cart fix brings him in from the west, which makes it about 100. Measured on `main` (the production build
+of ba63190, 2026-11-02, `w623_measure.mjs` on deterministic 1/64 s frames). He finished his walk in 0.488 m west of
+his spot, facing -1.434 rad, and stood there 4.03 s. In the window's first frame he turned 97.8 degrees and hopped
+0.488 m, and his team jumped 0.468 m. Every frame of his walk in had turned him no more than 4.1 degrees.
+
+**The fix.** For the rest of the way he steps up to the spot. `data/merchantDay.ts`'s `settleOnSpot` walks him onto
+`MERCHANT_SPOT` at his own pace, about 0.4 s for the half metre, and sets him exactly on it once he is within `ON_SPOT`
+(1 cm). While he does, his figure plays its walk and his team's gait follows him. He also turns to face the spot's way
+the same way his walk turns him: each second, three times the angle he still has to turn, the short way round. From
+then on he stands exactly on the spot, as the code expects (`findTarget` and the Minimap take him to be there). One
+change to the plan: the ease applies only at the end of a walk. If the clock brings him into the window without a walk
+in (out of hiding, or a game loaded or a long frame inside it), he is set on his spot facing its way, as before, where
+`layTeam` has laid his team. Without this, the ease would have walked him in from wherever he stood while hidden, which
+is the road's end, 80 m away. `putOnSchedule`, his walk out from the spot and the save are unchanged. *Out of scope*
+(F-04): any change to his schedule.
+
+**Verified** with `tsc` and the unit tests. New tests are in `data/merchantDay.test.ts`. Starting from where `main`'s
+walk in left him, at 1/64 s frames, he reaches the spot in 25 frames and is set exactly on it. No step is longer than
+his pace allows (plus `ON_SPOT` on the last). He turns 4.6 degrees in the first frame and less after, and is within 3
+degrees of the gate's way after 2 s. Within `ON_SPOT` he is set on the spot and left there. He turns the short way
+round across ±π. Each part was taken out alone and its test failed, then the fix was put back and `git diff` was the
+same as before (`w623_takeout.py`): the old snap (the first and third tests fail), and no setting him on the spot
+within `ON_SPOT` (the second). The implementer ran the change's production build live once with the same probe. The
+step from the last frame of his walk in to the window's first frame was 4.6 degrees, 0.019 m, and 0.018 m for his
+team. Across the window's first 3 s the largest steps were 4.6 degrees/frame, 0.019 m and 0.019 m (team). He was on the
+spot exactly by window frame 32, and facing its way to within 0.1 degree after 3 s. *Evidence pass* (2026-11-02,
+independent of the above): six single reverts of `settleOnSpot` (`w623_ev_mutate.py`) — his place snapped, his yaw
+snapped, no `wrapAngle`, no `ON_SPOT` pin, a turn ten times as fast, its answer inverted — were each failed by a unit
+test, and the tree restored exactly (`git diff`'s sha256 the same before and after). Live, side by side on production
+builds — `main` (ba63190, base-14, port 3101, build id 2-PoIpUcnJekBtlNwFEg9) and the change (port 3102, build id
+kZkYb31yTv_W5WIOfRsPL). With `w623_ev.mjs` on deterministic 1/64 s frames, his walk in from 0.256 of a 12-minute day:
+on both his walk in ends 0.488 m west of the spot, facing -1.44 rad, and he stands there 4.03 s. On `main` the window's
+first frame turned him 97.5 degrees and moved him 0.488 m, and his team 0.468 m (its own facing 7.1 degrees) — the
+fault; no frame of his walk in turned him more than 4.06 degrees, moved him more than 0.028 m. On the change that
+frame turned him 4.6 degrees and moved him 0.019 m, his team 0.018 m; across the window's first 4 s no frame turned
+him more than 4.6 degrees or moved him more than 0.020 m, his team more than 0.019 m (its facing 0.34 degrees). He
+plays his walk from window frame 1 to 25, is set exactly on the spot from frame 25, is 20 degrees off its facing at
+frame 32, 0.2 at frame 128 and 0 by frame 255; his team stands where `main`'s does to within 1 cm (-78.47, 16.57).
+Brought in by the clock, both builds alike: out of hiding into the middle of his window (0.1 then 0.5), the first
+window frame finds him exactly on the spot facing it (yaw π) with his team laid at (-78.57, 16.00), and neither moves
+in the 2 s after; the clock moved on 2.9 s five frames into his stepping up (the change) sets him on the spot facing
+its way in that frame, and nothing moves after it. With `cart_road_probe.mjs` (real time, 12-minute day, `morning` and
+`trade`), the change's report is `main`'s: the team overlaps nothing and he is inside nothing in any stage, the trade
+run's 20 samples on the spot with the team's drawn outline the same to the millimetre. Its 100 ms samples across the
+window's opening: `main` 97.5 degrees and 0.497 m between two samples; the change 4.9 degrees and 0.020 m, and at most
+24.6 degrees and 0.14 m a sample while he steps up (about 6 frames a sample). *Not measured*: a game loaded during
+the half second he steps up (the same `jumped` path the clock test takes), and a walk in so late that the window opens
+with him further than `WALK_STOP` from the spot — `settleOnSpot` would walk him straight there, off his planned way,
+where `main` set him on it.
 
 ## Bugfix: a knock-out never stood the player down — FOUND 2026-10-15 (left as found in the knighting fix, above), FIXED 2026-10-21
 
