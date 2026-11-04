@@ -21,6 +21,10 @@ export const seq = {
   water: 1,
 };
 
+/** F-08b · every set() that marks the save dirty, counted (gameStore.ts's createGameStore): markSaved clears the flag
+ *  only if none has come since the save it is told of was taken. Never reset — only compared. */
+export const saveEdits = { count: 0 };
+
 export const buildUndo: {
   /** buildings placed this session, newest last (undo stack). Wave 9 widened
    *  each entry from one id to a GROUP of ids so a row-fill drag — which lays a

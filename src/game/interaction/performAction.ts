@@ -10,7 +10,7 @@ import {
 import { audio } from '@/lib/audio';
 import { worldEnv } from '@/game/env';
 import { fishingState, startFishing } from '@/game/fishing';
-import { ridingState, mountHorse, dismountHorse, canStable, stableHorse } from '@/game/riding';
+import { ridingState, mountHorse, dismountHorse, canStable } from '@/game/riding';
 import { detonate, fireCannon } from '@/game/siege';
 import { quintainHit } from '@/game/quintain';
 import { cartState } from '@/game/carts';
@@ -130,7 +130,7 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
       && Math.hypot(b.x - pos.current.x, b.z - pos.current.z) < 6);
     dismountHorse(pos.current.x - fx * 1.2, pos.current.z - fz * 1.2, yaw.current);
     if (ridden && stable && canStable(ridden)) {
-      stableHorse(ridden);
+      st.stableHorse(ridden);
       st.notify('The horse is stabled — assign it to a defender in the Roster (N).', true);
     }
     audio.play('graze', 0.5);

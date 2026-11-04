@@ -24,6 +24,7 @@ import { BUILDABLE_BY_ID } from '../../data/buildables';
 import { levelFromXp } from '../../data/ranks';
 import { audio } from '@/lib/audio';
 import { worldEnv } from '../../env';
+import { stableHorse, stabledHorses } from '../../riding';
 import { seq } from '../storeCounters';
 import type { GameState } from '../gameStore';
 import type { SliceCreator } from './types';
@@ -137,6 +138,10 @@ export interface VillagerSlice {
   unequipVillagerCarrier: (villagerId: string) => void;
   stationDefender: (villagerId: string, buildingId: string | null) => void;
   setDefenderShift: (villagerId: string, shift: 'day' | 'night') => void;
+  /** G27 · the horse the player walked to a Stable becomes the homestead's (riding.ts's stabledHorses) */
+  stableHorse: (horseId: string) => void;
+  /** G27 · the defender patrols on this stabled horse, or (null) on foot */
+  setDefenderMount: (villagerId: string, horseId: string | null) => void;
   gainDefenderXp: (villagerId: string, amount: number) => void;
 
   /** Phase 5, iteration 5.8b — the trade-mastery half of a completed trip,
@@ -547,6 +552,20 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
       set({ villagers, dirty: true });
       const name = st.villagers.find((v) => v.id === villagerId)?.name ?? 'Villager';
       st.notify(`${name} now stands the ${shift === 'day' ? 'day' : 'night'} watch.`);
+    },
+
+    // F-08b · the stable and its mounts live in riding.ts's leaf module, not the store, but the save holds them
+    // (stabled, mounts): changed here, so the save is marked dirty — the clock no longer marks it every 2 s (OD-12), and
+    // a change that does not would wait for some other one to be written
+    stableHorse: (horseId) => {
+      stableHorse(horseId);
+      set({ dirty: true });
+    },
+
+    setDefenderMount: (villagerId, horseId) => {
+      if (horseId) stabledHorses.assigned[villagerId] = horseId;
+      else delete stabledHorses.assigned[villagerId];
+      set({ dirty: true });
     },
 
     gainDefenderXp: (villagerId, amount) => {

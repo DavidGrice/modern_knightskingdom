@@ -429,7 +429,9 @@ export const createGatheringSlice: SliceCreator<GatheringSlice> = (set, get) => 
           if (next === 0) ready = true;
         }
       }
-      if (changed) set({ plots });
+      // F-08b · a crop's countdown is a running tally, like the clock (OD-12): it goes with any other save and with the
+      // tab-close flush. A crop coming ready marks the save, so it is written within the autosave's 20 s
+      if (changed) set(ready ? { plots, dirty: true } : { plots });
       if (ready) st.notify('🌾 A crop is ready to harvest!', true);
     },
 

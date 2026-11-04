@@ -59,6 +59,7 @@ export default function VillagersPanel() {
   const armory = useGameStore((s) => s.armory);
   const stationDefender = useGameStore((s) => s.stationDefender);
   const setDefenderShift = useGameStore((s) => s.setDefenderShift);
+  const setDefenderMount = useGameStore((s) => s.setDefenderMount);
   const chooseTrait = useGameStore((s) => s.chooseTrait);
   const equipVillagerCarrier = useGameStore((s) => s.equipVillagerCarrier);
   const unequipVillagerCarrier = useGameStore((s) => s.unequipVillagerCarrier);
@@ -308,7 +309,7 @@ export default function VillagersPanel() {
                     <ChoiceChip
                       opacity={mountOf(v.id) ? 0.65 : 1}
                       selected={!mountOf(v.id)}
-                      onClick={() => { delete stabledHorses.assigned[v.id]; bumpMounts(); }}
+                      onClick={() => { setDefenderMount(v.id, null); bumpMounts(); }}
                     >
                       On Foot
                     </ChoiceChip>
@@ -322,7 +323,7 @@ export default function VillagersPanel() {
                           title={takenBy ? 'Already ridden by another defender' : 'Assign this horse'}
                           opacity={mountOf(v.id) === hid ? 1 : takenBy ? 0.4 : 0.65}
                           selected={mountOf(v.id) === hid}
-                          onClick={() => { stabledHorses.assigned[v.id] = hid; bumpMounts(); }}
+                          onClick={() => { setDefenderMount(v.id, hid); bumpMounts(); }}
                         >
                           Horse {i + 1}
                         </ChoiceChip>

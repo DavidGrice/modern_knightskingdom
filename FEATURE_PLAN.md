@@ -105,6 +105,25 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   fixed (it had no entry); a markSaved race the clock now hides logged for F-08b. Measured on main (`w632_save.mjs`):
   Save & Return with the PUT answered 500 or 413 went to the menu with no Continue and no word, the session lost; a
   guest with storage full the same, the autosave failing unseen; the autosave PUT every 20 s against a 500, nothing shown.
+- **#294 — Wave 63.3** (F-08b): closing the tab never loses play. As the tab goes out of sight, or at pagehide if it did
+  not first, the save is flushed whatever has changed (`game/autosave.ts`'s `flushOnLeave`, `lib/save.ts`'s
+  `flushSave`): a guest's to `kk_guest_save` at once; a signed-in player's to a shadow copy (`kk_shadow_<id>`) and, at
+  60 KiB or less, a `sendBeacon` to a new `POST /api/save` (PUT's own handler). Every save carries `savedAt`; `fetchSave`
+  takes up a shadow only if it passes `parseSave` and is newer than the server's, and PUTs it on. A boundary's catch
+  writes `kk_recovery_<id|guest>`, never the main key, and the menu offers "Restore recovered session" when it is newer
+  — never loaded by itself. OD-12: the clock's mirror no longer marks the save dirty, and neither does the playtime
+  tally. Absorbed from 63.2's review: Save & Quit with a save that cannot be put together shows Not Saved ("the game
+  could not put it together") instead of hanging; the chip and the backoff are module state, kept behind Options and
+  Help and reset at a session start; and the markSaved race the clock had hidden (a change counter: `saveMark`,
+  `markSaved(mark)`). Premises held, with four corrections: no `savedAt` existed, so `toSave()` stamps one; the clock
+  was not alone in marking an idle save — `flushStats` did every 4 s, measured, and is quiet too; `fetchSave` takes the
+  account; and three saved changes never marked the save, the clock having covered for them — stabling a horse, a
+  defender's mount (now `villagerSlice.ts` actions that mark it) and a crop coming ready (`tickPlots`). The flush and the
+  recovery writer last while the game is on the screen stack (`game/sessionFlush.ts`), not the game screen's mount,
+  which Options, Stats and Help replace. ROADMAP: the three 63.2 entries retagged fixed, F-08b logged fixed. Measured
+  on main (`w633_flush.mjs`, `w633_dirty.mjs`): 6 PUTs in 120 s idle (the change 0); `dirty` set 45 times a minute idle (30 clock, 15 tally; the
+  change 0); gold changed then the tab left — nothing written, guest or signed in; a crash left no recovery; a save is
+  ~19.8 KB with six villagers and ten blueprints, plus ~86 B a wall: past the beacon's 60 KiB at about 480 pieces.
 
 ## Owner decisions
 

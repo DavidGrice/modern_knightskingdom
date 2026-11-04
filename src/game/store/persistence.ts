@@ -33,9 +33,10 @@ export const ZERO_STATS: LifetimeStats = {
 
 /** SaveGame keys that intentionally have NO same-named persisted store field.
  *  `version` is the literal 1 buildSave stamps first (never read back);
- *  `playerPos` is legacy — never written by any toSave, never read by any
- *  load (see playerState.ts). Kept on SaveGame, optional, for old saves. */
-export const UNPERSISTED_SAVE_KEYS = ['version', 'playerPos'] as const satisfies readonly (keyof SaveGame)[];
+ *  `savedAt` is the clock toSave() stamps last (read only to compare copies:
+ *  lib/save.ts); `playerPos` is legacy — never written by any toSave, never
+ *  read by any load (see playerState.ts). Kept on SaveGame, optional, for old saves. */
+export const UNPERSISTED_SAVE_KEYS = ['version', 'savedAt', 'playerPos'] as const satisfies readonly (keyof SaveGame)[];
 type UnpersistedKey = (typeof UNPERSISTED_SAVE_KEYS)[number];
 
 /** Every SaveGame key that has a same-named live store field (66 today). */

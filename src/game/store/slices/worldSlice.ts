@@ -217,7 +217,10 @@ export const createWorldSlice: SliceCreator<WorldSlice> = (set, get) => {
       st.notify('You found 30 gold in the royal treasure chest!', true);
     },
 
-    setTimeOfDay: (timeOfDay) => set({ timeOfDay, dirty: true }),
+    // OD-12 · the clock's mirror (DayNight.tsx, every 2 s) does not mark the save dirty: that wrote the whole save to
+    // the server every 20 s for the clock alone. The time goes with any save made for another change, and Save & Quit
+    // and the tab-close flush (lib/save.ts's flushSave) write it whatever has changed
+    setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
     setDayCount: (dayCount) => set({ dayCount, dirty: true }),
     setSeason: (season) => set({ season }),
     sleep: () => {

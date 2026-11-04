@@ -9355,28 +9355,279 @@ fixed 226. Sound Walls, a standing order and the FPS readout, chips in the same 
 outside build mode on `main` too, now push the card down instead (not measured live). No page errors. Not measured: a
 401 or an unreachable server live (unit tests only), Firefox's quota error, and build mode's chip (no card there).
 
-## Seen, not fixed: a change made while an autosave is in flight is marked saved without being written — logged 2026-11-03 (wave 63.2; by the code)
+## Bugfix: a change made while an autosave was in flight was marked saved without being written — FOUND 2026-11-03 (wave 63.2; by the code), FIXED 2026-11-03
 
-`GameScreen.tsx`'s autosave takes `toSave()`, awaits `persistSave`, and on success calls `markSaved()`, which sets
+**The fault.** `GameScreen.tsx`'s autosave takes `toSave()`, awaits `persistSave`, and on success calls `markSaved()`, which sets
 `dirty: false` — so anything that set `dirty` while the PUT was in flight is cleared without being in the save that was
 written, and the autosave will not write it until something else dirties the store. Today the clock dirties the save
 every 2 s (`DayNight.tsx`'s `setTimeOfDay`), which hides this; once FEATURE_PLAN.md's F-08b (wave 63.3, OD-12) stops
 that, it can lose a change until the next one. To do: clear `dirty` only if nothing has changed since the snapshot (a
 change counter taken with `toSave()`), with F-08b.
 
-## Seen, not fixed: Save & Quit hangs on "Saving…" when the save itself cannot be put together — logged 2026-11-03 (in the review of wave 63.2; by the code)
+**The fix** (wave 63.3, with F-08b, which stopped the clock marking the save). The store's slices write through one
+`set` (`gameStore.ts`'s `createGameStore`) that counts every patch carrying `dirty: true` (`storeCounters.ts`'s
+`saveEdits`). `saveMark()` reads the count; the autosave takes it with `toSave()`, and `markSaved(mark)` clears `dirty`
+only if no change has come since — otherwise the save stays dirty and the next round writes it. The guest's tab-close
+flush, which writes synchronously, clears it the same way.
 
-The autosave (`game/autosave.ts`) catches a `toSave()` that throws, logs it and retries; Save & Quit does not. In
+**Verified** with `tsc` (clean) and the unit tests (77 files, 585 tests): new `game/store/slices/sessionSlice.test.ts`
+("a change made while a save is on its way stays to be written": a tracked-quest change between `saveMark()`/`toSave()`
+and `markSaved(mark)` leaves `dirty` set, and the save taken holds the earlier value). It fails with `markSaved`
+clearing whatever the mark, and again with the counting `set` not counting; restored, `git diff` byte-identical (`cmp`).
+Evidence pass (production builds side by side: `main` = base-14 on port 3101, build id `CcZHCFWIBaggIEclP_u7H`; the
+change = this worktree rebuilt on port 3102, build id `78t79KOaIGb6R_NyenOuZ`; `scripts/cln-tools/w633_ev.mjs race`):
+a signed-in player's autosave PUT held 5 s by `page.route`, gold +100 before it and +455 (`addItems`, a slice action)
+while it is in flight. 150 ms after the held PUT answers, `dirty` is false on `main` (the race) and true on the change;
+the server holds 130 on both. On `main` the next PUT (36.1 s) still carries 585, because the clock marked the save
+dirty again in the meantime — the loss stays hidden there, as the entry said. On the change the next PUT (36.6 s)
+carries 585 because the change was never cleared. A change made with the raw `useGameStore.setState` bypasses the
+count (a first run of this probe did that, and the change was then never written — see the new entry at the end);
+no game code does that while a save is in flight.
+
+## Bugfix: Save & Quit hung on "Saving…" when the save itself could not be put together — FOUND 2026-11-03 (in the review of wave 63.2; by the code), FIXED 2026-11-03
+
+**The fault.** The autosave (`game/autosave.ts`) catches a `toSave()` that throws, logs it and retries; Save & Quit does not. In
 `GameScreen.tsx` it calls `saveAndLeave(() => persistSave(st.toSave(), guest), …)`, so a throw in `toSave()` — or in a
 signed-in player's `JSON.stringify`, which sits outside `persistSave`'s try — rejects the promise: the pause menu's
 button stays disabled on "Saving…", no Not Saved dialog comes, and the rejection goes unhandled (on the guest path the
 same throw is caught but reported as "this browser would not open its storage"). `main` behaves the same, so this is
 not a regression. To do: treat a throw in `write()` as a failed save with its own reason, and pin it with a test.
 
-## Seen, not fixed: the Not-saved chip and the autosave's backoff are forgotten behind Options or Help — logged 2026-11-03 (in the review of wave 63.2; by the code)
+**The fix** (wave 63.3). `saveAndLeave` catches a `write()` that throws — synchronously, as `toSave()` does inside it,
+or as a rejection — logs it to the error log (`save & quit`) and answers it as a failed save: "the game could not put it
+together" (`UNMADE`, the autosave's own phrase for the same throw), so the pause menu shows "Not Saved" with Retry,
+Quit without saving and Back, and the button is never left on "Saving…". `persistSave` makes the JSON before the
+guest's `try`, so a save that cannot be put into JSON is that failure for a guest too, not "this browser would not open
+its storage".
 
-The chip's problem and the autosave's failure count are GameScreen's state, and the pause menu's Options and Help
+**Verified** with `tsc` (clean) and the unit tests: new in `game/autosave.test.ts`, a `write()` that throws and one that
+rejects each answer `UNMADE` and never leave; new in `lib/save.test.ts`, a save holding a BigInt rejects from
+`persistSave` for a guest and for a signed-in player. The first fails with `saveAndLeave`'s `try` taken out, the second
+with the guest's `JSON.stringify` put back inside its `try`; restored, `git diff` byte-identical. Evidence pass
+(ports 3101 `main` / 3102 the change, as above; `w633_ev.mjs unmade`): a guest whose `toSave()` is made to throw
+(`__kk.setState({ toSave })`) presses Save & Return to Menu. After 3 s on `main` the game is still up, the button is
+stuck on "Saving…" (disabled), no dialog appears, and there is 1 unhandled rejection (a page error). On the change the
+Not Saved dialog says "the game could not put it together" with Retry, Quit without saving and Back, and there are 0
+page errors. Not measured live: a signed-in player's `JSON.stringify` throwing (unit test only).
+
+## Bugfix: the Not-saved chip and the autosave's backoff were forgotten behind Options or Help — FOUND 2026-11-03 (in the review of wave 63.2; by the code), FIXED 2026-11-03
+
+**The fault.** The chip's problem and the autosave's failure count are GameScreen's state, and the pause menu's Options and Help
 replace the game screen (`App.tsx` draws one screen at a time), so coming back remounts it: the chip is gone and the
 next try waits a full 20 s although the server may still be down — briefly showing nothing wrong while nothing is
 saved. The chip comes back on the next failure. The same cause as BUG-8726 (fixed in wave 62.1 by moving the
 directors' state out of the component). To do: hold the autosave's state at module level, reset at a session start.
+
+**The fix** (wave 63.3). The failures in a row and the last problem are module state in `game/autosave.ts`
+(`autosaveState`), reset by `resetAutosave`, which is registered with `onSessionReset` — a load, a new game or a new
+game plus forgets them; a remount does not. `startAutosave` tells `onProblem` of a problem still standing as it starts,
+so the chip is back at once, and arms its first try on the backoff it had reached.
+
+**Verified** with `tsc` (clean) and the unit tests: new in `game/autosave.test.ts`, two failures, `stop()` (the game
+screen replaced), a new `startAutosave` hears the problem at once and tries 10 s on, not 20; after
+`runSessionResetHooks()` a new one hears nothing. It fails with the state put back inside `startAutosave`; restored,
+`git diff` byte-identical. Evidence pass (ports 3101 `main` / 3102 the change, as above; `w633_ev.mjs options`): a
+signed-in player whose every PUT is answered 500. After the first failed autosave (15.8 s on both), "Not saved ·
+retrying" is up, then Escape → Options → Back. 0.5 s after coming back, `main` shows no chip and its next PUT goes
+20.0 s later. The change shows the chip, and its next PUT goes 5.0 s later (the backoff it had reached). Both then
+show the chip. Not measured live: Help (the same remount), and the reset at a session start (unit test only).
+
+## Bugfix: closing the tab lost what the autosave had not yet written, a crash left nothing to come back to, and an idle player's save went to the server every 20 s — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, GAP-save-failure-feedback, Q-autosave-cadence), FIXED 2026-11-03
+
+**The fault.** Nothing saved as the tab closed: whatever changed after the last 20 s autosave was gone, for a guest and
+for a signed-in player alike. F-06's error boundaries call a recovery writer, but it was a no-op, so a crash kept only
+the last autosave. And the save was marked dirty all the time: `DayNight.tsx`'s mirror of the clock (`setTimeOfDay`,
+every 2 s) and — not named in the plan — the playtime and distance tally (`flushStats`, handed over every 4 s by
+`GameScreen.tsx`'s deed timer) both set `dirty`, so an idle signed-in player's whole save went to the server every
+20 s. Measured on `main` (base-14's production build of aed9e4b on port 3101, build id `CcZHCFWIBaggIEclP_u7H`,
+`scripts/cln-tools/w633_flush.mjs` and `w633_dirty.mjs`; records in `scripts/cln-tools/out/w633/main_*`): a fresh
+signed-in account left idle 120 s after its first autosave — 6 PUTs (10.3, 30.3, 50.4, 70.4, 90.5, 110.5 s), still dirty
+at the end; a guest idle 60 s — `dirty` turned on 45 times, 30 by `timeOfDay` (every 2 s) and 15 by `stats` (every 4 s).
+A signed-in player who set gold 777 and left at once — to another page (a real pagehide) or by closing the tab — had
+no write sent; the server kept no gold, and Continue loaded none; with a 122.6 KB save the same; a guest's
+`kk_guest_save` the same. A guest whose world crashed (`__kkcrash.frame`) after a change (gold 999) left only
+`kk_errors` and `kk_guest_save` (no gold); after Reload the menu offered Continue alone. A mature save against the
+beacon's limit (`w633_flush.mjs size`, a guest's `toSave()` JSON): 1,626 B fresh; with six villagers and ten 40-piece
+blueprints 19,782 B, and then about 86 B a stone wall — 28,419 B at 100 walls, 41,357 at 250, 62,930 at 500, 84,379 at
+750, 105,488 at 1000, 148,144 at 1500. So a holdfast of some 480 pieces is past what a beacon may carry.
+
+**The fix** (FEATURE_PLAN.md F-08b, wave 63.3; OD-12). (1) *The flush.* `game/autosave.ts`'s `flushOnLeave` calls the
+flush as the tab goes out of sight (visibilitychange to hidden — a phone's app switcher closes a tab from there, with no
+pagehide) or, if it did not first, at pagehide; once, not twice for a close. It writes whatever has changed, the clock
+and the tally with it. `lib/save.ts`'s `flushSave` writes a guest's save to `kk_guest_save` synchronously; a signed-in
+player's to a shadow copy in this browser (`kk_shadow_<account id>`) and, while its JSON is at most 60 KiB
+(`BEACON_MAX_BYTES`), with `navigator.sendBeacon` to a new `POST /api/save` — PUT's handler itself, so the same
+sign-in check, `MAX_SAVE_LENGTH` and `parseSave`. A larger one has only the shadow: `fetch` keepalive shares the
+beacon's 64 KiB quota, so it is no way round it. The beacon's body is the JSON as text (a `text/plain` request — a JSON
+`Blob` is not a CORS-safelisted type); the session cookie is `SameSite=Lax`, so a cross-site POST carries no session. It
+lasts as long as the game is on the screen stack, not the game screen's mount (`game/sessionFlush.ts`, after the
+review below), and stops with wave 62.5's `worldFailed`, so a frozen world flushes nothing over the last good save.
+(2) *Reconciling.* Every save now carries `savedAt` (`toSave()` stamps `Date.now()`; an unpersisted key beside
+`version`). `fetchSave(guest, account)` reads the server's save and then the shadow: one that passes `parseSave` and is
+newer is the save to load, and is PUT to the server (and dropped once it is there); one no newer, with no time, or
+unreadable is never taken, and is dropped when the server answered with a save. A save that could not be fetched leaves
+the shadow alone. The menu looks for a shadow even when the server has none, and a save taken up that way counts as one
+on record. (3) *The recovery slot.* While the game is on the screen stack, `game/sessionFlush.ts` sets
+`lib/recovery.ts`'s writer: a boundary's catch
+writes `toSave()` to `kk_recovery_<account id>` (`kk_recovery_guest` for a guest) — never the main save's key. The main
+menu offers "Restore recovered session" (with its day) only when that slot holds a save that passes `parseSave` and is
+newer than the save — once the save is read, or known to be none or unreadable, never when it could not be fetched — and
+never loads it by itself; Restore loads it, marks it dirty so the autosave writes it, and empties the slot. (4) *OD-12.*
+`setTimeOfDay` no longer marks the save dirty, nor does `flushStats`; the time and the tally go with any save made for
+another change, with Save & Quit (which writes whether the save is dirty or not) and with the flush. A new day still
+marks it (`setDayCount`), and so does sleeping. With the clock quiet, the markSaved race logged in wave 63.2 would have
+lost changes; it is fixed with it (its entry, above). Premises held, with three corrections: there was no `savedAt` to
+compare, so `toSave()` now stamps one; the clock was not the only thing marking an idle save (the tally, measured
+above); and `fetchSave` needed the account to find the shadow, so it takes it. A fourth, found in review: "time is
+still written with any other change" assumed every other saved change marks the save, and three did not — stabling a
+horse and a defender's mount (riding.ts's `stabledHorses`, saved as `stabled`/`mounts`) and a crop's countdown
+(`tickPlots`). The clock had covered for them; see the review round below.
+
+**Verified** with `tsc` (clean) and the unit tests (77 files, 585 tests) — new: `lib/save.test.ts` (a guest's flush
+writes `kk_guest_save` only and sends no beacon; a signed-in player's keeps `kk_shadow_u1` and beacons a small save, and
+keeps but does not beacon one past `BEACON_MAX_BYTES`; `fetchSave` takes up a newer shadow, PUTs it and drops it, takes
+one up when the server has none, and never an older, as old, untimed or unloadable one, dropping each; a save that
+could not be fetched leaves the shadow; the recovery slot is `kk_recovery_guest`/`kk_recovery_u1`, never
+`kk_guest_save`, and offers back only a loadable save), `game/autosave.test.ts` (the flush at visibilitychange-hidden
+and at pagehide, once for a close, none after its stop), `game/store/slices/sessionSlice.test.ts` (the clock's mirror
+does not mark the save dirty and a new day does; the tally does not; every save is stamped). Each was failed by taking
+its piece out — `dirty: true` back on `setTimeOfDay`, and on `flushStats`; no `savedAt`; the beacon whatever its size;
+no shadow; reconcile taking any shadow, and taking one without `parseSave`; the recovery slot on the guest's main key;
+the flush's once-only guard — and restored, `git diff` byte-identical before and after (`cmp`). Live on the change's
+production build (port 3102, build id `y_qXdNlqB9oAugepwHRmD`; the flush, shadow and recovery runs first on build
+`7ZI3OXYB0eyexfpH_wZ1N`, before `flushStats` stopped marking the save, three of them re-run on the later build alike):
+idle 120 s, 0 writes to `/api/save` and not dirty at the end (`main` 6); a guest idle 60 s, `dirty` never turned on
+(`main` 45 times). Gold 777 and away — to another page, a dispatched visibilitychange (a POST at 0.0 s, the beacon), or
+the tab closed — the server held 777 and Continue loaded it; with the 122.6 KB save, the next menu PUT the shadow (the
+server then 777, the shadow dropped); a guest's `kk_guest_save` held 777 after a close or a navigation. The crash:
+`kk_recovery_guest` written beside the main save, the menu offered Continue and "Restore recovered session"; Restore
+loaded gold 999, dirty, the slot emptied, and the next autosave wrote 999 to `kk_guest_save`. No page errors in any
+run.
+
+**Evidence pass** (independent, 2026-11-03). `tsc` clean; the unit tests 77 files, 585 tests; `next build` passes
+(build id `78t79KOaIGb6R_NyenOuZ`). Mutation controls: 21 take-outs, each run against its own test file, and each
+failed it. They were: `dirty` back on `setTimeOfDay` and on `flushStats`; `markSaved` ignoring the mark; the counting
+`set` not counting; no `savedAt`; autosave state per mount; no problem replay at start; no session-reset hook;
+`saveAndLeave` without its `try`; the flush's once-only guard; no visibilitychange listener; no pagehide listener; the
+guest's JSON inside its `try`; the beacon whatever its size; no shadow kept; reconcile taking any shadow; `readKept`
+without `parseSave`; reconcile on a fetch error; the shadow not dropped after its PUT; a stale shadow not dropped; and
+the guest's recovery slot on `kk_guest_save`. `git diff` and `git status --porcelain` were saved before and after, and
+`cmp` found both byte-identical (sha256 `b2bcf45c…`). Not covered by any unit test, so checked live only: the `POST`
+route, `GameScreen`'s wiring, and `MainMenu`'s offer.
+
+Live, production builds side by side: `main` = base-14 on port 3101 (build `CcZHCFWIBaggIEclP_u7H`), the change on
+port 3102 (build `78t79KOaIGb6R_NyenOuZ`). Probes are `w633_flush.mjs`, `w633_dirty.mjs` and the new `w633_ev.mjs`;
+records are `scripts/cln-tools/out/w633/ev_*`.
+- **Idle signed-in player, 120 s:** `main` 6 PUTs (10.1, 30.6, 50.7, 70.7, 90.8, 110.8 s), dirty at the end; the change
+  0, not dirty.
+- **Guest idle 60 s:** `dirty` turned on 45 times on `main` (30 `timeOfDay`, 15 `stats`), 0 on the change.
+- **Save size** (`main` / change, bytes): fresh 1,626 / 1,649; with villagers and blueprints 19,783 / 19,806; at 500
+  walls 62,930 / 62,953; at 1000 walls 105,496 / 105,520; at 1500 walls 148,145 / 148,168. `savedAt` adds 23 B. Each
+  size run logged 1 page error on both builds alike: the probe's made-up villagers lack `tripSeconds`.
+- **Gold 777, then away** (`close` by `nav`, `hide`, `close`):
+  - `main`: the server's gold null every time and no shadow; Continue loads none.
+  - The change: the server 777 and Continue loads 777. The `hide` case logged a POST at 0.0 s.
+- **The beacon's own arrival** (`w633_ev.mjs beacon`). The server and the browser's storage were read through the
+  context, with no game page open again, so no menu had reconciled:
+  - Small save, change: the server already held 777 after `nav` and after the tab closed, with `kk_shadow_<id>` at 777
+    and a numeric `savedAt`.
+  - 104,419 B save (1200 walls), change: the server still held none, with the shadow at 777 (104,429 chars), so no
+    beacon went.
+  - `main`: none and no shadow in all three.
+  - `bigclose/close` (122,577 B) on the change: the next menu PUT the shadow (at 0.6 s), the server then held 777,
+    Continue loaded 777 and the shadow was gone. `main` lost the gold and the 1200 walls (the menu said 0 structures).
+- **`POST /api/save`:** `main` answers 405 to all three requests. The change answers 413 when too long, 400 when the
+  body is not a save, and 401 when signed out; a rejected POST left the server's save as it was.
+- **Guest, close or nav:** `kk_guest_save` gold null on `main`, 777 on the change.
+- **Crash** (`__kkcrash.frame` after gold 999):
+  - `main`: `kk_errors` and `kk_guest_save` only, and the menu offers Continue alone.
+  - The change: `kk_recovery_guest` too, and the menu offers Continue plus "Restore recovered session DAY 1". Restore
+    loaded 999 with dirty true and emptied the slot; the next autosave wrote 999 to `kk_guest_save`.
+  - The main save's gold was null on both before Restore, so it was never overwritten.
+- **Page errors:** none on either build, apart from the crash test's own throws and the probe artifact above.
+
+Not measured: a phone's app switcher; Firefox and Safari; a beacon refused by the browser (`sendBeacon` false); a
+signed-in player's recovery slot (unit test only); the shadow taken up on another machine (see the clock-skew entry
+below); and whether the offer stays hidden while the save cannot be fetched (by the code only).
+
+**Review round** (2026-11-04). Two defects, each reported twice, both confirmed in the code and fixed:
+- *The flush died with the game screen.* `flushOnLeave` and the recovery writer were installed in `GameScreen`'s
+  mount effect and removed by its cleanup, but the pause menu's Options and Stats and the Help key push a screen that
+  replaces `GameScreen` (`App.tsx` draws one at a time) while the session goes on, so a tab closed from there flushed
+  nothing. Now `game/sessionFlush.ts` holds both: `GameScreen` starts it at each mount (a second start does nothing); it
+  ends as the game leaves the screen stack (Save & Quit, Quit without saving — an `appStore` subscription) or at
+  `worldFailed`.
+- *Saved changes that never marked the save.* Stabling a horse (`performAction`'s call of `riding.ts`'s
+  `stableHorse`) and the Roster's mount chips (`VillagersPanel.tsx`) mutated `stabledHorses` with no `dirty`, and
+  `tickPlots` wrote `plots` with none: on `main` the clock re-marked the save within 2 s, so the autosave caught them;
+  with OD-12 nothing did. Stabling and mounting are now store actions (`villagerSlice.ts`'s `stableHorse` and
+  `setDefenderMount`) that mark the save. A crop's countdown is treated as a tally, like the clock and playtime — it
+  goes with any other save and with the flush — but a crop coming ready marks the save. An audit of every slice `set()`
+  writing a persisted key without `dirty` found no other: the rest (kills' stats, a quest's unlocks, a side quest's
+  completion, the keep's inventory, a cancelled move) come in the same action as a change that marks it.
+
+Verified with `tsc` (clean) and the unit tests (78 files, 589 tests). New: `game/sessionFlush.test.ts` (with Options
+pushed over the game the flush and the recovery writer still run; a second start is still one flush; after
+`resetTo('menu')` neither runs; none after `stopSessionFlush`), and in `sessionSlice.test.ts` stabling, mounting and
+unmounting mark the save, a crop's countdown does not, and a crop coming ready does. Six take-outs, each failing its
+test file, then restored: the flush ended when the game is no longer the top screen (the old per-mount lifetime); no
+once-only start; `stableHorse` and `setDefenderMount` without `dirty`; `tickPlots` never marking, and always marking.
+Live, production builds: `main` = base-14 on port 3101 (build `CcZHCFWIBaggIEclP_u7H`), the change on port 3102 (build
+`285QdEl8ccGVlXuxhe2Ew`); `w633_flush.mjs` with a new 4th argument that leaves from Options or Help; records
+`scripts/cln-tools/out/w633/fix_*`. A signed-in player set gold 777, opened Pause > Options (screens `menu, create,
+game, options`, no canvas) and closed the tab: the change's server held 777 and Continue loaded it, `main`'s none. A
+guest set 777, pressed Help and closed the tab: `kk_guest_save` 777 on the change, null on `main`. The crash run again
+on the change, with the writer now set by `sessionFlush.ts`: `kk_recovery_guest` written, Restore loaded 999 and the
+next autosave wrote it. No page errors but the crash test's own. Not measured live: stabling, mounting and crops (unit
+tests only), and the per-mount flush this replaces (its build was not kept; its take-out above fails the test).
+
+**Hardened before it shipped** (2026-11-04, from the review's low note): the new `POST /api/save` is a CORS-simple
+request — a plain form or a no-cors fetch can send one with no preflight — and a page on another port or subdomain of
+the same site carries the player's session cookie (`SameSite=Lax`), so it could have posted a save over theirs. `POST`
+now takes a save only from the game's own origin (`lib/server/sameOrigin.ts`; `sameOrigin.test.ts`: the own origin
+taken, another port, another subdomain, an unreadable or `null` Origin refused, no Origin passed on to PUT's own
+checks). Live on a production build of the change (`wugztIuOXk15Oq5nKuoCn`, port 3102): POSTs with the game's Origin
+and with none went on to PUT's checks (400 for a body that is not a save); from `localhost:3000` and
+`evil.localhost:3102` they were refused (403); and `w633_flush.mjs close close` — a signed-in player sets gold 777 and
+closes the tab — left 777 on the server and in Continue, so the beacon still lands.
+
+## Seen, not fixed: a shadow copy is judged newer by the clock of the machine that wrote it — logged 2026-11-03 (wave 63.3; by the code)
+
+`lib/save.ts`'s `reconcile` takes up a shadow copy when its `savedAt` is later than the server's save's, and each
+`savedAt` is `Date.now()` on whichever machine made the save. One player on two machines whose clocks disagree can
+lose play: a shadow left on machine A (its beacon failed or was too large) is taken up over a later save made on
+machine B if B's clock runs far enough behind A's. Rare: it takes two machines, a failed beacon and a skewed clock.
+To do, if it is ever seen: have the server stamp the time it wrote each save and the shadow carry the server stamp it
+was made on top of, and take up a shadow only when that is still the server's latest.
+
+## Seen, not fixed: a change made with the store's raw setState is not counted, so an autosave in flight can mark it saved — logged 2026-11-03 (wave 63.3's evidence pass; live)
+
+Wave 63.3 has `markSaved(mark)` clear `dirty` only if no change has come since the save was taken. It counts changes
+in the slices' own `set` (`gameStore.ts`'s `createGameStore`, `storeCounters.ts`'s `saveEdits`). `useGameStore.setState`
+does not go through that `set`, so a `dirty: true` it writes is not counted. If that happens while an autosave PUT is
+in flight, the PUT's `markSaved` clears it, and with the clock no longer marking the save (OD-12) nothing writes it
+until the next change.
+
+Seen live in the evidence pass's first `w633_ev.mjs race` run, which set gold with `__kk.setState`: on port 3102, gold
+555 was never written in 60 s. The same run made through `addItems` was written. Today no game code calls it while a
+save can be in flight: only `MainMenu.tsx`'s Restore does, at load. So this is a trap for later code and for debug
+tooling, not a live loss.
+
+To do, if wanted: count in a store middleware (or `subscribe`, on `dirty` going true or a new change while true), so
+every path is counted.
+
+## Seen, not fixed: a save that finishes after the autosave stops can leave a stale "Not saved" chip — logged 2026-11-04 (in the review of wave 63.3; by the code)
+
+`game/autosave.ts`'s try returns at `if (stopped)` before it updates the module-level `autosaveState`. So if the
+autosave is failing (the chip up), the server recovers, and the retry is in flight when the player opens Options or
+Help, the save goes through (`markSaved` clears dirty) but the state keeps the old problem: back in the game the chip
+is replayed, saying "Not saved" of a game that is saved, until the next change saves. To do: let a try that finishes
+after `stop()` still update the state, and only skip arming the next timer (not calling `onProblem` while stopped).
+
+## Seen, not fixed: leaving by a navigation can flush the save twice — logged 2026-11-04 (in the review of wave 63.3; by the code)
+
+`flushOnLeave` (`game/autosave.ts`) flushes on `visibilitychange` to hidden, or at `pagehide` if the page did not go
+out of sight first, and its doc says a close flushes once. But a navigation fires `pagehide` before `visibilitychange`:
+`onPageHide` flushes without setting `flushed`, and `onVisibility` then flushes again — two beacons and two shadow
+writes of the same save. Harmless (the second write is the same save; a beacon over the quota is simply refused).
+To do: set `flushed` in `onPageHide`.
