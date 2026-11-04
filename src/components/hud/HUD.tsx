@@ -9,6 +9,9 @@
 // positioned in the same 22px band, which is what used to collide.
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
+import { useAppStore } from '@/game/store/appStore';
+import { resolveInputDevice, interactLabel, splitPrompt } from '@/game/inputMode';
+import { codeLabel } from '@/game/data/keybinds';
 import { sideQuestGiverName, sideQuestsOf } from '@/game/data/npcs';
 import { clockLabel, nightFactor } from '@/game/env';
 import { activeMelee, combatState, type MeleeWeaponId } from '@/game/combat';
@@ -312,6 +315,8 @@ export default function HUD({ saveProblem = null }: { saveProblem?: string | nul
   const paused = useGameStore((s) => s.paused);
   const panel = useGameStore((s) => s.panel);
   const photoMode = useGameStore((s) => s.photoMode);
+  const settings = useAppStore((s) => s.settings);
+  const activeDevice = useGameStore((s) => s.activeInputDevice);
   // lifted so the reticle can recolour from the same resolve the readout uses
   const [standing, setStanding] = useState<Standing | null>(null);
 
@@ -321,19 +326,17 @@ export default function HUD({ saveProblem = null }: { saveProblem?: string | nul
     return (
       <div className="hud">
         <div className="keyhint" style={{ position: 'absolute', bottom: 14, right: 14, opacity: 0.6 }}>
-          Photo Mode — <b>P</b> to exit
+          Photo Mode — <b>{codeLabel(settings.keybinds.photoMode)}</b> to exit
         </div>
       </div>
     );
   }
 
   const field = !buildMode && !paused && panel === 'none';
-  // a "Hold E" prompt reads as a verb on a ring; a tap prompt as a key chip
-  const holdMatch = prompt?.match(/^Hold\s+(\S+)\s+—?\s*(.*)$/i);
-  const tapMatch = prompt?.match(/^(\S+)\s+—\s+(.*)$/);
-  const verb = holdMatch?.[2] ?? tapMatch?.[2] ?? prompt ?? '';
-  const key = holdMatch?.[1] ?? tapMatch?.[1] ?? 'E';
-  const held = !!holdMatch;
+  // a "Hold E" prompt reads as a verb on a ring; a tap prompt as a key chip;
+  // a prompt naming no key (a target that cannot be acted on) shows interact's
+  const { held, key: promptKey, verb } = splitPrompt(prompt ?? '');
+  const key = promptKey ?? interactLabel(resolveInputDevice(settings.inputMode, activeDevice), settings);
 
   return (
     <div className="hud">

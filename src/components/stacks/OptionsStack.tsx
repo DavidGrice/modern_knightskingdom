@@ -11,7 +11,7 @@
 // cleanups made while reorganizing anyway, not scope creep.
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore, UI_THEMES } from '@/game/store/appStore';
-import { KEYBIND_GROUPS, codeLabel, rebindState } from '@/game/data/keybinds';
+import { KEYBIND_GROUPS, codeLabel, keybindConflicts, rebindState } from '@/game/data/keybinds';
 import { GAMEPAD_ACTION_GROUPS, RESERVED_GAMEPAD_BUTTONS, gamepadButtonLabel, type GamepadAction } from '@/game/data/gamepadInput';
 import { GRAPHICS_PROFILES, GRAPHICS_QUALITY_LIST } from '@/game/graphicsProfiles';
 import { AA_MODES } from '@/game/aaModes';
@@ -35,7 +35,10 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
-  const code = useAppStore((s) => s.settings.keybinds[actionId]);
+  const keybinds = useAppStore((s) => s.settings.keybinds);
+  const code = keybinds[actionId];
+  // F-10a · a key two actions share only ever does the first one's job
+  const conflicts = keybindConflicts(keybinds, actionId);
   const setKeybind = useAppStore((s) => s.setKeybind);
   const [listening, setListening] = useState(false);
 
@@ -57,6 +60,7 @@ function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
   return (
     <div className="kk-key-row">
       <span>{label}</span>
+      {conflicts.length > 0 && <span className="kk-key-conflict">Also bound to {conflicts.join(', ')}</span>}
       <button
         className={`kk-cap ${listening ? 'listening' : ''}`}
         style={{ border: 0, cursor: 'pointer' }}
@@ -316,7 +320,7 @@ export default function OptionsStack() {
                 value={settings.inputMode}
                 onChange={(v) => update({ inputMode: v })}
               />
-              <div className="kk-opt-note">Auto follows whatever you actually pick up last (keyboard, a controller, or the touch controls) — pin it if you'd rather the on-screen prompts stayed put.</div>
+              <div className="kk-opt-note">Auto follows whatever you actually pick up last (keyboard, a controller, or the touch controls) — pin it if you'd rather the on-screen prompts stayed put. Touch also shows the on-screen joystick and buttons; Keyboard or Gamepad hides them when a mouse is connected.</div>
             </div>
           )}
 

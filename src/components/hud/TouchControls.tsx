@@ -4,7 +4,8 @@
 // DOM so their own touches take priority), and action buttons
 // (Sprint/Jump/Block/Interact/Attack). Feature-detected — renders nothing on
 // a desktop without touch support, so this is purely additive alongside
-// keyboard/mouse/gamepad. Writes into game/touchInput.ts's leaf module; reads
+// keyboard/mouse/gamepad — unless Options' Prompt style is pinned, which
+// decides it instead (F-10a, touchInput.ts's showTouchControls). Writes into game/touchInput.ts's leaf module; reads
 // nothing back (PlayerController.tsx — its input/pads.ts — a separate React
 // tree under the Canvas, is the only consumer — same bridge pattern as playerState/
 // combatState).
@@ -18,7 +19,8 @@
 // combat code from that point on.
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
-import { touchState, detectTouch, resetTouchState } from '@/game/touchInput';
+import { useAppStore } from '@/game/store/appStore';
+import { touchState, detectMouse, detectTouch, resetTouchState, showTouchControls } from '@/game/touchInput';
 import { noteInputDevice } from '@/game/inputMode';
 import { combatState } from '@/game/combat';
 import { ridingState } from '@/game/riding';
@@ -39,8 +41,14 @@ export default function TouchControls() {
   const buildMode = useGameStore((s) => s.buildMode);
   const paused = useGameStore((s) => s.paused);
   const panel = useGameStore((s) => s.panel);
-  const [isTouch, setIsTouch] = useState(false);
-  useEffect(() => setIsTouch(detectTouch()), []);
+  const inputMode = useAppStore((s) => s.settings.inputMode);
+  const [touchCapable, setTouchCapable] = useState(false);
+  const [hasMouse, setHasMouse] = useState(false);
+  useEffect(() => {
+    setTouchCapable(detectTouch());
+    setHasMouse(detectMouse());
+  }, []);
+  const isTouch = showTouchControls(inputMode, touchCapable, hasMouse);
 
   const joyBase = useRef<HTMLDivElement>(null);
   const joyKnob = useRef<HTMLDivElement>(null);

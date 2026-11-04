@@ -13,6 +13,7 @@ import { registerHitbox, unregisterHitbox } from './hitbox';
 import { playerState } from './playerState';
 import { horses, mountHorse, registerHorse, resetRiding, ridingState } from './riding';
 import { useGameStore } from './store/gameStore';
+import { useAppStore } from './store/appStore';
 import type { CharacterConfig, PlacedBuilding } from './types';
 
 const HERO: CharacterConfig = { name: 'Test', headDonor: 'x', bodyDonor: 'x', armColor: 0, handColor: 0, legColor: 0, hipColor: 0 };
@@ -298,6 +299,21 @@ describe('melee', () => {
     expect(combatState.rangedWeapon).toBe('crossbow');
     cycleWeapon();
     expect([combatState.weapon, combatState.meleeWeapon]).toEqual(['melee', 'sword']);
+  });
+
+  it('names the aim control of the device in hand, by its binding, when a crossbow is readied', () => {
+    const settings = useAppStore.getState().settings;
+    useGameStore.setState({ inventory: { ...game().inventory, crossbow: 1 } } as never);
+    try {
+      useAppStore.setState({ settings: { ...settings, inputMode: 'keyboard' } });
+      cycleWeapon(); // to the crossbow
+      cycleWeapon(); // back to the sword
+      useAppStore.setState({ settings: { ...settings, inputMode: 'gamepad', gamepadButtons: { ...settings.gamepadButtons, block: 4 } } });
+      cycleWeapon();
+    } finally {
+      useAppStore.setState({ settings });
+    }
+    expect(notes.filter((n) => n.startsWith('🏹'))).toEqual(['🏹 Crossbow readied (RMB to aim)', '🏹 Crossbow readied (LB to aim)']);
   });
 });
 

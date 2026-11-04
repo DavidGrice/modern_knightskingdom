@@ -44,14 +44,15 @@ export function holdToAct(ctx: HoldCtx, st: ReturnType<typeof useGameStore.getSt
   // game/inputMode.ts's header for why "Click" is keyboard/mouse-only
   // (gamepad/touch never got a separate hold-input for gathering; they
   // still hold their ordinary Interact button, same as heldInput below
-  // reads). HUD.tsx's kk-prompt regex only needs a single \S+ token
-  // here, so any of these labels round-trips through it unchanged.
-  const promptDevice = resolveInputDevice(useAppStore.getState().settings.inputMode, st.activeInputDevice);
-  const eLabel = interactLabel(promptDevice);
+  // reads). HUD.tsx's kk-prompt regex reads the key back as one token, or
+  // two for the labels that have a space ('Up Arrow', 'L-Stick Click').
+  const settings = useAppStore.getState().settings;
+  const promptDevice = resolveInputDevice(settings.inputMode, st.activeInputDevice);
+  const eLabel = interactLabel(promptDevice, settings);
   st.setPrompt(
     target
       ? target.duration > 0
-        ? target.actionable ? `Hold ${isClickHeld ? clickHoldLabel(promptDevice) : eLabel} — ${target.label}` : target.label
+        ? target.actionable ? `Hold ${isClickHeld ? clickHoldLabel(promptDevice, settings) : eLabel} — ${target.label}` : target.label
         : `${eLabel} — ${target.label}`
       : null,
   );

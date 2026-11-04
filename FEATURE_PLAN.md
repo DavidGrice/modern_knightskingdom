@@ -138,6 +138,22 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   the defect logged fixed (it had no entry); a carried keep losing its `y` (always 0 today) logged. Measured on main
   (`w634_carry.mjs`): carrying the keep, the autosave, the flush and Continue all had no keep (1 building of 2,
   `keep: null`); carrying a wall, the wall gone from all three.
+- **#296 — Wave 64.1** (F-10a): input truth. The Collection Book defaults to O (`data/keybinds.ts`; it shared G with
+  the emote wheel, and the hotkey switch obeys the first action on a code, so it had no key); `loadSettings` merges the
+  stored map through `mergeStoredKeybinds`, which moves it to O only where the stored map still has it on the emote
+  wheel's key and O is free — a deliberate rebind of either is kept. Options' rebind row warns "Also bound to …"
+  (`keybindConflicts`). `interactLabel`/`clickHoldLabel` take the rebind tables (`Bindings`) and name the bound key or
+  pad button; new `attackLabel`/`blockLabel`; `SWAP_HINT` is `swapHint(slot, device, bindings)`; How to Play is
+  `helpSteps(bindings, device)` (its wrong "hold E" to gather is "hold left-click" on a keyboard); `MenuTabs`, the
+  Satchel's Controls line and the Photo Mode hint read the keybinds; the HUD reads the prompt's key back with
+  `splitPrompt`, which keeps two-word labels whole. `showTouchControls` makes Prompt style decide the on-screen
+  controls: Touch shows them, Keyboard/Gamepad hides them where a mouse is there (never on a touch-only device), Auto detects. Premises held (GameScreen's line numbers had
+  moved; the switch is unchanged), with one correction: the plan's "rebinding interact changes SWAP_HINT" cannot hold —
+  the toast names aim/draw, not interact — so it follows the device and the pad's attack/block bindings. ROADMAP: a new
+  fixed entry (the collision had none); OPEN-084 and OPEN-085 closed; the keyboard interact row's stale "Hold to
+  Gather" label logged. CLEANUP_PLAN.md's KeyG question marked settled. Measured on main (`w641_keys.mjs`): G opens
+  the emotes and O nothing with the defaults and with a stored collision; with interact on Z the Satchel and How to
+  Play still name E; the crossbow says "RMB to aim" on Gamepad; pinned Touch shows no touch controls.
 
 ## Owner decisions
 

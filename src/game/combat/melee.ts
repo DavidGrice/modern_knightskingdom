@@ -3,6 +3,8 @@
 // the swing itself and what one landed blow does.
 import { audio } from '@/lib/audio';
 import { atGuildMaxRank, useGameStore } from '../store/gameStore';
+import { useAppStore } from '../store/appStore';
+import { resolveInputDevice, attackLabel, blockLabel, type Bindings, type InputDevice } from '../inputMode';
 import { callingSignature } from '../data/classes';
 import { ATTR_FX, CALLING_FX, PERK_FX, TALENT_FX } from '../data/effects';
 import { playerState } from '../playerState';
@@ -62,14 +64,18 @@ export function activeMelee(): MeleeWeaponId {
 
 /** what Q (keyboard) or Y (gamepad) says when a weapon is readied. Each line
  *  names the thing THIS weapon does DIFFERENTLY from the last one, since
- *  that is the only part a player can't see from the viewmodel itself. */
-const SWAP_HINT: Record<WeaponSlot, string> = {
-  sword: '⚔️ Sword readied',
-  halberd: '🔱 Halberd readied (slow, long reach — one swing sweeps the whole line in front of you)',
-  spear: '🗡️ Spear readied (longest reach; couch it at a gallop for a charging blow)',
-  crossbow: '🏹 Crossbow readied (RMB to aim)',
-  longbow: '🏹 Longbow readied (hold LMB to draw, release to loose)',
-};
+ *  that is the only part a player can't see from the viewmodel itself.
+ *  F-10a · the aim/draw controls are named for the device in hand and its
+ *  bindings (inputMode.ts), not always the mouse's. */
+export function swapHint(slot: WeaponSlot, device: InputDevice, b: Bindings): string {
+  switch (slot) {
+    case 'sword': return '⚔️ Sword readied';
+    case 'halberd': return '🔱 Halberd readied (slow, long reach — one swing sweeps the whole line in front of you)';
+    case 'spear': return '🗡️ Spear readied (longest reach; couch it at a gallop for a charging blow)';
+    case 'crossbow': return `🏹 Crossbow readied (${blockLabel(device, b)} to aim)`;
+    case 'longbow': return `🏹 Longbow readied (hold ${attackLabel(device, b)} to draw, release to loose)`;
+  }
+}
 
 /** Cycle to the next OWNED weapon in WEAPON_SLOTS order and toast what
  *  changed. Wave 15 · moved here from GameScreen.tsx (verbatim logic) so it
@@ -108,7 +114,8 @@ export function cycleWeapon(): void {
   combatState.aiming = false;
   combatState.drawStart = 0;
   combatState.comboCount = 0; // Wave 40 (A6) · swapping weapons breaks a melee chain
-  st.notify(SWAP_HINT[next]);
+  const settings = useAppStore.getState().settings;
+  st.notify(swapHint(next, resolveInputDevice(settings.inputMode, st.activeInputDevice), settings));
 }
 
 /** Resolve ONE landed melee blow: damage, the camp's rally, knockback, and

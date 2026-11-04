@@ -17,6 +17,8 @@
 // touchstart. Read by HUD.tsx's interact prompt and Panels.tsx's cheat
 // sheet via resolveInputDevice().
 import { useGameStore } from './store/gameStore';
+import { codeLabel } from './data/keybinds';
+import { gamepadButtonLabel } from './data/gamepadInput';
 
 export type InputDevice = 'keyboard' | 'touch' | 'gamepad';
 
@@ -40,13 +42,19 @@ export function resolveInputDevice(mode: 'auto' | InputDevice, active: InputDevi
   return mode === 'auto' ? active : mode;
 }
 
+/** the two rebind tables a label is read from — Settings (appStore.ts) is one */
+export interface Bindings {
+  keybinds: Record<string, string>;
+  gamepadButtons: Record<string, number>;
+}
+
 // the on-screen/physical control that actually drives "interact" for each
-// device — X is pollGamepad's button 2 (components/fps/input/pads.ts); keyboard's bound
-// key and touch's own on-screen button both happen to already read "E"
-// (TouchControls.tsx's Interact circle is literally labelled E), so there's
-// only one real fork here.
-export function interactLabel(device: InputDevice): string {
-  return device === 'gamepad' ? 'X' : 'E';
+// device. F-10a · keyboard and gamepad name the player's own binding (both
+// are rebindable — Options > Keybinds); touch's on-screen Interact circle is
+// literally labelled E (TouchControls.tsx), whatever the keyboard says.
+export function interactLabel(device: InputDevice, b: Bindings): string {
+  if (device === 'gamepad') return gamepadButtonLabel(b.gamepadButtons.interact);
+  return device === 'touch' ? 'E' : codeLabel(b.keybinds.interact);
 }
 
 // the hold-to-gather/build prompt: on keyboard/mouse this is a held LMB
@@ -55,6 +63,33 @@ export function interactLabel(device: InputDevice): string {
 // `heldInput` — search that name for why) — they still gather by holding
 // their ordinary Interact button, so the prompt has to say THAT, not
 // "Click", or it would point at a control that does nothing here.
-export function clickHoldLabel(device: InputDevice): string {
-  return device === 'keyboard' ? 'Click' : interactLabel(device);
+export function clickHoldLabel(device: InputDevice, b: Bindings): string {
+  return device === 'keyboard' ? 'Click' : interactLabel(device, b);
+}
+
+// F-10a · attack/draw and block/aim: the mouse buttons on keyboard/mouse (not
+// rebindable), the player's pad buttons, or the touch buttons' own glyphs
+export function attackLabel(device: InputDevice, b: Bindings): string {
+  if (device === 'gamepad') return gamepadButtonLabel(b.gamepadButtons.attack);
+  return device === 'touch' ? '⚔' : 'LMB';
+}
+export function blockLabel(device: InputDevice, b: Bindings): string {
+  if (device === 'gamepad') return gamepadButtonLabel(b.gamepadButtons.block);
+  return device === 'touch' ? '🛡' : 'RMB';
+}
+
+// F-10a · a key label is one word, or two for codeLabel's 'Up Arrow'/'Caps
+// Lock' and a pad's 'L-Stick Click'
+const PROMPT_KEY = String.raw`\S+(?: (?:Arrow|Lock|Click))?`;
+const HOLD_PROMPT = new RegExp(String.raw`^Hold\s+(${PROMPT_KEY})\s+—?\s*(.*)$`, 'i');
+const TAP_PROMPT = new RegExp(String.raw`^(${PROMPT_KEY})\s+—\s+(.*)$`);
+
+/** HUD.tsx's prompt chip, read back from the text holdToAct.ts writes: "Hold
+ *  <key> — <verb>" is held, "<key> — <verb>" a tap, anything else a bare verb
+ *  with no key */
+export function splitPrompt(prompt: string): { held: boolean; key: string | null; verb: string } {
+  const hold = prompt.match(HOLD_PROMPT);
+  if (hold) return { held: true, key: hold[1], verb: hold[2] };
+  const tap = prompt.match(TAP_PROMPT);
+  return tap ? { held: false, key: tap[1], verb: tap[2] } : { held: false, key: null, verb: prompt };
 }

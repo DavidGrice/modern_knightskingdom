@@ -5,25 +5,29 @@
 // closing. The old hotkeys still deep-link straight to their tab; contextual
 // panels (dialogue, shop, travel, parley, guild hall, emotes) stay standalone.
 import { useGameStore, type PanelId } from '@/game/store/gameStore';
+import { useAppStore } from '@/game/store/appStore';
+import { codeLabel } from '@/game/data/keybinds';
 import Ico from '../ui/Ico';
 
-const TABS: { id: PanelId; icon: string; label: string; hint: string }[] = [
-  { id: 'inventory', icon: '🎒', label: 'Satchel', hint: 'I' },
-  { id: 'crafting', icon: '🔨', label: 'Crafting', hint: 'C' },
-  { id: 'quests', icon: '📜', label: 'Quests', hint: 'J' },
-  { id: 'skills', icon: '⭐', label: 'Abilities', hint: 'K' },
-  { id: 'villagers', icon: '👥', label: 'Roster', hint: 'N' },
-  { id: 'chronicle', icon: '📖', label: 'Lore', hint: 'L' },
+// F-10a · each tab's chip names the key its action is bound to now, not the default
+const TABS: { id: PanelId; icon: string; label: string; action: string }[] = [
+  { id: 'inventory', icon: '🎒', label: 'Satchel', action: 'inventory' },
+  { id: 'crafting', icon: '🔨', label: 'Crafting', action: 'craft' },
+  { id: 'quests', icon: '📜', label: 'Quests', action: 'quests' },
+  { id: 'skills', icon: '⭐', label: 'Abilities', action: 'skills' },
+  { id: 'villagers', icon: '👥', label: 'Roster', action: 'roster' },
+  { id: 'chronicle', icon: '📖', label: 'Lore', action: 'lore' },
 ];
 
 export default function MenuTabs() {
   const panel = useGameStore((s) => s.panel);
   const setPanel = useGameStore((s) => s.setPanel);
+  const keybinds = useAppStore((s) => s.settings.keybinds);
   return (
     <div className="menu-tabs">
       {TABS.map((t) => (
         <button key={t.id} className={panel === t.id ? 'active' : ''} onClick={() => setPanel(t.id)}>
-          <span className="mt-icon"><Ico e={t.icon} /></span> {t.label} <span className="mt-key">{t.hint}</span>
+          <span className="mt-icon"><Ico e={t.icon} /></span> {t.label} <span className="mt-key">{codeLabel(keybinds[t.action])}</span>
         </button>
       ))}
     </div>
