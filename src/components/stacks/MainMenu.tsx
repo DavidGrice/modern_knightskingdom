@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore } from '@/game/store/gameStore';
-import { fetchSave, hasGuestSave, type SaveResult } from '@/lib/save';
+import { dropRecoverySave, fetchSave, hasGuestSave, hasShadowSave, readRecoverySave, type SaveResult } from '@/lib/save';
 import { SKILLS, levelFromXp, rankFromTotalLevel, RANKS } from '@/game/data/ranks';
 import { QUESTS } from '@/game/data/quests';
 import { stageNewGamePlus } from '@/game/ngPlus';
@@ -80,6 +80,9 @@ export default function MainMenu() {
   const [checked, setChecked] = useState(false);
   const [trouble, setTrouble] = useState<Trouble | null>(null);
   const [tries, setTries] = useState(0);
+  // F-08b · the game as it was when it crashed (lib/save.ts's recovery slot), read once
+  const account = guest ? null : user?.id ?? null;
+  const [recovered] = useState(() => readRecoverySave(account));
 
   // signed in, `hasSave` is the server's word that it holds one (readable or not); a guest's is in this browser
   const saveOnRecord = guest ? hasGuestSave() : hasSave;
@@ -90,6 +93,8 @@ export default function MainMenu() {
       setSlot(describe(r.save));
       setRawSave(r.save);
       setTrouble(r.restored ? { kind: 'restored' } : null);
+      // F-08b · it may be a shadow copy the server had not heard of (fetchSave's reconcile): there is one now
+      if (!guest) setHasSave(true);
       return;
     }
     setSlot(null);
@@ -102,20 +107,21 @@ export default function MainMenu() {
   // read the save on mount (and on "Try again") so the card can show what is in it
   useEffect(() => {
     let alive = true;
-    const present = guest ? hasGuestSave() : hasSave;
+    // F-08b · a signed-in player's shadow copy is looked at even when the server has no save
+    const present = guest ? hasGuestSave() : hasSave || hasShadowSave(account);
     if (!present) { setChecked(true); return; }
-    fetchSave(guest).then((r) => {
+    fetchSave(guest, account).then((r) => {
       if (!alive) return;
       take(r);
       setChecked(true);
     });
     return () => { alive = false; };
-  }, [guest, hasSave, take, tries]);
+  }, [guest, account, hasSave, take, tries]);
 
   const play = useCallback(async (continueGame: boolean) => {
     if (continueGame) {
       setLoading(true);
-      const r = await fetchSave(guest);
+      const r = await fetchSave(guest, account);
       setLoading(false);
       if (r.status === 'ok') {
         loadFromSave(r.save);
@@ -127,7 +133,20 @@ export default function MainMenu() {
       return;
     }
     push('create');
-  }, [guest, loadFromSave, push, take]);
+  }, [guest, account, loadFromSave, push, take]);
+
+  // F-08b · offered, never loaded on its own: a recovered session newer than the save — once the save is read, or known
+  // to be none or unreadable (one that could not be fetched just now says nothing of how old it is). Taken up, it is
+  // the session to save: marked dirty, so the autosave writes it over the older save.
+  const offerRecovery = !!recovered && checked && trouble?.kind !== 'error'
+    && (recovered.savedAt ?? 0) > (rawSave?.savedAt ?? 0);
+  const restore = useCallback(() => {
+    if (!recovered) return;
+    loadFromSave(recovered);
+    useGameStore.setState({ dirty: true });
+    dropRecoverySave(account);
+    push('game');
+  }, [recovered, account, loadFromSave, push]);
 
   // Reported 2026-07-28: "Empty slot — start a new holdfast" sits directly
   // beneath the real save card, styled almost the same way, and used to jump
@@ -184,6 +203,13 @@ export default function MainMenu() {
                 <KkIcon name="k-swords" size={18} />
                 <span>{loading ? 'Reading the chronicles…' : 'Continue Journey'}</span>
                 {slot && <span className="kk-menu-key">DAY {slot.day}</span>}
+              </button>
+            )}
+            {offerRecovery && recovered && (
+              <button className="kk-menu-item" onClick={restore}>
+                <KkIcon name="k-scroll" size={17} />
+                <span>Restore recovered session</span>
+                <span className="kk-menu-key">DAY {(recovered.dayCount ?? 0) + 1}</span>
               </button>
             )}
             <button className="kk-menu-item" onClick={startNew}>

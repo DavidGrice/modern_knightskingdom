@@ -39,6 +39,10 @@ export interface LifetimeStats {
  */
 export interface SaveGame {
   version: 1;
+  /** F-08b · when toSave() took it (ms since the epoch): which of two copies of one player's save is the newer — the
+   *  server's and the shadow the tab-close flush left in the browser, or the main save and the recovery slot. Absent on
+   *  saves written before it, which are taken as the oldest. */
+  savedAt?: number;
   character: CharacterConfig;
   /** Wave 39 (A4) · chosen once at newGame()/startNewGamePlus() time, never
    *  toggled mid-run. Absent = 'normal' (every save written before this

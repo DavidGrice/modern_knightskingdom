@@ -1,6 +1,7 @@
-// F-06 · the recovery writer the error boundaries call when they catch a crash: a no-op until F-08b (FEATURE_PLAN.md,
-// wave 63.3) sets one that writes a snapshot of the game to a recovery slot of its own. Whatever it writes, it must
-// never write the main save (lib/save.ts's keys): a crash's state is offered back, never loaded in its place.
+// F-06 · the recovery writer the error boundaries call when they catch a crash: a no-op but while a game is on the
+// screen stack, which sets one (F-08b, game/sessionFlush.ts) that writes a snapshot of the game to the recovery slot
+// (lib/save.ts's writeRecoverySave).
+// Whatever it writes, it must never write the main save: a crash's state is offered back, never loaded in its place.
 let writer: () => void = () => {};
 
 export function setRecoveryWriter(w: () => void): void {

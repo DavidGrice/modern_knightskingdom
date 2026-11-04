@@ -17,6 +17,7 @@ import { FAILED_FRAMES_TO_STOP, WATCH_BEGIN_PRIORITY, WATCH_END_PRIORITY, makeFr
 import { releaseGameLock } from '@/game/pointerLock';
 import { errorLog } from '@/lib/errorLog';
 import { saveAndLeave, startAutosave } from '@/game/autosave';
+import { startSessionFlush, stopSessionFlush } from '@/game/sessionFlush';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import GameWorld from '../world/GameWorld';
 import HUD from '../hud/HUD';
@@ -245,13 +246,17 @@ export default function GameScreen() {
     autosave.current = startAutosave(async () => {
       const st = useGameStore.getState();
       if (!st.dirty || !st.character) return null;
+      const mark = st.saveMark();
       const r = await persistSave(st.toSave(), useAppStore.getState().guest);
       if (r.ok) {
-        st.markSaved();
+        st.markSaved(mark);
         setHasSave(true);
       }
       return r;
     }, setSaveProblem);
+    // F-08b · the tab-close flush and the recovery writer, which outlast this screen while the game is on the stack
+    // (game/sessionFlush.ts)
+    startSessionFlush();
     return () => {
       audio.stopAmbience();
       audio.stopAllLoops();
@@ -277,10 +282,12 @@ export default function GameScreen() {
     });
   }
 
-  // F-06 · the world failed: free the pointer for the card's button, and autosave no more over the last good save
+  // F-06 · the world failed: free the pointer for the card's button, and autosave (or flush) no more over the last good
+  // save
   function worldFailed() {
     releaseGameLock();
     autosave.current?.stop();
+    stopSessionFlush();
   }
 
   if (!character) return null;

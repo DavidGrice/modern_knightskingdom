@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUserId } from '@/lib/server/session';
 import { loadSave, writeSave } from '@/lib/server/db';
 import { MAX_SAVE_LENGTH, parseSave } from '@/lib/saveSchema';
+import { sameOrigin } from '@/lib/server/sameOrigin';
 
 // `{ save }` with the save, or null when there is none; `problem` instead when there is one that cannot be read
 // (lib/save.ts's fetchSave tells the three apart), and `restored` when the one sent is the save before the latest.
@@ -30,4 +31,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'The save could not be written.' }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
+}
+
+/** F-08b · the save sent as the tab closes (lib/save.ts's flushSave): a beacon can only POST. Taken only from the game's
+ *  own origin (lib/server/sameOrigin.ts says why), then the same checks and the same write as PUT's. */
+export async function POST(req: Request) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: 'A save is taken only from the game itself.' }, { status: 403 });
+  return PUT(req);
 }

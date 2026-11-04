@@ -7,7 +7,7 @@ import { resetSessionModules } from '../sessionReset';
 import { ZERO_XP, applySave, buildSave, freshPersisted } from '../persistence';
 import { worldEnv, seasonOf } from '../../env';
 import { setWaterworks, waterworks } from '../../waterworks';
-import { buildUndo, seq } from '../storeCounters';
+import { buildUndo, saveEdits, seq } from '../storeCounters';
 import type { GameState } from '../gameStore';
 import type { SliceCreator } from './types';
 
@@ -56,7 +56,11 @@ export interface SessionSlice {
   /** change how the character LOOKS mid-game (see AppearancePanel) — not
    *  their name or calling, which are identity and stay fixed */
   setCharacter: (c: CharacterConfig) => void;
-  markSaved: () => void;
+  /** F-08b · how many changes have marked the save dirty so far: taken with toSave(), and handed to markSaved once that
+   *  save is written */
+  saveMark: () => number;
+  /** the save taken at `mark` is written: not dirty — unless a change has come since, which that save does not hold */
+  markSaved: (mark: number) => void;
 }
 
 export const createSessionSlice: SliceCreator<SessionSlice> = (set, get) => {
@@ -142,15 +146,25 @@ export const createSessionSlice: SliceCreator<SessionSlice> = (set, get) => {
       });
     },
 
-    toSave: () => buildSave(get(), {
-      // worldEnv/riding/waterworks are the live truth for these (see persistence.ts)
-      timeOfDay: worldEnv.time, dayCount: worldEnv.dayCount,
-      stabledIds: stabledHorses.ids, stabledAssigned: stabledHorses.assigned,
-      waterworks: waterworks.list,
+    toSave: () => ({
+      ...buildSave(get(), {
+        // worldEnv/riding/waterworks are the live truth for these (see persistence.ts)
+        timeOfDay: worldEnv.time, dayCount: worldEnv.dayCount,
+        stabledIds: stabledHorses.ids, stabledAssigned: stabledHorses.assigned,
+        waterworks: waterworks.list,
+      }),
+      savedAt: Date.now(),
     }),
 
     setCharacter: (character) => set({ character, dirty: true }),
 
-    markSaved: () => set({ dirty: false }),
+    saveMark: () => saveEdits.count,
+
+    // a change made while the save was on its way to the server is not in it, and stays to be written (ROADMAP.md, "a
+    // change made while an autosave is in flight…") — with the clock no longer marking the save every 2 s (OD-12),
+    // nothing else would write it until the next change
+    markSaved: (mark) => {
+      if (saveEdits.count === mark) set({ dirty: false });
+    },
   };
 };

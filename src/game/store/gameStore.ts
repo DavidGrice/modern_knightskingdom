@@ -10,6 +10,8 @@ import { freshPersisted, type PersistedState } from './persistence';
 import { playerState } from '../playerState';
 import { stationsInReach } from '../stations';
 import { exposeDebug } from '@/lib/debugHooks';
+import { saveEdits } from './storeCounters';
+import type { StoreSet } from './slices/types';
 import { createSessionSlice, type SessionSlice } from './slices/sessionSlice';
 import { createUiSlice, type UiSlice } from './slices/uiSlice';
 import { createProgressionSlice, type ProgressionSlice } from './slices/progressionSlice';
@@ -50,21 +52,29 @@ useGameStore.subscribe((s, prev) => {
 exposeDebug('__kk', useGameStore);
 
 function createGameStore() {
-  return create<GameState>((set, get) => ({
-    ...freshPersisted(null, 'normal'),
-    ...createSessionSlice(set, get),
-    ...createUiSlice(set, get),
-    ...createProgressionSlice(set, get),
-    ...createQuestSlice(set, get),
-    ...createStorySlice(set, get),
-    ...createInventorySlice(set, get),
-    ...createWorldSlice(set, get),
-    ...createGatheringSlice(set, get),
-    ...createBuildSlice(set, get),
-    ...createBuildToolsSlice(set, get),
-    ...createKeepSlice(set, get),
-    ...createVillagerSlice(set, get),
-    ...createCompanionSlice(set, get),
-    ...createEmpireSlice(set, get),
-  }));
+  return create<GameState>((setState, get) => {
+    // F-08b · the slices' set, counting each change that marks the save dirty (storeCounters.ts's saveEdits)
+    const set = ((partial: Partial<GameState> | ((s: GameState) => Partial<GameState>), replace?: boolean) => setState((s) => {
+      const patch = typeof partial === 'function' ? partial(s) : partial;
+      if (patch.dirty === true) saveEdits.count++;
+      return patch;
+    }, replace as false)) as StoreSet;
+    return {
+      ...freshPersisted(null, 'normal'),
+      ...createSessionSlice(set, get),
+      ...createUiSlice(set, get),
+      ...createProgressionSlice(set, get),
+      ...createQuestSlice(set, get),
+      ...createStorySlice(set, get),
+      ...createInventorySlice(set, get),
+      ...createWorldSlice(set, get),
+      ...createGatheringSlice(set, get),
+      ...createBuildSlice(set, get),
+      ...createBuildToolsSlice(set, get),
+      ...createKeepSlice(set, get),
+      ...createVillagerSlice(set, get),
+      ...createCompanionSlice(set, get),
+      ...createEmpireSlice(set, get),
+    };
+  });
 }

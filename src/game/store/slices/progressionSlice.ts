@@ -243,6 +243,9 @@ export const createProgressionSlice: SliceCreator<ProgressionSlice> = (set, get)
       if (tiers !== st.challengeTiers) set({ challengeTiers: tiers, dirty: true });
     },
 
+    // F-08b · a running tally (GameScreen.tsx hands it over every 4 s while the game runs) does not mark the save dirty,
+    // like the clock (OD-12): with it, an idle player's whole save went to the server every 20 s. It goes with any save
+    // made for another change, and Save & Quit and the tab-close flush write it whatever has changed
     flushStats: (delta) => {
       const st = get();
       set({
@@ -251,7 +254,6 @@ export const createProgressionSlice: SliceCreator<ProgressionSlice> = (set, get)
           distanceMeters: st.stats.distanceMeters + delta.distanceMeters,
           playtimeSec: st.stats.playtimeSec + delta.playtimeSec,
         },
-        dirty: true,
       });
     },
 
