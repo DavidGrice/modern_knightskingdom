@@ -1,6 +1,8 @@
 'use client';
 // In-game overlay panel dispatcher: one file per panel, this switch picks the one the store's `panel` field names.
-import { useGameStore } from '@/game/store/gameStore';
+import { useGameStore, type PanelId } from '@/game/store/gameStore';
+import { crashIfArmed } from '@/game/crashTest';
+import ErrorBoundary from '../ui/ErrorBoundary';
 import EmoteWheel from './EmoteWheel';
 import DialoguePanel from './DialoguePanel';
 import ShopPanel from './ShopPanel';
@@ -26,6 +28,23 @@ import GuildPanel from './GuildPanel';
 
 export default function Panels() {
   const panel = useGameStore((s) => s.panel);
+  // F-06 · a panel that throws is closed with a notice, and the game goes on; the boundary is keyed by the panel, so
+  // the next one opened starts afresh
+  return (
+    <ErrorBoundary key={panel} name="panel" fallback={null} onError={closeBrokenPanel}>
+      <Panel panel={panel} />
+    </ErrorBoundary>
+  );
+}
+
+function closeBrokenPanel() {
+  const st = useGameStore.getState();
+  st.setPanel('none');
+  st.notify('That panel broke and was closed. The game goes on.');
+}
+
+function Panel({ panel }: { panel: PanelId }) {
+  if (panel !== 'none') crashIfArmed('panel');
   switch (panel) {
     case 'inventory': return <InventoryPanel />;
     case 'crafting': return <CraftingPanel />;

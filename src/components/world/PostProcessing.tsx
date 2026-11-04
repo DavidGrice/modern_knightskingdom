@@ -10,8 +10,9 @@
 // `gl.render(scene, camera)` call for the WHOLE canvas and expects that
 // subscriber to render instead (verified directly against the installed
 // @react-three/fiber source — `internal.priority` bookkeeping). This
-// component is the only priority>0 subscriber anywhere in the codebase, and
-// it is ALWAYS mounted (never conditionally, so R3F's priority accounting
+// component is the only priority>0 subscriber that renders (the frame watch's
+// closing callback, game/frameWatch.ts, sits above it only to run after the
+// render, and is as always-mounted), and it is ALWAYS mounted (never conditionally, so R3F's priority accounting
 // never flaps mid-session) — its callback just branches internally: with no
 // active composer (`aaMode === 'off'`) it does the exact `gl.render(scene,
 // camera)` R3F would have done on its own, so "Off" is byte-identical to

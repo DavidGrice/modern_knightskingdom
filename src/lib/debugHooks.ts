@@ -6,8 +6,8 @@
 //
 // Zero imports on purpose — the store-free leaf modules (riding, carts, env, ...) can pull this in
 // without adding an edge to any import cycle. SSR-safe: a no-op when there is no `window`.
-// Deliberately NOT gated on NODE_ENV — stripping the hooks from production builds is an open owner
-// decision (CLEANUP_PLAN.md, Open questions), not something this helper decides.
+// Deliberately NOT gated on NODE_ENV — the owner kept the hooks in production builds (FEATURE_PLAN.md, OD-14):
+// the probes run against those, crash tests (game/crashTest.ts) included.
 // Dev note: ~70 modules import this file, so editing it under `next dev` re-creates their singletons —
 // reload the page afterwards.
 //
@@ -27,7 +27,8 @@
 //   game/buildChallenge: __kkbuildchallenge    game/carts: __kkCart, __kkCartPos
 //   game/cedricSiege: __kkCedricWar            game/challengeModes: __kkchallenges
 //   game/collisionShapes: __kkshapes           game/commandWheel: __kkwheel
-//   game/companion: __kkcompanioncombat        game/crew: __kkcrew
+//   game/companion: __kkcompanioncombat        game/crashTest: __kkcrash
+//   game/crew: __kkcrew
 //   game/defenders: __kkdefenders, __kkorders  game/difficulty: __kkdiff
 //   game/directors/state: __kkdirectors
 //   game/dragonAir: __kkdragonAir, __kkdragonAirBlack
@@ -45,7 +46,7 @@
 //   game/data/buildables: __kkcollideFor       game/data/road: __kkroadEntry, __kkonRoad
 //   game/data/validate: __kkdata
 //   game/store/appStore: __kkapp               game/store/gameStore: __kk
-//   lib/audio: __kkaudio
+//   lib/audio: __kkaudio                       lib/errorLog: __kkerrors
 
 export function exposeDebug(name: string, value: unknown): void {
   if (typeof window === 'undefined') return;

@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useAppStore, currentScreen } from '@/game/store/appStore';
 import { audio } from '@/lib/audio';
+import { installErrorLog } from '@/lib/errorLog';
 import AuthStack from './stacks/AuthStack';
 import MainMenu from './stacks/MainMenu';
 import OptionsStack from './stacks/OptionsStack';
@@ -18,6 +19,9 @@ export default function App() {
   const setUser = useAppStore((s) => s.setUser);
   const resetTo = useAppStore((s) => s.resetTo);
   const settings = useAppStore((s) => s.settings);
+
+  // F-06 · from now on every error that reaches the window is kept, with its stack (window.__kkerrors)
+  useEffect(() => installErrorLog(), []);
 
   // restore an existing session on startup
   useEffect(() => {

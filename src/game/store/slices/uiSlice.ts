@@ -10,7 +10,7 @@ import type { SliceCreator } from './types';
 
 interface Notification { id: number; text: string; gold?: boolean }
 
-export type PanelId = 'none' | 'inventory' | 'crafting' | 'quests' | 'skills' | 'emotes' | 'dialogue' | 'shop' | 'villagers' | 'travel' | 'chronicle' | 'parley' | 'guild' | 'commands' | 'npcEquip' | 'stationMenu' | 'appearance' | 'bestiary' | 'keepSocket' | 'buildingMenu' | 'workshop';
+export type PanelId = 'none' | 'inventory' | 'crafting' | 'quests' | 'skills' | 'emotes' | 'dialogue' | 'shop' | 'villagers' | 'travel' | 'chronicle' | 'parley' | 'guild' | 'npcEquip' | 'stationMenu' | 'appearance' | 'bestiary' | 'keepSocket' | 'buildingMenu' | 'workshop';
 
 type CameraMode = 'fps' | 'third';
 
