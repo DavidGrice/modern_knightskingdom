@@ -5,13 +5,12 @@
 // focus navigation.
 //
 // Wave 61 (H1) adds that in-panel navigation, at a real but honestly-scoped
-// shape: re-reading every one of the 19 real, reachable PanelId panels
-// (`commands` is dead code — no `setPanel('commands')` call anywhere and
-// Panels.tsx's switch has no case for it) showed the overwhelming majority of
-// their actionable controls are ALREADY real `<button>` elements — natively
-// Tab/Shift-Tab-focusable and Enter/Space-activatable the instant pointer
-// lock releases (the player's pointer-lock panel watcher, input/usePointerLock.ts,
-// calls `releaseGameLock()` the moment any panel opens). That already
+// shape: re-reading every one of the 19 PanelId panels showed the
+// overwhelming majority of their actionable controls are ALREADY real
+// `<button>` elements — natively Tab/Shift-Tab-focusable and
+// Enter/Space-activatable the instant pointer lock releases (the player's
+// pointer-lock panel watcher, input/usePointerLock.ts, calls
+// `releaseGameLock()` the moment any panel opens). That already
 // worked today, silently, just invisibly (no focus-visible ring) and
 // unreachable by a gamepad specifically, since a gamepad press synthesizes
 // no DOM event at all. So rather than a bespoke system per panel, this is one

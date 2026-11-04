@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { useAppStore } from '@/game/store/appStore';
 import { closeWheel, commandWheel, openWheel } from '@/game/commandWheel';
 import { DEFENDER_ORDER_COUNT, giveDefenderOrder } from '@/game/data/defenderOrders';
@@ -12,6 +12,11 @@ import { isRebindListening } from '@/game/data/keybinds';
 import { statsAccum } from '@/game/statsAccum';
 import { preloadCommonAssets } from '@/game/preload';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
+import { crashIfArmed } from '@/game/crashTest';
+import { FAILED_FRAMES_TO_STOP, WATCH_BEGIN_PRIORITY, WATCH_END_PRIORITY, makeFrameWatch } from '@/game/frameWatch';
+import { releaseGameLock } from '@/game/pointerLock';
+import { errorLog } from '@/lib/errorLog';
+import ErrorBoundary from '../ui/ErrorBoundary';
 import GameWorld from '../world/GameWorld';
 import HUD from '../hud/HUD';
 import TouchControls from '../hud/TouchControls';
@@ -49,6 +54,44 @@ function PauseMenu({ onQuit }: { onQuit: () => void }) {
   );
 }
 
+// F-06 · what stands in the world's place when it fails: the store and the last autosave are untouched (autosave
+// stops with the world), and a reload brings the game back from that save
+function WorldFailed() {
+  return (
+    <div className="pause-overlay clickable" style={{ zIndex: 30 }}>
+      <div className="panel" style={{ width: 420 }}>
+        <h1 className="game-title" style={{ fontSize: 28 }}>The World Has Faltered</h1>
+        <p>Something in the world broke and it could not go on. Your last autosave is safe.</p>
+        <button className="menu-btn" onClick={() => window.location.reload()}>Reload</button>
+      </div>
+    </div>
+  );
+}
+
+// F-06 · a frame that throws never reaches the scene's error boundary (game/frameWatch.ts says why): this watches the
+// world's own frames from inside its Canvas and calls `onStop` once FAILED_FRAMES_TO_STOP in a row have failed
+function FrameWatch({ onStop }: { onStop: () => void }) {
+  const [watch] = useState(makeFrameWatch);
+  useFrame(() => {
+    if (watch.begin() >= FAILED_FRAMES_TO_STOP) onStop();
+  }, WATCH_BEGIN_PRIORITY);
+  useFrame(() => watch.end(), WATCH_END_PRIORITY);
+  return null;
+}
+
+// F-06 · ...and this throws where the scene's boundary sees it: beside the Canvas, not in it, since a throw in the
+// Canvas's own tree reaches the window as well as the boundary, and the log would hold it twice
+function WorldStopped(): null {
+  const last = errorLog[errorLog.length - 1];
+  throw new Error(`the world stopped: ${FAILED_FRAMES_TO_STOP} frames in a row threw${last ? ` (${last.message})` : ''}`);
+}
+
+// F-06 · the frame crash test (game/crashTest.ts)
+function FrameCrashTest() {
+  useFrame(() => crashIfArmed('frame'));
+  return null;
+}
+
 export default function GameScreen() {
   const guest = useAppStore((s) => s.guest);
   const resetTo = useAppStore((s) => s.resetTo);
@@ -63,6 +106,7 @@ export default function GameScreen() {
   const buildMode = useGameStore((s) => s.buildMode);
   const character = useGameStore((s) => s.character);
   const saveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [worldStopped, setWorldStopped] = useState(false);
 
   // hotkeys — looked up by action through the current keybinds, not the raw
   // key code, so rebinding in Options (see keybinds.ts) takes effect here
@@ -203,26 +247,37 @@ export default function GameScreen() {
     resetTo('menu');
   }
 
+  // F-06 · the world failed: free the pointer for the card's button, and autosave no more over the last good save
+  function worldFailed() {
+    releaseGameLock();
+    if (saveTimer.current) clearInterval(saveTimer.current);
+  }
+
   if (!character) return null;
 
   return (
     <div style={{ position: 'absolute', inset: 0 }} onContextMenu={(e) => e.preventDefault()}>
-      <Canvas
-        shadows={shadows}
-        dpr={profile.dpr}
-        // Requested 2026-07-31: once any PostProcessing AA mode is active,
-        // hardware MSAA on the (now offscreen, non-multisampled-target)
-        // default framebuffer is inert overhead regardless — this just
-        // avoids paying for it. `antialias` is a context-creation attribute
-        // (can't change on an already-created WebGL context), so this only
-        // takes effect on the next full Canvas mount, same category of
-        // limitation as the quality tier's own antialias/powerPreference.
-        gl={{ antialias: profile.gl.antialias && aaMode === 'off', powerPreference: profile.gl.powerPreference }}
-        camera={{ fov, near: 0.1, far: 500, position: [0, 1.6, 26] }}
-        style={{ position: 'absolute', inset: 0 }}
-      >
-        <GameWorld />
-      </Canvas>
+      <ErrorBoundary name="scene" fallback={<WorldFailed />} onError={worldFailed}>
+        <Canvas
+          shadows={shadows}
+          dpr={profile.dpr}
+          // Requested 2026-07-31: once any PostProcessing AA mode is active,
+          // hardware MSAA on the (now offscreen, non-multisampled-target)
+          // default framebuffer is inert overhead regardless — this just
+          // avoids paying for it. `antialias` is a context-creation attribute
+          // (can't change on an already-created WebGL context), so this only
+          // takes effect on the next full Canvas mount, same category of
+          // limitation as the quality tier's own antialias/powerPreference.
+          gl={{ antialias: profile.gl.antialias && aaMode === 'off', powerPreference: profile.gl.powerPreference }}
+          camera={{ fov, near: 0.1, far: 500, position: [0, 1.6, 26] }}
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <GameWorld />
+          <FrameCrashTest />
+          <FrameWatch onStop={() => setWorldStopped(true)} />
+        </Canvas>
+        {worldStopped && <WorldStopped />}
+      </ErrorBoundary>
       <HUD />
       <TouchControls />
       <FactionTheme />

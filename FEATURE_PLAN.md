@@ -76,6 +76,21 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   upright textured meshes with a green sprite on a one-colour background. ROADMAP: BUG-8219 retagged fixed; the trees
   this uncovered standing upside down logged as a new entry. Measured on main (`cln22_cards_probe.mjs`, all 14
   destinations): 30 card trees in 8 destinations (none at the challenge grounds), all 30 drawn opaque, 0% alpha.
+- **#291 — Wave 62.5** (F-06): crash boundaries and an error log. A class boundary (`components/ui/ErrorBoundary.tsx`)
+  round the panel dispatcher closes a panel that throws, with a notice, and the game goes on; round the Canvas it puts up
+  "The World Has Faltered" with Reload, gives the pointer back and stops the autosave. A frame that throws never reaches
+  React, so `FrameWatch` (`game/frameWatch.ts`, the world Canvas's own first and last useFrame) turns three failed
+  frames in a row into a throw the scene's boundary sees. `app/error.tsx` and `global-error.tsx` catch the rest. The error log
+  (`lib/errorLog.ts`: the last 20 with stacks, localStorage `kk_errors`, `window.__kkerrors`) takes the window's error
+  and unhandledrejection and every boundary's catch. Crash hooks `__kkcrash.panel`/`.frame` (`game/crashTest.ts`, on
+  production builds per OD-14). The recovery writer (`lib/recovery.ts`) is F-08b's no-op hook. Premises held, with three
+  adaptations: React renders a tree that threw once more before its boundary takes the error, so a crash hook holds until
+  set back rather than firing once; the probe harness `kk.mjs` already listened for `pageerror`; and BUG-8746's hunt (four
+  runs on a development build, two on `main`) met no error at all, so #177 closes as captured on recurrence, the merchant
+  left as he was. OD-17: the dead `'commands'` PanelId is gone. ROADMAP: BUG-8746 closed, OPEN-079 retagged closed, the
+  crash fix logged fixed. Measured on main (`w625_crash.mjs`): a panel's throw white-screened the app (Next's
+  "Application error", 0 frames); a frame's left the canvas up at 0 frames a second, 129 page errors in a few seconds;
+  nothing logged anywhere.
 
 ## Owner decisions
 

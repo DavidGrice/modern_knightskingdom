@@ -282,7 +282,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | ID | Status | Size | Item | What remains |
 |---|---|---|---|---|
 | OPEN-035 | STILL_OPEN | S | Dead CourtNpc.schedule lerp mechanism never removed | Delete the structurally-dead schedule branch, scheduledCourtNpcs(), npcSync.ts, and stale comments — pure cleanup, zero behavior change. |
-| OPEN-079 | STILL_OPEN | S | Dead 'commands' member of the PanelId union never removed | Delete 'commands' from the PanelId union and its stale reference in GamepadMenuController.tsx's comment. |
+| OPEN-079 | CLOSED | S | Dead 'commands' member of the PanelId union never removed | Closed by wave 62.5 (#291, with F-06): 'commands' is deleted from the `PanelId` union (`store/slices/uiSlice.ts:13`), and GamepadMenuController.tsx's comment no longer names it. |
 | OPEN-089 | STILL_OPEN | S | SaveGame.playerPos declared but never written or read | Either delete the dead field from SaveGame, or wire playerState into save.ts's serialization/deserialization. |
 | OPEN-091 | STILL_OPEN | S | DungeonScene freezes room layout via useMemo(() => ..., []) | Confirmed unreachable through real gameplay (separate UI-driven events), but the fragile pattern remains; swap for a live read or add a guarding comment. |
 | OPEN-092 | PARTIALLY_DONE | M | Latent circular-import hazard around gameStore/difficulty.ts | Only 2 known edges were inverted via leaf-module imports; the root cause (difficulty.ts's undeferred module-scope subscribe) and the general TemplateWorld->...->difficulty.ts chain remain latent. |
@@ -9005,7 +9005,7 @@ registration taken out (the session-start test fails, `[false, 1077, true]` for 
 live:** a save loaded with the scene up (the unit test starts a new game, which runs the same session-reset hook a load does), and the skeletons' and camp guards' timers across a
 remount.
 
-## Seen, not looked into: React error #177 ("Cannot commit the same tree as before") once in a live probe — logged 2026-10-29 (during CLN-26, part 1)
+## Closed: React error #177 ("Cannot commit the same tree as before") once in a live probe — logged 2026-10-29 (during CLN-26, part 1), CLOSED 2026-11-03 (wave 62.5: captured on recurrence)
 
 One run of CLN-26's interaction probe on a production build of the change (`cln26_probe.mjs`: the player stood at a few
 things at home and acting on each — a held click on a tree, a herb, the fishing spot and a construction site, E at the
@@ -9015,6 +9015,16 @@ react-dom's client and in react-three-fiber's own reconciler, and the minified m
 come back in three more runs of the same build of the change, nor in four runs of main; and the change does not alter
 when or how anything renders — the interaction code it moved is called from the same frame callback, at the same point,
 as before. Logged in case it shows up again: a development build would give the full message and the stack.
+
+**Closed, to be caught when it comes back** (wave 62.5, FEATURE_PLAN.md's F-06). The hunt the entry asked for found
+nothing to name: four runs of `cln26_probe.mjs` on a development build of the wave's branch (`next dev`, which gives
+React's full message and component stack) and two on `main`'s production build met no page error at all
+(`scripts/cln-tools/out/w625/cln26_{dev,main}_*.json`, local: `errors: []` in all six). The suspect the plan named, a
+state change from inside the merchant's frame callback (`Merchant.tsx`), was not touched without the error to tie it to.
+What the wave did instead is make the next one tell: every error that reaches the window, and every one the new error
+boundaries catch, is kept with its stack — and a boundary's with the component stack — in the error log
+(`lib/errorLog.ts`: the last 20, in localStorage `kk_errors` and on `window.__kkerrors`; see the crash-boundaries entry
+at the end of this file). If #177 recurs, that log keeps when it happened, its message and its stack — React raises #177 while committing, outside any component, so no boundary catches it and no component stack comes with it: the stack will name React's internals, not a component.
 
 ## Dead code: the pointer lock's `retry` and `lockCleanup` — logged 2026-10-30 (CLN-26, part 3's review), DELETED 2026-10-31
 
@@ -9156,3 +9166,110 @@ template-04's 40-45, template-05's 44 and 46, template-06's 76 and 77, template-
 **Not looked into:** which of those are inverted (some may stand right), and whether flipping each card's texture
 coordinates would serve better than that table's mirror of a whole row's geometry about its bounds (which, as its own
 comment records, moves a row that is not centred in its box).
+
+## Bugfix: a panel or a frame that threw took the game down, and left no record — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, GAP-error-boundaries), FIXED 2026-11-03
+
+**The fault.** The app had no error boundary anywhere — no `app/error.tsx`, no `global-error.tsx`, no class boundary —
+and nothing kept an error once the console was gone. So a panel that threw as it rendered unmounted the whole React
+tree and Next put up its bare "Application error: a client-side exception has occurred": the world, the HUD and the
+game with them. A throw in a frame callback (a `useFrame`) is not React's at all: react-three-fiber runs them from its
+own `requestAnimationFrame` loop, so the throw skipped every callback after it and the render, every frame, and the
+world stood frozen while the HUD still answered, with no word said. Measured on `main` (base-14's production build of
+4980f0f, build id `YUihVoUpmH2nZ2TkAsKf8`, `scripts/cln-tools/w625_crash.mjs`): the Chronicle made to throw as it
+renders white-screened the app — Next's "Application error" page, the canvas gone, 0 frames; a frame made to throw
+(the merchant's state, read only by his own frame callback) left the canvas up but stopped the loop — 0 frames a
+second, 129 page errors within a few seconds — while the store still opened and closed panels; and neither left
+anything behind (no `__kkerrors`, nothing in localStorage).
+
+**The fix.** (1) An error boundary (`components/ui/ErrorBoundary.tsx`) that shows a fallback in place of what threw,
+logs the error and calls the recovery writer (`lib/recovery.ts`: a no-op until FEATURE_PLAN.md's F-08b, wave 63.3, fills
+it; it must never write the main save). Round the panel dispatcher (`hud/Panels.tsx`), keyed by the panel: a panel that
+throws is closed with a notice ("That panel broke and was closed. The game goes on."), and the next one opened starts
+afresh. Round the Canvas (`stacks/GameScreen.tsx`): a throw while the world renders comes out of react-three-fiber's
+own boundary through its Canvas, and the card "The World Has Faltered" stands in the world's place with Reload; the
+pointer is given back and the autosave stops, so the last good save is not written over. (2) A frame that throws never
+reaches a boundary, so `GameScreen.tsx`'s `FrameWatch` watches the world's own frames (`game/frameWatch.ts`): opened
+by the world Canvas's first useFrame callback and closed by its last, after the render, a frame that finds it still
+open follows one that failed; three in a row and `WorldStopped`, beside the Canvas, throws where the scene's boundary
+sees it. It is the world root's watch, not the loop's: one react-three-fiber loop runs every Canvas (the HUD's portrait,
+the panels' previews), and a preview that throws after the world has drawn is not the world's failure. (3) `app/error.tsx` and
+`app/global-error.tsx` catch what the game's own boundaries do not (the menus, the HUD) with a "Something Broke" card
+and Reload. (4) The error log (`lib/errorLog.ts`): the last 20 errors with their stacks, newest last, kept in
+localStorage `kk_errors` and on `window.__kkerrors`; it takes the window's `error` and `unhandledrejection` (installed
+from `App.tsx`) and what every boundary catches, and counts the same error met back to back on one entry. (5) Crash-test
+hooks for the probes, reachable on production builds (OD-14): `window.__kkcrash.panel = true` makes every panel opened
+throw, `__kkcrash.frame = true` every frame (`game/crashTest.ts`); each holds until set back, since React renders a tree
+that threw once more before it hands the error to a boundary. The standard probe harness (`scripts/cln-tools/kk.mjs`)
+already listens for `pageerror`. Ride-along (OD-17): the dead `'commands'` member of `PanelId` is deleted (OPEN-079).
+
+**Verified** with `tsc`, `next build` and the unit tests — new: `components/ui/ErrorBoundary.test.ts` (the boundary
+shows its children and then its fallback; logs the error with the component stack under its name; calls the recovery
+writer then `onError`, and the main save key `kk_guest_save` is never written; a recovery writer that throws is passed
+over), `lib/errorLog.test.ts` (the log caps at 20, in the page and in localStorage; keeps the stack; counts a repeat on
+one entry; takes the window's error and rejection) and `game/frameWatch.test.ts` (failed frames counted in a row, and
+reset by a frame that ran through; on a model of react-three-fiber's one loop, a later Canvas that throws every frame
+does not trip the world's watch, while a world callback or the world's render that throws does). Each was failed by taking its piece out — the cap's splice, the window listener,
+the repeat count, `writeRecovery()`, the fallback, the component stack, the recovery writer's try, the watch's count,
+its `end` — and restored (`git diff` and the new files identical before and after). Live on the change's production
+build (port 3102, build id `5OXLKXsh93FRR2L8XqeCf`, `w625_crash.mjs` and `w625_app.mjs`): the Chronicle's throw and
+`__kkcrash.panel` each closed the panel with the notice, the world drawing on (183 frames a second), the Skills panel
+opening after, and one `panel` entry with its stack in `__kkerrors` and in localStorage; the merchant's frame throw and
+`__kkcrash.frame` each put up the card after 4 failed frames (the window's error counted 4 on one entry, then the
+scene's own entry), 0 frames after; a throw in the HUD put up `app/error.tsx`'s card, and Reload brought the title
+screen back with the log kept. Side by side with `main` (the evidence pass: `tsc` clean, 73 files and 555 unit tests
+passing, `next build` clean; fourteen take-outs — the six above in the error log plus its localStorage write and its
+`unhandledrejection` listener, five in the boundary, the recovery writer's try and the watch's two — each failed its
+test, and a sha256 of `git diff` with the new files was the same before and after; main is base-14's production build
+of 4980f0f on port 3101, build id `YUihVoUpmH2nZ2TkAsKf8`, the change a fresh one on port 3102, `DlxvF0H2sDon5fxuiud2M`,
+the same script digest `227883ba31fc` as above): before any throw both drew 180-183 frames a second with the same HUD.
+The Chronicle's throw on main gave Next's "Application error", the canvas gone, 0 frames, the Skills panel not shown
+after; on the change the notice, 183 frames a second, the Skills panel shown, one `panel` entry in `__kkerrors` and
+`kk_errors`. The merchant's frame throw on main left the HUD up and the world at 0 frames a second, 133 page errors in
+about 2 s and 1591 in about 27 s, `__kkerrors` not there and nothing in localStorage, and the autosave still writing
+the frozen game (`kk_guest_save` removed and the store marked dirty after the throw: a 1626-byte save back within 25 s,
+`w625_ev_autosave.mjs`); on the change the card, 6 page errors in 2 s and 5 in 27 s, the world's WebGL canvas gone
+(two WebGL canvases and the minimap's 2D one before, one WebGL after), `__kkerrors` and `kk_errors` holding the
+window's error (count 4), the `scene` entry and the one frame more that threw before the Canvas came down, and no save
+written in the 25 s. `__kkcrash.panel` and `.frame` on the change did the same as the probe's own throws; on main
+`__kkcrash` is not there. A throw in the HUD on main gave Next's "Application error" with no Reload and no log; on the
+change "Something Broke", one `app` entry, and Reload to the title screen with the entry kept. CLN-26's interaction
+probe (`cln26_probe.mjs`, deterministic frames) gave the same prompts, actions and placements on both, no problems and
+no page errors, and no card on the change. Not measured: `global-error.tsx` (a throw in the root layout itself was not
+staged), the card's Reload (only `app/error.tsx`'s was clicked), and a signed-in player's autosave (only the guest's); nor a component inside the world's Canvas throwing in render — that it reaches the scene boundary through react-three-fiber's own boundary and its Canvas was read from react-three-fiber's source, not staged (the probe's frame modes throw from a useFrame).
+The review then found the first `FrameWatch` hung on react-three-fiber's global before/after effects, which bracket
+every Canvas's frame, so a panel preview throwing every frame would have put up the world's card over a world still
+drawing; it now runs as the world Canvas's first and last useFrame callbacks (priorities -1e9 and 1e9; the world's
+render was already PostProcessing's, at 1), and the throw moved beside the Canvas so the log does not hold it twice.
+The new model test fails with the old global effects modelled, with the closing priority at 0 (a throw in the render
+missed) and with the opening one at 0 (a world callback's throw missed). Live again (`tsc` clean, 73 files and 558
+unit tests, the change rebuilt as `J7vF4eAQ3SFt-YbR112OV`): a new `w625_crash.mjs preview` mode opens the inventory
+and makes its preview's WebGL context throw on every draw — main (`YUihVoUpmH2nZ2TkAsKf8`) drew on at 180 frames a
+second with 122 page errors and no log, the change at 180 with no card, 120 page errors and one `error` entry counting
+120; the frame, `__kkcrash.frame`, panel and autosave runs gave what they gave above (the card after the window's error
+counted 4, then the `scene` entry and, on one of the two runs, the one frame more; 5-6 page errors; the panel's notice
+at 180 frames; the WebGL canvas gone and no save in 25 s).
+
+## Seen, not fixed: a panel's own Canvas that throws every frame is caught by nothing — logged 2026-11-03 (wave 62.5)
+
+Found while fixing F-06's frame watch. A useFrame callback or render that throws in a panel's own Canvas (the
+inventory's, appearance's and equip panel's `RotatablePreview`, the villagers' portrait) reaches only the window, not
+the panel's boundary, so the panel stays open with its preview frozen and the error log counts one window error a
+frame (120 in about 2 s with the probe's broken WebGL context, `w625_crash.mjs preview`). The world draws on, as on
+`main`, which is no better. A fix would give those Canvases a watch of their own that closes the panel the way a
+render throw does.
+
+## Seen, not fixed: an error log entry can lose its component stack to the length cut — logged 2026-11-03 (in the review of wave 62.5; by the code)
+
+`lib/errorLog.ts`'s `logError` appends a boundary's component stack after the error's own stack and cuts the whole to
+2,000 characters (`STACK_LENGTH`). A long JavaScript stack — a production build's long chunk URLs over V8's ten frames —
+can push the component stack, the part that names the component, partly or wholly past the cut. To do: keep each part
+to its own share of the length, or put the component stack first, and pin it with a test.
+
+## Seen, not fixed: a panel whose effect cleanup throws on close takes the whole game down — logged 2026-11-03 (in the review of wave 62.5; by the code)
+
+The panel's error boundary (`hud/Panels.tsx`) is keyed by the panel, so closing or switching a panel deletes the boundary
+with it. An error from a deleted subtree's effect cleanup is routed by React to the nearest still-mounted ancestor, past
+that boundary, so a panel whose `useEffect`/`useLayoutEffect` cleanup throws on close reaches `app/error.tsx`: "Something
+Broke" over the whole game instead of the panel closing with a notice. `main` white-screened here too, so this is a gap,
+not a regression. To do: a stable boundary that resets its failed state when the panel changes, instead of one remounted
+by key.
