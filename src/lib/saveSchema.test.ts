@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkSave, MAX_SAVE_LENGTH, parseSave, REQUIRED_SAVE_FIELDS, SAVE_VERSION } from './saveSchema';
+import { checkSave, MAX_SAVE_LENGTH, migrateSave, parseSave, REQUIRED_SAVE_FIELDS, SAVE_MIGRATIONS, SAVE_VERSION } from './saveSchema';
 import { PERSISTED_FIELDS, PERSISTED_KEYS } from '@/game/store/persistence';
 import { useGameStore } from '@/game/store/gameStore';
 import type { CharacterConfig, SaveGame } from '@/game/types';
@@ -38,6 +38,13 @@ describe('the save check', () => {
     expect(parseSave('null')).toEqual({ ok: false, problem: 'it is not a save at all' });
     expect(parseSave(' '.repeat(MAX_SAVE_LENGTH + 1))).toEqual({ ok: false, problem: 'it is far too large' });
     expect(checkSave({ ...save, version: '1' })).toEqual({ ok: false, problem: 'its version is not a number' });
+    // the fraction and the zero first: before the fix they pass the check, so the test fails there rather than hanging
+    // on the -1e300 its migration loop never left
+    for (const version of [0.5, 0, -1, -1e300]) {
+      expect(parseSave(JSON.stringify({ ...save, version })))
+        .toEqual({ ok: false, problem: `its version is not one the game ever wrote (${version})` });
+    }
+    expect(checkSave({ ...save, version: -Infinity }).ok).toBe(false);
     expect(checkSave({ ...save, version: SAVE_VERSION + 1 }))
       .toEqual({ ok: false, problem: `it was made by a newer version of the game (save version ${SAVE_VERSION + 1})`, newer: true });
     for (const [k, kind] of Object.entries(REQUIRED_SAVE_FIELDS)) {
@@ -46,5 +53,27 @@ describe('the save check', () => {
       expect(checkSave({ ...save, [k]: null })).toEqual({ ok: false, problem: `its ${k} is missing or damaged` });
       expect(checkSave({ ...save, [k]: kind === 'list' ? {} : [] })).toEqual({ ok: false, problem: `its ${k} is missing or damaged` });
     }
+  });
+});
+
+describe('the migrations (F-09)', () => {
+  it('bring an older save up a step at a time, in order, and leave one already there as it is', () => {
+    const steps = {
+      1: (s: Record<string, unknown>) => ({ ...s, trail: [...(s.trail as number[]), 1] }),
+      2: (s: Record<string, unknown>) => ({ ...s, trail: [...(s.trail as number[]), 2] }),
+      3: (s: Record<string, unknown>) => ({ ...s, trail: [...(s.trail as number[]), 3] }),
+    };
+    expect(migrateSave({ version: 1, trail: [] }, steps, 4)).toEqual({ version: 4, trail: [1, 2, 3] });
+    expect(migrateSave({ version: 2, trail: [] }, steps, 4)).toEqual({ version: 4, trail: [2, 3] });
+    expect(migrateSave({ trail: [] }, steps, 3)).toEqual({ version: 3, trail: [1, 2] }); // no version: the first
+    const current = { version: 4, trail: [] };
+    expect(migrateSave(current, steps, 4)).toBe(current);
+  });
+
+  it('are none yet, and the save check runs them: what it hands on is at SAVE_VERSION', () => {
+    expect(SAVE_MIGRATIONS).toEqual({});
+    const save = realSave();
+    const { version: _v, ...unversioned } = save; // the oldest a save can be: the first, which has no step yet
+    expect(parseSave(JSON.stringify(unversioned))).toEqual({ ok: true, save: JSON.parse(JSON.stringify(save)) });
   });
 });

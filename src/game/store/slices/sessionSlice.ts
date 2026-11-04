@@ -152,6 +152,7 @@ export const createSessionSlice: SliceCreator<SessionSlice> = (set, get) => {
         timeOfDay: worldEnv.time, dayCount: worldEnv.dayCount,
         stabledIds: stabledHorses.ids, stabledAssigned: stabledHorses.assigned,
         waterworks: waterworks.list,
+        carriedKeepExtra: buildUndo.carriedKeepExtra,
       }),
       savedAt: Date.now(),
     }),

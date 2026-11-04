@@ -33,12 +33,14 @@ export interface LifetimeStats {
  * The persisted save shape. CLN-03 · this interface is the DOCUMENTED type home
  * of every saved field, and store/persistence.ts's PERSISTED_FIELDS table is
  * the single behavioural one (fresh-game default, load rule, save rule): the
- * store's `GameState` inherits every field here (minus `version`/`playerPos`)
+ * store's `GameState` inherits every field here (minus persistence.ts's UNPERSISTED_SAVE_KEYS)
  * from it, so adding a persisted field is (1) a line here and (2) a row there.
  * Everything after `buildings` stays optional so an old save still loads.
  */
 export interface SaveGame {
-  version: 1;
+  /** the schema version (lib/saveSchema.ts's SAVE_VERSION when it was written): a newer one is refused, an older one
+   *  brought up through SAVE_MIGRATIONS. Absent is taken as the first. */
+  version: number;
   /** F-08b · when toSave() took it (ms since the epoch): which of two copies of one player's save is the newer — the
    *  server's and the shadow the tab-close flush left in the browser, or the main save and the recovery slot. Absent on
    *  saves written before it, which are taken as the oldest. */
@@ -54,6 +56,8 @@ export interface SaveGame {
   completedQuests: string[];
   questProgress: Record<string, Record<string, number>>;
   buildings: PlacedBuilding[];
+  /** legacy, and optional for good: no toSave has ever written it and no load reads it — a game starts and loads at
+   *  the spawn point (playerState.ts's resetPlayerState). Kept so a save that carries one still type-checks. */
   playerPos?: [number, number, number];
   timeOfDay?: number;
   /** full in-game days elapsed (Phase 15 seasons), absent = 0 */
@@ -84,10 +88,9 @@ export interface SaveGame {
   workshop?: { setNum: string; step: number } | null;
   builtSets?: string[];
   /** G27 · caught-and-stabled horse ids, and villagerId -> horseId assignments.
-   *  On load these are mirrored into riding.ts's leaf module, because the
-   *  mounted patrol AI reads it every frame and must not go through the store;
-   *  toSave therefore saves from THAT module, not from the store's own (dead)
-   *  copy. */
+   *  On load these go into riding.ts's leaf module, because the mounted patrol
+   *  AI reads it every frame and must not go through the store; toSave
+   *  therefore saves from THAT module. The store keeps no copy (OD-17). */
   stabled?: string[];
   mounts?: Record<string, string>;
   /** Wave 13 · the falcon companion has been tamed (see game/falcon.ts and

@@ -7,9 +7,9 @@
 // PersistedState, and the initial state, newGame/new-game-plus, loadFromSave
 // and toSave are all derived from this table).
 //
-// Leaf module: imports only types and MAX_LAND_TIER (the two zero-tables live
-// here) — nothing here may ever import gameStore.ts (see the TDZ history in
-// slices/buildSlice.ts's homeGroundY comment).
+// Leaf module: imports only types, MAX_LAND_TIER (the two zero-tables live
+// here) and SAVE_VERSION — nothing here may ever import gameStore.ts (see the
+// TDZ history in slices/buildSlice.ts's homeGroundY comment).
 //
 // What deliberately stays OUT of the table (still hand-written, in slices/sessionSlice.ts and storeCounters.ts):
 // the transient reset literals (their `dirty`/`season` differ between a fresh
@@ -17,9 +17,11 @@
 // setWaterworks, worldEnv), the id sequence counters, and NG+'s xp/skillTree
 // overlay — all order-sensitive side effects or session lifecycle, not state
 // that is saved.
-import type { CharacterConfig, DifficultyId, LifetimeStats, SaveGame, SkillId, WaterFeature } from '../types';
+import type { CharacterConfig, DifficultyId, LifetimeStats, PlacedBuilding, SaveGame, SkillId, WaterFeature } from '../types';
 import type { KeepState } from '../data/keep';
 import { MAX_LAND_TIER } from '../data/landTiers';
+import { SAVE_VERSION } from '@/lib/saveSchema';
+import type { CarriedKeepExtra } from './storeCounters';
 
 export const ZERO_XP: Record<SkillId, number> = {
   woodcutting: 0, mining: 0, smithing: 0, fishing: 0, building: 0, combat: 0, farming: 0,
@@ -32,14 +34,18 @@ export const ZERO_STATS: LifetimeStats = {
 };
 
 /** SaveGame keys that intentionally have NO same-named persisted store field.
- *  `version` is the literal 1 buildSave stamps first (never read back);
- *  `savedAt` is the clock toSave() stamps last (read only to compare copies:
- *  lib/save.ts); `playerPos` is legacy — never written by any toSave, never
- *  read by any load (see playerState.ts). Kept on SaveGame, optional, for old saves. */
-export const UNPERSISTED_SAVE_KEYS = ['version', 'savedAt', 'playerPos'] as const satisfies readonly (keyof SaveGame)[];
+ *  `version` is SAVE_VERSION, which buildSave stamps first (read back only by
+ *  lib/saveSchema.ts's checkSave, to refuse a newer save and migrate an older
+ *  one); `savedAt` is the clock toSave() stamps last (read only to compare
+ *  copies: lib/save.ts); `stabled`/`mounts` are written by buildSave from the
+ *  riding.ts leaf module and read back into it by loadFromSave (OD-17: the
+ *  store's copies were never read, and are gone); `playerPos` is legacy —
+ *  never written by any toSave, never read by any load (see playerState.ts).
+ *  Kept on SaveGame, optional, for old saves. */
+export const UNPERSISTED_SAVE_KEYS = ['version', 'savedAt', 'playerPos', 'stabled', 'mounts'] as const satisfies readonly (keyof SaveGame)[];
 type UnpersistedKey = (typeof UNPERSISTED_SAVE_KEYS)[number];
 
-/** Every SaveGame key that has a same-named live store field (66 today). */
+/** Every SaveGame key that has a same-named live store field (64 today). */
 export type PersistedKey = Exclude<keyof SaveGame, UnpersistedKey>;
 
 /** The live (in-store) type of every persisted field: SaveGame's, minus the
@@ -63,7 +69,13 @@ export interface SaveLeaves {
   stabledAssigned: Readonly<Record<string, string>>;
   /** waterworks.list (waterworks.ts) */
   waterworks: readonly WaterFeature[];
+  /** buildUndo.carriedKeepExtra (storeCounters.ts): the keep's parts while its foundation is carried */
+  carriedKeepExtra: CarriedKeepExtra | null;
 }
+
+/** What buildSave reads from the store: the persisted fields, and the piece in the player's hands (not saved itself —
+ *  saved back where it was picked up). */
+export type SaveSource = PersistedState & { movingBuilding: PlacedBuilding | null };
 
 interface FieldSpec<K extends PersistedKey> {
   /** The fresh-game / initial-store value. A FACTORY on purpose: every call
@@ -85,8 +97,9 @@ interface FieldSpec<K extends PersistedKey> {
 
 /**
  * THE TABLE. Row order IS the on-the-wire key order of toSave()'s JSON
- * (`version` first, then these) — it is deliberately NOT SaveGame's declaration
- * order. Do not sort or regroup it; a byte-identical save is part of the contract.
+ * (`version` first, then these, then the stable's two keys and `savedAt`) — it
+ * is deliberately NOT SaveGame's declaration order. Do not sort or regroup it;
+ * a byte-identical save is part of the contract.
  * `satisfies` makes tsc reject a missing row, an unknown row, or a wrong type.
  */
 export const PERSISTED_FIELDS = {
@@ -135,11 +148,6 @@ export const PERSISTED_FIELDS = {
   keep:                { fresh: () => null },
   workshop:            { fresh: () => null },
   builtSets:           { fresh: () => [] },
-  // stabled/mounts: the riding.ts leaf module is the live truth while playing
-  // (the patrol AI reads/writes it every frame); the store copies are set on
-  // load only and are never read (dead) — kept so the shape stays identical.
-  stabled:             { fresh: () => [], save: (_st, l) => [...l.stabledIds] },
-  mounts:              { fresh: () => ({}), save: (_st, l) => ({ ...l.stabledAssigned }) },
   falconTamed:         { fresh: () => false },
   companionRecruited:  { fresh: () => false },
   // Wave 54 (E2) · always present in live state (unlike the optional save
@@ -235,12 +243,23 @@ export function applySave(s: SaveGame): PersistedState {
   return out as PersistedState;
 }
 
-/** toSave(): `version` first, then every table row in order. */
-export function buildSave(state: PersistedState, leaves: SaveLeaves): SaveGame {
-  const out: Record<string, unknown> = { version: 1 };
+/** toSave(): `version` first, then every table row in order, then the stable. */
+export function buildSave(state: SaveSource, leaves: SaveLeaves): SaveGame {
+  const out: Record<string, unknown> = { version: SAVE_VERSION };
   for (const k of PERSISTED_KEYS) {
     const spec = PERSISTED_FIELDS[k] as FieldSpec<PersistedKey>;
     out[k] = spec.save ? spec.save(state, leaves) : state[k];
   }
+  // F-09 · a piece in the player's hands is saved where it was picked up, as cancelMove would put it back — the keep
+  // rebuilt round its foundation from the parts it carries. Only this copy is patched: the live carry goes on, and is
+  // set down once.
+  const mv = state.movingBuilding;
+  if (mv) {
+    out.buildings = [...state.buildings, mv];
+    if (mv.type === 'keep' && leaves.carriedKeepExtra) out.keep = { x: mv.x, z: mv.z, ...leaves.carriedKeepExtra };
+  }
+  // the riding.ts leaf module is the stable's only truth: the patrol AI reads and writes it every frame
+  out.stabled = [...leaves.stabledIds];
+  out.mounts = { ...leaves.stabledAssigned };
   return out as unknown as SaveGame;
 }

@@ -9631,3 +9631,93 @@ out of sight first, and its doc says a close flushes once. But a navigation fire
 `onPageHide` flushes without setting `flushed`, and `onVisibility` then flushes again — two beacons and two shadow
 writes of the same save. Harmless (the second write is the same save; a beacon over the quota is simply refused).
 To do: set `flushed` in `onPageHide`.
+
+## Bugfix: a save taken while a building or the Grand Keep was carried lost it, and every save was stamped a literal version 1 — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, Q-save-mid-carry; the brief: buildSave stamps a literal version 1), FIXED 2026-11-04
+
+**The fault.** Picking a piece up takes it out of `buildings` and holds it in the store's `movingBuilding`
+(`buildSlice.ts`'s `pickupBuilding`); picking up the keep also sets `keep` to null and holds its parts, progress and HP
+in `storeCounters.ts`'s `buildUndo.carriedKeepExtra` (`keepSlice.ts`'s `pickupKeep`). Neither is saved, and
+`persistence.ts`'s `buildSave` wrote `buildings` and `keep` as they stood — so any save taken mid-carry (the 20 s
+autosave, Save & Quit, the tab-close flush, the recovery slot: every writer goes through `toSave()`) held no such
+piece, and a closed tab or a crash then lost it: a wall and its materials, or the whole castle. Measured on `main`
+(production build of base-14, port 3101, build `UlfRQMVS1M92QGK77LYoa`; `scripts/cln-tools/w634_carry.mjs`, records
+`out/w634/main_*.log`): a guest lays a stone wall (HP set to 37) and the keep at (0, 0) with two parts raised, and the
+autosave holds both (2 buildings, keep present). Picking up the keep and waiting for the next autosave, still carrying
+it: `kk_guest_save` held 1 building, no keep foundation, `keep: null`; the same after leaving the page (the flush);
+Continue loaded no keep at all. Picking up the wall instead: the autosave and the flush held 1 building, the wall gone,
+and Continue loaded it without the wall. Separately, `buildSave` stamped `{ version: 1 }` by hand while
+`lib/saveSchema.ts`'s `SAVE_VERSION` is what the check refuses a newer save by, and `SaveGame.version` was typed as the
+literal `1`, so the first schema change had nowhere to migrate from; `UNPERSISTED_SAVE_KEYS`'s comment said `version`
+is "never read back" (`checkSave` reads it).
+
+**The fix** (wave 63.4, F-09). `buildSave` puts a carried piece back into the copy it writes, where it was picked up,
+exactly as `cancelMove` would: the piece appended to `buildings` at its own x/z, and a carried keep rebuilt as
+`{ x, z, ...carriedKeepExtra }` round its foundation (`carriedKeepExtra` reaches it through `SaveLeaves`, since it is
+module state; `buildSave` reads `movingBuilding` from the store through its new `SaveSource` type). Only the serialised
+copy is patched: the live carry goes on, and placing it sets it down once. Its HP, gate and plot entries were never
+removed, so they come back with it. `buildSave` stamps `SAVE_VERSION`; `SaveGame.version` is a `number`;
+`saveSchema.ts` has `SAVE_MIGRATIONS` (empty: no step yet) and `migrateSave`, which `checkSave` runs on a save older
+than `SAVE_VERSION` before checking it, so what the check hands on is always at the current version (a save with no
+version is stamped the first). Before it migrates, `checkSave` refuses a version that is not a whole number from 1 —
+the review's find: from `-1e300` the loop's `v++` never moves, so one PUT or beacon from a signed-in player would have
+stalled the server for everyone, and a `0.5` would have been written as `1.5`, refused as "newer" at every load
+without the `.bak` fallback. OD-17's
+ride-along: the store's `stabled`/`mounts` copies are gone (nothing read them; 63.3's `stableHorse`/`setDefenderMount`
+write `riding.ts`'s `stabledHorses`, not them). The two keys are `UNPERSISTED_SAVE_KEYS` now, written by `buildSave`
+from the leaf module after the table's rows (so they move to the end of the save's JSON) and read back by
+`loadFromSave` as before; they stay optional on `SaveGame`, and a save without them loads with an empty stable.
+`SaveGame.playerPos` is documented as optional legacy.
+
+**Verified** with `tsc` (clean) and the unit tests (80 files, 600 tests). New `game/store/persistence.test.ts`: a
+picked-up wall is in `toSave()` as it stood, HP 37, while the live store still carries it, and set down it appears once;
+a picked-up keep is saved whole (`{ x, z, parts, built, hp }`, its foundation once) while the live keep is null, and
+`cancelMove` still restores it; a save taken mid-carry loads back with the keep as picked up; with `SAVE_VERSION` mocked
+to 7 a save says 7; the stable is saved from and loaded into `stabledHorses`, the store has no `stabled`/`mounts`, and a
+save without them loads with none. New in `lib/saveSchema.test.ts`: `migrateSave` runs a stub table's steps in order
+from the save's version (none counts as 1) and hands a current save back untouched; the table is empty; `parseSave`
+brings an unversioned save up to `SAVE_VERSION`, stamped. Four take-outs, each failing its tests, then restored with `git diff`
+byte-identical (`cmp`): `buildSave`'s carry patch out (the three carry tests), the literal `{ version: 1 }` back (the
+version test), `checkSave` not migrating (the migration test), the store's `stabled`/`mounts` rows back (the stable
+test). Live, a first run of `w634_carry.mjs` on a production build of the change (port 3102, build
+`mxJ0-VtIgLw57dEC6Nf_E`): carrying the keep, the autosave and the flush held 2 buildings and the keep with both parts,
+and Continue loaded it; carrying the wall, both held the wall at (4, 10) with HP 37, and Continue loaded it. The
+evidence pass, run separately: `tsc` clean, 80 files and 600 tests passing, `next build` clean; seven take-outs, each
+failing its tests and restored with `git diff` byte-identical (`cmp` of the diff with the new test file intent-added,
+and `cmp` of each touched file against a backup): the carry patch out (3 tests), `carriedKeepExtra` not passed by
+`toSave` (2), the literal `{ version: 1 }` (1), `checkSave` not migrating (1), the stable not written from the leaf
+module (1), the store's `stabled`/`mounts` rows back (1), and `migrateSave` ignoring the save's version (2). Live, side
+by side on production builds — `main` (base-14, port 3101, build `UlfRQMVS1M92QGK77LYoa`) and the change (port 3102,
+build `rqqJ6km8U5XhI75wtfIZP`) — with `w634_carry.mjs` (keep, wall) and `w634_ev.mjs` (records `out/w634ev/`).
+Setup the same on both: the wall `b2` at (4, 10) with HP 37 and the keep at (0, 0) with `nw`/`n` raised; the autosave
+before any pickup held 2 buildings and the keep on both. Carrying the keep, after the 20 s autosave, after the flush
+and loaded by Continue: `main` 1 building, no foundation, `keep: null` all three times; the change 2 buildings, one
+foundation at (0, 0), the keep with both parts, and nothing carried after Continue. Carrying the wall: `main` 1
+building, the wall gone, all three; the change the wall once at (4, 10), HP 37, all three. The flush on its own (the
+keep picked up and the page left at once, the save stamped after the pickup): `main` 1 building, `keep: null`, and so
+loaded; the change 2 buildings and the keep, and so loaded. Save & Return to Menu with the wall in hand, from the game
+that flush loaded: `main` 0 buildings (the keep already lost, now the wall too), the change 2 buildings, one
+foundation and one wall, HP 37, and so loaded. Everything else the probes read matched: version 1 on both (as
+`SAVE_VERSION` is 1), the same 68 keys in every save, only `stabled`/`mounts` moved to the end on the change; no page
+errors on either. Not measured live: the recovery slot (it needs a crash a boundary catches; it calls the same
+`toSave()`, so only the unit tests cover it), a signed-in player's server save and shadow copy (guest saves only), a
+real migration (the table is empty), and an old save without `stabled`/`mounts` loaded in the browser (unit test only).
+The review's fix (`checkSave` refusing a version no game wrote; `migrateSave` stamping an unversioned save): `tsc`
+clean, 80 files and 600 tests; `saveSchema.test.ts` sends versions 0.5, 0, -1 and -1e300 through `parseSave` and
+expects each refused (the fraction and the zero first, so without the guard it fails rather than hangs), and checks
+-Infinity; three take-outs, each failing one test, the file restored byte-identical (`cmp`): the guard out (the
+refusal test), the unversioned stamp out and `checkSave` not migrating (each the migration test). Live, plain HTTP
+as a newly registered player (`scripts/cln-tools/w634_version.mjs`, records `out/w634ev/{main,change}_version.log`),
+production builds `main` (port 3101, `UlfRQMVS1M92QGK77LYoa`) and the change rebuilt (port 3102,
+`_18EUTYA5W6WgjnTtYa0y`): a version-1 save PUT is 200 on both. `main`, which has no migration loop, takes 0.5 and
+-1e300 with a 200 and serves them back as written (so the stall was new with this wave, not on `main`); the change
+answers each with a 400 ("its version is not one the game ever wrote"), keeps the version-1 save, and goes on
+answering at once (GET 3-5 ms). The stall itself was not reproduced live (it would need a build of the unguarded
+change); `-1e300 + 1 === -1e300` was checked in node.
+
+## Seen, not fixed: the carried keep comes back without its foundation's height — logged 2026-11-04 (wave 63.4; by the code)
+
+`pickupKeep` carries the keep's parts, progress and HP (`buildUndo.carriedKeepExtra`), not its `y`, and
+`cancelMove`/`finishMove` rebuild it as `{ x, z, ...carriedKeepExtra }` — so a keep picked up and set down (or saved
+mid-carry, which F-09 makes match `cancelMove`) loses `KeepState.y`, read back as `keep.y ?? 0`. Harmless today: the
+keep can only be laid inside the fence, where `y` is always 0 (`data/keep.ts`'s own note). To do, if the keep can ever
+stand on raised ground: carry `y` with the parts, or take it from the foundation's own `PlacedBuilding.y`.
