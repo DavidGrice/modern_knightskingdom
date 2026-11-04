@@ -36,6 +36,11 @@ export const buildUndo: {
   /** J51 · the keep's own parts/built/hp while its foundation is being carried
    *  (movingBuilding only has room for a plain PlacedBuilding's own fields) —
    *  set by pickupKeep, consumed by cancelMove/finishMove, always null
-   *  otherwise. Ephemeral like movingBuilding itself: never persisted. */
-  carriedKeepExtra: { parts: Record<string, string>; built: Record<string, number>; hp: Record<string, number> } | null;
+   *  otherwise. Ephemeral like movingBuilding itself: never persisted as it
+   *  is — a save taken mid-carry rebuilds the keep from it (persistence.ts's
+   *  buildSave). */
+  carriedKeepExtra: CarriedKeepExtra | null;
 } = { placeHistory: [], carriedKeepExtra: null };
+
+/** the part of a KeepState its foundation cannot hold (see buildUndo.carriedKeepExtra) */
+export type CarriedKeepExtra = { parts: Record<string, string>; built: Record<string, number>; hp: Record<string, number> };

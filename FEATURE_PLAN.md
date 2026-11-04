@@ -124,6 +124,20 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   on main (`w633_flush.mjs`, `w633_dirty.mjs`): 6 PUTs in 120 s idle (the change 0); `dirty` set 45 times a minute idle (30 clock, 15 tally; the
   change 0); gold changed then the tab left — nothing written, guest or signed in; a crash left no recovery; a save is
   ~19.8 KB with six villagers and ten blueprints, plus ~86 B a wall: past the beacon's 60 KiB at about 480 pieces.
+- **#295 — Wave 63.4** (F-09): a save taken while a building or the Grand Keep is carried keeps it. `buildSave`
+  (`store/persistence.ts`) writes the carried piece back into its copy of `buildings` where it was picked up, and a
+  carried keep as `cancelMove` rebuilds it (`{ x, z, ...carriedKeepExtra }`, which reaches it through `SaveLeaves`);
+  only the serialised copy is patched, so every writer (autosave, Save & Quit, the tab-close flush, the recovery slot)
+  is covered and the live carry is set down once. `buildSave` stamps `SAVE_VERSION`, `SaveGame.version` is a `number`,
+  and `lib/saveSchema.ts` has an empty `SAVE_MIGRATIONS` and `migrateSave`, which `checkSave` runs on an older save;
+  the `UNPERSISTED_SAVE_KEYS` comment is right now. OD-17: the dead `stabled`/`mounts` store copies are gone — still
+  dead after 63.3's `stableHorse`/`setDefenderMount`, which write `riding.ts`'s leaf module — and the two keys are
+  written by `buildSave` from it after the table (so they move to the end of the JSON) and stay optional, so old saves
+  load; `SaveGame.playerPos` is documented as optional legacy. Premises held, with one adaptation: `movingBuilding` is
+  store state but not persisted, so `buildSave` takes it through a `SaveSource` type rather than `SaveLeaves`. ROADMAP:
+  the defect logged fixed (it had no entry); a carried keep losing its `y` (always 0 today) logged. Measured on main
+  (`w634_carry.mjs`): carrying the keep, the autosave, the flush and Continue all had no keep (1 building of 2,
+  `keep: null`); carrying a wall, the wall gone from all three.
 
 ## Owner decisions
 
