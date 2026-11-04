@@ -77,11 +77,31 @@ export const DEFAULT_KEYBINDS: Record<string, string> = {
   roster: 'KeyN',
   tactics: 'KeyT',
   lore: 'KeyL',
-  bestiary: 'KeyG',
+  // F-10a · was KeyG, emotes' own key: the hotkey switch takes the first action bound to a code, so the Collection
+  // Book had no working key. O is free of the build view's hotkeys too (useBuildHotkeys.ts)
+  bestiary: 'KeyO',
   scan: 'KeyF',
   photoMode: 'KeyP',
   help: 'KeyH',
 };
+
+/** A stored map merged over the defaults by action, so a save from before an action existed (or before rebinding
+ *  shipped at all) still has every key bound. F-10a · a map that still holds the shipped collision — the Collection
+ *  Book on the very key the emote wheel has — takes the Collection Book's new default instead, unless that key is
+ *  bound to something else by now; a map where either of the two was rebound apart is the player's and is kept. */
+export function mergeStoredKeybinds(saved: Record<string, string> | undefined): Record<string, string> {
+  const kb = { ...DEFAULT_KEYBINDS, ...(saved ?? {}) };
+  if (kb.bestiary === kb.emotes && !Object.values(kb).includes(DEFAULT_KEYBINDS.bestiary)) kb.bestiary = DEFAULT_KEYBINDS.bestiary;
+  return kb;
+}
+
+/** the labels of the other actions bound to the same code as `action` — what the rebind row warns about, since the
+ *  hotkey switch obeys only the first of them (GameScreen.tsx) */
+export function keybindConflicts(kb: Record<string, string>, action: string): string[] {
+  return KEYBIND_GROUPS.flatMap((g) => g.actions)
+    .filter((a) => a.id !== action && kb[a.id] === kb[action])
+    .map((a) => a.label);
+}
 
 // While the Options screen is capturing the next keypress for a rebind, the
 // game's own global hotkey listener (GameScreen.tsx) must ignore that same
@@ -103,4 +123,10 @@ export function codeLabel(code: string): string {
     Tab: 'Tab', CapsLock: 'Caps Lock',
   };
   return named[code] ?? code;
+}
+
+/** the four movement keys as one label — 'WASD' while each is one letter, else slash-separated */
+export function movementLabel(kb: Record<string, string>): string {
+  const keys = [kb.moveForward, kb.moveLeft, kb.moveBack, kb.moveRight].map(codeLabel);
+  return keys.every((l) => l.length === 1) ? keys.join('') : keys.join('/');
 }

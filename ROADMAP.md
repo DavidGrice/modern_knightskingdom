@@ -253,8 +253,8 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-081 | STILL_OPEN | M | Dark-ages re-theme follow-ups: notification glow, minimap tint, blackletter font, loading heraldry | None of the 4 named cosmetic follow-ups from the original re-theme wave has shipped: toast/minimap border tinting, an embedded blackletter/uncial font, and title-screen heraldic tricolor treatment. |
 | OPEN-082 | STILL_OPEN | M | No touch support for the aerial Build View camera | Add pinch-zoom/pan/tap-to-place touch handling to BuildController's aerial camera, mirroring the FPS controller's existing touch bridge. |
 | OPEN-083 | STILL_OPEN | S | Per-panel narrow-viewport polish (Quest Log, NPC paperdoll) deferred | Only one global ≤720px breakpoint exists; bespoke reflow for quest-giver blocks and equip-tile/paperdoll drag interactions at narrow widths is unbuilt. |
-| OPEN-084 | PARTIALLY_DONE | S | Touch-control toggle doesn't actually force rendering on hybrid devices | settings.inputMode only relabels prompts; the on-screen joystick/buttons still render solely based on auto-detected touch support, never the user's setting. |
-| OPEN-085 | STILL_OPEN | S | Input-mode-aware tutorial/hint copy still hardcoded to keyboard+mouse | Thread the existing inputMode.ts label helpers into HelpStack.tsx's tutorial strings and combat.ts's SWAP_HINT — infrastructure exists, just not applied to these ~4 strings. |
+| OPEN-084 | CLOSED | S | Touch-control toggle doesn't actually force rendering on hybrid devices | Closed by wave 64.1 (#296, F-10a): Prompt style pinned to Touch shows the on-screen controls, Keyboard or Gamepad hides them where a mouse is there (never on a touch-only device), Auto still detects (`touchInput.ts`'s `showTouchControls`; "Bugfix: the Collection Book had no key…", at the end of this file). |
+| OPEN-085 | CLOSED | S | Input-mode-aware tutorial/hint copy still hardcoded to keyboard+mouse | Closed by wave 64.1 (#296, F-10a): How to Play, the weapon-swap toast, the interact prompt, the menu tabs and the Satchel's Controls line name the player's bindings and device (`inputMode.ts`'s label helpers; "Bugfix: the Collection Book had no key…", at the end of this file). |
 | OPEN-088 | STILL_OPEN | S | VillagersPanel XP bar has no '{cur}/{next} XP' text | Add the XP text line under both VillagersPanel xpbar instances (defender roster row and Tam's card), mirroring the text already shipped in SkillsPanel. |
 
 </details>
@@ -9721,3 +9721,122 @@ change); `-1e300 + 1 === -1e300` was checked in node.
 mid-carry, which F-09 makes match `cancelMove`) loses `KeepState.y`, read back as `keep.y ?? 0`. Harmless today: the
 keep can only be laid inside the fence, where `y` is always 0 (`data/keep.ts`'s own note). To do, if the keep can ever
 stand on raised ground: carry `y` with the parts, or take it from the foundation's own `PlacedBuilding.y`.
+
+## Bugfix: the Collection Book had no key, a rebind could collide unseen, the hints named E whatever was bound, and the touch toggle did not show touch controls — FOUND 2026-10-31 (CLEANUP_PLAN.md's open question on the KeyG collision; FEATURE_PLAN.md's survey, Q-keybind-collision, OPEN-084, OPEN-085), FIXED 2026-11-04
+
+**The fault.** `data/keybinds.ts` gave the Collection Book (`bestiary`) and the emote wheel (`emotes`) the same
+default, `KeyG`. `GameScreen.tsx`'s hotkey switch takes the first action bound to a code (`Object.keys(kb).find(...)`),
+and `emotes` comes first, so G opened the emote wheel and the Collection Book had no key at all; every settings change
+writes the whole map (`appStore.ts`'s `updateSettings`), so the collision was stored too, and the Options screen showed
+both rows on G with no warning. Separately, the hints were written for the default keys and the mouse: `inputMode.ts`'s
+`interactLabel` returned a literal `'E'` (or `'X'` on a pad, though the pad's interact is rebindable since wave 61); How
+to Play's text was static, and told the player to "hold E" to gather, which is wrong on a keyboard even unbound
+(gathering there is a held left-click, `CLICK_HELD_TARGET_KINDS`); the weapon-swap toast (`melee.ts`'s `SWAP_HINT`)
+said "RMB to aim" / "hold LMB" on every device; the menu tabs' key chips and the Satchel's Controls line were literals.
+And Options > Interface's Prompt style only relabelled prompts: `TouchControls.tsx` showed the on-screen controls from
+`detectTouch()` alone, so pinning Touch on a hybrid device did nothing. Measured on `main` (production build of
+base-14, port 3101, build `A85qfKFMUEnQ0AsLEyal6`; `scripts/cln-tools/w641_keys.mjs`, log `w641_main_keys.txt`): with
+the defaults G opens `emotes` and O nothing — the Collection Book is reachable by no key; a stored map with the
+collision loads as bestiary `KeyG`, emotes `KeyG` (G `emotes`, O nothing); a deliberate rebind (emotes on X) gives G the
+Collection Book and X the emotes. With interact rebound to Z, the Satchel's Controls line still says "E interact" and
+How to Play still says "hold E" to gather and "press E near them to talk"; with the Satchel rebound to U its menu tab
+still says "Satchel I"; Crafting rebound onto G shows the rows "Crafting G", "Emote Wheel G", "Collection Book G" and no
+warning; readying the crossbow says "RMB to aim" with Prompt style on Keyboard and on Gamepad alike. Prompt style pinned
+to Touch on this desktop: no `.touch-controls`, live or after a reload, and `touchState.active` false.
+
+**The fix** (wave 64.1, F-10a). The Collection Book's default is `KeyO` (free of the build view's hotkeys too,
+`useBuildHotkeys.ts`). `loadSettings` merges the stored map through `keybinds.ts`'s new `mergeStoredKeybinds`, which
+moves the Collection Book to O only where the stored map still has it on the emote wheel's own key and O is bound to
+nothing else; a map where either was rebound apart is the player's and is kept. Options' rebind row warns "Also bound
+to …", naming the other actions on that key (`keybindConflicts`). `interactLabel` and `clickHoldLabel` take the two
+rebind tables (`Bindings`; the settings object is one) and name the keyboard's or the pad's bound control (touch's
+on-screen button is labelled E, so touch stays E); new `attackLabel`/`blockLabel` name the mouse buttons, the pad's
+bindings or the touch glyphs. `SWAP_HINT` became `swapHint(slot, device, bindings)`, called by `cycleWeapon` with the
+resolved device. How to Play's steps are `helpSteps(bindings, device)`: every key named is the bound one, gathering is
+"hold left-click" on a keyboard and the interact control elsewhere, talking and blocking name the device's control, and
+the "H reopens this" hint follows the help key. `MenuTabs`, the Satchel's keyboard Controls line (which now lists the
+Collection Book) and the Photo Mode hint read the keybinds. The HUD's prompt chip reads the key back with
+`inputMode.ts`'s new `splitPrompt`, which keeps a two-word label whole ("Up Arrow", "Caps Lock", a pad's "L-Stick
+Click" — the old one-token regex would have split them), and a prompt naming no key shows interact's label rather than
+a literal E. `touchInput.ts`'s `showTouchControls(inputMode, touchCapable, hasMouse)` decides whether the on-screen controls show:
+pinned Touch shows them, pinned Keyboard or Gamepad hides them where a mouse is there to use instead (`detectMouse`, `(any-pointer: fine)` — on a hybrid laptop the full-screen look surface would
+otherwise sit over the mouse) but never on a touch-only device, which would have no other way to move or to reach the pause menu (the review round's note: a phone player with Keyboard stored, harmless before, would have loaded with no controls), Auto detects as before; the Options note says so. Not changed: the mouse buttons (not
+rebindable), the build view's own fixed hotkeys, M for the minimap and Escape, which the hints still name as literals.
+*Premise corrected:* the plan's live check "rebinding interact changes SWAP_HINT" cannot hold — the toast names the
+aim and draw controls, never interact — so it is checked against the device and the pad's block binding instead.
+
+**Verified** with `tsc` (clean) and the unit tests (84 files, 623 tests). New: `data/keybinds.test.ts` (no two default
+play-mode bindings share a code; every listed action has a default; the migration splits a stored collision, with other
+rebinds kept, and leaves alone a map with emotes or the Collection Book rebound and one where O is taken;
+`keybindConflicts`; `movementLabel`), `inputMode.test.ts` (interact/gather/attack/block labels on each device, with and
+without rebinds; `splitPrompt` with one- and two-word keys and a keyless prompt), `touchInput.test.ts`
+(`showTouchControls` for each pinned mode and Auto), `components/stacks/HelpStack.test.ts` (no "hold E" on a keyboard;
+the rebound keys named; a pad's and touch's controls), and in `combat.test.ts` the toast `cycleWeapon` gives when the
+crossbow is readied on Keyboard ("RMB to aim") and on Gamepad with block rebound to LB ("LB to aim"). Nine take-outs,
+each failing its tests, the source restored with `git diff` byte-identical (`cmp`): the default back on G (2 tests), the
+migration out (2), the migration made unconditional (2), the conflict filter emptied (1), `interactLabel` back to its
+literals (4), the swap toast's literal RMB (1), How to Play's literal "hold E" (2), the toggle on detection only (2),
+the prompt key one token (1). Live, a first run of `w641_keys.mjs` on a production build of the change (port 3102,
+build `rnwjv3-c2838QDIMxc7G3`, log `w641_change_keys.txt`): G opens `emotes` and O `bestiary`; the stored collision
+loads as emotes G, bestiary O; the deliberate rebind loads untouched (G the Collection Book, X the emotes, O nothing);
+interact on Z gives "Z interact" in the Satchel, and "press Z near them to talk" and "hold left-click" in How to Play;
+the Satchel tab reads "Satchel U"; Crafting on G warns "Also bound to Emote Wheel" (and the Emote Wheel row "Also bound
+to Crafting"); the crossbow says "LT to aim" on Gamepad; pinned Touch shows `.touch-controls` with `touchState.active`
+true, live and after a reload; no page errors. Side by side on production builds of `main` and the change (the
+evidence pass, 2026-11-04: `main` from base-14 on port 3101, build `A85qfKFMUEnQ0AsLEyal6`; the change from this
+worktree on port 3102, build `WMKwB6SwJt8GHTo52PWkp`; `tsc` clean, 84 files and 623 unit tests passing, `next build`
+clean; seventeen take-outs, sixteen failing a unit test each — the `loadSettings` wiring alone is caught by no unit
+test, only by the live stored-collision run below — with `git diff` and the new test files' hashes identical before
+and after). `w641_keys.mjs` (logs `w641_ev_main_keys.txt` / `w641_ev_change_keys.txt`): defaults, G opens `emotes` on
+both, O nothing on `main` and `bestiary` on the change; a stored collision loads as emotes G / bestiary G on `main` (O
+nothing) and emotes G / bestiary O on the change (O `bestiary`); a deliberate rebind (emotes on X) loads untouched on
+both (G `bestiary`, X `emotes`, O nothing); with interact on Z the Satchel's line says "E interact" on `main`, "Z
+interact" (and now "O collection") on the change, and How to Play says "hold E" / "press E near them" on `main`, "hold
+left-click" / "press Z near them" on the change; with the Satchel on U the tab reads "Satchel I" on `main`, "Satchel U"
+on the change; Crafting on G gives three bare rows on `main` and "Also bound to Emote Wheel" / "Also bound to
+Crafting" on the change (Collection Book on O); the crossbow says "RMB to aim" on Keyboard on both and on Gamepad
+"RMB to aim" on `main`, "LT to aim" on the change; pinned Touch on this desktop (`maxTouchPoints` 0) shows no
+`.touch-controls` on `main`, live or booted fresh, and shows them with `touchState.active` true on the change, both
+ways. `w641_prompt.mjs` (`w641_ev_*_prompt.txt`): the HUD chip beside the home horse reads "PRESS E" with the defaults
+on both, still "PRESS E" with interact on Z and on ArrowUp on `main`, "PRESS Z" and "PRESS UP ARROW" (verb "Ride
+Horse", the two-word key kept whole) on the change, "PRESS X" on Gamepad on both; the Photo Mode hint with its key on
+Y reads "P to exit" on `main`, "Y to exit" on the change (Y enters and leaves it on both); O opens the Collection Book
+with its page drawn on the change. `w641_touch.mjs` (`w641_ev_*_touch.txt`), an emulated touch-capable device
+(`maxTouchPoints` 1): Auto and Touch show the controls on both; pinned Keyboard and Gamepad show them on `main` and
+hide them on the change — the intended tradeoff. Everything else the probes read matched: the other default hotkeys
+(I C J K N L T open the same panels), the default menu tab chips, the rest of the Satchel's line and How to Play's
+other lines with the defaults, the sword's toast; no page errors on either build. Not measured: a real touch screen or
+a real gamepad (the device is pinned in settings, not detected from hardware), pressing a rebound interact key to act,
+the How to Play text on Gamepad/Touch live (unit-tested only), and Options' Escape/rebind-listening interplay (F-10b's).
+
+## Seen, not fixed: the interact keybind's label still says "Hold to Gather" — logged 2026-11-04 (wave 64.1; by the code)
+
+Options > Keybinds lists interact as "Interact / Hold to Gather" (`data/keybinds.ts`'s `KEYBIND_GROUPS`), but on a
+keyboard gathering (and building) is a held left-click since 2026-07-30 (`CLICK_HELD_TARGET_KINDS`); the bound key
+still holds for the other timed targets. The gamepad table's same label is right (a pad gathers with interact). To do:
+relabel the keyboard row, e.g. "Interact / Hold to Act".
+
+## Seen, not fixed: three hints still name a default key literally — logged 2026-11-04 (wave 64.1's evidence pass; by the code)
+
+Wave 64.1 made How to Play, the menu tabs, the Satchel's Controls line, the swap toast and the HUD prompt name the
+player's own binding, but three strings were outside its list and still name the default: the Workshop panel's "Go to
+the workbench and hold **E** to set the next piece" (`WorkshopPanel.tsx`; the `workshop` target is a tap, duration 0,
+and interact is rebindable), the first quest's "Press B for the aerial build view" (`data/quests.ts`) and the Build
+View's footer "**B**/**Esc** return" (`BuildBar.tsx`; the build key is rebindable). The review found more of the same: `cast/court.ts`'s "Your quest log (J)", "Roster (N)" in `defenderOrders.ts`, `OrderRadial.tsx` and `interaction/performAction.ts`, `VillagersPanel.tsx`'s "radial call (T)", `empireSlice.ts`'s "build menu (B)" and `store/slices/shared.ts`'s "Abilities (K)"; and How to Play on Gamepad or Touch still says "WASD walks … the mouse looks around" and "Press C/J/B" (`helpSteps` follows the device for gathering, talking and blocking only). Harmless with the defaults. To do:
+read them from the keybinds (`codeLabel`, `inputMode.ts`'s `interactLabel`) the way wave 64.1's hints do.
+
+## Seen, not fixed: a pad button past the named ones splits the HUD prompt in two — logged 2026-11-04 (in the review of wave 64.1; by the code)
+
+The Options gamepad capture takes any unreserved button index (`OptionsStack.tsx`), and `gamepadButtonLabel` names
+one past its table "Button N" (`data/gamepadInput.ts`). Since wave 64.1 the interact prompt names the bound button, and
+`inputMode.ts`'s `PROMPT_KEY` keeps only the two-word labels it knows (Arrow, Lock, Click) whole, so with pad interact
+on, say, a DualSense's touchpad press (button 17) the chip reads "Hold BUTTON" with "17 — Chop the oak" as its verb.
+Rare (an unusual button bound to interact) and only the text is wrong. To do: let `splitPrompt` take the label it was
+given rather than re-parsing it, or add "Button N" to the pattern.
+
+## Seen, not fixed: the Collection Book's key migration runs at every load — logged 2026-11-04 (in the review of wave 64.1; by the code)
+
+`mergeStoredKeybinds` (`data/keybinds.ts`) moves a stored bestiary that shares its key with the emote wheel onto O at
+every load, with no one-time marker. So a player who deliberately binds the Collection Book back onto the wheel's key
+(the Options screen warns of it) finds it moved to O at the next launch — overriding a deliberate rebind, though one
+that could never open the book. To do: mark the migration done in the stored settings and run it once.

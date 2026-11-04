@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 import type { ScreenName } from '../types';
-import { DEFAULT_KEYBINDS } from '../data/keybinds';
+import { DEFAULT_KEYBINDS, mergeStoredKeybinds } from '../data/keybinds';
 import { DEFAULT_GAMEPAD_BUTTONS, type GamepadAction } from '../data/gamepadInput';
 import { suggestGraphicsQuality } from '../deviceProfile';
 import type { AaMode } from '../aaModes';
@@ -138,13 +138,14 @@ function loadSettings(): Settings {
     const saved = JSON.parse(raw || '{}');
     const migrated = migrateGraphicsQuality(saved.graphicsQuality);
     // merge keybinds by action so a save from before a new action existed
-    // (or before rebinding shipped at all) still has every key bound
+    // (or before rebinding shipped at all) still has every key bound — and
+    // the shipped KeyG collision split (keybinds.ts's mergeStoredKeybinds)
     return {
       ...DEFAULT_SETTINGS,
       ...(freshInstall ? { graphicsQuality: suggestGraphicsQuality() } : {}),
       ...saved,
       ...(migrated ? { graphicsQuality: migrated } : {}),
-      keybinds: { ...DEFAULT_KEYBINDS, ...(saved.keybinds ?? {}) },
+      keybinds: mergeStoredKeybinds(saved.keybinds),
       // same merge-by-action reasoning as keybinds above — a save from
       // before gamepad rebinding shipped (or before a given action existed)
       // still has every button bound

@@ -699,6 +699,7 @@
   background: rgba(255, 255, 255, .03);
 }
 .kk-key-row > span:first-child { flex: 1; font: 400 11.5px/1 var(--kk-font); color: var(--kk-n-300); }
+.kk-key-conflict { font: 400 10px/1.2 var(--kk-font); color: var(--kk-warn); text-align: right; }
 .kk-cap {
   font: 700 10px/1 var(--kk-font-num);
   padding: 4px 7px;

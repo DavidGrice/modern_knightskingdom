@@ -16,6 +16,7 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { BULK_GOODS, isBulkGood, storageCapacity } from '@/game/storage';
 import { gamepadButtonLabel } from '@/game/data/gamepadInput';
+import { codeLabel, movementLabel } from '@/game/data/keybinds';
 import type { ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
 import { onKeyActivate } from '../ui/a11yClick';
@@ -220,6 +221,8 @@ export default function InventoryPanel() {
   // button table instead of a hardcoded default label — a rebound player
   // sees their own actual buttons, not a stale "A"/"X"/"RB".
   const gpBtn = useAppStore((s) => s.settings.gamepadButtons);
+  // F-10a · and the keyboard sheet reads the live keybinds the same way
+  const kb = useAppStore((s) => s.settings.keybinds);
   // Wave 9 · the storage ceiling has to be VISIBLE somewhere before it bites,
   // or the first refusal toast reads as a bug. This is the one screen that
   // already shows what you're holding, so it shows the room left too.
@@ -370,10 +373,10 @@ export default function InventoryPanel() {
       )}
       {showControls && controlsDevice === 'keyboard' && (
         <div className="controls-ref">
-          <b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>E</b> interact<br />
-          <b>I</b> satchel · <b>C</b> craft · <b>J</b> quests · <b>K</b> abilities<br />
-          <b>V</b> camera · <b>G</b> emotes · <b>M</b> map · <b>N</b> roster · <b>L</b> lore<br />
-          <b>T</b> orders · <b>B</b> build view · <b>H</b> how to play · <b>Esc</b> menu
+          <b>{movementLabel(kb)}</b> move · <b>{codeLabel(kb.sprint)}</b> sprint · <b>{codeLabel(kb.jump)}</b> jump · <b>{codeLabel(kb.interact)}</b> interact<br />
+          <b>{codeLabel(kb.inventory)}</b> satchel · <b>{codeLabel(kb.craft)}</b> craft · <b>{codeLabel(kb.quests)}</b> quests · <b>{codeLabel(kb.skills)}</b> abilities<br />
+          <b>{codeLabel(kb.camera)}</b> camera · <b>{codeLabel(kb.emotes)}</b> emotes · <b>M</b> map · <b>{codeLabel(kb.roster)}</b> roster · <b>{codeLabel(kb.lore)}</b> lore · <b>{codeLabel(kb.bestiary)}</b> collection<br />
+          <b>{codeLabel(kb.tactics)}</b> orders · <b>{codeLabel(kb.build)}</b> build view · <b>{codeLabel(kb.help)}</b> how to play · <b>Esc</b> menu
         </div>
       )}
     </PanelFrame>
