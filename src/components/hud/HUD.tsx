@@ -2,11 +2,11 @@
 // 1a–1d · the field HUD, rebuilt to the UI handoff pack's cluster plan.
 //
 // Nine clusters, each anchored to a viewport edge and never to another
-// cluster (HANDOFF §3 rule 4): vitals TL · compass + clock TR · objective
-// card R · reticle + hold-E ring C · toasts R-mid · and — critically —
-// resource ledger, readied gear and minimap as ONE bottom flow row rather
-// than three things independently positioned in the same 22px band, which
-// is what used to collide.
+// cluster (HANDOFF §3 rule 4): vitals TL · compass + clock TR, with the
+// objective card at the foot of the same column (F-08a) · reticle + hold-E
+// ring C · toasts R-mid · and — critically — resource ledger, readied gear
+// and minimap as ONE bottom flow row rather than three things independently
+// positioned in the same 22px band, which is what used to collide.
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore, activeQuestOf } from '@/game/store/gameStore';
 import { sideQuestGiverName, sideQuestsOf } from '@/game/data/npcs';
@@ -293,7 +293,18 @@ function ReadiedRow() {
   );
 }
 
-export default function HUD() {
+/** F-08a · the autosave failed: shown until a save goes through (GameScreen.tsx's autosave tries again on its own),
+ *  in build mode too, since a save is no less lost while building */
+function SaveChip({ problem }: { problem: string }) {
+  return (
+    <div className="kk-clock kk-glass kk-save-chip" role="status" title={`Not saved: ${problem}. Trying again on its own.`}>
+      <KkIcon name="k-scroll" size={13} />
+      Not saved · retrying
+    </div>
+  );
+}
+
+export default function HUD({ saveProblem = null }: { saveProblem?: string | null }) {
   const prompt = useGameStore((s) => s.prompt);
   const progress = useGameStore((s) => s.actionProgress);
   const notifications = useGameStore((s) => s.notifications);
@@ -359,10 +370,14 @@ export default function HUD() {
             possible confirmation that the last gap is plugged */}
         <FortStatus />
         <OrderStatus />
+        {saveProblem && <SaveChip problem={saveProblem} />}
         <FpsReadout />
+        {/* F-08a · the card stacks under whatever chips are up rather than
+            being pinned at the height of the compass and clock alone, which
+            drew it over every chip below the clock (the save chip, Sound
+            Walls, a standing order, the FPS readout) */}
+        {!buildMode && <ObjectiveCard />}
       </div>
-
-      {!buildMode && <ObjectiveCard />}
 
       <div className="kk-bottom">
         <Ledger />

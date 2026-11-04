@@ -9273,3 +9273,110 @@ that boundary, so a panel whose `useEffect`/`useLayoutEffect` cleanup throws on 
 Broke" over the whole game instead of the panel closing with a notice. `main` white-screened here too, so this is a gap,
 not a regression. To do: a stable boundary that resets its failed state when the panel changes, instead of one remounted
 by key.
+
+## Bugfix: a save that failed was silent, and Save & Quit threw the session away — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, GAP-save-failure-feedback), FIXED 2026-11-03
+
+**The fault.** `lib/save.ts`'s `persistSave` answered a bare boolean — a PUT that could not be sent was swallowed by
+`.catch(() => null)`, and a guest's full localStorage by an empty `catch` — and neither caller said a word of a `false`.
+`GameScreen.tsx`'s `saveAndQuit` called `resetTo('menu')` whatever the save came to, so a Save & Quit that failed
+dropped the session it had failed to write; the 20 s autosave (a `setInterval`) left the store dirty and tried again
+every 20 s, unseen, without end and without backing off. Measured on `main` (base-14's production build of 2d9107a on
+port 3101, build id `5zHZHaGOqn4Myy5pzo9v_`, `scripts/cln-tools/w632_save.mjs`): a signed-in player (a fresh account)
+whose PUT `/api/save` was answered 500 pressed Save & Return to Menu and landed on the menu with no Continue offered,
+no word shown, after one PUT — the session gone; the same with a 413; a guest whose localStorage was filled to its quota
+got no save written and no sign of it, and Save & Return took them to the menu with no Continue. With every PUT
+answered 500 and the store kept dirty, the autosave PUT at 15, 35, 55, 75 and 95 s — every 20 s, nothing on the HUD.
+
+**The fix.** (1) `persistSave` answers `SaveOutcome` — `{ ok: true }` or `{ ok: false, problem }`, the problem a phrase
+in the manner of `fetchSave`'s: "the server could not be reached", "the server answered 500", "the save is too large
+for the server to take" (413), "you are signed out — sign in again" (401), "this browser's storage is full" (a
+`QuotaExceededError`, or Firefox's `NS_ERROR_DOM_QUOTA_REACHED`) or "this browser would not open its storage". (2) Save
+& Quit leaves only once the save is written (`game/autosave.ts`'s `saveAndLeave`); otherwise the pause menu turns into
+"Not Saved" — the reason, "You are still in the game, and nothing has been lost", and Retry, Quit without saving, and
+Back. (3) The autosave is one timer, re-armed when each try has finished (`startAutosave`): every 20 s while there is
+anything to save; after a failure 5 s, then 10, 20, 40, 80 and at most 160 s while failures run on, and 20 s again
+after one goes through. A try waiting on a slow server holds the next back, so tries never stack. The HUD shows a "Not
+saved · retrying" chip in the top-right stack (its title says why) from the first failure until a save goes through;
+the tracked-quest card is now the foot of that same column (`HUD.tsx`, `kk-hud-field.css`) rather than pinned at
+`top: 100px` — the height of the compass and clock alone — where it drew over every chip below the clock (the evidence
+pass found it hiding this one).
+A save that throws as it is put together (`toSave`) is logged to the error log (`autosave`) and retried like any
+failure. Wave 62.5's guarantee holds: `worldFailed` stops the autosave, and a try in flight as it stops arms no other,
+so a frozen world never writes over the last good save.
+
+**Verified** with `tsc` (clean) and the unit tests (75 files, 568 tests) — new: `lib/save.test.ts` (`persistSave`
+reports ok, a 500, a 413, a 401 and an unreachable server for a signed-in player, and storage full — Chrome's and
+Firefox's names — or closed for a guest) and `game/autosave.test.ts` (the backoff doubles from 5 s to its 160 s cap;
+with fake timers the tries fall at 20, 25, 35 and 55 s, the problem is told once and cleared once a save goes through,
+and the round goes back to 20 s; a try that hangs holds the next back with no timer armed; nothing to save is neither;
+`stop()` ends it, even with a try in flight; Save & Quit leaves only on a written save). Each was failed by taking its
+piece out — `persistSave` back to main's boolean (all 4 of its tests), the autosave back to main's fixed interval (the
+backoff and stacking tests), the in-flight `stopped` guard, `saveAndLeave`'s early return — and restored (`git diff`
+identical before and after). Live on the change's production build (port 3102, build id `vEqnq82D7sIgIsa-j3YWl`, `w632_save.mjs`):
+Save & Return with the PUT answered 500 stayed in game with the "Not Saved" dialog ("…the server answered 500…"), Retry
+with the server still failing kept it, and Retry with the server answering again took the player to the menu with
+Continue offered and the save on the server; the same with a 413 ("…too large for the server to take…"); a guest with
+storage full got the chip after the autosave, the dialog ("…this browser's storage is full…") on Save & Return, and
+Quit without saving went to the menu. With every PUT answered 500 the autosave PUT at 15, 20, 30, 50 and 90 s, the chip
+up from the first failure; with the server answering again the next PUT, at 170 s, cleared it. `w625_ev_autosave.mjs
+hookframe`: no save written in the 25 s after a frame crash. Evidence pass (2026-11-03, re-run independently): `tsc` clean, 75 files / 568 tests passing, and each
+take-out above repeated plus three more — the problem told at every failure instead of once, an interval in place of
+the re-armed timer, `stop()` not clearing its timer — each failed a test, and `git diff` (saved to a file, with the
+three new files' SHA-1s) was byte-identical after the restores (`cmp`). Side by side on production builds — `main`
+(base-14, port 3101, build id `5zHZHaGOqn4Myy5pzo9v_`) and the change rebuilt (port 3102, build id
+`tUSWfG8crSOXgH32lXD0v`), `w632_save.mjs` and `w632_ev_ok.mjs`, records in `scripts/cln-tools/out/w632/ev_*`: Save &
+Return against a 500 — `main` to the menu, Continue not offered, no dialog, 1 PUT; the change in game with "Not Saved …
+the server answered 500 …", Retry still failing kept it (2 PUTs), Retry answering went to the menu with Continue
+offered (3 PUTs). Against a 413 the same, with "…too large for the server to take…". A guest with localStorage full
+(19 × 256 KiB + 252 × 1 KiB): `main` no chip, no `kk_guest_save`, Save & Return to the menu with no Continue; the change
+the chip in the DOM, the dialog ("…this browser's storage is full…"), Quit without saving to the menu. Every PUT
+answered 500: `main` PUT at 15.0, 35.0, 55.0, 75.0, 95.0 s, no chip at any 5 s sample, the next once answering at
+115.0 s; the change at 15.1, 20.1, 30.1, 50.1, 90.2 s, the chip from the 20 s sample on, the next once answering at
+170.2 s (+80 s) and the chip gone. The controls match: with the server answering, both PUT at about 19, 39 and 59 s
+(all 200, no chip) and Save & Return went to the menu with Continue offered and the save on the server (4 PUTs each);
+`w625_ev_autosave.mjs hookframe` gave the same on both — no save written in the 25 s after a frame crash — so wave
+62.5's guarantee still holds; no page errors in any run but that crash probe's (5 on each, its own crash). **Not
+right yet: the chip is in the DOM but not seen.** It sits in the top-right stack at y 101 (1080, 101, 178 × 29 at
+1280 × 800), wholly under the tracked-quest card, which is pinned at `top: 100px` (996, 100, 262 × 95) — the
+screenshot (`ev_3102_cover.png`) shows the card and no chip. So outside build mode, with a quest tracked (as from the
+first minute), a failing autosave is still unseen on screen; the Save & Quit dialog is seen. **Fixed in the fix pass
+(2026-11-03):** the card moved into the column, under the chips; new `components/hud/HUD.test.ts` renders the HUD with
+a save problem (`renderToStaticMarkup`) and checks the card comes after the chip inside `.kk-topright` and that
+`.kk-objective` is not absolutely positioned — it fails with the card put back outside the column, and again with
+`position: absolute; top: 100px` put back. `tsc` clean, 76 files / 569 tests. Rebuilt (port 3102, build id
+`WDzGdkSLbEUEjNoE9Gvp_`) beside `main` (3101, `5zHZHaGOqn4Myy5pzo9v_`), `w632_fix_cover.mjs`, a signed-in player with
+the PUT answered 500, after the first autosave: at 1280 × 800 the change shows compass (1008, 22), clock (1077, 63),
+chip (1080, 101, 178 × 29), card (996, 139, 262 × 95), no two overlapping, and the screenshot (`fix_3102_fail_1280.png`)
+shows the chip in warn red between clock and card; at 375 × 812 compass (103, 126), clock (172, 167), chip (175, 205),
+card (91, 243), no overlap, no sideways scroll (`fix_3102_fail_375.png`). With the server answering, the card sits at
+(996, 101) on the change and (996, 100) on `main` — the same place; `main` with the 500 has no chip and the card at
+(996, 100). At phone width without a chip the card now sits 9 px under the clock (about 205) rather than at `main`'s
+fixed 226. Sound Walls, a standing order and the FPS readout, chips in the same column that the pinned card covered
+outside build mode on `main` too, now push the card down instead (not measured live). No page errors. Not measured: a
+401 or an unreachable server live (unit tests only), Firefox's quota error, and build mode's chip (no card there).
+
+## Seen, not fixed: a change made while an autosave is in flight is marked saved without being written — logged 2026-11-03 (wave 63.2; by the code)
+
+`GameScreen.tsx`'s autosave takes `toSave()`, awaits `persistSave`, and on success calls `markSaved()`, which sets
+`dirty: false` — so anything that set `dirty` while the PUT was in flight is cleared without being in the save that was
+written, and the autosave will not write it until something else dirties the store. Today the clock dirties the save
+every 2 s (`DayNight.tsx`'s `setTimeOfDay`), which hides this; once FEATURE_PLAN.md's F-08b (wave 63.3, OD-12) stops
+that, it can lose a change until the next one. To do: clear `dirty` only if nothing has changed since the snapshot (a
+change counter taken with `toSave()`), with F-08b.
+
+## Seen, not fixed: Save & Quit hangs on "Saving…" when the save itself cannot be put together — logged 2026-11-03 (in the review of wave 63.2; by the code)
+
+The autosave (`game/autosave.ts`) catches a `toSave()` that throws, logs it and retries; Save & Quit does not. In
+`GameScreen.tsx` it calls `saveAndLeave(() => persistSave(st.toSave(), guest), …)`, so a throw in `toSave()` — or in a
+signed-in player's `JSON.stringify`, which sits outside `persistSave`'s try — rejects the promise: the pause menu's
+button stays disabled on "Saving…", no Not Saved dialog comes, and the rejection goes unhandled (on the guest path the
+same throw is caught but reported as "this browser would not open its storage"). `main` behaves the same, so this is
+not a regression. To do: treat a throw in `write()` as a failed save with its own reason, and pin it with a test.
+
+## Seen, not fixed: the Not-saved chip and the autosave's backoff are forgotten behind Options or Help — logged 2026-11-03 (in the review of wave 63.2; by the code)
+
+The chip's problem and the autosave's failure count are GameScreen's state, and the pause menu's Options and Help
+replace the game screen (`App.tsx` draws one screen at a time), so coming back remounts it: the chip is gone and the
+next try waits a full 20 s although the server may still be down — briefly showing nothing wrong while nothing is
+saved. The chip comes back on the next failure. The same cause as BUG-8726 (fixed in wave 62.1 by moving the
+directors' state out of the component). To do: hold the autosave's state at module level, reset at a session start.

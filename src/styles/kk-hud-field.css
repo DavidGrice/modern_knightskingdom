@@ -178,12 +178,14 @@
   background: rgba(255, 255, 255, .22);
 }
 .kk-clock .pips span.on { background: var(--kk-renown); box-shadow: 0 0 6px var(--kk-renown); }
+/* F-08a · the autosave failed and is retrying */
+.kk-clock.kk-save-chip { color: var(--kk-warn); border-color: var(--kk-warn); }
 
-/* --- objective card, right rail under the compass --- */
+/* --- objective card, right rail under the compass ---
+   The last item of .kk-topright's column (F-08a), so it sits under whatever
+   chips the column shows. It was pinned at top: 100px, the height of the
+   compass and clock alone, and drew over every chip below the clock. */
 .kk-objective {
-  position: absolute;
-  right: var(--kk-hud-inset);
-  top: 100px;
   width: 262px;
   border-radius: 16px;
   overflow: hidden;
@@ -196,9 +198,9 @@
    overlap at 375px). Fine at 768px (135px clear gap per the same audit), so
    this only needs the phone tier. .kk-topright drops below .kk-vitals'
    tallest state (crest + a wrapped flags row) instead of shrinking either
-   cluster's content, and .kk-objective — which already stacks under
-   .kk-topright at top: 100px on desktop — moves down to keep stacking under
-   its new position rather than colliding with it.
+   cluster's content. (.kk-objective, part of .kk-topright's column since
+   F-08a, moves down with it; the note below is about the top: 226px rule it
+   needed while it was pinned on its own.)
    Verified live 2026-08-04: this block originally sat BEFORE the
    unconditional `.kk-objective { top: 100px; ... }` rule above — same
    selector, same specificity, so per the cascade the later unconditional
@@ -210,7 +212,6 @@
    not a specificity trick — so the phone-width value actually wins. */
 @media (max-width: 480px) {
   .kk-topright { top: 126px; }
-  .kk-objective { top: 226px; }
 }
 .kk-objective-in { position: relative; padding: 13px 16px 15px; }
 .kk-objective-kicker {
