@@ -16,6 +16,7 @@ import { crashIfArmed } from '@/game/crashTest';
 import { FAILED_FRAMES_TO_STOP, WATCH_BEGIN_PRIORITY, WATCH_END_PRIORITY, makeFrameWatch } from '@/game/frameWatch';
 import { releaseGameLock } from '@/game/pointerLock';
 import { errorLog } from '@/lib/errorLog';
+import { saveAndLeave, startAutosave } from '@/game/autosave';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import GameWorld from '../world/GameWorld';
 import HUD from '../hud/HUD';
@@ -28,10 +29,32 @@ import PerfOverlay from '@/components/hud/PerfOverlay';
 // side-effect import: registers window.__kkdata and, in development, logs any quest/cast data violation
 import '@/game/data/validate';
 
-function PauseMenu({ onQuit }: { onQuit: () => void }) {
+// F-08a · Save & Quit leaves only once the save is written (`onQuit` answers why not, or null when it left): a
+// failure stays in the game, with the reason and the choice of trying again or leaving without saving
+function PauseMenu({ onQuit, onQuitUnsaved }: { onQuit: () => Promise<string | null>; onQuitUnsaved: () => void }) {
   const setPaused = useGameStore((s) => s.setPaused);
   const push = useAppStore((s) => s.push);
   const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const saveAndQuit = async () => {
+    setSaving(true);
+    const why = await onQuit();
+    setSaving(false);
+    setProblem(why);
+  };
+  if (problem) {
+    return (
+      <div className="pause-overlay clickable">
+        <div className="panel" role="alertdialog" style={{ width: 420 }}>
+          <h1 className="game-title" style={{ fontSize: 28 }}>Not Saved</h1>
+          <p>Your holdfast was not saved: {problem}. You are still in the game, and nothing has been lost.</p>
+          <button className="menu-btn" disabled={saving} onClick={saveAndQuit}>{saving ? 'Saving…' : 'Retry'}</button>
+          <button className="menu-btn danger" disabled={saving} onClick={onQuitUnsaved}>Quit without saving</button>
+          <button className="menu-btn" disabled={saving} onClick={() => setProblem(null)}>Back</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="pause-overlay clickable">
       <div className="panel" style={{ width: 380 }}>
@@ -42,10 +65,7 @@ function PauseMenu({ onQuit }: { onQuit: () => void }) {
         <button
           className="menu-btn"
           disabled={saving}
-          onClick={async () => {
-            setSaving(true);
-            await onQuit();
-          }}
+          onClick={saveAndQuit}
         >
           {saving ? 'Saving…' : 'Save & Return to Menu'}
         </button>
@@ -105,7 +125,8 @@ export default function GameScreen() {
   const paused = useGameStore((s) => s.paused);
   const buildMode = useGameStore((s) => s.buildMode);
   const character = useGameStore((s) => s.character);
-  const saveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autosave = useRef<{ stop: () => void } | null>(null);
+  const [saveProblem, setSaveProblem] = useState<string | null>(null);
   const [worldStopped, setWorldStopped] = useState(false);
 
   // hotkeys — looked up by action through the current keybinds, not the raw
@@ -219,38 +240,47 @@ export default function GameScreen() {
         statsAccum.playtimeSec = 0;
       }
     }, 4000);
-    saveTimer.current = setInterval(async () => {
+    // F-08a · every 20 s while there is anything to save; a failure shows on the HUD's chip and is tried again
+    // sooner, backing off (game/autosave.ts)
+    autosave.current = startAutosave(async () => {
       const st = useGameStore.getState();
-      if (st.dirty && st.character) {
-        const ok = await persistSave(st.toSave(), useAppStore.getState().guest);
-        if (ok) {
-          st.markSaved();
-          setHasSave(true);
-        }
+      if (!st.dirty || !st.character) return null;
+      const r = await persistSave(st.toSave(), useAppStore.getState().guest);
+      if (r.ok) {
+        st.markSaved();
+        setHasSave(true);
       }
-    }, 20000);
+      return r;
+    }, setSaveProblem);
     return () => {
       audio.stopAmbience();
       audio.stopAllLoops();
       clearInterval(deedTimer);
-      if (saveTimer.current) clearInterval(saveTimer.current);
+      autosave.current?.stop();
     };
   }, [setHasSave]);
 
-  async function saveAndQuit() {
-    const st = useGameStore.getState();
-    if (st.character) {
-      const ok = await persistSave(st.toSave(), guest);
-      if (ok) setHasSave(true);
-    }
-    st.setPaused(false);
+  function quit() {
+    useGameStore.getState().setPaused(false);
     resetTo('menu');
+  }
+
+  function saveAndQuit(): Promise<string | null> {
+    const st = useGameStore.getState();
+    if (!st.character) {
+      quit();
+      return Promise.resolve(null);
+    }
+    return saveAndLeave(() => persistSave(st.toSave(), guest), () => {
+      setHasSave(true);
+      quit();
+    });
   }
 
   // F-06 · the world failed: free the pointer for the card's button, and autosave no more over the last good save
   function worldFailed() {
     releaseGameLock();
-    if (saveTimer.current) clearInterval(saveTimer.current);
+    autosave.current?.stop();
   }
 
   if (!character) return null;
@@ -278,7 +308,7 @@ export default function GameScreen() {
         </Canvas>
         {worldStopped && <WorldStopped />}
       </ErrorBoundary>
-      <HUD />
+      <HUD saveProblem={saveProblem} />
       <TouchControls />
       <FactionTheme />
       <div className="hud" style={{ zIndex: 12 }}>
@@ -289,7 +319,7 @@ export default function GameScreen() {
           overlay's agent tabs have to be clickable when the pointer is free */}
       <AIDebugOverlay />
       <PerfOverlay />
-      {paused && <PauseMenu onQuit={saveAndQuit} />}
+      {paused && <PauseMenu onQuit={saveAndQuit} onQuitUnsaved={quit} />}
     </div>
   );
 }

@@ -95,6 +95,16 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   test now blocks the merge (OD-11); `vitest.config.ts`'s header and CLEANUP_PLAN.md's open question say so. Shown on the PR
   itself: its first commit carried one deliberately failing test, and the job failed and held the merge; the second commit
   took it out.
+- **#293 — Wave 63.2** (F-08a): a save that fails is never silent. `persistSave` answers `{ ok }` or `{ ok: false,
+  problem }` (a 500, a 413, signed out, unreachable, a guest's storage full or closed); Save & Quit leaves only on a
+  written save (`game/autosave.ts`'s `saveAndLeave`), otherwise the pause menu shows "Not Saved" with the reason, Retry,
+  Quit without saving and Back; the autosave is one timer re-armed after each try (`startAutosave`): 20 s, and after a
+  failure 5, 10, 20 … at most 160 s, with a "Not saved · retrying" chip on the HUD until a save goes through. Premises
+  held (line numbers moved: the autosave at GameScreen.tsx:222-231, saveAndQuit at :240-248); wave 62.5's
+  `worldFailed` now stops the one timer, and a try in flight as it stops arms no other. ROADMAP: the defect logged
+  fixed (it had no entry); a markSaved race the clock now hides logged for F-08b. Measured on main (`w632_save.mjs`):
+  Save & Return with the PUT answered 500 or 413 went to the menu with no Continue and no word, the session lost; a
+  guest with storage full the same, the autosave failing unseen; the autosave PUT every 20 s against a 500, nothing shown.
 
 ## Owner decisions
 

@@ -5,13 +5,19 @@ import { checkSave, parseSave } from './saveSchema';
 
 const GUEST_KEY = 'kk_guest_save';
 
-export async function persistSave(save: SaveGame, guest: boolean): Promise<boolean> {
+/** What writing the save came to (F-08a): written, or why not — `problem` reads after "not saved: ", the way
+ *  fetchSave's does in the menu. Nothing is thrown away on a failure: the caller keeps the session and says so. */
+export type SaveOutcome = { ok: true } | { ok: false; problem: string };
+
+export async function persistSave(save: SaveGame, guest: boolean): Promise<SaveOutcome> {
   if (guest) {
     try {
       localStorage.setItem(GUEST_KEY, JSON.stringify(save));
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (e) {
+      // QuotaExceededError in Chrome and Safari, NS_ERROR_DOM_QUOTA_REACHED in Firefox
+      const full = /quota/i.test((e as { name?: string } | null)?.name ?? '');
+      return { ok: false, problem: full ? "this browser's storage is full" : 'this browser would not open its storage' };
     }
   }
   const res = await fetch('/api/save', {
@@ -19,7 +25,11 @@ export async function persistSave(save: SaveGame, guest: boolean): Promise<boole
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(save),
   }).catch(() => null);
-  return !!res?.ok;
+  if (!res) return { ok: false, problem: 'the server could not be reached' };
+  if (res.ok) return { ok: true };
+  if (res.status === 401) return { ok: false, problem: 'you are signed out — sign in again' };
+  if (res.status === 413) return { ok: false, problem: 'the save is too large for the server to take' };
+  return { ok: false, problem: `the server answered ${res.status}` };
 }
 
 /** What reading the save came to (CLN-09) — kept apart, because each asks something different of the menu: a save to
