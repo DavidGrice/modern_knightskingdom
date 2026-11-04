@@ -91,6 +91,10 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   crash fix logged fixed. Measured on main (`w625_crash.mjs`): a panel's throw white-screened the app (Next's
   "Application error", 0 frames); a frame's left the canvas up at 0 frames a second, 129 page errors in a few seconds;
   nothing logged anywhere.
+- **#292 — Wave 63.1** (F-07): `npm run test:unit` is a step of CI's required "Typecheck & build" job, so a failing
+  test now blocks the merge (OD-11); `vitest.config.ts`'s header and CLEANUP_PLAN.md's open question say so. Shown on the PR
+  itself: its first commit carried one deliberately failing test, and the job failed and held the merge; the second commit
+  took it out.
 
 ## Owner decisions
 
