@@ -80,6 +80,11 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # F-07 (wave 63.1) · the unit tests (vitest), inside this required job so that a failing test blocks the merge
+      # (FEATURE_PLAN.md, OD-11). They read no game assets (public/assets is not in CI), so they run here as locally.
+      - name: Unit tests
+        run: npm run test:unit
+
       # Note this passes without public/assets: the extracted models,
       # textures and sounds are runtime fetches from public/, not build
       # inputs. The catalog JSON that IS a build input lives in
