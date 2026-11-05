@@ -238,7 +238,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-073 | STILL_OPEN | S | Blender rig_lib.py up-axis convention never traced | Trace the sibling repo's rig_lib.py to confirm/refute the bare-Y-mirror assumption; research debt, no live defect currently observed. |
 | OPEN-074 | STILL_OPEN | S | template-05 tree-row orientation fix never visually confirmed | Find a walkable vantage point that clears the occluding mesh_0_47 to get a clean screenshot; the fix itself is already shipped and mesh-identity-confirmed. |
 | OPEN-102 | STILL_OPEN | L | Mixed head/body donor NPCs still float the head at the neck | No neck-socket re-anchor system exists; villager looks remain restricted to same-donor head/body pairs. |
-| OPEN-103 | NEEDS_DECISION | L | No music soundtrack — ambience-only state never formally ratified | A human product decision: commission/license new music tracks, or formally accept the current de-facto ambience-only state as final. |
+| OPEN-103 | CLOSED | L | No music soundtrack — ambience-only state never formally ratified | Decided by OD-13 (FEATURE_PLAN.md's Owner decisions): ambience-only is ratified — no music exists in the extraction and none can be made. Closed by wave 64.2 (#297, F-10b): the Sound tab's 'Music & ambience' slider reads 'Ambience'. (The slider still drives nothing: "Seen, not fixed: the Ambience slider sets a volume nothing reads", at the end of this file.) |
 
 </details>
 
@@ -248,7 +248,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 |---|---|---|---|---|
 | OPEN-061 | STILL_OPEN | S | Fold Stats/Deeds screens into the MenuTabs one-stop menu | Add 'stats' and 'deeds' tab entries; both remain separate pause-menu/embedded-gallery UI today. |
 | OPEN-075 | STILL_OPEN | S | Placement-ghost arrow direction wants a human in-game confirmation | A human playtester needs to eyeball the arrow against a known-asymmetric piece; no further code change identified as needed. |
-| OPEN-078 | STILL_OPEN | S | Options screen 'Esc to close' hint has no real Escape handler | Add an Escape keydown handler in OptionsStack.tsx that calls useAppStore's pop() to actually close the screen. |
+| OPEN-078 | CLOSED | S | Options screen 'Esc to close' hint has no real Escape handler | Closed by wave 64.2 (#297, F-10b): Escape closes Options, Credits and How to Play (`components/stacks/useStackEscape.ts`), except while a key or pad rebind is listening ("Bugfix: Escape did not close Options, Credits or How to Play", at the end of this file). |
 | OPEN-080 | CLOSED | S | StatsStack.tsx still on the old .stack-screen system, skips the UI theme lane | Closed during the cleanup (CLN-31/32): StatsStack renders `kk-screen kk-screen-${uiTheme}` (`StatsStack.tsx:96`). Re-verified 2026-10-31. |
 | OPEN-081 | STILL_OPEN | M | Dark-ages re-theme follow-ups: notification glow, minimap tint, blackletter font, loading heraldry | None of the 4 named cosmetic follow-ups from the original re-theme wave has shipped: toast/minimap border tinting, an embedded blackletter/uncial font, and title-screen heraldic tricolor treatment. |
 | OPEN-082 | STILL_OPEN | M | No touch support for the aerial Build View camera | Add pinch-zoom/pan/tap-to-place touch handling to BuildController's aerial camera, mirroring the FPS controller's existing touch bridge. |
@@ -9840,3 +9840,78 @@ given rather than re-parsing it, or add "Button N" to the pattern.
 every load, with no one-time marker. So a player who deliberately binds the Collection Book back onto the wheel's key
 (the Options screen warns of it) finds it moved to O at the next launch — overriding a deliberate rebind, though one
 that could never open the book. To do: mark the migration done in the stored settings and run it once.
+
+## Bugfix: Escape did not close Options, Credits or How to Play — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, OPEN-078), FIXED 2026-11-04
+
+**The fault.** Options' header says "Esc to close", but no stack screen listened for Escape: `OptionsStack.tsx` read
+it only inside a listening rebind row (where it cancels the rebind), and `CreditsStack.tsx` and `HelpStack.tsx` had
+only their Back buttons. `App.tsx` draws one screen at a time, so with Options or How to Play opened from the game,
+`GameScreen.tsx`'s own Escape handler is not mounted either. The pad's rebind row also never raised
+`rebindState.listening` (`data/keybinds.ts`), which only the keyboard row set. Measured on `main` (production build of
+base-14, port 3101, build `7bsyIyZUO1WVQPLOH1LnU`; `scripts/cln-tools/w642_escape.mjs`): from the main menu, Escape
+on Options, Credits and How to Play left the stack at `menu>options`, `menu>credits`, `menu>help`; with a keyboard
+row listening ("PRESS A KEY"), Escape cancelled the rebind (the row back to "W", keybinds unchanged) and a second
+Escape did nothing; the same with a pad row ("PRESS A BUTTON", back to "A"); in game, H then Escape stayed on How to
+Play (`menu>create>game>help`), and pause → Options → Escape stayed on Options. The Sound tab's third slider read
+"Music & ambience", though no music exists (OPEN-103).
+
+**The fix** (wave 64.2, F-10b). A shared hook, `components/stacks/useStackEscape.ts`, pops the screen on Escape — the
+same `pop` as its Back button — in Options, Credits and How to Play. Its handler (`stackEscapeHandler`) ignores Escape
+while a rebind row is listening (`isRebindListening()`), one a row has already taken (`defaultPrevented`: both rows
+call `preventDefault` on it, which covers a row whose listener ran first and has already stopped listening) and a held
+key's repeats, so a held Escape closes one screen, not that one and the next. The pad's rebind row now holds the listening state
+as the keyboard row does, so its Escape cancels without closing Options (the other readers of it live in the game
+screen, which is not mounted while Options is). That state was one shared boolean, `rebindState.listening`; it is now
+a count (`holdRebindListening()`, whose release counts once; `isRebindListening()` is count > 0), because a click on
+a second row's cap is not a keydown, so two rows can listen at once, and the first to stop cleared the flag while the
+second still listened — harmless before, but with the hook the next Escape would have closed Options mid-rebind (found
+in review). The slider reads "Ambience" (OD-13). Not changed: Stats, which G-25 moves into the menu tabs.
+
+**Verified** with `tsc` (clean) and the unit tests (85 files, 628 tests). New: `components/stacks/useStackEscape.test.ts`
+(Escape pops; other keys do not; not while a rebind listens, and does once it stops; not on a taken or repeated
+Escape). Three take-outs, each failing its tests, the source restored with `git diff` and the new file identical
+(hash compared): the rebind guard out (1 test), the `defaultPrevented`/repeat guards out (1), the pop out (2). Live,
+`w642_escape.mjs` on a production build of the change (port 3102, build `dcT4NzveGk2WzMlOVlVqV`): Escape takes
+Options, Credits and How to Play back to `menu`; with a keyboard or a pad row listening, Escape cancels the rebind
+(bindings unchanged) and keeps Options, and a second Escape closes it; in game, H → Escape returns to the game
+unpaused, pause → Options → Escape to the paused game with the pause menu up; the slider reads "Ambience"; no page
+errors. Side by side on production builds of `main` and the change (evidence pass, re-run independently:
+`tsc` clean, 85 files / 628 tests, `next build` clean; `scripts/cln-tools/w642_evidence.mjs`; `main` = base-14 on port
+3101, build `7bsyIyZUO1WVQPLOH1LnU`; the change on port 3102, build `vPjburaGOgBGP5VHbNvdk`, the same script digest
+`681de2e6fbe3` as its first build `s2E0w-px-I0xW61zdJ61r`): one Escape from the menu on Options, Credits and How to
+Play — `main` stays on `menu>options`, `menu>credits`, `menu>help`, the change goes to `menu`; a keyboard row
+listening — both cancel the rebind (back to "W", keybinds unchanged) and keep Options, and a second Escape stays on
+Options on `main` and goes to `menu` on the change; a pad row — the same (back to "A", buttons unchanged); a real
+rebind to Y still binds and keeps Options on both; in game, H → Escape — `main` stays on `menu>create>game>help`, the
+change returns to `menu>create>game` unpaused; H → a held Escape (down, two repeats, up) — the same (two repeats
+toggle pause twice in the game, so this run cannot show whether they reach it: GameScreen's Escape has no repeat
+check, logged at the end of this file); pause → Options, a key row listening → Escape cancels on both, then a second Escape — `main`
+stays on Options, the change returns to the paused game with the pause menu up; pause → Options → a held Escape —
+the same; the slider reads "Music & ambience" on `main`, "Ambience" on the change; no page errors on either. The
+take-outs, re-run one guard at a time: the rebind guard (1 test fails), the repeat guard (1), the `defaultPrevented`
+guard (1), the pop (2); and live, a build without the pad row's two flag lines (`UanxDAs9aAV1F_jjOxwJC`): one Escape
+during a pad rebind closed Options (`menu`), so the flag is needed. Each restored, `git diff` byte-identical (`cmp`)
+and the sha1 of the diff plus the new files unchanged. Not measured: a real gamepad (headless has none, so neither
+a pad's button capture in the rebind row nor a pad's own back button), the unit tests on Linux, and any sound from
+the slider (it drives nothing; see the next entry). After the count (review fix): `tsc` clean, 85 files / 629 tests;
+the new test (a second row still listening after the first stops, and a release run twice counting once) fails with
+the release clearing the count to 0 as the boolean did, and passes restored. Live, `w642_tworows.mjs` (Options >
+Keybinds: row 1's cap, row 2's cap, row 1's cap again, then Escape twice), keyboard and gamepad: `main` (3101,
+`7bsyIyZUO1WVQPLOH1LnU`) — the first Escape cancels row 2 (caps "W|S", "A|X", bindings unchanged) and a second stays
+on Options; the change (3102, `Ierk9pCco4TVdXVcjNeHG`) — the first Escape the same, keeping Options, the second goes
+to `menu`; and `w642_evidence.mjs` on that build gives every line as before; no page errors.
+
+## Seen, not fixed: the Ambience slider sets a volume nothing reads — logged 2026-11-04 (wave 64.2; by the code)
+
+The Sound tab's third slider (now "Ambience", OD-13) writes `settings.musicVolume` (`appStore.ts`, default 0.5), but
+nothing reads it: `App.tsx` passes only the master and effects volumes to `audio.setVolumes`, and the ambience beats
+(`lib/audio.ts`'s `startAmbience`, 0.35 of the pick) and the rain loop play at the effects volume. It has been so since
+the first commit. To do: give `AudioManager` an ambience volume set from `musicVolume` and play the ambience pool (and
+perhaps the rain loop) through it — deciding the default so today's ambience level does not change (0.35 × 0.9 now).
+
+## Seen, not fixed: holding Escape in the game flickers the pause menu — logged 2026-11-04 (in the review of wave 64.2; by the code)
+
+GameScreen's Escape handler (`components/stacks/GameScreen.tsx`) toggles pause on every keydown, OS key repeats
+included, so holding Escape past the repeat delay flips the pause menu on and off, and whether the game ends up paused
+depends on how many repeats arrived. The same on `main`. Wave 64.2's stack-screen hook ignores repeats, but once it
+has popped back to the game the rest of a held Escape reaches this handler. To do: ignore `e.repeat` there.

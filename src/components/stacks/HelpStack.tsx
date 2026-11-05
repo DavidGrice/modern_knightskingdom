@@ -4,6 +4,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { codeLabel, movementLabel } from '@/game/data/keybinds';
 import { resolveInputDevice, interactLabel, clickHoldLabel, blockLabel, type Bindings, type InputDevice } from '@/game/inputMode';
 import { ScreenHead, ScreenActions } from './ScreenShell';
+import { useStackEscape } from './useStackEscape';
 
 interface Step {
   title: string;
@@ -59,6 +60,7 @@ export function helpSteps(b: Bindings, device: InputDevice): Step[] {
 
 export default function HelpStack() {
   const pop = useAppStore((s) => s.pop);
+  useStackEscape(pop);
   const uiTheme = useAppStore((s) => s.settings.uiTheme);
   const settings = useAppStore((s) => s.settings);
   const activeDevice = useGameStore((s) => s.activeInputDevice);

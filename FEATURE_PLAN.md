@@ -154,6 +154,17 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   Gather" label logged. CLEANUP_PLAN.md's KeyG question marked settled. Measured on main (`w641_keys.mjs`): G opens
   the emotes and O nothing with the defaults and with a stored collision; with interact on Z the Satchel and How to
   Play still name E; the crossbow says "RMB to aim" on Gamepad; pinned Touch shows no touch controls.
+- **#297 — Wave 64.2** (F-10b): Escape closes Options, Credits and How to Play. A shared hook,
+  `components/stacks/useStackEscape.ts`, pops the screen on Escape, as Back does — not while a key or pad rebind is
+  listening (that Escape still cancels the rebind), not on an Escape a rebind row has already taken
+  (`defaultPrevented`), not on a held key's repeats. The pad's rebind row now holds the listening state like the
+  keyboard row (it never did, so the hook alone would have closed Options under it), and that state is a count, not
+  one boolean (`holdRebindListening()`): two rows can listen at once, and the first to stop cleared the second's
+  (found in review). The Sound tab's "Music & ambience"
+  slider reads "Ambience" (OD-13). Premises held (line numbers moved with wave 64.1), with one correction: the pad row
+  was not covered by `isRebindListening()`. ROADMAP: a new fixed entry (none existed); OPEN-078 closed; OPEN-103 closed
+  as decided by OD-13; logged that the Ambience slider's `musicVolume` is read by nothing. Measured on `main`
+  (`w642_escape.mjs`): Escape leaves Options, Credits and How to Play open, from the menu and from the game.
 
 ## Owner decisions
 
