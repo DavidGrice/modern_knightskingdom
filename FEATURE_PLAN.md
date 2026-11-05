@@ -192,6 +192,25 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   the owner confirms the voice by ear once. ROADMAP: a new fixed entry (none existed); I42's comment in court.ts
   corrected. Measured on main (`w644_lore.mjs`): step 4/4 asks for `lore_richard_cedric` and shows "Did you keep up
   alright? … the evil Cedric the Bull."
+- **#300 — Wave 64.5** (F-16): the same-market haggle floor (OD-07). `buyQuote` (`data/pricing.ts`) takes the offer (`{
+  item, qty, price }`) and, for an item the merchant buys back (`SELL_PRICES`), floors the lot at `sellQuote(item,
+  qty, +25%, haggle) + qty`: a gold a unit above what the same market pays at the player's current haggle at its
+  dearest (`MARKET_SENSITIVITY`, the pressure's cap). The ceiling, not the pressure of the moment: the review showed a
+  floor at the moment's pressure beaten by buying a flooded market up a lot at a time and selling it all back at +25%
+  (on `main`, `w645_flood.mjs`: the Wit-10 iron bar +265 a round). G-31's regional multiplier must lift this ceiling
+  with it. Wit stays uncapped; cross-market profit stays. The store's `buyOffer` (so `buyGuildOffer` too), `ShopPanel`'s and `GuildPanel`'s
+  tickets all pass the same offer, so a ticket is what the purchase takes. Premises held (the line references still
+  true; Wit's points are in `data/playerAttributes.ts`), with one adaptation: the floor reaches the guilds' stores as
+  well, since a guild's purchase is a `buyOffer` on the same market pressure, and three guild bulk rows already printed
+  gold at Wit 0 (stone ×8 for 14, cooked fish ×4 for 16, fish stew ×2 for 20; sold back for 17, 21, 22), which now cost
+  28, 29 and 30; plank ×6 goes from 14 to 21 and the Brotherhood's iron bar ×3 from 30 to 33; the merchant's own stock
+  at Wit 0 on a market at rest is unchanged. Tests: a property test in `pricing.test.ts` (every resold merchant and
+  guild offer, Wit 0 to 1,000,000, every perk set, 11 market pressures, against the ceiling's payout) and
+  `store/slices/inventorySlice.test.ts` (5,760 buy-then-sell loops through the real store: gold never rises, the charge
+  equals the ticket; and a flooded market bought up to its cap then sold all at once, three rounds: every round
+  loses). ROADMAP: a new fixed entry (none existed); CLEANUP_PLAN.md's haggle-cap question marked settled.
+  Measured on main (`w645_loop.mjs`, the shop panel's own Buy and All buttons, Wit set through the store hook): gold
+  rose in 12 of 20 loops — at Wit 10 by 1-3 gold, at Wit 25 by 3-15 (every offer at 1 gold), at Wit 100 by 9-39.
 
 ## Owner decisions
 

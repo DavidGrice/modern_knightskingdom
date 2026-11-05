@@ -116,8 +116,9 @@ export const createInventorySlice: SliceCreator<InventorySlice> = (set, get) => 
       const marketMul = marketPriceMultiplier(st.marketState[item], now);
       // Wave 23 · the same haggle sellItem() gives when selling, spent the
       // other way here (data/pricing.ts) — clamped to 1g so a maxed haggler
-      // is never handed goods for free.
-      const cost = buyQuote(price, marketMul, haggleOf(st));
+      // is never handed goods for free, and (F-16) never to what sellItem()
+      // would pay straight back for them.
+      const cost = buyQuote({ item, qty, price }, marketMul, haggleOf(st));
       if ((st.inventory.gold ?? 0) < cost) {
         st.notify('Not enough gold!');
         return;

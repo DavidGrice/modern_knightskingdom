@@ -119,7 +119,7 @@ export default function GuildPanel() {
 
           <div className="creator-section" style={{ marginTop: 16 }}>Guild Store</div>
           {g.vendor.map((o) => {
-            const cost = buyQuote(o.price, marketPriceMultiplier(marketState[o.item], Date.now()), { wit, silverTongue, honestWeight, wanderer });
+            const cost = buyQuote(o, marketPriceMultiplier(marketState[o.item], Date.now()), { wit, silverTongue, honestWeight, wanderer });
             const locked = (o.minRank ?? 0) > rankIdx;
             return (
               <div className="recipe-row" key={o.item}>

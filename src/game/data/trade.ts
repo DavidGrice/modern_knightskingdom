@@ -161,7 +161,7 @@ export type { MarketEntry };
  *  it into an actual percentage — see this section's header for the math. */
 export const MARKET_NUDGE_PER_UNIT = 0.04;
 /** level === ±1 means the price is ±25% off baseline */
-const MARKET_SENSITIVITY = 0.25;
+export const MARKET_SENSITIVITY = 0.25;
 /** real minutes for a full ±1 swing to linearly decay back to 0 */
 const MARKET_RECOVERY_MS = 20 * 60_000;
 
