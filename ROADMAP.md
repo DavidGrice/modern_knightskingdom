@@ -10034,3 +10034,102 @@ the stutter dropped from the table → 1 fail. Screenshots (d3d11, headless) `ou
 `ev_change_leo4.png`. Not measured: the voice itself — nobody listened, so who speaks `c1s04t1a` and that it says these
 words rests on the pak's transcript and the WAV's bytes until the owner confirms it by ear; the I42 comment edit is a
 comment and no test can see it.
+
+## Bugfix: buying goods and selling them straight back printed gold at high Wit — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, Q-haggle-arbitrage; CLEANUP_PLAN.md's open question "Should the haggle/economy formula be capped?"), FIXED 2026-11-05
+
+**The fault.** Wit is uncapped (a point per 4 total skill levels, `data/playerAttributes.ts`), and each point takes 4%
+off a purchase (`buyQuote`, `data/pricing.ts`) while adding 4% to a sale (`sellQuote`), with Silver Tongue, Honest
+Weight and the Wanderer's cut doing the same both ways. Nothing tied a purchase to what the same market pays back for
+the same goods, so from Wit 8 (no perks, market at rest) the merchant sold an iron bar for less than he then paid for
+it, from Wit 9 his planks and stone too, and further on everything at the 1-gold clamp. A guild's store goes through the
+same `buyOffer` and the same market pressure, and three of its bulk rows were under the merchant's buy-back price at no
+Wit at all (by the formula, market at rest: the Builders' Guild's stone ×8 for 14, sold back for 17; the Anglers'
+Circle's cooked fish ×4 for 16, back for 21; fish stew ×2 for 20, back for 22). Measured on `main` (production build of
+base-14, port 3101, build `jY4qAt0qeN47FAy5WfFSG`, digest `b7ea84ef514b`; `scripts/cln-tools/w645_loop.mjs`: a guest
+(the default Wanderer, +2% haggle), Wit set through the store hook, a purse of 500 and nothing else, the market at rest;
+the shop panel opened, Buy clicked on the offer, then All on its sell row): in 12 of 20 loops gold rose. Wit 0 and 5
+lost or broke even (plank ×2 at Wit 5: 5 gold out, 5 back); Wit 10: plank and stone ×2 +2 each, iron bar +3, wildflowers
++1; Wit 25: every offer at 1 gold, +7, +7, +15, +3; Wit 100: +19, +19, +39, +9. Every purchase took the gold its ticket
+showed.
+
+**The fix** (wave 64.5, F-16; OD-07, the same-market floor). `buyQuote` takes the offer (`{ item, qty, price }`) and,
+for an item the merchant buys back (`SELL_PRICES`), floors the lot at `sellQuote(item, qty, +25%, haggle) + qty`: a
+gold a unit more than the same market pays for the lot at the player's current haggle at its dearest (the pressure's
++25% cap, `MARKET_SENSITIVITY`, now exported from `data/trade.ts`). The ceiling and not the pressure of the moment,
+because every unit bought lifts the market 1% for the sale after it (see the review round below): against the ceiling
+no run of purchases and sales, in lots of any size, at any pressure, comes out ahead — each lot's floor clears what its
+units can fetch by more than the sales' roundings can give back. Wit stays uncapped and still pays (a high-Wit buyer
+pays the floor, a low-Wit one the haggled price, whichever is more); cross-market profit is untouched. The store's
+`buyOffer` (and so `buyGuildOffer`), `ShopPanel`'s tickets and `GuildPanel`'s tickets all call it with the same offer,
+so a ticket is what the purchase takes. At Wit 0 on a market at rest the merchant's stock costs what it did (7, 7, 14,
+6, 4, 60); the guilds' resold rows rise: stone ×8 14 → 28, cooked fish ×4 16 → 29, fish stew ×2 20 → 30, plank ×6
+14 → 21, the Brotherhood's iron bar ×3 30 → 33. On a flooded market the merchant's planks and stone no longer drop
+below 7 at Wit 0 (5 on `main`), nor his iron bar below 11 (10). At Wit 25 (no perks, at rest) his plank and stone ×2
+cost 11, the iron bar 19, wildflowers 6; at Wit 100 23, 23, 43 and 12.
+
+**Verified** with `tsc` (clean) and the unit tests (87 files, 650 tests). New: in `src/game/data/pricing.test.ts`, a
+property test that every merchant and guild offer whose item `SELL_PRICES` buys costs more per unit than the same market
+pays for one, over Wit 0-60, 75, 100, 250, 1,000, 10,000 and 1,000,000, with and without each perk and the Wanderer, on
+11 market pressures from -25% to +25%; and a test that the floor is all that changed (an offer above it, or one the
+market never buys back, costs what the old formula said; the merchant's stock at no Wit is as before). The CLN-23
+regression tests now price an offer of something never bought back (a bolt). New file
+`src/game/store/slices/inventorySlice.test.ts`: the real store's `buyOffer` then `sellItem`, all at once and one by one,
+for every such offer at Wit 0 to 1,000,000, every perk set, Wanderer or not, five market levels (-1 to 1) — 5,760 loops,
+gold never rises, the purchase takes exactly the ticket's `buyQuote` — and the measured Wit-25 iron bar (17 out, 16
+back). Take-out: with the floor taken out of `buyQuote`, all four new tests fail (the property and loop tests, the floor
+test, the iron bar: 1 out, 16 back); restored, `git diff` identical and `pricing.ts`'s sha1 the same. A first live run
+of the change (`w645_loop.mjs` on its production build, port 3102, build `vzh9nBUaAKXs_Nx8mLYmv`, digest
+`9a2c6fea4165`): gold rose in 0 of 20 loops (Wit 0 as on `main`; every other loop lost 1 or 2 gold, the iron bar at Wit
+25 17 out and 16 back; every purchase took its ticket), no page errors. Side by side on production builds of `main` and
+the change (the evidence pass, re-run independently): `tsc` clean, 87 files and 650 unit tests passing, `next build`
+clean. Mutation controls, each one edit alone, then restored (`git diff` byte-identical to a copy taken before, and the
+sha1 of every changed source and test file the same): the floor taken out of `buyQuote` → 4 tests fail; the floor
+without its gold (`qty × sellQuote`) → the same 4 fail; the gold added once to the lot instead of to each unit → 2 fail
+(the floor test, and the store loop: a bulk row still made 1 gold); the store's `buyOffer` charging without the floor
+→ 2 fail (the loop test: charge ≠ ticket; the iron bar). No unit test reaches `ShopPanel`'s or `GuildPanel`'s ticket
+(a panel left on the old price would pass them); the live runs below check those tickets against the charge instead.
+Live: `main` = base-14's production build on port 3101 (build `jY4qAt0qeN47FAy5WfFSG`, digest `b7ea84ef514b`), the
+change = the worktree's on port 3102 (build `PIQBLEogVdZVYTeXXHmV9`, digest `9a2c6fea4165`). The merchant
+(`w645_loop.mjs`, 20 loops): on `main` gold rose in 12 — Wit 0 -3, -3, -6, -2 (plank, stone, iron bar, wildflowers);
+Wit 5 0, 0, -1, -1; Wit 10 +2, +2, +3, +1; Wit 25 (every ticket 1 gold) +7, +7, +15, +3; Wit 100 +19, +19, +69, +9
+(the iron bar's +69 holds Golden Fortune I's 30 gold, its 4-second check landing in that window as the probe's sales
+crossed 100 lifetime gold; the sale itself paid 40, so +39). On the change gold rose in 0: Wit 0 the same as `main`
+(7, 7, 14, 4 out, the same back); Wit 5 -1 each; Wit 10 -2, -2, -1, -1; Wit 25 -2, -2, -1, -1 (17 out, 16 back for the
+iron bar); Wit 100 -2, -2, -1, -1 (22, 22, 41, 11 out). Every sale paid the same on both builds; every purchase took
+exactly its ticket on both (0 mismatches in 20). A guild's store (`w645_guild.mjs`, new: the Builders' Guild at
+template-04, joined at the top rank through the hook, Stone ×8 bought from the guild panel and sold back on the
+merchant's All): on `main` gold rose in 4 of 4 — Wit 0 14 out, 18 back (+4: the purchase's own +8% pressure lifts the
+sale above the 17 at rest), Wit 10 8 → 24 (+16), Wit 25 1 → 34 (+33), Wit 100 1 → 82 (+81); on the change in 0 of 4 —
+24 → 18, 32 → 24, 40 → 34, 88 → 82 (-6, -8, -6, -6); tickets equal to the charge on both, and the Builder Hammer (never
+bought back) ticketed the same on both (18, 10, 1, 1). No page errors on either build in any run. Not measured live:
+the perks (Silver Tongue, Honest Weight), a non-Wanderer hero, a market off its rest, the other guilds' rows (the
+Anglers' Circle's cooked fish ×4 and fish stew ×2, the Lodge's plank ×6, the Brotherhood's iron bar ×3) — those rest on
+the unit tests; no control build with a panel left on the old ticket was made. (Every "the change" number in this
+paragraph is of the first floor, at the pressure of the moment; the review round below replaced it.)
+
+**Review round.** The review found the first floor beatable: it priced each lot at the pressure of its purchase, and
+each unit bought lifts the pressure 1% (to the +25% cap) for the sale after it, so a flooded market bought up one lot at
+a time and then sold back with one All sold everything at +25% that was bought on average near 0% — and that one sale
+floods the market again, so the round repeats at once. Measured on `main` (`scripts/cln-tools/w645_flood.mjs`, new: a
+guest, Wit through the hook, a purse of 5,000, the item's market flooded to -1; three rounds of clicking the shop's Buy
+until the pressure reaches +1, then All once; a round's net is the sale minus the purchases): gold rose in 13 of 18
+rounds — the iron bar at Wit 10 +265 a round (50 bought for 403, sold for 668), plank ×2 +67; at Wit 25 +841 and +202;
+at Wit 0 the iron bar lost 175 and the plank 42 (one Wit-0 plank round showed +28: a 70-gold Golden Fortune tier landed
+mid-purchase). The first floor, run through the store's own functions, gave the same: the iron bar +52 a round at Wit 7
+to 25. Fixed by flooring against the market's ceiling (above). New test in `inventorySlice.test.ts`: every resold
+merchant and guild offer, Wit 0 to 1,000,000, no perks or both, Wanderer or not, from a flooded market, three rounds of
+buying until the pressure caps and then selling everything at once — every round loses gold; on the first floor it
+fails (a round +36 gold). The property test in `pricing.test.ts` now asks for more per unit than the market pays for one
+at its ceiling, at every pressure; the iron-bar test is now 19 out, 16 back. Control: the first floor put back alone
+into `buyQuote` → 4 tests fail (the property, floor, flood-round and iron-bar tests); restored, `pricing.ts`'s sha1 the
+same. `tsc` clean; unit tests 87 files, 651 tests. Live on production builds: `main` = base-14 on port 3101 (build
+`jY4qAt0qeN47FAy5WfFSG`, digest `b7ea84ef514b`), the change = the worktree on port 3102 (build `GONSWyYoYjipXbqpc9NLJ`,
+digest `9ec262869294`). `w645_flood.mjs` on the change: gold rose in 1 of 18 rounds, the same Wit-0 plank round the
+70-gold reward landed in (logged as gold rising 63 on a 7-gold ticket; without it -55, as the other two); the iron bar
+-177, -147, -177 at Wit 0 (the second again holding Golden Fortune I's 30 gold), -32 a round at Wit 10, -42 at Wit 25;
+plank ×2 -55, -58, -48; every other purchase took its ticket (673 of 675; the 2 were the rewards). `w645_loop.mjs` on
+the change: gold rose in 0 of 20 — Wit 0 as on `main` (7, 7, 14, 4 out, the same back), every loop -1 to -6, the iron
+bar 19 out and 16 back at Wit 25, 43 and 40 at Wit 100; 0 ticket mismatches. `w645_guild.mjs` on the change: 0 of 4 —
+stone ×8 28 → 18, 35 → 24, 44 → 34, 92 → 82 (-10, -11, -10, -10); tickets equal to the charge; the Builder Hammer's
+ticket as before (18, 10, 1, 1). No page errors. `main`'s loop and guild numbers above stand (the same build). Not
+measured live: the perks, a non-Wanderer hero, the other guilds' rows — the unit tests carry those.

@@ -91,7 +91,7 @@ export default function ShopPanel() {
           <div className="creator-section">Buy</div>
           {BUY_OFFERS.map((o) => {
             const marketMul = marketPriceMultiplier(marketState[o.item], Date.now());
-            const cost = buyQuote(o.price, marketMul, haggler);
+            const cost = buyQuote(o, marketMul, haggler);
             return (
               <div className="recipe-row" key={o.item}>
                 <div className="icon"><Ico e={ITEMS[o.item].icon} /></div>
