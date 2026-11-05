@@ -36,7 +36,9 @@ export const COURT_NPCS: NpcDef[] = [
       { text: 'I am King Leo. Do you like my castle? Richard tells me you want to become a knight.', sound: 'lore_leo_castle' },
       { text: "My land is a wonderful place, but for Cedric and his gang. He's always trying to get his hands on my Kingdom... and his bottom on my throne!", sound: 'lore_leo_cedric1' },
       { text: 'For now though, Cedric still lives in the woods!', sound: 'lore_leo_cedric2' },
-      { text: 'Did you keep up alright? Good! Right! I want to introduce you to the evil Cedric the Bull.', sound: 'lore_richard_cedric' },
+      // Wave 64.4 (F-12) · the clip is c1s04t1a, from Leo's scene; the id keeps its old name (the copy script names it). Its text
+      // was Richard's c1s01t4a. Every line here is checked against its clip's transcript (loreTranscripts.test.ts).
+      { text: "Ignore Cedric! Let me see Richard's new recruit!", sound: 'lore_richard_cedric' },
     ],
     revealAfterQuest: 'knights_arms',
     // kingdom-scale levies, befitting the crown's own seat (Phase 20 4b)
@@ -144,10 +146,12 @@ export const COURT_NPCS: NpcDef[] = [
       { text: "Greetings! I am Richard the Strong, and I welcome you to LEGO Creator Knights' Kingdom.", sound: 'lore_richard_greet' },
       { text: "Don't worry. I'll be here to help you throughout.", sound: 'lore_richard_reassure' },
       { text: "I'll introduce you to some friends and foes along the way!", sound: 'lore_richard_friendsfoes' },
-      // I42 · the line that used to sit here — "Did you keep up alright? …
-      // the evil Cedric the Bull" — is KING LEO's voice, not Richard's. It
-      // was playing in Richard's run with his portrait over it. Moved to Leo,
-      // where the recording actually belongs.
+      // I42 · the line that used to sit here (`lore_richard_cedric`) is KING
+      // LEO's voice, not Richard's. It was playing in Richard's run with his
+      // portrait over it. Moved to Leo, where the recording actually belongs.
+      // Its text, "Did you keep up alright? … the evil Cedric the Bull", was
+      // Richard's own c1s01t4a, never imported; wave 64.4 gave Leo's line the
+      // words his clip speaks.
       { text: 'Farewell, my good Knight!', sound: 'lore_richard_farewell' },
     ],
     repTitles: [

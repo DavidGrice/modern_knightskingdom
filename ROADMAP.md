@@ -9983,3 +9983,54 @@ spent 2 stone — the player's shot, and one more from the only engine on the fi
 wave 64.3 the two shots pay differently (the engine's own at the lower rate and without the final stand), so under a
 crewed engine which ball lands first decides what a kill pays, and the engine also shoots where its crew is not
 aiming. To do: skip the crewed engine in that loop (`b.id === crewState.engineId`).
+
+## Bugfix: King Leo's fourth lore line showed words his recording does not speak — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, the idea "Cedric's voice in the world"; by the extraction), FIXED 2026-11-05
+
+**The fault.** Leo's fourth lore line (`data/cast/court.ts`) showed "Did you keep up alright? Good! Right! I want to
+introduce you to the evil Cedric the Bull." over `lore_richard_cedric`, but the local copy script
+(`scripts/prepare-assets.mjs`, gitignored, its `loreMap`) makes that clip from `challenge1/c1s04t1a.wav`, whose
+transcript is "Ignore Cedric!  Let me see Richard's new recruit!". The text shown is the transcript of
+`c1s01t4a` (Richard's, never imported). I42 moved the line from Richard's run to Leo's because the voice was Leo's,
+and kept the text. Nothing tied a lore line's text to its clip. The other ten lore lines match their transcripts (one
+leaves out Leo's stutter, "Do do you like my castle?"). Measured on `main` (production build of base-14, port 3101,
+build `YKh80LF4iprbyk1tlz7nX`; `scripts/cln-tools/w644_lore.mjs`, the King's dialogue opened through the store and
+continued to step 4): step 4/4 asks for `lore_richard_cedric` and shows "Did you keep up alright? … the evil Cedric
+the Bull."; the served `lore_richard_cedric.wav` (241,022 bytes, sha1 `d03feea4…`) is byte-identical to
+`c1s04t1a.wav`, not to `c1s01t4a.wav`; screenshot `out/w644/main_leo4.png`.
+
+**The fix** (wave 64.4, F-12). The line reads "Ignore Cedric! Let me see Richard's new recruit!", the words of its
+clip. The audio id keeps its misleading name, since the gitignored copy script names it (G-01 moves the copy lists into
+a tracked manifest). A committed table, `src/game/data/loreTranscripts.generated.json`, holds for each of the 11 lore
+audio ids its source clip and that clip's transcript, verbatim from the original game's pak (Windows-1252 decoded). It
+was generated once by `scripts/cln-tools/w644_gen_lore_transcripts.mjs`, which reads the copy script's `loreMap` and
+checks each served WAV byte for byte against the clip it names (all 11 identical). CI reads the table, never the sibling
+extraction. `loreTranscripts.test.ts` checks every NPC's lore line against it after normalising curly apostrophes
+(0x92) and runs of whitespace. Its one exception is Leo's stutter. It also checks that the table and the lore lines
+cover exactly the `lore_*` sounds. The I42 comment in Richard's block is corrected. NOBODY LISTENED in this pass: the
+fix is the text, matched to the clip by its transcript and by the WAV's bytes. Who speaks `c1s04t1a` has not been
+confirmed by ear, and the owner confirms the voice by ear once.
+
+**Verified** with `tsc` (clean) and the unit tests (86 files, 646 tests). New: `src/game/data/loreTranscripts.test.ts`
+(14 tests: table and lines cover the 11 `lore_*` sounds; each of the 11 lines against its transcript; Leo's fourth
+line and its source; the normaliser and the stutter exception still needed). Take-out: with the old text put back,
+two tests fail ("'king' shows what 'lore_richard_cedric' speaks" and the fourth-line test); restored, `git diff`
+byte-identical (`cmp`). Live, `w644_lore.mjs` on a production build of the change (port 3102, build
+`lIv6TpUn0pbm9q63ST620`): step 4/4 asks for the same `lore_richard_cedric` (same bytes) and shows "Ignore Cedric! Let
+me see Richard's new recruit!"; steps 1-3 unchanged; no page errors; screenshot `out/w644/change_leo4.png`. Side by
+side on production builds of `main` and the change (evidence pass, `scripts/cln-tools/w644_ev_lore.mjs`: all three
+court lore runs — King, Queen, Richard — Continue'd through to Finish, then the Chronicle; `main` from base-14 on port
+3101, build `YKh80LF4iprbyk1tlz7nX`, digest `10cdcad7919f`; the change rebuilt in the worktree on port 3102, build
+`2Ss70kVCwUbcSYl-IjRg3`, digest `93983a3163f2`): on `main` the King's step 4/4 asks for `lore_richard_cedric` and shows
+"Did you keep up alright? … the evil Cedric the Bull.", and the Chronicle's 4th line says the same; on the change step
+4/4 asks for the same `lore_richard_cedric` and shows "Ignore Cedric! Let me see Richard's new recruit!", and so does
+the Chronicle's 4th line. Everything else is identical between the two: 11 lore steps (King 4, Queen 3, Richard 4) with
+the same 11 voices asked for in the same order, the other 10 lines' text, the Chronicle's "Recorded: 11 / 11", the 11
+served WAVs' bytes (`lore_richard_cedric.wav` 241,022 bytes, sha1 `d03feea4…`, = `c1s04t1a.wav` on both), no page
+errors on either. The committed table re-derived independently from the pak (`w644_ev_table.mjs`): 11/11 entries
+equal byte for byte, every served lore WAV identical to the clip its entry names. Mutations, each alone and restored
+(`git diff` and the two new files' sha1s equal before and after, `cmp` of the saved `git diff`): the old line text
+back → 2 of 14 fail; the table pairing `lore_richard_cedric` with `c1s01t4a` → 2 fail; a table entry dropped → 2 fail;
+the stutter dropped from the table → 1 fail. Screenshots (d3d11, headless) `out/w644/ev_main_leo4.png` and
+`ev_change_leo4.png`. Not measured: the voice itself — nobody listened, so who speaks `c1s04t1a` and that it says these
+words rests on the pak's transcript and the WAV's bytes until the owner confirms it by ear; the I42 comment edit is a
+comment and no test can see it.

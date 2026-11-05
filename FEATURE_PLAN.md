@@ -180,6 +180,18 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   settled. Measured on main (`w643_blast.mjs`): a crewed shot that killed Cedric's final stand read "Bandit
   blasted!", paid 35 combat XP and no purse, and the rebellion went on; an emplacement's kill of a bandit read
   "Bandit blasted!" with no purse.
+- **#299 — Wave 64.4** (F-12): King Leo's fourth lore line shows the words its clip speaks, "Ignore Cedric! Let me see
+  Richard's new recruit!" (`data/cast/court.ts`), not Richard's "Did you keep up alright? … the evil Cedric the Bull"
+  (c1s01t4a, never imported). The id `lore_richard_cedric` keeps its name. A committed table,
+  `data/loreTranscripts.generated.json`, holds each of the 11 lore audio ids' source clip and its transcript, verbatim
+  (Windows-1252 decoded). It was generated once by the local `scripts/cln-tools/w644_gen_lore_transcripts.mjs`, which
+  also checked each served WAV byte for byte against its clip. `loreTranscripts.test.ts` checks every lore line
+  against it (curly apostrophes and whitespace normalised; one exception, Leo's "Do do you" stutter) and that table
+  and lines cover exactly the `lore_*` sounds. Premises held: the copy script's `loreMap` now sits at :245-257, the
+  other ten pairs match, and the served `lore_richard_cedric.wav` is byte-identical to `c1s04t1a.wav`. Nobody listened:
+  the owner confirms the voice by ear once. ROADMAP: a new fixed entry (none existed); I42's comment in court.ts
+  corrected. Measured on main (`w644_lore.mjs`): step 4/4 asks for `lore_richard_cedric` and shows "Did you keep up
+  alright? … the evil Cedric the Bull."
 
 ## Owner decisions
 
