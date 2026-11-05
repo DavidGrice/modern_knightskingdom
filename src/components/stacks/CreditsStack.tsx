@@ -1,9 +1,11 @@
 'use client';
 import { useAppStore } from '@/game/store/appStore';
 import { ScreenHead, ScreenActions } from './ScreenShell';
+import { useStackEscape } from './useStackEscape';
 
 export default function CreditsStack() {
   const pop = useAppStore((s) => s.pop);
+  useStackEscape(pop);
   const uiTheme = useAppStore((s) => s.settings.uiTheme);
   return (
     <div className={`kk-screen kk-screen-scroll kk-screen-${uiTheme}`}>

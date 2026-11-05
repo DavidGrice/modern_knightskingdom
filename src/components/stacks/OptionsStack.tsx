@@ -11,11 +11,12 @@
 // cleanups made while reorganizing anyway, not scope creep.
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore, UI_THEMES } from '@/game/store/appStore';
-import { KEYBIND_GROUPS, codeLabel, keybindConflicts, rebindState } from '@/game/data/keybinds';
+import { KEYBIND_GROUPS, codeLabel, keybindConflicts, holdRebindListening } from '@/game/data/keybinds';
 import { GAMEPAD_ACTION_GROUPS, RESERVED_GAMEPAD_BUTTONS, gamepadButtonLabel, type GamepadAction } from '@/game/data/gamepadInput';
 import { GRAPHICS_PROFILES, GRAPHICS_QUALITY_LIST } from '@/game/graphicsProfiles';
 import { AA_MODES } from '@/game/aaModes';
 import { ScreenHead, ScreenActions } from './ScreenShell';
+import { useStackEscape } from './useStackEscape';
 
 const ANISOTROPY_LEVELS: { value: number; label: string }[] = [
   { value: 1, label: 'Off' },
@@ -44,7 +45,7 @@ function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
 
   useEffect(() => {
     if (!listening) return;
-    rebindState.listening = true;
+    const release = holdRebindListening();
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       if (e.code !== 'Escape') setKeybind(actionId, e.code);
@@ -53,7 +54,7 @@ function KeybindRow({ actionId, label }: { actionId: string; label: string }) {
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      rebindState.listening = false;
+      release();
     };
   }, [listening, actionId, setKeybind]);
 
@@ -89,6 +90,8 @@ function GamepadButtonRow({ actionId, label }: { actionId: GamepadAction; label:
 
   useEffect(() => {
     if (!listening) return;
+    // F-10b · held like KeybindRow's, so this row's Escape cancels the rebind without also closing Options
+    const release = holdRebindListening();
     let raf = 0;
     let cancelled = false;
     // Escape backs out without binding anything, mirroring KeybindRow's own
@@ -117,6 +120,7 @@ function GamepadButtonRow({ actionId, label }: { actionId: GamepadAction; label:
       cancelled = true;
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
+      release();
     };
   }, [listening, actionId, setGamepadButton]);
 
@@ -196,6 +200,7 @@ export default function OptionsStack() {
   const resetKeybinds = useAppStore((s) => s.resetKeybinds);
   const resetGamepadButtons = useAppStore((s) => s.resetGamepadButtons);
   const pop = useAppStore((s) => s.pop);
+  useStackEscape(pop);
   const [tab, setTab] = useState<Tab>('sound');
   const [keybindDevice, setKeybindDevice] = useState<'keyboard' | 'gamepad'>('keyboard');
 
@@ -219,7 +224,7 @@ export default function OptionsStack() {
                 onChange={(v) => update({ masterVolume: v })} />
               <Slider label="Effects" value={settings.sfxVolume} min={0} max={1} step={0.05}
                 onChange={(v) => update({ sfxVolume: v })} />
-              <Slider label="Music &amp; ambience" value={settings.musicVolume} min={0} max={1} step={0.05}
+              <Slider label="Ambience" value={settings.musicVolume} min={0} max={1} step={0.05}
                 onChange={(v) => update({ musicVolume: v })} />
             </div>
           )}

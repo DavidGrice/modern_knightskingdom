@@ -107,9 +107,19 @@ export function keybindConflicts(kb: Record<string, string>, action: string): st
 // game's own global hotkey listener (GameScreen.tsx) must ignore that same
 // keystroke — otherwise rebinding "Interact" to E would also open/close
 // whatever E used to do, the instant you press it.
-export const rebindState = { listening: false };
+// F-10b · a count, not a flag: a click on a second row's cap is not a keydown, so two rows can listen at once, and
+// the first one to stop must not clear the other's.
+let rebindListeners = 0;
+/** a rebind row starts listening; the returned release, for the row's effect cleanup, counts only once */
+export function holdRebindListening(): () => void {
+  rebindListeners++;
+  let held = true;
+  return () => {
+    if (held) { held = false; rebindListeners--; }
+  };
+}
 export function isRebindListening(): boolean {
-  return rebindState.listening;
+  return rebindListeners > 0;
 }
 
 /** a short, readable label for a KeyboardEvent.code, for the rebind UI */
