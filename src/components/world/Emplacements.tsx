@@ -87,7 +87,9 @@ export default function Emplacements() {
 
       // aim at the target rather than the placement rotation: yaw 0 faces -Z
       const aim = Math.atan2(-(best.mob.x - b.x), -(best.mob.z - b.z));
-      fireCannon(b, aim);
+      // not the player's shot, posted defender or not: a kill pays an engine's
+      // lower rate (combat/kill.ts, OD-04)
+      fireCannon(b, false, aim);
       cooldowns.current[b.id] = manned ? CD_MANNED : CD_UNMANNED;
     }
   });

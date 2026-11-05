@@ -35,6 +35,9 @@ export interface Cannonball {
   id: number;
   pos: { x: number; y: number; z: number };
   vel: { x: number; y: number; z: number };
+  /** loosed by the player — from an engine he crews, or by hand — rather than by an engine firing on its own
+   *  (Emplacements.tsx); a kill pays by it (combat/kill.ts) */
+  byPlayer: boolean;
 }
 
 let ballSeq = 1;
@@ -81,10 +84,12 @@ function fireSound(assetId: string) {
   }
 }
 
-/** Fire an engine. `aimYaw` is supplied when the player is CREWING it (see
- *  game/crew.ts): a manned engine shoots where you're looking instead of
- *  along the quarter-turn it happened to be placed at. */
-export function fireCannon(cannon: PlacedBuilding, aimYaw?: number) {
+/** Fire an engine. `byPlayer` is whether the player loosed it — crewing it
+ *  (game/crew.ts) or firing it by hand — rather than the engine firing on its
+ *  own (Emplacements.tsx). `aimYaw` is a look yaw to shoot along instead of
+ *  the quarter-turn it happened to be placed at: the crew's look, or an
+ *  emplacement's aim at its target. */
+export function fireCannon(cannon: PlacedBuilding, byPlayer: boolean, aimYaw?: number) {
   const st = useGameStore.getState();
   if ((st.inventory.stone ?? 0) < 1) return;
   st.addItems({ stone: -1 });
@@ -101,6 +106,7 @@ export function fireCannon(cannon: PlacedBuilding, aimYaw?: number) {
     id: ballSeq++,
     pos: { x: cannon.x + dx * 1.2, y: (cannon.y ?? 0) + 1.1, z: cannon.z + dz * 1.2 },
     vel: { x: dx * 17, y: 4.5, z: dz * 17 },
+    byPlayer,
   });
   fireSound(labAssetId(cannon.type));
 }
@@ -123,7 +129,7 @@ export function explodeBall(ball: Cannonball) {
     if (d > 4.5) continue;
     e.hp -= 6;
     hits++;
-    if (e.hp <= 0) resolveEnemyKill(e, { by: 'cannonball' });
+    if (e.hp <= 0) resolveEnemyKill(e, { by: ball.byPlayer ? 'cannonball' : 'emplacement' });
   }
   if (hits > 0) st.addXp('combat', 5);
   for (const b of st.buildings) {
@@ -155,6 +161,8 @@ export function detonate(charge: PlacedBuilding) {
   const x = charge.x;
   const z = charge.z;
   audio.play('explosion', 1);
+  // said first, so that it comes before the line for each enemy it fells
+  st.notify('💥 The charge goes off!', true);
   const { enemies } = useEnemyStore.getState();
   for (const e of enemies) {
     if (e.mob.state === 'dying' || e.kind === 'storm') continue; // Storm: see explodeBall's own note
@@ -175,7 +183,6 @@ export function detonate(charge: PlacedBuilding) {
   // caught in your own blast
   if (Math.hypot(playerState.x - x, playerState.z - z) < 4.5) damagePlayer(2);
   st.removeBuilding(charge.id, true);
-  st.notify('💥 The charge goes off!', true);
 }
 
 exposeDebug('__kkDetonate', detonate);

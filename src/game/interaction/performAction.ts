@@ -195,7 +195,7 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
     st.notify('You step down.');
   } else if (t.kind === 'cannon') {
     const b = st.buildings.find((x) => x.id === t.id);
-    if (b) fireCannon(b);
+    if (b) fireCannon(b, true);
   } else if (t.kind === 'detonate') {
     const b = st.buildings.find((x) => x.id === t.id);
     if (b) detonate(b);

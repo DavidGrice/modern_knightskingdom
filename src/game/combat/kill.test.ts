@@ -9,7 +9,7 @@ import { enemyBeliefId, ensureBelief } from '@/ai/perception/Belief';
 import { resolveEnemyKill, useEnemyStore, type EnemyData, type EnemyKind } from '../combat';
 import { arenaState } from '../arena';
 import { playerState } from '../playerState';
-import { detonate, explodeBall } from '../siege';
+import { detonate, explodeBall, fireCannon, useSiegeStore } from '../siege';
 import { useGameStore } from '../store/gameStore';
 import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '../types';
 
@@ -55,7 +55,7 @@ afterEach(() => { vi.restoreAllMocks(); });
 describe('resolveEnemyKill', () => {
   it('starts the fall and records the kill, whatever the cause', () => {
     const causes: Cause[] = [
-      { by: 'melee' }, { by: 'ranged' }, { by: 'cannonball' }, { by: 'charge' }, { by: 'companion' },
+      { by: 'melee' }, { by: 'ranged' }, { by: 'cannonball' }, { by: 'emplacement' }, { by: 'charge' }, { by: 'companion' },
       { by: 'defender', villager: OSRIC }, { by: 'villager', villager: HOB },
     ];
     for (const cause of causes) {
@@ -128,7 +128,7 @@ describe('resolveEnemyKill', () => {
   });
 
   it("Cedric's final stand ends his rebellion, at the player's own hand only", () => {
-    for (const cause of [{ by: 'companion' }, { by: 'defender', villager: OSRIC }, { by: 'villager', villager: HOB }, { by: 'cannonball' }, { by: 'charge' }] as Cause[]) {
+    for (const cause of [{ by: 'companion' }, { by: 'defender', villager: OSRIC }, { by: 'villager', villager: HOB }, { by: 'emplacement' }] as Cause[]) {
       resolveEnemyKill(spawn('cedric', {}, { finalStand: true }), cause);
     }
     expect([game().defeatedCedric, game().cedricCaptures]).toEqual([false, 0]);
@@ -152,20 +152,41 @@ describe('resolveEnemyKill', () => {
     expect([game().cedricCaptures, held('halberd_legendary')]).toEqual([2, 1]);
   });
 
-  // CLEANUP_PLAN.md's open question. These are the blast rules as CLN-12 found them, pinned so that changing them is
-  // a decision and not an accident: a bandit's 30 XP and a bandit's name for every kind but the skeleton, no purse,
-  // no arena tally, and a charge that says nothing at all.
-  it('blast kills are kept as they were found', () => {
-    expect(xpFor(spawn('skeleton', { stone: 2 }, { arena: true }), { by: 'cannonball' })).toBe(20);
-    expect(xpFor(spawn('mountedRaider', { gold: 9 }), { by: 'cannonball' })).toBe(30); // not KIND_XP's 55
-    expect(notes).toEqual([['Skeleton blasted!', true], ['Bandit blasted!', true]]);
+  // The owner's decision OD-04 (wave 64.3): a blast pays by who fired. Before it every blast paid as CLN-12 found it —
+  // a bandit's 30 XP and a bandit's name for every kind but the skeleton, no purse, no final stand, and a charge that
+  // said nothing at all.
+  it("a shot the player looses and a charge: the kind's own XP and the purse, and what fell is named", () => {
+    for (const by of ['cannonball', 'charge'] as const) {
+      notes = [];
+      expect(xpFor(spawn('cedric', { gold: 7 }), { by })).toBe(150);
+      expect(xpFor(spawn('royal', { plank: 2 }), { by })).toBe(40);
+      expect(xpFor(spawn('skeleton', {}, { arena: true }), { by })).toBe(20);
+      // (Cedric's 150 also announces a combat level)
+      expect(notes.filter(([text]) => text.includes('blasted'))).toEqual([
+        ['Cedric the Bull blasted! Looted 7× Gold Coin.', true], ['Royal Knight blasted! Looted 2× Plank.', true], ['Skeleton blasted!', true],
+      ]);
+    }
+    expect([held('gold'), held('plank'), arenaState.kills]).toEqual([14, 4, 0]);
+  });
 
-    notes = [];
-    expect(xpFor(spawn('skeleton', { stone: 2 }, { arena: true }), { by: 'charge' })).toBe(30); // not even a skeleton's 20
-    expect(xpFor(spawn('gilbert', { gold: 9 }), { by: 'charge' })).toBe(30);
-    expect(notes).toEqual([]);
+  it('an engine firing on its own: the purse and the right name, at the lower rate', () => {
+    expect(xpFor(spawn('cedric', { gold: 7 }), { by: 'emplacement' })).toBe(30); // not KIND_XP's 150
+    expect(xpFor(spawn('royal', { plank: 2 }), { by: 'emplacement' })).toBe(30);
+    expect(xpFor(spawn('skeleton', {}, { arena: true }), { by: 'emplacement' })).toBe(20);
+    expect(notes).toEqual([
+      ['Cedric the Bull blasted! Looted 7× Gold Coin.', true], ['Royal Knight blasted! Looted 2× Plank.', true], ['Skeleton blasted!', true],
+    ]);
+    expect([held('gold'), held('plank'), arenaState.kills]).toEqual([7, 2, 0]);
+  });
 
-    expect([held('stone'), held('gold'), arenaState.kills]).toEqual([0, 0, 0]);
+  it("Cedric's final stand is ended by a shot the player looses and by a charge, not by an engine on its own", () => {
+    resolveEnemyKill(spawn('cedric', {}, { finalStand: true }), { by: 'emplacement' });
+    expect([game().defeatedCedric, game().cedricCaptures]).toEqual([false, 0]);
+    resolveEnemyKill(spawn('cedric', {}, { finalStand: true }), { by: 'cannonball' });
+    expect([game().defeatedCedric, game().cedricCaptures]).toEqual([true, 1]);
+    useGameStore.setState({ defeatedCedric: false } as never); // a jailbreak
+    resolveEnemyKill(spawn('cedric', {}, { finalStand: true }), { by: 'charge' });
+    expect([game().defeatedCedric, game().cedricCaptures]).toEqual([true, 2]);
   });
 
   it('settles a death once', () => {
@@ -182,25 +203,38 @@ describe('resolveEnemyKill', () => {
 // The player's blade and bolts are driven end to end in game/combat.test.ts. These are the other sites: each must
 // reach the resolver with its own cause.
 describe('the sites that call it', () => {
-  it('a cannonball', () => {
-    const near = spawn('royal');
-    near.hp = 6;
-    const far = spawn('royal');
-    far.hp = 6; far.mob.x = 40;
-    explodeBall({ id: 1, pos: { x: 30, y: 0.2, z: 30 }, vel: { x: 0, y: 0, z: 0 } });
-    expect([near.mob.state, far.mob.state, far.hp]).toEqual(['dying', 'wander', 6]);
-    expect(notes).toEqual([['Bandit blasted!', true]]);
-    expect(game().xp.combat).toBe(30 + 5); // the kill, and the 5 any shot that hits something earns
+  it('a cannonball, paid by who loosed it', () => {
+    for (const [byPlayer, xp] of [[true, 40], [false, 30]] as const) {
+      notes = [];
+      useGameStore.setState({ xp: { ...game().xp, combat: 0 } } as never);
+      const near = spawn('royal', { gold: 3 });
+      near.hp = 6;
+      const far = spawn('royal');
+      far.hp = 6; far.mob.x = 40;
+      explodeBall({ id: 1, pos: { x: 30, y: 0.2, z: 30 }, vel: { x: 0, y: 0, z: 0 }, byPlayer });
+      expect([near.mob.state, far.mob.state, far.hp]).toEqual(['dying', 'wander', 6]);
+      expect(notes).toEqual([['Royal Knight blasted! Looted 3× Gold Coin.', true]]);
+      expect([byPlayer, game().xp.combat]).toEqual([byPlayer, xp + 5]); // the kill, and the 5 any shot that hits something earns
+    }
+    expect(held('gold')).toBe(6);
+  });
+
+  it('a shot carries who loosed it to where it bursts', () => {
+    const cannon = { id: 'k1', type: 'cannon', x: 0, z: 0, rot: 0, built: 1 } as PlacedBuilding;
+    game().addItems({ stone: 2 });
+    fireCannon(cannon, true, 0);
+    fireCannon(cannon, false, 0);
+    expect(useSiegeStore.getState().balls.slice(-2).map((b) => b.byPlayer)).toEqual([true, false]);
   });
 
   it('a placed charge', () => {
     const charge = { id: 'c1', type: 'gate', x: 30, z: 30, rot: 0, built: 1 } as PlacedBuilding;
     useGameStore.setState({ buildings: [charge] } as never);
     Object.assign(playerState, { x: 60, z: 60 });
-    const e = spawn('bandit');
+    const e = spawn('royal', { gold: 3 });
     detonate(charge);
-    expect([e.mob.state, game().stats.kills, game().xp.combat]).toEqual(['dying', 1, 30]);
-    expect(lines()).toEqual(['💥 The charge goes off!']);
+    expect([e.mob.state, game().stats.kills, game().xp.combat, held('gold')]).toEqual(['dying', 1, 40, 3]);
+    expect(lines()).toEqual(['💥 The charge goes off!', 'Royal Knight blasted! Looted 3× Gold Coin.']);
   });
 
   /** one blow from an ally standing next to `e`, through the reasoner's own activity */
@@ -265,7 +299,7 @@ describe('the sites that call it', () => {
 
     it('a cannonball and a charge pass her by', () => {
       const e = spawn('storm');
-      explodeBall({ id: 1, pos: { x: 30, y: 0.2, z: 30 }, vel: { x: 0, y: 0, z: 0 } });
+      explodeBall({ id: 1, pos: { x: 30, y: 0.2, z: 30 }, vel: { x: 0, y: 0, z: 0 }, byPlayer: true });
       const charge = { id: 'c1', type: 'gate', x: 30, z: 30, rot: 0, built: 1 } as PlacedBuilding;
       useGameStore.setState({ buildings: [charge] } as never);
       Object.assign(playerState, { x: 60, z: 60 });

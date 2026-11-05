@@ -165,6 +165,21 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   was not covered by `isRebindListening()`. ROADMAP: a new fixed entry (none existed); OPEN-078 closed; OPEN-103 closed
   as decided by OD-13; logged that the Ambience slider's `musicVolume` is read by nothing. Measured on `main`
   (`w642_escape.mjs`): Escape leaves Options, Credits and How to Play open, from the menu and from the game.
+- **#298 — Wave 64.3** (F-11): blast kills are paid by who fired (OD-04). A `Cannonball` carries `byPlayer`
+  (`fireCannon(cannon, byPlayer, aimYaw?)`): true from the crew's click (`locomotion.ts`) and the "fire" interaction
+  (`performAction.ts`), false from `Emplacements.tsx`, a posted defender or not; `explodeBall` settles the player's
+  shot as `cannonball` and an engine's own as a new cause, `emplacement`, with its own `RULES` row in
+  `combat/kill.ts`. The cannonball and charge rows pay `KIND_XP`, the purse and Cedric's final stand; the emplacement
+  row keeps the old 20/30 and hands over the purse; all three say "<kind> blasted!" from `KIND_LABEL`, with the
+  haul. `detonate` says "💥 The charge goes off!" before the kill lines it now has. Premises held (every line
+  reference still true), with three adaptations: the split is a separate cause rather than a flag the rules read, so
+  `RULES` stays one row per cause; Cedric's line is "Cedric the Bull blasted!" (his `KIND_LABEL`, as the blade's
+  line has it); the arena tally stays off, as the plan says (the arena cannot be claimed). ROADMAP: the open decision
+  "what a cannon or a charge kill is worth" is now a decided-and-fixed entry, its table kept; logged that a home
+  engine the player crews is also fired by the emplacement loop. CLEANUP_PLAN.md's blast-kill question marked
+  settled. Measured on main (`w643_blast.mjs`): a crewed shot that killed Cedric's final stand read "Bandit
+  blasted!", paid 35 combat XP and no purse, and the rebellion went on; an emplacement's kill of a bandit read
+  "Bandit blasted!" with no purse.
 
 ## Owner decisions
 

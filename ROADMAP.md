@@ -7146,11 +7146,11 @@ settlement, and she only ever appears at her dome.
 agent in earshot briefly holds a faint belief about an enemy who is already gone (threat 0 in the probe). Nothing
 can come of it — there is nobody left to strike.
 
-## Open decision: what a cannon or a charge kill is worth — logged 2026-10-02 (during CLN-12)
+## Bugfix: a cannon or a charge kill named every foe but a skeleton "Bandit", kept the purse and could not end Cedric's final stand — FOUND 2026-10-02 (during CLN-12, logged as an open decision; DEC-7147, Q-blast-kill-rewards), DECIDED 2026-10-31 (OD-04), FIXED 2026-11-04
 
-CLN-12 put every kill's bookkeeping in one place (`src/game/combat/kill.ts`), which sets the two blast paths' rules
-side by side with the rest. They are kept exactly as they were — this is `CLEANUP_PLAN.md`'s open question, and a
-change of what the game pays — but the facts are now in one table:
+**The fault.** CLN-12 put every kill's bookkeeping in one place (`src/game/combat/kill.ts`), which set the two blast
+paths' rules side by side with the rest. They were kept exactly as they were — this was `CLEANUP_PLAN.md`'s open
+question, and a change of what the game pays — and the facts, as they were, in one table:
 
 | | the player's blade | bolt or arrow | cannonball | placed charge |
 |---|---|---|---|---|
@@ -7160,19 +7160,77 @@ change of what the game pays — but the facts are now in one table:
 | arena tally | counted | counted | not counted | not counted |
 | Cedric's final stand | ends his rebellion | ends his rebellion | does not | does not |
 
-So a cannon that fells Gilbert pays 30 where a sword pays 45, Cedric 30 where a sword pays 150, and a Mounted Raider,
-a Hedge Witch, a Shieldbearer, a Siege Engineer, a Royal Knight, Gilbert and Cedric are all announced as "Bandit
-blasted!". The cannonball's two numbers and two names are exactly the skeleton and bandit rows of the tables every
-other path reads. The arena row cannot matter today (the arena cannot be claimed, so no engine can stand there);
-Cedric's camp is in a destination that can be claimed, so the final-stand row might.
+So a cannon that felled Gilbert paid 30 where a sword pays 45, Cedric 30 where a sword pays 150, and a Mounted Raider,
+a Hedge Witch, a Shieldbearer, a Siege Engineer, a Royal Knight, Gilbert and Cedric were all announced as "Bandit
+blasted!". The cannonball's two numbers and two names were exactly the skeleton and bandit rows of the tables every
+other path reads. The arena row cannot matter (the arena cannot be claimed, so no engine can stand there); Cedric's
+camp is in a destination that can be claimed, so the final-stand row did. And it was also what an automated defence
+paid: a cannon, catapult or manned tower that fires on its own (`Emplacements.tsx`) killed through the same cannonball
+path, and a powder charge a raider walks onto through the charge path — nothing told a shot the player loosed from one
+an engine loosed by itself (`siege.ts`'s docstring said `aimYaw` meant a crewed shot, but the emplacement passes one
+too and the player's own "fire" interaction passes none). Measured on `main` (production build of base-14, port 3101,
+build `WormBqRsEtY9YL9jE-cw0`; `scripts/cln-tools/w643_blast.mjs`, the player crewing a home cannon and clicking once,
+Cedric's final stand spawned where the ball comes down with 3 HP and a purse of 7 gold and 2 planks; then the same
+cannon left to fire on its own at a bandit with 5 gold and 1 plank): the crewed shot read "Bandit blasted!", paid 35
+combat XP (30, and the 5 any shot that hits earns), no gold or plank, and Cedric's rebellion did not end
+(`defeatedCedric` false, `cedricCaptures` 0); the emplacement's kill read "Bandit blasted!", paid 36 (the same 35,
+scaled at combat level 1) and no purse.
 
-This is also what an automated defence pays: a cannon, catapult or manned tower that fires on its own
-(`Emplacements.tsx`) kills through the cannonball path, and a powder charge that a raider walks onto through the
-charge path. A raid beaten off by engines alone hands over no purse at all — which may be exactly the intent.
+**The decision** (OD-04, asked and answered 2026-10-31): split by who fired. A shot the player looses from an engine
+he crews (or fires by hand) and every charge — only the player places one, whatever sets it off — pay as his blade
+does: the kind's full XP, its purse and Cedric's final stand. An automatic emplacement, a defender posted to it
+included, hands over the purse and names the right kind at the lower XP blasts always paid. The wrong name is fixed in
+every case. The arena tally stays off for all three (FEATURE_PLAN.md's F-11: nothing can be built there).
 
-**To decide:** whether blast kills should follow the same tables as the blade (name, XP, purse, tally, final stand)
-or stay cheaper on purpose. Either way it is now an edit to two rows of `RULES` in `kill.ts`, and
-`combat/kill.test.ts`'s "blast kills are kept as they were found" is the test to change with it.
+**The fix** (wave 64.3, F-11). A cannonball carries who loosed it: `fireCannon(cannon, byPlayer, aimYaw?)` stores
+`byPlayer` on the `Cannonball` (`siege.ts`) — true from the crew's click (`playerPhysics/locomotion.ts`'s
+`crewEngine`) and the "fire" interaction (`interaction/performAction.ts`), false from `Emplacements.tsx` — and
+`explodeBall` settles a kill as `{ by: 'cannonball' }` for the player's shot or `{ by: 'emplacement' }` for an
+engine's own, a new cause with its own row in `RULES` (`combat/kill.ts`), so the table stays one row per cause. The
+cannonball and charge rows pay `KIND_XP`, hand over the purse and credit the final stand; the emplacement row keeps the
+old 20/30 and hands over the purse; all three read `"<kind> blasted!"` from `KIND_LABEL`, with the haul as the blade's
+line has it ("Cedric the Bull blasted! Looted 7× Gold Coin, 2× Plank."). A charge now names what it fells, so
+`detonate` says "💥 The charge goes off!" first rather than last. The docstring on `fireCannon` says what `aimYaw`
+really is. Not changed: siege ammunition (deferred), and the arena tally.
+
+**Verified** with `tsc` (clean) and the unit tests (85 files, 632 tests). `combat/kill.test.ts` (22 tests): "blast
+kills are kept as they were found" is replaced by three — a shot the player looses and a charge pay Cedric 150, a Royal
+Knight 40 and a skeleton 20, hand over the purse and name each, with no arena tally; an engine on its own pays 30, 30
+and 20 with the purse and the right names; Cedric's final stand ends by a player's shot and by a charge, not by an
+engine on its own (which joins the allies in "at the player's own hand only") — and the site tests: a cannonball
+burst with `byPlayer` true and false (40 + 5 and 30 + 5, the purse both times), `fireCannon` carrying `byPlayer` onto
+the ball, and a placed charge (a Royal Knight's 40 and purse, "💥 The charge goes off!" before "Royal Knight blasted!
+Looted 3× Gold Coin."). Five take-outs, each failing its tests, the source restored and `git diff` byte-identical
+(`cmp`): the cannonball and charge rows back as found (4 tests fail), the emplacement row without purse or name (2),
+`explodeBall` ignoring `byPlayer` (1), `fireCannon` not carrying it (1), the charge's line back after the kills (1).
+`next build` clean. Live, `w643_blast.mjs` on a production build of the change (port 3102, build
+`Q7SytfFka2gmz43xKIQ7w`): the crewed shot read "Cedric the Bull blasted! Looted 7× Gold Coin, 2× Plank.", paid 156
+combat XP (150 + 5, scaled) and ended the rebellion ("🔒 Cedric's rebellion ends here — the Bull is dragged in chains
+at last!", `cedricCaptures` 1); the emplacement's kill read "Bandit blasted! Looted 5× Gold Coin, 1× Plank." and paid
+40 (30 + 5, scaled at the higher combat level the first kill left); no page errors. Side by side, in the evidence pass
+(an independent re-run: `tsc` clean, 85 files / 632 tests, `next build` clean as build `gbX4WLSVwbe0CG8FOQosj`):
+`scripts/cln-tools/w643_ev.mjs` — `w643_blast.mjs`'s two scenarios and a third, a Powder Charge set off by its own
+proximity trigger under a Royal Knight with 3 HP, 4 gold and 2 planks, the cannon taken away first — on production
+builds of `main` (base-14, port 3101, build `WormBqRsEtY9YL9jE-cw0`, digest `dfb9c79c7d65`) and the change (the
+worktree, port 3102, build `gbX4WLSVwbe0CG8FOQosj`, digest `cab517c1c3df`), one after the other. The crewed shot at
+Cedric's final stand: on `main` "Bandit blasted!", +35 combat XP (30 + 5), no gold or plank, the rebellion not ended
+(`defeatedCedric` false, `cedricCaptures` 0); on the change "Cedric the Bull blasted! Looted 7× Gold Coin, 2× Plank.",
++156 (150 at combat level 0, then the 5 scaled to 6 at level 1) and the rebellion ended (true, 1, "🔒 Cedric's
+rebellion ends here …") with its capstone payout (gold +287: the purse's 7, 250 and a 30-gold challenge; stone +18:
+20 less the two shots). The emplacement's kill of the bandit: on `main` "Bandit blasted!", +36 (30, then 5 scaled to
+6), no purse; on the change "Bandit blasted! Looted 5× Gold Coin, 1× Plank.", +40 (the same 30 + 5, scaled at level
+1). The charge: on `main` "💥 The charge goes off!" and nothing else, +34 (30, scaled), no purse; on the change "💥 The
+charge goes off!" then "Royal Knight blasted! Looted 4× Gold Coin, 2× Plank.", +45 (40, scaled), the purse. The same
+in both: every target fell, one kill each, the charge consumed, 2 stone for the crewed click (the emplacement loop
+fired the crewed engine too — the "Seen, not fixed" entry at the end of this file) and 1 for the emplacement's shot,
+no page errors; the XP scale differs only because the change's first kill leaves a higher combat level. Twenty-four
+single take-outs (`w643_mutate.cjs`, against the whole unit suite): each of the 18 edits to `kill.ts` and `siege.ts`
+— every changed field of the three rows, the line helper's haul, `explodeBall`'s choice either way, `fireCannon`'s
+storing, the charge line's place — fails at least one test; the three call sites put back as on `main` fail `tsc`,
+but flipping one's `true`/`false` fails no unit test, so the crew's click and the emplacement are shown right only by
+the live numbers above, and the "fire" interaction (`performAction.ts`) by neither. The source was restored from the
+bytes read (the five files' sha1s and `git diff`'s the same before and after, the `src/` diff `cmp`-identical). Not
+measured: the "fire" interaction live, a defender-manned post, a catapult or a tower, and anything in the arena.
 
 ## Bugfix: Alric or Beda, once recruited, never had a reasoner Agent again — FOUND AND FIXED 2026-10-03 (during CLN-17)
 
@@ -9915,3 +9973,13 @@ GameScreen's Escape handler (`components/stacks/GameScreen.tsx`) toggles pause o
 included, so holding Escape past the repeat delay flips the pause menu on and off, and whether the game ends up paused
 depends on how many repeats arrived. The same on `main`. Wave 64.2's stack-screen hook ignores repeats, but once it
 has popped back to the game the rest of a held Escape reaches this handler. To do: ignore `e.repeat` there.
+
+## Seen, not fixed: a home engine the player crews also fires on its own — logged 2026-11-04 (wave 64.3; by the code)
+
+`Emplacements.tsx`'s loop fires every built home engine that can shoot at the nearest hostile in range, and does not
+skip the one the player is crewing (`crewState.engineId`, `game/crew.ts`). Consistent with it, on `main`
+(`scripts/cln-tools/w643_blast.mjs`): one click from the crew position, with the attack button let go after the shot,
+spent 2 stone — the player's shot, and one more from the only engine on the field once Cedric appeared in range. Since
+wave 64.3 the two shots pay differently (the engine's own at the lower rate and without the final stand), so under a
+crewed engine which ball lands first decides what a kill pays, and the engine also shoots where its crew is not
+aiming. To do: skip the crewed engine in that loop (`b.id === crewState.engineId`).
