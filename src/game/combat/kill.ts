@@ -18,9 +18,11 @@ export type KillCause =
   | { by: 'melee' }
   /** the player's own bolt or arrow (projectiles.ts's stepBolt) */
   | { by: 'ranged' }
-  /** a siege engine's shot bursting (siege.ts's explodeBall) */
+  /** a siege engine's shot the player loosed, crewing it or by hand, bursting (siege.ts's explodeBall) */
   | { by: 'cannonball' }
-  /** a placed charge going off (siege.ts's detonate) */
+  /** an engine's shot bursting that it loosed on its own, a defender posted to it or not (Emplacements.tsx) */
+  | { by: 'emplacement' }
+  /** a placed charge going off (siege.ts's detonate) — the player's, whatever set it off */
   | { by: 'charge' }
   /** Tam, the companion squire (the reasoner's assist_leader) */
   | { by: 'companion' }
@@ -46,6 +48,10 @@ interface KillRules {
   finalStand: boolean;
 }
 
+/** the line for a blast kill, of any of the three kinds */
+const blasted = (kind: EnemyKind, haul: string) =>
+  (haul ? `${KIND_LABEL[kind]} blasted! Looted ${haul}.` : `${KIND_LABEL[kind]} blasted!`);
+
 const RULES: Record<KillCause['by'], KillRules> = {
   melee: {
     arena: true, xp: (kind) => KIND_XP[kind], loot: true, finalStand: true,
@@ -57,17 +63,18 @@ const RULES: Record<KillCause['by'], KillRules> = {
     arena: true, xp: (kind) => KIND_XP_RANGED[kind], loot: true, finalStand: true, gold: true,
     line: (kind, haul) => (haul ? `${KIND_LABEL[kind]} shot down! Looted ${haul}.` : `${KIND_LABEL[kind]} shot down!`),
   },
-  // OPEN QUESTION (CLEANUP_PLAN.md, "Open questions") — the two blast rows are the pre-CLN-12 behaviour, kept
-  // exactly rather than decided here. They know two kinds of enemy: a cannonball pays and names a skeleton as
-  // KIND_XP and KIND_LABEL do, and everything else as a bandit (30 XP, "Bandit blasted!" — a Royal Knight and
-  // Cedric included); a charge pays that same 30 for anything and says nothing. Neither hands over the purse,
-  // counts toward the arena or credits Cedric's final stand. Bringing them in line with the two rows above is an
-  // edit to these two rows and nothing else.
-  cannonball: {
-    arena: false, xp: (kind) => (kind === 'skeleton' ? 20 : 30), loot: false, finalStand: false, gold: true,
-    line: (kind) => `${kind === 'skeleton' ? 'Skeleton' : 'Bandit'} blasted!`,
+  // Blast kills are paid by who fired (the owner's decision OD-04, wave 64.3). A shot the player looses and every
+  // charge (only the player places one) pay as his blade does: the kind's own XP, the purse and Cedric's final
+  // stand. An engine firing on its own hands over the purse at the lower rate blasts always paid (a skeleton's 20,
+  // 30 for anything else). All three name what fell — until then everything but a skeleton was "Bandit blasted!",
+  // no blast handed over a purse, and a charge said nothing. None counts toward the arena, which cannot be claimed,
+  // so no engine or charge can stand there.
+  cannonball: { arena: false, xp: (kind) => KIND_XP[kind], loot: true, finalStand: true, gold: true, line: blasted },
+  emplacement: {
+    arena: false, xp: (kind) => (kind === 'skeleton' ? 20 : 30), loot: true, finalStand: false, gold: true,
+    line: blasted,
   },
-  charge: { arena: false, xp: () => 30, loot: false, finalStand: false, line: null },
+  charge: { arena: false, xp: (kind) => KIND_XP[kind], loot: true, finalStand: true, gold: true, line: blasted },
   // An ally's kill pays the player nothing but the purse. All three say "a raider" whatever the kind.
   companion: { arena: false, xp: null, loot: true, finalStand: false, gold: true, line: () => 'Tam defeats a raider!' },
   defender: {

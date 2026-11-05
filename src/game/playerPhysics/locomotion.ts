@@ -96,7 +96,7 @@ export function crewEngine(st: ReturnType<typeof useGameStore.getState>, pos: { 
     crewCooldown.current -= dt;
     if (combatState.lmbDown && crewCooldown.current <= 0) {
       crewCooldown.current = 1.2;
-      fireCannon(eng, yaw.current);
+      fireCannon(eng, true, yaw.current);
     }
   }
 }
