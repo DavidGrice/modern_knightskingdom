@@ -10133,3 +10133,91 @@ bar 19 out and 16 back at Wit 25, 43 and 40 at Wit 100; 0 ticket mismatches. `w6
 stone ×8 28 → 18, 35 → 24, 44 → 34, 92 → 82 (-10, -11, -10, -10); tickets equal to the charge; the Builder Hammer's
 ticket as before (18, 10, 1, 1). No page errors. `main`'s loop and guild numbers above stand (the same build). Not
 measured live: the perks, a non-Wanderer hero, the other guilds' rows — the unit tests carry those.
+
+## Bugfix: the world stood still in build mode and behind every panel — FOUND 2026-10-31 (FEATURE_PLAN.md's survey, Q-world-ticks-build-mode; CLEANUP_PLAN.md's open question on world ticks in build mode), FIXED 2026-11-05
+
+**The fault.** The world's own ticks — the fishing bite cycle and the build challenge's countdown every frame, and the
+half-second sweep that grows the crops, brings felled nodes back, works the villagers and lets newcomers arrive
+(`game/worldTick.ts`) — ran only from `PlayerController`'s frame callback, inside its `!frozen` branch, where frozen is
+paused, build mode, any panel or a ceremony. Build mode swaps the controller out for `BuildController` altogether
+(`components/world/GameWorld.tsx`), and a panel holds it still, so in both the world stopped; and the sweep's countdown
+was a ref of the controller that restarted at 0 with each mount, so every return from build mode swept at once and
+credited the plots and the villagers a free half second. The owner's call (OD-08): the world runs in build mode and
+behind panels, and stops only when paused or in a ceremony. Measured on `main` (production build of base-14, port
+3101, build `oPsQiP7B5VdUjDEZMRUZg`, digest `cec94464f74e`; `scripts/cln-tools/w651_build_ticks.mjs`: a guest, a crop
+planted through the store hook with 1,000 s to grow, season 0): 10 s in the open world grew it 10.00 s; 60 s in build
+mode grew it 0.00 s, and a tree due back 5 s in was still felled at the end; 20 s behind the inventory 0.00 s; 10 s
+paused 0.00 s.
+
+**The fix** (wave 65.1, F-14; OD-08). The ticks stay in the controller while it drives the player, where the ordering
+note in `worldTick.ts` needs them (the per-frame ticks after movement and before targeting and `performAction`, the
+sweep after them). A new always-mounted `components/world/WorldTicker.tsx` runs them while build mode or a panel holds
+the controller still (`tickWorldHeld`: the build challenge's countdown, then the sweep when due, from the player's
+published position in `playerState`). `worldTickOwner` decides whose frame it is — the controller's, the ticker's, or
+no one's when paused or in a ceremony — and `claimWorldTicks` lets the ticks run once a frame whoever asks first:
+WorldTicker's frame callback has priority -1, so it runs before every other and opens the frame (`beginWorldFrame`),
+and a frame whose store changes hands between the two callbacks (a panel opened by the controller's own
+`performAction`) never ticks twice. The sweep's countdown is module state in `worldTick.ts` (`sweepDue`), so a trip to
+build mode no longer restarts it; a session start still sweeps at once. Audited, as the plan asked: the fishing bite
+cycle is NOT run in a held frame — a bite is the player's own test of reflex, which nobody in build mode or behind a
+panel can answer, so it would only toast "The fish got away!" every few seconds; a cast line waits, as on `main`, and
+bites on the first frame back if its wait is over. The build challenge's countdown is run: its deadline was always
+wall-clock (`performance.now()`), so build mode never stopped it, only held back the "Time's up!" to the first frame
+back; now it is said on time, in build mode too (no villager builds at a challenge ground, so the sweep cannot finish
+a piece there). The saves: crops coming ready mark the save (since wave 63.3) and villagers' trips mark it as they always did
+outside build mode — at most once a sweep, and the autosave writes at most every 20 s; nothing marks it every frame. A
+villager arriving in build mode walks in by the road as anywhere else, and `evalPlacement` never looks at villagers, so
+a ghost is not blocked by one; a piece picked up to move is out of `buildings`, so no builder touches it.
+
+**Verified** in the worktree: `tsc` clean; unit tests 87 files, 656 passing — five new in `worldTick.test.ts` (the
+gate over all 16 combinations of paused, ceremony, build mode and panel, and against the controller's own frozen test;
+exactly one owner a frame while the world runs and none while it stands still; never twice in a frame, even when the
+store changes hands between the two owners; one countdown across owners and remounts, with no free half second back
+from build mode; a held frame runs the build challenge and the sweep from the given position but leaves a biting line
+alone). Mutation controls, each alone, then restored (`git diff` identical to a copy taken before, by sha256): `main`'s
+gate (build mode and panels stop the world) → 1 test fails; no once-a-frame guard → 1; no session-start sweep → 1; a
+held frame that ticks the fishing bite too → 1; one that skips the build challenge → 1; a countdown that restarts each
+call → 2. `next build` clean. Live, the change on port 3102 (`w651_build_ticks.mjs`): the crop grew 10.00 s in 10 s of
+open world, 59.00 s in 60 s of build mode (the tree back), 19.50 s in 20 s behind the inventory and 0.00 s in 10 s
+paused; store writes 2.7 a second in build mode as in the open world, none turning the save dirty.
+
+The evidence pass, run afresh and independently: `tsc` clean; 87 files, 656 unit tests passing; `next build` clean.
+Mutation controls on `worldTick.ts`, each alone, run against `worldTick.test.ts` (11 tests): `main`'s gate → 1 fails;
+no once-a-frame guard → 1; a frame that never opens (`beginWorldFrame` a no-op) → 2; no session-start sweep → 1; a held
+frame that skips the build challenge → 1, that ticks the fishing bite too → 1, that skips the sweep → 1; a countdown
+always due → 2; one that starts a session full instead of at 0 → 2. Restored by copying the saved file back: `cmp`
+identical, and the sha256 of `git diff`, of `git status --porcelain` and of `WorldTicker.tsx` all the same as before.
+Live, side by side on production builds (`scripts/cln-tools/w651_evidence.mjs`: a guest, a crop with 1,000 s to grow,
+season 0, timed in the page; "sweeps" are store writes that moved the crop) — `main` = base-14 on port 3101 (build
+`oPsQiP7B5VdUjDEZMRUZg`, digest `cec94464f74e`), the change = the worktree on port 3102 (build `f4FhkuXqKebMURalIvFpG`,
+digest `d82ad28e9cae`, the same scripts as the build measured above):
+
+| phase | `main`: crop grew | change: crop grew | `main`: sweeps a second | change: sweeps a second |
+|---|---|---|---|---|
+| open world, 10 s | 9.50 s | 10.00 s | 1.90 | 2.00 |
+| build mode, 60 s | **0.00 s** (the tree due 5 s in still felled) | 59.00 s (the tree back) | 0 | 1.97 |
+| inventory panel, 20 s | **0.00 s** | 19.50 s | 0 | 1.95 |
+| paused, 10 s | 0.00 s | 0.00 s | 0 | 0 |
+| paused in build mode, 8 s | 0.00 s | 0.00 s | 0 | 0 |
+| ceremony, 8 s | 0.00 s | 0.00 s | 0 | 0 |
+| ceremony behind the inventory, 6 s | 0.00 s | 0.00 s | 0 | 0 |
+| build mode toggled 10 times (0.2 s in, 0.2 s out), 4.3 s | **5.00 s** | 4.50 s | 2.32 | 2.09 |
+| open world again, 10 s | 10.00 s | 10.00 s | 2.00 | 2.00 |
+
+`main` stands still in build mode and behind a panel, and its toggle row shows the free half second: 5.00 s of growth
+from about 2.2 s of open world, a sweep on every return. The change grows at real time everywhere the world runs (never
+double: about 2 sweeps a second, as in the open world) and not at all when paused or in a ceremony. Store writes were
+2.8 a second in build mode on the change (0.8 on `main`, which ticks nothing there) against 2.7 in the open world on
+both; the save's dirty flag turned on 0 times in every phase on both builds; one localStorage write (`kk_guest_save`)
+on entering build mode on both, none anywhere else. No page errors on either build. Not measured: the fishing bite
+held in build mode and the build challenge's countdown run there (`__kkfish` and `__kkbuildchallenge` could stage both, but were not used; the held-frame unit tests
+carry them), a villager arriving during build mode, and the `PlayerController`/`WorldTicker` wiring by mutation (r3f
+components with no unit test; the live rows above cover the wiring as built).
+
+## Seen, not fixed: the build challenge's 90 s clock runs through a pause, and its countdown hides in build mode — logged 2026-11-05 (wave 65.1's audit; by the code)
+
+`game/buildChallenge.ts` keeps the run's deadline as a `performance.now()` time and only checks it from the world's
+ticks, so a pause (which stops those ticks, by OD-08) does not stop the clock: pause for the rest of the 90 s and the
+first frame back says "Time's up!". And `BuildChallengePanel.tsx` returns nothing in build mode (and behind a panel),
+which is where the player places the six pieces, so the countdown is out of sight for much of the run. To do: move the
+deadline on by the paused time (or count the run down by the frame's `dt`), and show the countdown in build mode.

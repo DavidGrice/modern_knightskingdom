@@ -6,7 +6,8 @@
 // ROADMAP.md for exactly what extending this to the other five needs.
 //
 // Ephemeral run state, a leaf module exactly like dungeonState/cartState/
-// fishingState/arenaState: PlayerController.tsx ticks it every frame,
+// fishingState/arenaState: PlayerController.tsx ticks it every frame (and
+// WorldTicker.tsx in build mode and behind a panel, since wave 65.1),
 // gameStore.ts's constructBuilding credits a finished piece toward it, and
 // BuildChallengePanel.tsx (HUD) polls it to render the countdown. Never
 // persisted — an attempt does not survive a reload, the same as a fishing
@@ -54,8 +55,9 @@ export function startBuildChallenge() {
 }
 
 /** Called every frame from PlayerController's frame loop, through
- *  game/worldTick.ts's tickWorldFrame (mirrors game/fishing.ts's tickFishing
- *  exactly: pure state + a notify callback, no store import needed here).
+ *  game/worldTick.ts's tickWorldFrame — or WorldTicker's, through
+ *  tickWorldHeld, while build mode or a panel holds the player (mirrors
+ *  game/fishing.ts's tickFishing exactly: pure state + a notify callback, no store import needed here).
  *  Resolves a loss on timeout, and quietly abandons (no toast — the player
  *  made an active choice to leave) if the player travels away from the
  *  challenge ground mid-run. A WIN is resolved

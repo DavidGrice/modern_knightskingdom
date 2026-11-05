@@ -90,10 +90,10 @@ export const createUiSlice: SliceCreator<UiSlice> = (set, get) => {
     activeStation: null,
 
     // The Crafting book shows what is in reach AS IT OPENS (so does a station's own menu, openStationMenu below).
-    // Both used to go by whatever the player controller's half-second sweep had last found — and the sweep stops
-    // while a panel is up, so a list that was stale at that moment stayed stale until the panel was shut: walk up
-    // to a forge with the key held and its menu opened, as often as not, to "You've stepped away". (While either
-    // is open the list goes on following the buildings: the subscription under the store's creation.)
+    // Both used to go by whatever the player controller's half-second sweep had last found — and until wave 65.1 the
+    // sweep stopped while a panel was up, so a list that was stale at that moment stayed stale until the panel was
+    // shut: walk up to a forge with the key held and its menu opened, as often as not, to "You've stepped away".
+    // (While either is open the list goes on following the buildings: the subscription under the store's creation.)
     setPanel: (panel) => {
       if (panel === 'crafting') get().setNearStations(stationsInReach(get().buildings, playerState.x, playerState.z));
       set({ panel });

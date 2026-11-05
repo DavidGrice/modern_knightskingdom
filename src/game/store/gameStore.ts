@@ -39,9 +39,10 @@ export type GameState = PersistedState
 
 export const useGameStore = createGameStore();
 
-// While a crafting panel is up, the list of stations in reach follows the buildings. Nothing else renews it then —
-// the player controller's sweep stops for a panel — but the world does not stop: a dragon can leave the campfire in
-// ruins, and a siege crew can knock the forge down, while the book lies open; and a ruin is no place to craft.
+// While a crafting panel is up, the list of stations in reach follows the buildings at once (the world's sweep, run
+// behind a panel since wave 65.1, renews it only each half second), for the world does not stop: a dragon can leave
+// the campfire in ruins, and a siege crew can knock the forge down, while the book lies open; and a ruin is no place
+// to craft.
 useGameStore.subscribe((s, prev) => {
   if (s.buildings !== prev.buildings && (s.panel === 'crafting' || s.panel === 'stationMenu')) {
     s.setNearStations(stationsInReach(s.buildings, playerState.x, playerState.z));
