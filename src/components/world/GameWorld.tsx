@@ -39,6 +39,7 @@ import BuildingInteriorRoom from './BuildingInteriorRoom';
 import Signpost from './Signpost';
 import TemplateWorld from './TemplateWorld';
 import DestinationScope from './DestinationScope';
+import WorldTicker from './WorldTicker';
 import PlayerController from '../fps/PlayerController';
 import PlayerAvatar from '../fps/PlayerAvatar';
 import Viewmodel from '../fps/Viewmodel';
@@ -129,6 +130,10 @@ export default function GameWorld() {
         <CedricSiege />
       </Suspense>
       {buildMode ? <BuildController /> : <PlayerController />}
+      {/* Wave 65.1 · always mounted: runs the world's ticks (crops, respawns,
+          villagers, the build challenge's countdown) while build mode has
+          swapped the controller out or a panel holds it still */}
+      <WorldTicker />
       {/* the player's own body stays visible in build mode too — it used to
           vanish entirely (not just uninteractable) because this was folded
           into the same condition that swaps the controller/viewmodel, which

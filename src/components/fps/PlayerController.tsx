@@ -15,7 +15,7 @@ import {
   EYE_HEIGHT, SPAWN,
 } from '@/game/data/world';
 import { playerState } from '@/game/playerState';
-import { sweepWorld, tickWorldFrame, WORLD_SWEEP_S } from '@/game/worldTick';
+import { claimWorldTicks, sweepDue, sweepWorld, tickWorldFrame } from '@/game/worldTick';
 import { crewState } from '@/game/crew';
 import { exposeDebug } from '@/lib/debugHooks';
 import { usePointerLock } from './input/usePointerLock';
@@ -85,7 +85,6 @@ export default function PlayerController() {
   const holdJustCompletedId = useRef<string | null>(null);
   const holdJustCompletedKind = useRef<string | null>(null);
   const stepTimer = useRef(0);
-  const stationTimer = useRef(0);
   const talkCooldown = useRef(0);
 
   // the pointer lock with mouse look, then the keyboard and the gamepad (CLN-26: input/usePointerLock.ts,
@@ -126,22 +125,20 @@ export default function PlayerController() {
       // CLN-20 · the world's per-frame ticks (the fishing bite cycle, the
       // build challenge's countdown) — game/worldTick.ts, called from here
       // because they must run after this frame's movement and BEFORE the
-      // targeting and performAction below, which read what they write
-      tickWorldFrame(st, pos.current.x, pos.current.z);
+      // targeting and performAction below, which read what they write.
+      // Wave 65.1 · unless WorldTicker has run them already this frame
+      // (claimWorldTicks: once a frame, whoever asks first)
+      const ticks = claimWorldTicks();
+      if (ticks) tickWorldFrame(st, pos.current.x, pos.current.z);
 
       // what the player is looking at, its prompt, and acting on it — at once or held (CLN-26:
       // game/interaction/holdToAct.ts)
       holdToAct({ camera, pos, kb, isDown, pad, talkCooldown, holdTarget, holdTime, holdJustCompletedId, holdJustCompletedKind, grounded, vel, yaw }, st, dt);
 
       // CLN-20 · the world's half-second sweep (nearby stations, the wall
-      // ring, respawns, plots, villagers) — game/worldTick.ts. The countdown
-      // stays this component's own ref: it restarts at 0 with every mount, so
-      // the first unfrozen frame after build mode sweeps at once.
-      stationTimer.current -= dt;
-      if (stationTimer.current <= 0) {
-        stationTimer.current = WORLD_SWEEP_S;
-        sweepWorld(st, pos.current.x, pos.current.z);
-      }
+      // ring, respawns, plots, villagers) — game/worldTick.ts, whose
+      // countdown goes on through build mode and panels (WorldTicker's)
+      if (ticks && sweepDue(dt)) sweepWorld(st, pos.current.x, pos.current.z);
     } else {
       dropHold(st, holdTarget);
     }

@@ -305,7 +305,8 @@ export const createGatheringSlice: SliceCreator<GatheringSlice> = (set, get) => 
     // Empire arc, Wave 5 — plots. `plantedAt`/`lastWateredAt` are epoch ms,
     // the wall-clock convention foundSettlement/collectSettlementYield use,
     // NOT tickPlots' frame-accumulated countdown: a plot has to survive being
-    // reloaded, and the countdown only advances while you stand in the world.
+    // reloaded, and the countdown only advances while the world runs (not
+    // while paused or in a ceremony).
     // Nothing reads those timestamps YET — watering advances a stage
     // immediately, with no real-time growth or cooldown. Growth-rate and
     // cooldown timing are explicitly out of scope for this wave; the fields

@@ -7,9 +7,10 @@
 // that tells you WHICH gate you left up.
 //
 // It polls game/fort.ts's leaf module the way DungeonStatus polls the dungeon
-// layout — and it is the thing that drives the recomputation while build mode
-// is open (PlayerController, the other caller, is unmounted for the whole time
-// you are actually laying walls).
+// layout. It recomputes as it polls; so does the world's half-second sweep
+// (game/worldTick.ts), the player controller's or, while build mode is open
+// and the controller unmounted, WorldTicker's — refreshFort does nothing
+// unless something changed, so the two callers cost nothing together.
 import { useState } from 'react';
 import { FORT_DAMAGE_REDUCTION, fortState, refreshFort } from '@/game/fort';
 import { useGameStore } from '@/game/store/gameStore';

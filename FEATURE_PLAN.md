@@ -211,6 +211,22 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   loses). ROADMAP: a new fixed entry (none existed); CLEANUP_PLAN.md's haggle-cap question marked settled.
   Measured on main (`w645_loop.mjs`, the shop panel's own Buy and All buttons, Wit set through the store hook): gold
   rose in 12 of 20 loops — at Wit 10 by 1-3 gold, at Wit 25 by 3-15 (every offer at 1 gold), at Wit 100 by 9-39.
+- **#301 — Wave 65.1** (F-14): the world keeps living in build mode and behind panels (OD-08); paused or in a ceremony
+  it stops. `game/worldTick.ts` gains the gate (`worldTickOwner`: the controller's frame, the ticker's, or no one's),
+  a once-a-frame claim (`beginWorldFrame`, `claimWorldTicks`), the sweep's countdown as module state (`sweepDue`; a
+  session start still sweeps at once) and `tickWorldHeld`; a new always-mounted `components/world/WorldTicker.tsx`
+  (frame priority -1, so it runs first and opens each frame) runs them while build mode or a panel holds the
+  controller, from the published `playerState`; the controller keeps its two call sites, each behind the claim.
+  Premises held (after CLN-26 `frozen` is PlayerController.tsx:102, `tickWorldFrame` still :130, the sweep :140-144;
+  GameWorld is `components/world/GameWorld.tsx`, its swap still :131). Adapted by the audit: the fishing bite cycle is not run in a held frame (a bite nobody can answer would
+  only toast "The fish got away!" every few seconds; the line waits, as on main); the build challenge's countdown is
+  (its deadline was always wall-clock, so "Time's up!" is now said on time). No villager works a challenge ground, a
+  ghost's `evalPlacement` never looks at villagers, and nothing marks the save more than once a sweep. Tests: five in
+  `worldTick.test.ts` (the gate over 16 flag sets; one owner a frame; never twice; one countdown across remounts; the
+  held frame). ROADMAP: a new fixed entry (none existed) and a logged one (the build challenge's clock runs through a
+  pause, and its countdown hides in build mode); CLEANUP_PLAN.md's world-ticks question marked settled. Measured on
+  main (`w651_build_ticks.mjs`, a crop with 1,000 s to grow): 10 s of open world grew it 10.00 s, 60 s in build mode
+  0.00 s (a tree due back 5 s in still felled), 20 s behind the inventory 0.00 s, 10 s paused 0.00 s.
 
 ## Owner decisions
 

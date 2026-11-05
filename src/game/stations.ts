@@ -1,7 +1,8 @@
-// Which crafting stations are within reach of a point. One answer for all who ask: the player controller's
-// half-second sweep (game/worldTick.ts), and the game store, which looks again at the moment a crafting panel opens
-// and whenever the buildings change while one is up — the sweep stops for a panel, so what a panel shows has to be
-// right as it opens and stay right as the buildings change under it. A leaf on purpose (data and types only): the
+// Which crafting stations are within reach of a point. One answer for all who ask: the world's half-second sweep
+// (game/worldTick.ts — the player controller's, or WorldTicker's in build mode and behind a panel), and the game
+// store, which looks again at the moment a crafting panel opens and whenever the buildings change while one is up —
+// so what a panel shows is right as it opens, and stays right as the buildings change under it, without waiting for
+// the next sweep. A leaf on purpose (data and types only): the
 // store imports it.
 import { BUILDABLE_BY_ID } from './data/buildables';
 import { STATION_RANGE } from './data/world';
