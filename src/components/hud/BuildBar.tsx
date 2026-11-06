@@ -12,7 +12,7 @@ import { STARTER_BLUEPRINTS } from '@/game/data/blueprints';
 import { buildCamState } from '@/game/buildCam';
 import { SET_PLANS, setOwning } from '@/lib/setBuild';
 import { ITEMS } from '@/game/data/items';
-import { MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
+import { homeVillagers, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
 import { isHomeBuilding } from '@/game/types';
 import type { Buildable, ItemId } from '@/game/types';
 import Ico from '../ui/Ico';
@@ -397,8 +397,8 @@ export default function BuildBar() {
             own footer, pinned last in flow */}
         {(() => {
           const built = buildings.filter(isHomeBuilding).length;
-          const next = villagers.length < MAX_VILLAGERS
-            ? villagerRequirement(villagers.length + 1) : null;
+          const home = homeVillagers(villagers).length;
+          const next = home < MAX_VILLAGERS ? villagerRequirement(home + 1) : null;
           const tier = LAND_TIERS[landTier];
           const nextLand = landTier < MAX_LAND_TIER ? LAND_TIERS[landTier + 1] : null;
           const gold = inventory.gold ?? 0;

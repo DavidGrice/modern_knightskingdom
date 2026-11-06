@@ -6,7 +6,8 @@
 // A real live-3D preview already exists (`RotatablePreview.tsx`) — reused
 // today in the Appearance panel and `NpcEquipPanel`, always ONE instance at a
 // time. Embedding it directly into the roster list would mean N simultaneous
-// live WebGL canvases (one per row, up to `MAX_VILLAGERS`); no precedent for
+// live WebGL canvases (one per row: the whole roster, every settlement's
+// residents included as well as the six at home); no precedent for
 // that anywhere in this codebase. So this bakes a thumbnail instead: one
 // shared hidden Canvas renders each distinct appearance once, snapshots it
 // with `toDataURL`, and caches the PNG — every row after that is a plain
