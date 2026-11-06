@@ -26,6 +26,7 @@ import { publishPlayerState } from './publishPlayerState';
 import { readAim, pinNameplate } from './aimReadout';
 import { useFovEase, placeCamera } from './cameraRig';
 import { relocate, flyPhoto, crewEngine, walk } from '@/game/playerPhysics/locomotion';
+import { newFloorTrack } from '@/game/playerPhysics/vertical';
 import { holdToAct, dropHold } from '@/game/interaction/holdToAct';
 
 
@@ -66,6 +67,8 @@ export default function PlayerController() {
   // fed by walk in locomotion.ts) needs the PREVIOUS answer, not just this
   // one — see it for why.
   const wasOnOpenGround = useRef(true);
+  // Wave 65.2 · the floor under the player last frame, which tells a slope from a step (floorCarry, vertical.ts)
+  const floorTrack = useRef(newFloorTrack());
   // requested 2026-08-03: the lava arena's own ambient chip damage — a
   // once-per-second tick through the normal damagePlayer() path (so armor/
   // block still apply), not a per-frame call, which would spam the hit
@@ -119,7 +122,7 @@ export default function PlayerController() {
       } else if (crewState.engineId) {
         crewEngine(st, pos, yaw, grounded, vel, crewCooldown, dt);
       } else {
-        walk(st, kb, isDown, pos, yaw, vel, grounded, wasOnOpenGround, arenaDamageTimer, stepTimer, dt);
+        walk(st, kb, isDown, pos, yaw, vel, grounded, wasOnOpenGround, floorTrack, arenaDamageTimer, stepTimer, dt);
       }
 
       // CLN-20 · the world's per-frame ticks (the fishing bite cycle, the
