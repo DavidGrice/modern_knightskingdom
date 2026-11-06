@@ -10376,3 +10376,87 @@ Hold arc should take it. To do: remember the player's position (and grounded sta
 back on exit, and forget the `FloorTrack` (`newFloorTrack()`) whenever `walk` did not run the frame before (Photo
 Mode, crewing an engine).
 
+## Bugfix: founding the settlements stopped every arrival and recruit at the homestead — FOUND 2026-10-31 (FEATURE_PLAN.md's verification, the G-23 verifier: "global MAX_VILLAGERS counts settlement residents"), FIXED 2026-11-06
+
+**The fault.** `MAX_VILLAGERS = 6` (`data/villagers.ts`) is the homestead's cap, but `recruitVillageFolk` and
+`checkVillagerArrival` (`store/slices/villagerSlice.ts`) checked it against `st.villagers.length` — the whole roster,
+which since the Empire arc also holds every settlement's residents (`foundSettlement`, `empireSlice.ts`, moves three in
+per deed with `world` set to the destination). `checkVillagerArrival` also asked `villagerRequirement(villagers.length
++ 1)`, so the beds and buildings it wanted grew with the residents too. Founding the three settlements adds nine
+residents, so the homestead counted as full with nobody in it: no newcomer ever arrived and Alric and Beda refused to
+join ("Your homestead roster is full"). The Roster panel and the build palette's footer (`VillagersPanel.tsx`,
+`BuildBar.tsx`) read the same whole-roster count, so they said "fully settled". Measured on `main` (production build of
+base-14, port 3101, build `gLwzTOBzH1r98S1lyimwy`, digest `ff3e34976c8b`; `scripts/cln-tools/w653_arrival.mjs`: a
+guest, the three settlements founded through the store's own `foundSettlement` with their errands marked done, Alric
+recruited with 6 wood in hand, then six built beds and eleven torches at home — enough for six newcomers — and 15 s of
+the game's own half-second sweep): after founding, 9 villagers, none at home; Alric refused with "Your homestead roster
+is full — no room to take them on."; 0 arrivals in 15 s. The control (the same without founding): Alric joined and
+five newcomers walked in within 3.9 s, the homestead full at six.
+
+**The fix** (wave 65.3, F-18). One selector, `homeVillagers(villagers)` in `data/villagers.ts` (the villagers whose
+`world` is home, absent or null — the same test `isHomeBuilding` makes of a building), and the cap and the requirement
+count only those: `recruitVillageFolk`'s cap, `checkVillagerArrival`'s cap and its `villagerRequirement(home + 1)`, and
+the two readouts of the next arrival (`VillagersPanel.tsx`, `BuildBar.tsx`), which must say what the arrival judges.
+The cap stays six (settlement caps are G-23's). Audited and kept: `OrderRadial.tsx`, `OrderStatus.tsx` and
+`giveDefenderOrder` count defenders, and `Defenders.tsx` posts every defender at the homestead whatever its world, so
+they count what is drawn (that a resident can be made a defender at all is logged below); `VillagerPortrait.tsx` has no
+row cap — its premise in the plan did not hold: it bakes each look once on one shared hidden canvas and every row is a
+plain `<img>`, so the roster's fifteen rows at most (six at home and nine residents — on `main` too, had the homestead
+filled before the foundings) cost nothing new; only its comment, which said "up to `MAX_VILLAGERS`" rows, was
+corrected. `tickVillagers` already works each world's roster apart; `collectSettlementYield`, the caravan's carts and the dialogue's cart count already count
+one world. The newcomer's fallback name (`Villager N`, by the whole roster) is never reached — six names for at most
+six at home — and is left as it was. The home tax counts the whole roster (logged below, with the dragon siege's
+scream line).
+
+**Verified** in the worktree: `tsc` clean; unit tests 89 files, 674 passing — four new in
+`store/slices/villagerSlice.test.ts` (the selector takes home folk, `world` absent or null, and no resident; with the
+three settlements founded through `foundSettlement` and three at home, a newcomer arrives exactly when the fourth's beds
+and buildings stand and not one bed short; Alric joins beside nine residents; six at home still stops both). With the
+fix taken out of the slice the arrival and recruit tests fail (2); each part alone — the arrival cap, the requirement,
+the recruit cap — fails its own test (1 each); a selector that does not filter fails all four; the cap raised to 7
+fails "still stops at six". Restored each time by copying the saved file back, `git diff` byte-identical to a copy
+taken before. `next build` clean. Live, the change on port 3102 (build `m4HWutC8GGlPyBWhyPbvn`, digest
+`33bcd9f57eb3`, `w653_arrival.mjs`): after founding 9 villagers, none at home; Alric joined; Cuthbert, Edda, Godwin,
+Hilda and Osric arrived within 3.6 s; 15 in all, six at home, and no further arrival. Evidence pass (independent,
+2026-11-06): `tsc` exit 0, unit tests 89 files / 674 passing, `next build` clean (build `PeuwGiSRDPoIg40nmF2wH`, digest
+`33bcd9f57eb3`). Take-outs, each alone against the new test file: the recruit cap back to the whole roster fails
+"Alric joins" (1 of 4); the arrival cap back fails "a newcomer arrives" (1); the requirement back to
+`villagers.length + 1` fails the same (1); a selector that does not filter fails all 4; `MAX_VILLAGERS = 7` fails
+"still stops at six" (1). Each restored from a saved copy and checked with `cmp` of `git diff` against one taken
+before: identical all five times, and the file's 4 tests pass after. Live side by side (`scripts/cln-tools/
+w653_evidence.mjs`, the same seed as above, plus each step's Roster-panel and build-footer readouts): `main` on port
+3101 (build `gLwzTOBzH1r98S1lyimwy`, digest `ff3e34976c8b`) — the three foundings spent 180 gold and moved in nine
+residents (Bram, Ida, Tolan; Kolgrim, Sigrun, Brenna; Rurik, Petra, Dunstan), 0 at home; the panel then read "Your
+homestead is fully settled." and the footer "fully settled"; Alric refused ("Your homestead roster is full — no room to
+take them on."), the 6 wood kept; 0 arrivals in 15 s. The change on port 3102 (build `PeuwGiSRDPoIg40nmF2wH`) — the
+same foundings, gold and nine residents; the readouts "Next villager arrives with 1 bed(s) (you have 0) and 5 total
+structures (you have 0)." and "next kin at 5", as before founding; Alric joined (wood 6 → 0); Cuthbert, Edda, Godwin,
+Hilda and Osric arrived at 0.3-3.9 s, 15 in all, six at home, none after; then both readouts "fully settled". Control
+(no foundings) on both builds alike: Alric joined, the same five arrived by 3.9 s, stopping at six, the readouts the
+same at each step. No page errors on any run. Not measured: the two readouts have no unit test (they were checked live
+only); Beda's recruit (only Alric's was driven — the same function); the founding through the in-game deed UI (the
+store's own `foundSettlement` was called); a save reloaded with residents; frame-exact timing (arrival times are
+wall-clock); the unit tests on Linux.
+
+## Seen, not fixed: the home tax counts the settlements' residents too — logged 2026-11-06 (wave 65.3's audit; by the code)
+
+`collectTaxes` (`store/slices/empireSlice.ts`) is "a homestead-only mechanic (the Grand Keep's treasury)" by its own
+comment and counts only home buildings, but pays `8 + 4 × st.villagers.length` over the whole roster, settlement
+residents included — while each settlement's own yield (`collectSettlementYield`) already pays 5 a resident. So the
+three foundings add 36 gold to every home tax: the residents pay twice. Its guard ("at least one villager") and the
+Keep's prompt (`interaction/findTarget.ts`, `st.villagers.length > 0`) count them too, so a homestead with nobody at
+home but a founded settlement can be taxed. Also by the code: the dragon siege's scream line
+(`DragonSiegeController.tsx`) picks a name from the whole roster, so a resident far away can scream at the homestead.
+To do (an economy change, so not in wave 65.3): count `homeVillagers` in the tax, its guard and the prompt, and pick the
+scream from them.
+
+## Seen, not fixed: a settlement resident made a defender stands guard at the homestead — logged 2026-11-06 (wave 65.3's audit; by the code)
+
+The Homestead Roster lists every villager, settlement residents included (on purpose: it is where their jobs and gear
+are managed), and `assignJob` takes any job for any of them. `Villagers.tsx` draws a villager in their own world but
+never a defender, and `Defenders.tsx` draws every defender at a home post (a tower, a keep wall, the merchant camp or
+the hearth) whatever their `world`; `OrderRadial`, `OrderStatus` and `giveDefenderOrder` count them as the homestead's.
+So making a resident a defender takes them out of their settlement (its yield still counts them) and posts them at the
+homestead. To do: either keep the defender job to home folk in the Roster (and `assignJob`),
+or give a settlement its own defenders — the Walls That Hold arc or G-23 should decide.
+

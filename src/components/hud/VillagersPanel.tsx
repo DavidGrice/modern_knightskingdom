@@ -8,7 +8,9 @@ import { useGameStore } from '@/game/store/gameStore';
 import { mountOf, stabledHorses } from '@/game/riding';
 import { defenderOrders, orderFor } from '@/game/defenders';
 import { DEFENDER_ORDERS, setDefenderOrder } from '@/game/data/defenderOrders';
-import { CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, JOBS, MAX_VILLAGERS, villagerRequirement } from '@/game/data/villagers';
+import {
+  CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, homeVillagers, JOBS, MAX_VILLAGERS, villagerRequirement,
+} from '@/game/data/villagers';
 import { ATTRS, attrsOf, carryCapacityOf, tradeLevelOf } from '@/game/data/attributes';
 import { CHESTPLATES, CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
 import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/data/companionTraits';
@@ -83,7 +85,9 @@ export default function VillagersPanel() {
   const keep = useGameStore((s) => s.keep);
 
   const beds = buildings.filter((b) => b.type === 'bed').length;
-  const next = villagers.length < MAX_VILLAGERS ? villagerRequirement(villagers.length + 1) : null;
+  // the next arrival as checkVillagerArrival judges it: the homestead's own folk, not a settlement's residents
+  const home = homeVillagers(villagers).length;
+  const next = home < MAX_VILLAGERS ? villagerRequirement(home + 1) : null;
   const towers = buildings.filter((b) => b.type === 'tower' && isBuilt(b));
   // J51 (rest) · a raised, finished KeepPart with its own walkway is a
   // station too — same "archers see further from it" reasoning as a tower,

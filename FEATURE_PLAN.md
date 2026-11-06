@@ -254,6 +254,25 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   (walk) and 0.23 m (sprint) under its place; turning back mid-climb (`w652_reverse.mjs`) 1-3 falls, 2.4 m clear on a
   1.2 grade. The change: no falls, the eye within 0.01 m; ledges and steps at template-02 and template-07
   (`w652_edges.mjs`) dropped the player at once on both builds.
+- **#303 — Wave 65.3** (F-18): settlement residents stop filling the home roster. `data/villagers.ts` gains
+  `homeVillagers(villagers)` (the folk whose `world` is home, absent or null), and `MAX_VILLAGERS` (still six) and
+  `villagerRequirement` count only those: `recruitVillageFolk`'s cap, `checkVillagerArrival`'s cap and requirement
+  (`store/slices/villagerSlice.ts`), and the next-arrival readouts in `VillagersPanel.tsx` and `BuildBar.tsx`, which the
+  plan did not name but which said "fully settled" from the same count. Premises held (on the base, `MAX_VILLAGERS`
+  villagers.ts:204, `villagerRequirement` :200-202, the caps at villagerSlice.ts:207 and :257-258, residents given
+  `world` at empireSlice.ts:116). Corrected: `VillagerPortrait.tsx` has no row cap — it bakes each look once on one
+  shared hidden canvas and every row is an `<img>` — so only its comment changed. Audited and kept: `OrderRadial` and
+  `OrderStatus` count defenders, whom `Defenders.tsx` posts at home whatever their world, so they count what is drawn.
+  Tests: four in `store/slices/villagerSlice.test.ts` (the selector; with the three settlements founded through
+  `foundSettlement` and three at home, a newcomer arrives exactly at the fourth's beds and buildings; Alric joins;
+  six at home still stops both). ROADMAP: a new fixed entry (none existed) and two "Seen, not fixed" entries: the home
+  tax (and its prompt, and the dragon siege's scream line) counts the residents too, so they pay twice; and a resident
+  made a defender from the Roster is posted at the homestead. Measured on main (`w653_arrival.mjs`: the three
+  settlements founded through the store, six built beds and eleven torches at home, 15 s of sweeps): 9 villagers, none
+  at home, Alric refused ("roster is full"), 0 arrivals; without the foundings Alric joined and five walked in within
+  3.9 s. The change: Alric joined and five walked in within 3.9 s beside the nine residents (3.6 s on the
+  implementer's run; the sweep's timing is wall-clock), stopping at six at home. **This closes the Ground Truth arc:
+  waves 62.1-65.3, seventeen PRs (#287-#303).**
 
 ## Owner decisions
 

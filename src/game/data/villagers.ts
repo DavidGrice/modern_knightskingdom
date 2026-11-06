@@ -1,4 +1,4 @@
-import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeState, VillagerJob } from '../types';
+import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeState, Villager, VillagerJob } from '../types';
 import { hashId } from '@/lib/rng';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
 import { activeWindow } from './schedule';
@@ -202,3 +202,10 @@ export function villagerRequirement(n: number): { beds: number; buildings: numbe
 }
 
 export const MAX_VILLAGERS = 6;
+
+/** F-18 · the homestead's own folk. A settlement's residents share the roster (their `world` is its destination) but
+ *  live there: MAX_VILLAGERS and villagerRequirement count these alone, or founding the three settlements (nine
+ *  residents) filled the homestead and nobody arrived or was recruited there again. */
+export function homeVillagers(villagers: readonly Villager[]): Villager[] {
+  return villagers.filter((v) => (v.world ?? null) === null);
+}

@@ -15,7 +15,7 @@ import {
   COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult,
 } from '../../data/companionTraits';
 import {
-  CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES,
+  CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, homeVillagers, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES,
   MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement,
 } from '../../data/villagers';
 import { ITEMS } from '../../data/items';
@@ -204,7 +204,7 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
     recruitVillageFolk: (npcId) => {
       const st = get();
       if (st.villagers.some((v) => v.id === npcId)) return; // already joined
-      if (st.villagers.length >= MAX_VILLAGERS) {
+      if (homeVillagers(st.villagers).length >= MAX_VILLAGERS) {
         st.notify('Your homestead roster is full — no room to take them on.');
         return;
       }
@@ -254,8 +254,10 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
 
     checkVillagerArrival: () => {
       const st = get();
-      if (st.villagers.length >= MAX_VILLAGERS) return;
-      const req = villagerRequirement(st.villagers.length + 1);
+      // the homestead's own folk only (homeVillagers): a settlement's residents do not fill it
+      const home = homeVillagers(st.villagers).length;
+      if (home >= MAX_VILLAGERS) return;
+      const req = villagerRequirement(home + 1);
       // newcomers judge the HOMESTEAD, not a remote outpost — a claimed
       // template-world plot's structures shouldn't hasten arrivals at home
       // …and they judge FINISHED structures. Both counts used to include
