@@ -227,6 +227,33 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   pause, and its countdown hides in build mode); CLEANUP_PLAN.md's world-ticks question marked settled. Measured on
   main (`w651_build_ticks.mjs`, a crop with 1,000 s to grow): 10 s of open world grew it 10.00 s, 60 s in build mode
   0.00 s (a tree due back 5 s in still felled), 20 s behind the inventory 0.00 s, 10 s paused 0.00 s.
+- **#302 — Wave 65.2** (F-15): destination hillsides walk smoothly and the eye stops trailing climbs (OPEN-063,
+  OPEN-064). `playerPhysics/vertical.ts` gains `floorCarry`, which tells a slope from a step by the floor's continuity
+  (this frame's floor against last frame's over the distance moved: a grade no steeper than 1.5 that turned by no more
+  than 0.5 since last frame carries on; more than `STEP_UP` in a frame, or a move of more than 1 m, never does), and
+  `fall` lets the grounded eye ride the floor's own rise or fall where it carries on; `locomotion.ts`'s `walk` uses it
+  as `onOpenGround` at a destination, and `PlayerController` keeps its `FloorTrack`. Premises held (on the base,
+  locomotion's `onOpenGround` :211, vertical.ts's `fall` :6, ledge test :15 and lerp :32, floorUnder floor.ts:86-121;
+  the top raycast hit against the whole bake is templateGround.ts:59-60, `raycastGroundY`, reached through
+  `destinationGroundY` :99). Adapted: the plan's cheap alternative (a raycast against ground-only materials) does
+  not hold — `w652_groundmats.mjs` found the ground's own materials hold thousands of drops over 0.55 m (cliffs and
+  terraces), so they cannot tell a slope from a ledge — and the plan's asymmetric follow (fast up, max-lag clamp) gave
+  way to the eye riding a slope's own rise: a faster lerp only shortens the lag and its clamp would pop every step and
+  mount, where carrying the rise removes the lag on a slope and leaves steps and mounts eased as before. The first move
+  from a standstill has no grade to keep and is taken as a slope if no steeper than 1.5 (found live: a sprint started on
+  a 1.2 grade otherwise launched off it, on `main` too). Review round: the back key reverses the walk in one frame, so
+  turning back on a hill flipped the kept grade and launched the player (on `main` too); `floorCarry` now also forgets
+  the grade when the heading turns more than 18° (`HEADING_KEEP`). Tests: fourteen in `playerPhysics/vertical.test.ts`
+  (slopes at every speed on a jittering clock; reversals and turns across a slope; stairs, ledges, relocations and
+  too-steep grades never carried; with `fall`: no falls and the eye on its place down and up a slope and turning back
+  mid-climb, a step eased, a battlement dropped at once). ROADMAP: OPEN-063 and OPEN-064 closed and a new fixed entry
+  (none existed), plus two "Seen, not fixed" entries: a sprint over a sharp brow onto a steep downhill still launches
+  (as on `main`), and Photo Mode's free-fly leaves the player wherever the camera stopped, through any wall (for the
+  Walls That Hold arc). Measured on main (`w652_slope.mjs`, template-02): walking down a 0.48 grade airborne in 125 of
+  153 frames in 7 falls, sprinting 82 of 88 in 3; sprinting down 0.21-0.23 grades 4 falls; climbing, the eye 0.13 m
+  (walk) and 0.23 m (sprint) under its place; turning back mid-climb (`w652_reverse.mjs`) 1-3 falls, 2.4 m clear on a
+  1.2 grade. The change: no falls, the eye within 0.01 m; ledges and steps at template-02 and template-07
+  (`w652_edges.mjs`) dropped the player at once on both builds.
 
 ## Owner decisions
 

@@ -18,7 +18,7 @@ import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
 import { crewEyeHeight, crewState, leaveEngine } from '@/game/crew';
 import { floorUnder, _terrainOut } from './floor';
 import { collide } from './collide';
-import { fall } from './vertical';
+import { fall, floorCarry, type FloorTrack } from './vertical';
 
 // scratch for the movement maths (moved with it from PlayerController.tsx, where these first replaced per-frame
 // allocations — the GC-pressure fix requested 2026-07-31): never kept past the statement that reads it — safe while there
@@ -104,7 +104,7 @@ export function crewEngine(st: ReturnType<typeof useGameStore.getState>, pos: { 
 /** a step on foot or on horseback: where the controls point, a dodge-roll, how fast (sprint and gallop spending
  *  stamina; the road; the arena's own multipliers and chip damage), the stride clamped by every collision, a cart being
  *  pushed or towed, then the floor under it, the jump and the fall, and the footsteps or hoofbeats */
-export function walk(st: ReturnType<typeof useGameStore.getState>, kb: Record<string, string>, isDown: (code: string) => boolean, pos: { current: THREE.Vector3 }, yaw: { current: number }, vel: { current: THREE.Vector3 }, grounded: { current: boolean }, wasOnOpenGround: { current: boolean }, arenaDamageTimer: { current: number }, stepTimer: { current: number }, dt: number): void {
+export function walk(st: ReturnType<typeof useGameStore.getState>, kb: Record<string, string>, isDown: (code: string) => boolean, pos: { current: THREE.Vector3 }, yaw: { current: number }, vel: { current: THREE.Vector3 }, grounded: { current: boolean }, wasOnOpenGround: { current: boolean }, floorTrack: { current: FloorTrack }, arenaDamageTimer: { current: number }, stepTimer: { current: number }, dt: number): void {
   _dirV.set(
     (isDown(kb.moveRight) ? 1 : 0) - (isDown(kb.moveLeft) ? 1 : 0),
     0,
@@ -203,19 +203,22 @@ export function walk(st: ReturnType<typeof useGameStore.getState>, kb: Record<st
   // would have ridden the player straight through the hillside.
   const floorY = floorUnder(st, p, riding, eyeOff);
   const groundEye = floorY + eyeOff;
+  // Wave 65.2 · the floor's own rise since last frame when it is one surface carried on (a slope), else null —
+  // the eye rides it (vertical.ts's fall)
+  const floorRise = floorCarry(floorTrack.current, p.x, p.z, floorY);
   // Wave 12 · is the thing holding us up the GROUND, or something standing
-  // on it? Only the ledge test below cares, and only at home — a
-  // destination bake is all terrain and keeps its existing behaviour
-  // untouched. Two frames of it, because the answer alone is not enough:
-  // see where it is read.
-  const onOpenGround = !st.destination && floorY <= _terrainOut.y + 1e-6;
+  // on it? Only the ledge test below cares. Two frames of it, because the
+  // answer alone is not enough: see where it is read. Wave 65.2 · a
+  // destination bake is one merged mesh, with no ground-only height to
+  // compare against, so there it is the floor carrying on as a slope.
+  const onOpenGround = st.destination ? floorRise !== null : floorY <= _terrainOut.y + 1e-6;
   const slopeUnderfoot = onOpenGround && wasOnOpenGround.current;
   wasOnOpenGround.current = onOpenGround;
   if (grounded.current && isDown(kb.jump) && !riding) {
     vel.current.y = 5;
     grounded.current = false;
   }
-  fall(p, vel, grounded, dt, groundEye, slopeUnderfoot);
+  fall(p, vel, grounded, dt, groundEye, slopeUnderfoot, floorRise ?? 0);
 
   // footsteps / hoofbeats
   if (riding) {

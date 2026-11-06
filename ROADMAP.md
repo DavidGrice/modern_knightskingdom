@@ -159,8 +159,8 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-043 | STILL_OPEN | S | Marketplace square (half of the original Road-models idea) never built | Lay out an open plaza using the existing 4 Road tile models near the settlement/signpost; no new assets needed. |
 | OPEN-048 | PARTIALLY_DONE | M | template-05 still has no resident NPC to ground-truth its walkable classification | template-04 and -07 got residents to verify against; template-05 alone still relies solely on the generic claim-footprint safety net. |
 | OPEN-062 | STILL_OPEN | M | Per-asset target height for template 'set' props still a flat 0.8m default | Source/derive a per-asset target height and wire it in place of DEFAULT_PROP_HEIGHT for every kind:'set' prop. |
-| OPEN-063 | STILL_OPEN | M | Destination-world hillsides still bounce/stutter downhill | Extend the slopeUnderfoot ledge-test fix (homestead-only today) to the 14 non-home destination terrain bakes. |
-| OPEN-064 | STILL_OPEN | S | Follow-lerp eye-height trails climbs by climb-rate/12 | Increase/replace the fixed dt*12 eye-height follow-lerp without reintroducing the descent-stutter bug it was built to fix. |
+| OPEN-063 | CLOSED | M | Destination-world hillsides still bounce/stutter downhill | Closed by wave 65.2 (#302, F-15): at a destination the ledge test reads the floor's continuity frame to frame (`floorCarry`, `playerPhysics/vertical.ts`), and the eye rides a slope's own rise or fall ("Bugfix: destination hillsides bounced the player downhill, and the eye trailed every climb", at the end of this file). |
+| OPEN-064 | CLOSED | S | Follow-lerp eye-height trails climbs by climb-rate/12 | Closed by wave 65.2 (#302, F-15): on a slope the eye carries the floor's own rise (`fall`, `playerPhysics/vertical.ts`), so a climb no longer trails; a step or a mount still eases at the lerp's rate (same entry as OPEN-063). |
 | OPEN-065 | PARTIALLY_DONE | M | Home elevation limited to 2 quadrants (Downs + West Fell) | Further quadrant expansion was explicitly declined (Wave 59) for lack of a real gameplay consumer — a permanent decision, not an oversight. |
 | OPEN-067 | STILL_OPEN | S | terrainConflict() has no slope check | Currently confirmed unreachable (no region overlaps the build fence) but the check itself is still missing from the code. |
 | OPEN-070 | STILL_OPEN | S | Specular-glint material artifact on the natural POND | Diagnose and tune the water material's roughness/metalness/envMapIntensity; confirmed pre-existing, not a regression, but never triaged further. |
@@ -10221,3 +10221,158 @@ ticks, so a pause (which stops those ticks, by OD-08) does not stop the clock: p
 first frame back says "Time's up!". And `BuildChallengePanel.tsx` returns nothing in build mode (and behind a panel),
 which is where the player places the six pieces, so the countdown is out of sight for much of the run. To do: move the
 deadline on by the paused time (or count the run down by the frame's `dt`), and show the countdown in build mode.
+
+## Bugfix: destination hillsides bounced the player downhill, and the eye trailed every climb — FOUND 2026-08-13 (Wave 12's North Downs entry, "Residual, inherited rather than introduced"; OPEN-063, OPEN-064), FIXED 2026-11-06
+
+**The fault.** The player's fall (`game/playerPhysics/vertical.ts`) has a ledge test — grounded, and the eye more than
+0.08 m above where it belongs, start to fall — and a follow-lerp (`dt * 12`) that eases the eye to the floor. The lerp
+trails any steady change of height by (vertical speed / 12), so going down a slope the eye stood that far above its
+place and the ledge test fired: the player fell, landed, fell again. Wave 12 stopped that at home by asking whether the
+floor was bare ground two frames running (`slopeUnderfoot`), but a destination bake is one glTF mesh (one primitive per
+material, all raycast together), so there is no ground-only height to compare against and the test stayed off
+(`locomotion.ts`: `onOpenGround = !st.destination && …`). Climbing, the same lag left the eye below the head. Measured
+on `main` (production build of base-14, port 3101, build `EH1FUxfhmTAIoef88Giie`, digest `c2d76438cacf`;
+`scripts/cln-tools/w652_slope.mjs`, deterministic 1/64 s frames, the real movement keys along straight lines found in
+the bake's top surface at template-02): walking 9.5 m down a 0.48 grade the player was airborne in 125 of 153 frames,
+in 7 separate falls, the feet up to 0.21 m off the ground; sprinting down it, 82 of 88 frames in 3 falls, up to 0.48 m;
+on 0.21 and 0.23 grades a walk was clean but a sprint fell 4 times (64 and 68 airborne frames, up to 0.15 and 0.17 m);
+climbing them the eye trailed its place by 0.13 m at a walk and 0.23 m at a sprint on the 0.48 grade (0.16 and 0.28 m
+on a 0.60 grade). Steeper, `w652_edges.mjs` on 1.2 grades at template-02 and template-07: 4 falls and 160 airborne
+frames of 10 m at a walk, and a sprint started from standing launched off the hill (106 airborne frames, the feet 2.6 m
+up).
+
+**The fix** (wave 65.2, F-15). The plan's first alternative was checked and does not hold: `w652_groundmats.mjs`
+rasterized every bake's top surface per material, and the materials that are the ground over most of each template
+(template-02's `mesh_0_42` and `mesh_0_36`, 89% of its walkable area) carry thousands of their own drops of more than
+0.55 m between neighbouring 0.25 m cells — cliffs and terraces are drawn in the ground's own materials — so a raycast
+against them would tell ground from building but not a slope from a ledge. So the floor's continuity decides,
+everywhere: `floorCarry` (`vertical.ts`) compares this frame's floor with last frame's against the horizontal distance
+moved. A slope keeps its grade frame to frame whatever the speed and dt (the rise and the run of a frame scale
+together); a stair is level treads and sudden risers, a ledge a drop. The floor carries on when the frame's grade is no
+steeper than 1.5 (`SLOPE_LIMIT`) and has turned by no more than 0.5 since the last frame (`GRADE_TURN`; the first move
+from a standstill, a relocation or a drop has no grade to keep, and nor has a move whose heading turned more than
+18° — the walk has no inertia, so the back key turns a climb into a descent in one frame), and never when it rose or fell more than `STEP_UP`
+(0.55 m) in the frame or the player moved more than 1 m (a relocation) — so no misread can carry anyone off a ledge,
+and a misread smaller drop is one they could step back up. At a destination that is what `onOpenGround` now means, so
+the ledge test stands down on a slope (home keeps its bare-ground test). And grounded, the eye rides the floor's own rise
+or fall when it carries on (`fall`'s new `floorRise`), so it neither trails a climb nor floats over a descent; a step
+or a mount, which do not carry on, still ease at the lerp's old rate. That is the plan's "asymmetric follow" done at
+its root instead: a faster lerp up only shortens the lag (rate 24 still trails a sprint up a 0.48 grade by 0.14 m),
+and its max-lag clamp would pop the camera on every step and every mount. The eye riding the floor applies at home too
+(the North Downs, where OPEN-064 was first written down); home terrain is otherwise untouched.
+
+**Verified** in the worktree: `tsc` clean; unit tests 88 files, 668 passing (670 after the review round below) — twelve new in
+`playerPhysics/vertical.test.ts`: `floorCarry` carries a slope's own rise every frame on grades 0.1 to 1.4, up and down,
+at a walk, a sprint, a gallop and a dodge, on a frame clock jittering from 1/144 to 1/20 s; never carries a stair's
+riser (0.15-0.3 m, 0.28 m treads) at 45 to 144 frames a second; never carries more than `STEP_UP` in a frame whatever the
+stride or the grade before it; never reads a grade steeper than `SLOPE_LIMIT` as a slope however gently it steepens;
+holds still ground level and reads a relocation as a break; sets off from a standstill either way. With `fall`: down a
+0.48 grade at walk, sprint and gallop never airborne, the eye never rising and within 0.02 m of its place; down a 1.2
+grade from a standstill likewise; up a 0.48 grade the eye within 0.02 m; up a 0.5 m step eased as before (never above
+its place, the lag only shrinking, gone in a third of a second); off a 0.6 m and a 3 m battlement airborne at once at
+every speed, never grounded with the eye 0.08 m above its place; down a stair a short fall a step, as before. Take-out
+controls, each alone, then restored (`git diff` sha256 identical before and after): no eye carry → 4 tests fail; never
+a slope (`main`'s destination path) → 6; no `STEP_UP` cap → 1; no grade-turn test → 1; no stride cap → 1; the grade kept
+through a standstill → 1; no `SLOPE_LIMIT` → 1. `next build` clean. Live, side by side on production builds (`main` =
+base-14 on port 3101 as above; the change = the worktree on port 3102, build `6KJqYqJh61GnK4c7emTyh`, digest
+`2811c4eddde2`), the same lines on both:
+
+| template-02, `w652_slope.mjs` | `main`: falls / airborne frames / feet above ground | change | `main`: eye under its place climbing | change |
+|---|---|---|---|---|
+| 0.48 grade, walk | 7 / 125 of 153 / 0.21 m | 0 / 0 / 0.02 m | 0.13 m | 0.005 m |
+| 0.48 grade, sprint | 3 / 82 of 88 / 0.48 m | 0 / 0 / 0.04 m | 0.23 m | 0.009 m |
+| 0.21 grade, sprint | 4 / 64 of 88 / 0.15 m | 0 / 0 / 0 | 0.10 m | 0.004 m |
+| 0.23 grade, sprint | 4 / 68 of 88 / 0.17 m | 0 / 0 / 0 | 0.11 m | 0.004 m |
+| 0.60 grade, walk / sprint | 6 / 135, 3 / 82 / up to 0.71 m | 0 / 0 / up to 0.05 m | 0.16 / 0.28 m | 0.006 / 0.011 m |
+
+`w652_edges.mjs`, at template-02 and template-07 (lines found in the bake's top surface inside the walkable rects; a
+stair or a step kept only where the game's own ray finds sharp risers): on 1.2 grades (three a template) `main` fell 4
+times walking down and 2 sprinting down (the sprint launched 2.5 m clear of the hill), and trailed climbs by 0.32 and
+0.57 m; the change fell 0 times on all six lines and trailed by 0.005 m. Ledges of 30-34 m (three a template) and a
+0.70 m step at template-02: airborne on the frame the ground fell away on both builds, at a walk and a sprint, never
+grounded with the feet more than 0.065 m above the ground on either build. On six stretches of terraced hillside with
+sharp lips (three a template, walked and sprinted down) `main` fell 17 times, the change 9 — at a real drop, where
+`main` fell too, or a short fall (0.09-0.18 m) off a sharp lip, which is a step and is meant to drop the player; climbing
+them the eye trailed by up to 0.81 m on both where a riser is eased as a step, and less on the change elsewhere. No bake was found with true stairs
+(level treads and vertical risers) inside the walkable rects at either template, so the stair cases rest on the unit
+tests. No page errors on either build.
+
+**Evidence pass** (independent re-run, 2026-11-06). In the worktree: `tsc --noEmit` clean; unit tests 88 files, 668
+passing; `next build` clean (build `6jp-BU9ZjKrjSNeOoR10S` — the same script digest, `2811c4eddde2`, as the build
+above). Take-outs, each alone and run against `vertical.test.ts` (the two in `locomotion.ts` against the whole suite),
+each file restored from its own copy and compared byte for byte, and the sha256 of `git diff` plus the new test file
+the same before and after the batch (`7ecd2953…`): no eye carry → 4 tests fail; `floorCarry` never a slope → 7; no
+`STEP_UP` cap → 1; no grade-turn test → 1; no stride cap → 1; the grade kept through a standstill → 1; no
+`SLOPE_LIMIT` → 1; standing still not read as level → 2. `locomotion.ts`'s two lines (`onOpenGround` from `floorCarry`
+at a destination, `floorRise` handed to `fall`) fail no unit test when taken out — the tests compose `floorCarry` and
+`fall` themselves — so that wiring rests on the live runs below, where `main` is exactly that path taken out. Live, on
+`main` = base-14 on port 3101 (`EH1FUxfhmTAIoef88Giie`, digest `c2d76438cacf`) and the change on port 3102, the same
+lines on both, deterministic 1/64 s frames: `w652_slope.mjs` at template-02 — on the two 0.60 grades `main` fell 6
+times walking down (135 airborne frames of 153, feet up to 0.28 m) and 3 sprinting (82 of 88, up to 0.71 m), on the
+0.49 grade 7 and 3 (125 and 82 frames, 0.22 and 0.50 m), and its eye trailed climbs by 0.16 / 0.28 m (0.60) and
+0.13 / 0.23 m (0.49); the change 0 falls, 0 airborne frames, feet never above the ground, the eye 0.005 m under its
+place climbing. `main`'s first lines again (`KK_LINES`): 0.48 grade 7 falls / 125 frames / 0.21 m walking down and 3 /
+82 / 0.48 m sprinting, 0.21 and 0.23 grades clean at a walk but 4 falls (64 and 68 frames) at a sprint, climbs trailed
+0.13 / 0.23, 0.06 / 0.10 and 0.06 / 0.11 m; the change 0 falls and 0 airborne frames on all twelve runs, the feet
+never above the ground (the table above, from an earlier run, has 0.02-0.05 m), climbs within 0.005 m. The plan's
+"eye dy sign flips" were 0 on both builds — the eye only ever goes down a descent, even falling — so the bounce shows
+as the jerk instead: the eye's d2y changed sign 26, 22, 14 and 5 times on `main`'s runs down, 0 on the
+change. `w652_edges.mjs` reproduced the numbers above line for line on both builds: 1.2 grades (three a template)
+`main` 4 falls / 160 frames walking down, 2 / 106 sprinting (feet 2.5-2.6 m clear), climbs trailed 0.32-0.33 / 0.56-0.57
+m, the change 0 falls and 0.005 m; the six ledges (30-34 m) and the 0.70 m step airborne on the frame the ground fell
+away on both builds at both speeds (one sprint at the 33.95 m ledge reports no such frame, on both builds alike), the
+feet never more than 0.065 m above the ground while grounded on either (0.061 on the change, 0.032 on `main`, walking
+to the 33.95 m ledge; elsewhere 0-0.063 on both); the terraced stretches 17 falls on `main`, 9 on the change, the
+change's climbs trailing no more than `main`'s (0.811 m on both at template-07's (2913,1188), where a riser eases as a
+step). Home, `w652_home.mjs` (new): down and up the North Downs' east flank (z −94, x 1 ↔ 21, the main bump's grade up
+to 0.34), no fall on either build, `main`'s eye trailing the climb by 0.07 m mean / 0.09 max at a walk and 0.13 / 0.16
+at a sprint and the feet up to 0.09 / 0.16 m above the ground going down; the change 0.007 / 0.013 m climbing and the
+feet never above the ground. No page errors on either build. Not measured live: riding at a destination, frame rates
+other than 64 a second (the unit tests carry jittered dt), and a true stair (none found in the walkable rects).
+
+**Review round** (2026-11-06). The review found the grade `floorCarry` keeps has a direction the walk does not: the
+back key reverses the walk in one frame, so on one hillside the grade flips from +g to −g, a turn of 2g, and any hill
+steeper than 0.25 read as a break; at a destination that made the ledge test live for two frames while the floor fell
+away — sprinting up a 1.2 grade and turning back launched the player 2.6 m clear of the hill (the reviewer's port of
+`floorCarry` and `fall`), as `main` does too. The "0 falls on every slope run" above was true of the lines walked,
+which all went one way. Fixed at its root: `floorCarry` keeps the last move's heading and forgets the grade when the
+heading turns by more than 18° (`HEADING_KEEP`, the cosine 0.95: one plane's grade turns by at most 2·grade·sin(turn/2)
+along the new heading, within `GRADE_TURN` up to 18° on a grade as steep as `SLOPE_LIMIT`), as it already did at a
+standstill; the move after is then a slope if it is no steeper than `SLOPE_LIMIT`. Two new tests, each failing with the
+heading check taken out (and only those two): a reversal and a turn across the plane on 0.48, 0.9 and 1.2 grades carry
+the floor's own rise; and, with `fall`, turning back down a 0.48 and a 1.2 grade mid-climb at a walk and a sprint, at 64
+and 30 frames a second, never leaves the ground (the eye within 0.01 m of its place). `tsc` clean, unit tests 88 files,
+670 passing. Live (`w652_reverse.mjs`, new: template-02's 0.60, 0.49 and 1.2 lines above, the real keys, climb 4 m then
+back, down 4 m then back, or climb 4 m then strafe 1.5 m across; `main` = base-14 on 3101 as above, the change rebuilt on
+3102, build `ySAkwNqc4h_8Ak7S30nxS`, digest `83b12190fbf6`): at 64 frames a second `main` fell 1-3 times after a
+reversal up-to-down on every line (feet up to 0.28 m on the 0.60 grade, 0.48 m on 0.49, 2.38 m sprinting on 1.2) and
+1 time after the turn across on the 0.60 and 1.2 grades; at 32 a second the same (up to 2.39 m); the change 0 falls,
+0 airborne frames and the feet never above the ground on all 36 runs. `w652_edges.mjs` re-run on the rebuilt change:
+every ledge, step, terraced and 1.2-grade line identical to the evidence pass's, line for line. No page errors. Still
+a break, as on `main`, and logged below rather than changed: sprinting over a sharp brow from level ground onto a
+grade steeper than `GRADE_TURN`.
+
+## Seen, not fixed: sprinting over a sharp brow onto a steep destination downhill still launches the player — logged 2026-11-06 (in the review of wave 65.2; by a port of the code)
+
+At a destination `floorCarry` (`playerPhysics/vertical.ts`) reads a frame whose grade turns by more than `GRADE_TURN`
+(0.5) as a break, because that is what a stair's lip looks like, so going over a sharp crease from level ground onto a
+steeper downhill the ledge test is live for that frame and the next (`slopeUnderfoot` needs two carried frames). At a
+sprint the floor drops past the 0.08 m threshold in that frame and the player leaves the ground: the reviewer's port at
+64 frames a second launched on 9 of 20 frame phases over a 0.8 grade (feet up to 1.16 m) and 19 of 20 over a 1.2 grade
+(up to 2.65 m). `main` did the same before wave 65.2. A running body would leave such a brow too, so this may be fine;
+if not, to do: let a break that the next frame carries on at its new grade count as a slope after the fact (hold the
+ledge test one frame for a drop under `STEP_UP`), and measure a real ledge still drops the player on its first frame.
+
+## Seen, not fixed: Photo Mode's free-fly leaves the player where the camera stopped, through any wall — logged 2026-11-06 (in the review of wave 65.2)
+
+Photo Mode (`P`) flies the player's own position: `flyPhoto` (`playerPhysics/locomotion.ts`) moves `pos` along the
+view with no collision and no gravity, and nothing puts it back when the mode ends. So the player can fly over a wall,
+through a gate, into a closed building or out of a raid, press `P` again and walk on from there. At a destination they
+then fall from wherever they stopped; at home, over open ground, they ease down to it. Wave 65.2 adds a small case of
+the same root: at a destination, flying up less than 1 m sideways and exiting now eases down too, because
+`floorCarry`'s track (`vertical.ts`) still holds the floor from before the flight (both reviewers saw this; one called
+it low and cosmetic). It matters more once walls hold (OD-01, solid to everyone; OD-02, harsh raids), so the Walls That
+Hold arc should take it. To do: remember the player's position (and grounded state) on entering Photo Mode and put it
+back on exit, and forget the `FloorTrack` (`newFloorTrack()`) whenever `walk` did not run the frame before (Photo
+Mode, crewing an engine).
+
