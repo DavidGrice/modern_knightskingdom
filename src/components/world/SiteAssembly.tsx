@@ -7,20 +7,25 @@
 // renders that piece through the same construction path as any other site
 // (J47/J48): wireframe plan, real stone rising out of the ground with the
 // work. A finished piece is simply the piece.
+//
+// Wave 67 (G-36) · KeepAssembly became SiteAssembly: it draws one socket site
+// (game/sites/sites.ts) by its id — the home keep is site 'keep' — laid out
+// to its layout and turned by the site's own rot.
 import { Suspense, useMemo } from 'react';
 import * as THREE from 'three';
 import { useTexture } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
-import { KEEP_PART_BY_ID, KEEP_SIZE, KEEP_SOCKETS } from '@/game/data/keep';
+import { KEEP_PART_BY_ID } from '@/game/data/keep';
+import { KEEP_SITE_ID, SITE_LAYOUTS, siteById, siteSockets } from '@/game/sites/sites';
 import PropModel from './PropModel';
 import ConstructionSiteModel from './ConstructionSite';
 
 /** the same trodden stone the road uses — this is a courtyard, not a lawn */
 const PLATE_TEX = '/assets/textures/ground/spr177_128x128.png';
 
-function Foundation() {
+function Foundation({ size }: { size: number }) {
   const tex = useTexture(PLATE_TEX);
   const { gl } = useThree();
   // Requested 2026-07-31: a real Options setting (Settings.anisotropy,
@@ -30,36 +35,42 @@ function Foundation() {
   useMemo(() => {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(KEEP_SIZE / 4, KEEP_SIZE / 4);
+    tex.repeat.set(size / 4, size / 4);
     tex.anisotropy = anisotropy;
-  }, [tex, anisotropy]);
+  }, [tex, anisotropy, size]);
   return (
     <mesh rotation-x={-Math.PI / 2} position-y={0.05} receiveShadow>
-      <planeGeometry args={[KEEP_SIZE, KEEP_SIZE]} />
+      <planeGeometry args={[size, size]} />
       <meshStandardMaterial map={tex} roughness={0.98} metalness={0} side={THREE.DoubleSide} />
     </mesh>
   );
 }
 
-export default function KeepAssembly() {
+export default function SiteAssembly({ siteId }: { siteId: string }) {
   const keep = useGameStore((s) => s.keep);
+  const sites = useGameStore((s) => s.sites);
   const destination = useGameStore((s) => s.destination);
   const buildings = useGameStore((s) => s.buildings);
   const openBuildingMenu = useGameStore((s) => s.openBuildingMenu);
-  if (!keep || destination) return null;
+  // read from the two store fields, not through a selector: siteById sees the
+  // keep as a new object each call
+  const site = useMemo(() => siteById({ keep, sites }, siteId), [keep, sites, siteId]);
+  if (!site || site.world !== (destination ?? null)) return null;
 
   return (
     <group
       // Wave 31 · keep.y (was hardcoded 0 — see gameStore.ts's foundKeep for
       // where it's now actually threaded through). Always 0 in practice
       // today (see KeepState.y's own doc), real infrastructure regardless.
-      position={[keep.x, keep.y ?? 0, keep.z]}
+      position={[site.x, site.y ?? 0, site.z]}
+      rotation-y={site.rot ?? 0}
       // L72's click-to-open-menu, extended to the foundation itself — the
       // keep's own PlacedBuilding (game/store/gameStore.ts's foundKeep) is
-      // deliberately not rendered by Buildings.tsx (KeepAssembly already
+      // deliberately not rendered by Buildings.tsx (SiteAssembly already
       // owns every visual here), so it needs its own click handler to reach
       // the same "Move the foundation" action BuildingMenuPanel offers it.
-      onClick={(e: any) => {
+      // Only the home keep has a PlacedBuilding to move.
+      onClick={site.id !== KEEP_SITE_ID ? undefined : (e: any) => {
         const st = useGameStore.getState();
         if (!st.buildMode || st.buildSelection || st.movingBuilding) return;
         const b = buildings.find((x) => x.type === 'keep');
@@ -69,12 +80,12 @@ export default function KeepAssembly() {
       }}
     >
       <Suspense fallback={null}>
-        <Foundation />
+        <Foundation size={SITE_LAYOUTS[site.layout].size} />
       </Suspense>
-      {KEEP_SOCKETS.map((sock) => {
-        const partId = keep.parts[sock.id];
+      {siteSockets(site).map((sock) => {
+        const partId = site.parts[sock.id];
         const part = partId ? KEEP_PART_BY_ID[partId] : null;
-        const built = keep.built[sock.id] ?? 0;
+        const built = site.built[sock.id] ?? 0;
         if (!part) {
           // an empty socket: a low course of stone marking out the place, so
           // the shape of the castle-to-be is legible from the first day
@@ -109,7 +120,7 @@ export default function KeepAssembly() {
                     url={part.model}
                     size={[4, part.height, 4]}
                     progress={built}
-                    worldY={keep.y ?? 0}
+                    worldY={site.y ?? 0}
                   />
                 )}
             </Suspense>

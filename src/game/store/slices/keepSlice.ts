@@ -1,10 +1,12 @@
 // CLN-07 · the store's keep slice: the composed keep (founding it; raising, working and damaging its parts; carrying
-// it) and the assembly workshop's bench.
+// it) and the assembly workshop's bench. Wave 67 (G-36): raising, working and damaging a piece is done on any socket
+// site (game/sites/sites.ts) by its id; the keep's own actions are those on site 'keep'.
 import type { ItemId, PlacedBuilding } from '../../types';
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
+import { KEEP_PART_BY_ID, maxHpForPart } from '../../data/keep';
 import {
-  KEEP_PART_BY_ID, KEEP_SOCKETS, SOCKET_BY_ID, keepComplete, maxHpForPart, type KeepState,
-} from '../../data/keep';
+  KEEP_SITE_ID, knockdownRefund, siteById, siteComplete, siteSocket, siteSockets, siteWrite,
+} from '../../sites/sites';
 import { ITEMS } from '../../data/items';
 import { audio } from '@/lib/audio';
 import { buildUndo, seq } from '../storeCounters';
@@ -21,15 +23,15 @@ function partCost(vol: number): Partial<Record<ItemId, number>> {
 }
 
 export interface KeepSlice {
-  /** which keep socket the player is stood at, for the socket panel */
-  keepSocket: string | null;
+  /** which socket of which site the player is stood at, for the socket panel */
+  keepSocket: { site: string; socket: string } | null;
 
   /** J51 · lay the castle foundation at (x, z, y) — sockets open once it
    *  exists. Wave 31 adds `y`: the caller (placeBuilding) already computed a
    *  real elevation via evalPlacement and used to discard it here. */
   foundKeep: (x: number, z: number, y: number) => void;
-  /** open the socket panel for one named socket */
-  openKeepSocket: (socketId: string) => void;
+  /** open the socket panel for one named socket (of the home keep, unless a site is named) */
+  openKeepSocket: (socketId: string, siteId?: string) => void;
 
   /** M · put a set on the bench (or swap the one that is there) */
   startSet: (setNum: string) => void;
@@ -37,12 +39,16 @@ export interface KeepSlice {
   placeSetPart: () => boolean;
   /** M · clear the bench without finishing */
   clearBench: () => void;
-  /** commit a part to one socket, paying its bill of pieces */
+  /** G-36 · commit a part to one socket of a site, paying its bill of pieces */
+  raiseSitePart: (siteId: string, socketId: string, partId: string) => void;
+  /** G-36 · one hammer swing's worth of work on a site socket's piece */
+  workSitePart: (siteId: string, socketId: string, amount: number) => void;
+  /** G-36 · a raised piece on a site takes siege damage — knocked down (socket cleared, half materials refunded) at
+   *  0 HP, same shape as damageBuilding */
+  damageSitePart: (siteId: string, socketId: string, amount: number, cause?: string) => void;
+  /** the same three on the home keep (site 'keep') */
   raiseKeepPart: (socketId: string, partId: string) => void;
-  /** one hammer swing's worth of work on a socket's piece */
   workKeepPart: (socketId: string, amount: number) => void;
-  /** J51 · a raised piece takes siege damage — knocked down (socket cleared,
-   *  half materials refunded) at 0 HP, same shape as damageBuilding */
   damageKeepPart: (socketId: string, amount: number, cause?: string) => void;
 
   /** J51 · pick the whole foundation up — every socket's part/progress/HP
@@ -56,7 +62,7 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
     keepSocket: null,
 
     // ---- J51 · the composed keep -------------------------------------
-    openKeepSocket: (socketId) => set({ keepSocket: socketId, panel: 'keepSocket' }),
+    openKeepSocket: (socketId, siteId = KEEP_SITE_ID) => set({ keepSocket: { site: siteId, socket: socketId }, panel: 'keepSocket' }),
 
     foundKeep: (x, z, y) => {
       const st = get();
@@ -78,17 +84,17 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       st.notify('Foundation laid. Choose a corner and raise something on it.', true);
     },
 
-    raiseKeepPart: (socketId, partId) => {
+    raiseSitePart: (siteId, socketId, partId) => {
       const st = get();
-      const keep = st.keep;
-      const socket = SOCKET_BY_ID[socketId];
+      const site = siteById(st, siteId);
+      const socket = site && siteSocket(site, socketId);
       const part = KEEP_PART_BY_ID[partId];
-      if (!keep || !socket || !part) return;
+      if (!site || !socket || !part) return;
       if (!part.fits.includes(socket.kind)) {
         st.notify(`A ${part.name.toLowerCase()} will not stand on ${socket.name.toLowerCase()}.`);
         return;
       }
-      if (keep.parts[socketId]) { st.notify(`${socket.name} is already taken.`); return; }
+      if (site.parts[socketId]) { st.notify(`${socket.name} is already taken.`); return; }
       // the bill of pieces has to be in the parts bin, same as any build
       for (const [item, n] of Object.entries(part.cost)) {
         if ((st.inventory[item as ItemId] ?? 0) < (n ?? 0)) {
@@ -102,67 +108,69 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       }
       set({
         inventory: inv,
-        keep: { ...keep, parts: { ...keep.parts, [socketId]: partId }, built: { ...keep.built, [socketId]: 0 } },
+        ...siteWrite(st, siteId, { parts: { ...site.parts, [socketId]: partId }, built: { ...site.built, [socketId]: 0 } }),
         dirty: true,
       });
       audio.play('brick_link', 0.7);
       st.notify(`${part.name} staked out on ${socket.name} — now build it.`, true);
     },
 
-    workKeepPart: (socketId, amount) => {
+    workSitePart: (siteId, socketId, amount) => {
       const st = get();
-      const keep = st.keep;
-      if (!keep || !keep.parts[socketId]) return;
-      const before = keep.built[socketId] ?? 0;
+      const site = siteById(st, siteId);
+      if (!site || !site.parts[socketId]) return;
+      const before = site.built[socketId] ?? 0;
       if (before >= 1) return;
       const after = Math.min(1, before + amount);
-      const next: KeepState = { ...keep, built: { ...keep.built, [socketId]: after } };
-      set({ keep: next, dirty: true });
+      const built = { ...site.built, [socketId]: after };
+      set({ ...siteWrite(st, siteId, { built }), dirty: true });
       if (after >= 1) {
-        const part = KEEP_PART_BY_ID[keep.parts[socketId]];
+        const part = KEEP_PART_BY_ID[site.parts[socketId]];
         st.addXp('building', part?.buildXp ?? 30);
         audio.play('brick_link', 0.9);
-        st.notify(`${part?.name ?? 'Piece'} raised. ${KEEP_SOCKETS.length - Object.values(next.built).filter((v) => v >= 1).length} to go.`, true);
-        if (keepComplete(next)) {
+        st.notify(`${part?.name ?? 'Piece'} raised. ${siteSockets(site).length - Object.values(built).filter((v) => v >= 1).length} to go.`, true);
+        if (siteComplete({ ...site, built })) {
           st.notify('Your castle stands complete.', true);
           audio.play('treasure', 0.9);
         }
       }
     },
 
-    damageKeepPart: (socketId, amount, cause) => {
+    damageSitePart: (siteId, socketId, amount, cause) => {
       const st = get();
-      const keep = st.keep;
-      if (!keep) return;
-      const partId = keep.parts[socketId];
+      const site = siteById(st, siteId);
+      if (!site) return;
+      const partId = site.parts[socketId];
       const part = partId ? KEEP_PART_BY_ID[partId] : null;
       // only a finished piece can be sieged — a bare socket or a construction
       // ghost has nothing standing on it yet to knock down
-      if (!part || (keep.built[socketId] ?? 0) < 1) return;
+      if (!part || (site.built[socketId] ?? 0) < 1) return;
       const max = maxHpForPart(part);
-      const hp = (keep.hp?.[socketId] ?? max) - amount;
+      const hp = (site.hp?.[socketId] ?? max) - amount;
       if (hp > 0) {
-        set({ keep: { ...keep, hp: { ...keep.hp, [socketId]: hp } }, dirty: true });
+        set({ ...siteWrite(st, siteId, { hp: { ...site.hp, [socketId]: hp } }), dirty: true });
         audio.play('brick_collide', 0.6);
         return;
       }
-      // knocked down: back to a bare socket, half its materials recovered —
-      // same rubble rate damageBuilding uses for an ordinary structure
-      const parts = { ...keep.parts };
+      // knocked down: back to a bare socket, half its materials recovered
+      const parts = { ...site.parts };
       delete parts[socketId];
-      const built = { ...keep.built };
+      const built = { ...site.built };
       delete built[socketId];
-      const hpRest = { ...keep.hp };
+      const hpRest = { ...site.hp };
       delete hpRest[socketId];
       const inv = { ...st.inventory };
-      for (const [itemId, n] of Object.entries(part.cost)) {
-        const refund = Math.floor((n as number) / 2);
-        if (refund > 0) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + refund;
+      for (const [itemId, n] of Object.entries(knockdownRefund(part.cost))) {
+        inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + (n as number);
       }
-      set({ keep: { ...keep, parts, built, hp: hpRest }, inventory: inv, dirty: true });
+      set({ ...siteWrite(st, siteId, { parts, built, hp: hpRest }), inventory: inv, dirty: true });
       audio.play('brick_collide', 0.8);
       st.notify(`${part.name} ${cause ?? 'was battered down'}! Half materials recovered.`, true);
     },
+
+    raiseKeepPart: (socketId, partId) => get().raiseSitePart(KEEP_SITE_ID, socketId, partId),
+    workKeepPart: (socketId, amount) => get().workSitePart(KEEP_SITE_ID, socketId, amount),
+    damageKeepPart: (socketId, amount, cause) => get().damageSitePart(KEEP_SITE_ID, socketId, amount, cause),
 
     pickupKeep: () => {
       const st = get();
@@ -172,7 +180,9 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       // every socket's part/progress/HP travels with the foundation, lossless
       // — carried outside movingBuilding (a plain PlacedBuilding has nowhere
       // to hold that) and restored by cancelMove/finishMove (buildSlice.ts)
-      buildUndo.carriedKeepExtra = { parts: keep.parts, built: keep.built, hp: keep.hp ?? {} };
+      // (Wave 67 · and its ruins and gates, once anything writes them: all of KeepState but where it stands)
+      const { x: _x, z: _z, y: _y, ...extra } = keep;
+      buildUndo.carriedKeepExtra = { ...extra, hp: keep.hp ?? {} };
       set({
         keep: null,
         buildings: st.buildings.filter((x) => x.id !== b.id),

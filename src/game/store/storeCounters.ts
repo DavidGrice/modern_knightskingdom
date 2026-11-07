@@ -6,6 +6,7 @@
 // `placeHistory` and `carriedKeepExtra` on every session start. The id counters are
 // recomputed from the save on a LOAD only and deliberately keep counting across a new
 // game (see beginSession).
+import type { KeepState } from '../data/keep';
 
 /** the next id of each kind: a notification's, a placed building's (`b…`), a villager's (`v…`), a captured
  *  blueprint's (`bp…`) and a dug waterway's (`w…`) */
@@ -42,5 +43,6 @@ export const buildUndo: {
   carriedKeepExtra: CarriedKeepExtra | null;
 } = { placeHistory: [], carriedKeepExtra: null };
 
-/** the part of a KeepState its foundation cannot hold (see buildUndo.carriedKeepExtra) */
-export type CarriedKeepExtra = { parts: Record<string, string>; built: Record<string, number>; hp: Record<string, number> };
+/** the part of a KeepState its foundation cannot hold — all of it but where it stands, ruins and gates included (see
+ *  buildUndo.carriedKeepExtra; pickupKeep, keepSlice.ts) */
+export type CarriedKeepExtra = Omit<KeepState, 'x' | 'z' | 'y' | 'hp'> & { hp: Record<string, number> };

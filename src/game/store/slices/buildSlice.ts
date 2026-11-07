@@ -600,7 +600,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       const st = get();
       const mv = st.movingBuilding;
       if (!mv) return false;
-      // the keep's socket layout has no rotation of its own (KeepAssembly.tsx
+      // the keep's socket layout has no rotation of its own (SiteAssembly.tsx
       // renders it unrotated regardless of PlacedBuilding.rot) — force 0 so a
       // rotated ghost during placement can never leave the synthetic entry
       // and the real KeepState disagreeing about which way it faces

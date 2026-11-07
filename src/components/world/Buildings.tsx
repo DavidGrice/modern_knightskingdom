@@ -535,7 +535,7 @@ export default function Buildings() {
   // matter where the player actually stood.
   // the Grand Keep's own PlacedBuilding entry (added 2026-07-30 so its
   // interior can be entered — see gameStore's foundKeep) exists purely for
-  // interact-detection; KeepAssembly.tsx already owns 100% of its actual
+  // interact-detection; SiteAssembly.tsx already owns 100% of its actual
   // visual (foundation plate + sockets), so it's excluded here to avoid
   // double-rendering a "Castle Foundation" mesh on top of that.
   // Stage 1 (2026-08-20): SCOPED_DESTINATIONS' own buildings now render

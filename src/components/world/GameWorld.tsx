@@ -2,6 +2,7 @@
 import { Suspense } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
 import { WORLD_DESTINATION_BY_ID } from '@/game/data/worlds';
+import { KEEP_SITE_ID } from '@/game/sites/sites';
 import Terrain from './Terrain';
 import { GameSky } from './Sky';
 import DayNight from './DayNight';
@@ -13,7 +14,7 @@ import Wildlife from './Wildlife';
 import AmbientWildlife from './AmbientWildlife';
 import ResourceNodes from './ResourceNodes';
 import Grounds from './Grounds';
-import KeepAssembly from './KeepAssembly';
+import SiteAssembly from './SiteAssembly';
 import MountedHorse from './MountedHorse';
 import Companion from './Companion';
 import WorkshopBench from './WorkshopBench';
@@ -90,7 +91,7 @@ export default function GameWorld() {
       {!destination && <Terrain />}
       <ResourceNodes />
       <Grounds />
-      <KeepAssembly />
+      <SiteAssembly siteId={KEEP_SITE_ID} />
       <MountedHorse />
       {/* Wave 25 · same unconditional, everywhere-the-player-is convention
           as MountedHorse above — see Companion.tsx's own header for the

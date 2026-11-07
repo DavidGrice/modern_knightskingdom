@@ -17,11 +17,13 @@
 //
 // The grid is a flat metre lattice over the current land tier (32m half at the
 // widest, so ~4,900 cells) rebuilt only when the buildings array, the gate
-// state, the keep or the land tier actually change identity — placing a piece
-// is the only thing that can change the answer, so idle frames cost nothing.
+// state, the keep, the other sites or the land tier actually change identity —
+// placing a piece is the only thing that can change the answer, so idle
+// frames cost nothing.
 import { useGameStore } from './store/gameStore';
 import { landHalf, sizeFor } from './data/buildables';
-import { KEEP_PART_BY_ID, KEEP_SOCKETS } from './data/keep';
+import { KEEP_PART_BY_ID } from './data/keep';
+import { siteSocketWorld, siteSockets, sitesIn } from './sites/sites';
 import { isRampart, wallLinks } from './walls';
 import { isBuilt, isDoorLike } from './types';
 import { playerState } from './playerState';
@@ -64,6 +66,7 @@ let outside: Uint8Array | null = null;
 let lastBuildings: unknown = null;
 let lastGates: unknown = null;
 let lastKeep: unknown = null;
+let lastSites: unknown = null;
 let lastTier = -1;
 let everChecked = false;
 /** identity of the character record, which newGame and loadFromSave both
@@ -102,11 +105,13 @@ export function refreshFort(force = false) {
     && st.buildings === lastBuildings
     && st.gateOpen === lastGates
     && st.keep === lastKeep
+    && st.sites === lastSites
     && st.landTier === lastTier
   ) return;
   lastBuildings = st.buildings;
   lastGates = st.gateOpen;
   lastKeep = st.keep;
+  lastSites = st.sites;
   lastTier = st.landTier;
 
   const half = landHalf(st.landTier);
@@ -129,16 +134,15 @@ export function refreshFort(force = false) {
   }
   // the composed keep seals ground too — its pieces are not PlacedBuildings
   // (they live in KeepState), so they need their own pass here exactly the way
-  // siege.ts's damageKeepNear needs one alongside its buildings loop
-  const keep = st.keep;
-  if (keep) {
-    for (const s of KEEP_SOCKETS) {
-      const part = KEEP_PART_BY_ID[keep.parts[s.id] ?? ''];
-      if (!part || (keep.built[s.id] ?? 0) < 1) continue;
-      const alongX = s.kind !== 'wall' || Math.abs(Math.sin(s.yaw)) < 0.5;
-      const hx = s.kind === 'wall' ? (alongX ? 4 : 1.2) : 2;
-      const hz = s.kind === 'wall' ? (alongX ? 1.2 : 4) : 2;
-      stamp(blocked, keep.x + s.x, keep.z + s.z, hx, hz);
+  // siege.ts's damageSitesNear needs one alongside its buildings loop. Wave 67:
+  // every socket site at home, each piece by its footprint's bounds as
+  // game/sites/sites.ts's siteSocketWorld turns it
+  for (const site of sitesIn(st, null)) {
+    for (const s of siteSockets(site)) {
+      const part = KEEP_PART_BY_ID[site.parts[s.id] ?? ''];
+      if (!part || (site.built[s.id] ?? 0) < 1) continue;
+      const at = siteSocketWorld(site, s.id)!;
+      stamp(blocked, at.x, at.z, at.hx, at.hz);
     }
   }
 

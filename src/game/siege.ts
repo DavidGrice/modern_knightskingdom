@@ -10,7 +10,7 @@ import { playerState } from './playerState';
 import { labExplosive, labSiegeRole } from './data/labCapabilities';
 import { labAssetId } from './data/buildables';
 import { fireProp } from '@/components/world/RiggedProp';
-import { KEEP_SOCKETS } from './data/keep';
+import { siteSocketWorld, siteSockets, sitesIn } from './sites/sites';
 import { isDoorLike, type PlacedBuilding } from './types';
 import { exposeDebug } from '@/lib/debugHooks';
 
@@ -18,16 +18,17 @@ import { exposeDebug } from '@/lib/debugHooks';
  *  hit an ordinary building would — the keep has no PlacedBuilding entries
  *  of its own per piece (see gameStore's foundKeep), so the splash-damage
  *  loops below need this alongside their `st.buildings` loop rather than in
- *  place of it. */
-function damageKeepNear(x: number, z: number, radius: number, amount: number, cause: string) {
+ *  place of it. Wave 67 (G-36): every socket site standing in `world`, the
+ *  keep among them — a blast at a destination no longer reaches the home
+ *  keep's pieces at the same coordinates. */
+function damageSitesNear(world: string | null, x: number, z: number, radius: number, amount: number, cause: string) {
   const st = useGameStore.getState();
-  const keep = st.keep;
-  if (!keep) return;
-  for (const sock of KEEP_SOCKETS) {
-    const wx = keep.x + sock.x;
-    const wz = keep.z + sock.z;
-    if (Math.hypot(wx - x, wz - z) > radius) continue;
-    st.damageKeepPart(sock.id, amount, cause);
+  for (const site of sitesIn(st, world)) {
+    for (const sock of siteSockets(site)) {
+      const at = siteSocketWorld(site, sock.id)!;
+      if (Math.hypot(at.x - x, at.z - z) > radius) continue;
+      st.damageSitePart(site.id, sock.id, amount, cause);
+    }
   }
 }
 
@@ -38,6 +39,9 @@ export interface Cannonball {
   /** loosed by the player — from an engine he crews, or by hand — rather than by an engine firing on its own
    *  (Emplacements.tsx); a kill pays by it (combat/kill.ts) */
   byPlayer: boolean;
+  /** Wave 67 · the world of the engine that loosed it (absent = home): a home emplacement goes on firing while the
+   *  player is away, so where it bursts is the engine's world, not the player's */
+  world?: string | null;
 }
 
 let ballSeq = 1;
@@ -108,6 +112,7 @@ export function fireCannon(cannon: PlacedBuilding, byPlayer: boolean, aimYaw?: n
     pos: { x: cannon.x + dx * 1.2, y: (cannon.y ?? 0) + 1.1, z: cannon.z + dz * 1.2 },
     vel: { x: dx * 17, y: 4.5, z: dz * 17 },
     byPlayer,
+    world: cannon.world ?? null,
   });
   fireSound(labAssetId(cannon.type));
 }
@@ -136,13 +141,13 @@ export function explodeBall(ball: Cannonball) {
   for (const b of st.buildings) {
     // the keep's own synthetic entry exists purely for interact-detection —
     // damaging it directly would delete it at 0 HP and orphan the real
-    // assembled castle (st.keep), which damageKeepNear below already covers
+    // assembled castle (st.keep), which damageSitesNear below already covers
     if (b.type === 'keep') continue;
     const d = Math.hypot(b.x - ball.pos.x, b.z - ball.pos.z);
     if (d > 3.2) continue;
     st.damageBuilding(b.id, 18, 'was blasted');
   }
-  damageKeepNear(ball.pos.x, ball.pos.z, 3.2, 18, 'was blasted');
+  damageSitesNear(ball.world ?? null, ball.pos.x, ball.pos.z, 3.2, 18, 'was blasted');
   useSiegeStore.getState().removeBall(ball.id);
 }
 
@@ -179,7 +184,7 @@ export function detonate(charge: PlacedBuilding) {
       if (Math.hypot(b.x - x, b.z - z) > 5) continue;
       st.damageBuilding(b.id, 45, 'was blown apart');
     }
-    damageKeepNear(x, z, 5, 45, 'was blown apart');
+    damageSitesNear(charge.world ?? null, x, z, 5, 45, 'was blown apart');
   }
   // caught in your own blast
   if (Math.hypot(playerState.x - x, playerState.z - z) < 4.5) damagePlayer(2);
@@ -201,14 +206,16 @@ export function ramCheck(rammerId: string, x: number, z: number) {
   const now = performance.now();
   if (now - lastRamHitAt < 900) return;
   const st = useGameStore.getState();
-  if (st.keep) {
-    for (const sock of KEEP_SOCKETS) {
-      const wx = st.keep.x + sock.x;
-      const wz = st.keep.z + sock.z;
-      if (Math.hypot(wx - x, wz - z) > 2.1) continue;
+  // Wave 67 · the sites in the ram's own world: a placed ram's, else home (the raiders' ram is not a PlacedBuilding,
+  // and only ever rolls at home — on, while the player is away)
+  const world = st.buildings.find((b) => b.id === rammerId)?.world ?? null;
+  for (const site of sitesIn(st, world)) {
+    for (const sock of siteSockets(site)) {
+      const at = siteSocketWorld(site, sock.id)!;
+      if (Math.hypot(at.x - x, at.z - z) > 2.1) continue;
       lastRamHitAt = now;
       audio.play('ram', 0.85);
-      st.damageKeepPart(sock.id, 12, 'was rammed');
+      st.damageSitePart(site.id, sock.id, 12, 'was rammed');
       return;
     }
   }

@@ -296,6 +296,35 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   open gate still lands a blow every 0.9 s; the enemies' engines (Cedric's war party, the Siege Engineers) loose with no
   launch sound; and a preloaded voice line asked for before the preload ends is fetched twice. Review round (two
   lenses, both ship): the keep-socket blow pinned by a third siege test, two more stale clip notes corrected.
+- **#305 — Wave 67** (G-36): socket sites — no visible change, by design. The keep is now one socket site among
+  many (`game/sites/sites.ts`): a `SocketSite` is a KeepState with an id, a world, an optional `rot` and a layout
+  (`grandKeep` = KEEP_SOCKETS); `siteSocketWorld` turns a socket by the site's rot and gives its footprint's bounds,
+  absorbing fort.ts's footprints (exact at rot 0 and at a quarter turn). The home keep is site 'keep', still `st.keep`
+  and saved as `keep` unchanged; other sites live in `st.sites`, saved in an optional `sites` field (one
+  PERSISTED_FIELDS row; absent loads as none). KeepState gains optional `ruined` and `gateOpen` (nothing writes them
+  yet; the carry keeps them). Generic `raiseSitePart` / `workSitePart` / `damageSitePart` take a site id, the keep's
+  three actions are those on 'keep'; `damageKeepNear` became `damageSitesNear(world)`, `ramCheck` reads its ram's
+  world, the fort seal stamps every home site; KeepAssembly became `SiteAssembly({ siteId })`, the socket panel and
+  the socket prompts carry a site. Premises held, with one correction: the sites are read by the BLOW's world, not the
+  player's — a home emplacement fires on while the player is away (Emplacements.tsx), and so does the raiders' ram, so a
+  cannonball now keeps its engine's world (`Cannonball.world`) and a ram the world of its PlacedBuilding, else home.
+  Measured live on main: a cannon standing at template-02 took the home keep's north run 24 → 6 and a charge there
+  knocked the home gatehouse down (fixed for sites; the change left both alone); the buildings' half is logged. SAVE_VERSION stays 1, no migration: the keep's shape is unchanged and
+  `sites` is optional (a save main's own toSave wrote loads and writes back its keep unchanged). Golden tests written
+  first (`keepGolden.test.ts`, 13, and a save fixture made by the base's toSave) passed on the base and pass unchanged;
+  `sites.test.ts` (12): the old footprints at rot 0, a quarter and a 30° turn, a second site at template-02 through
+  fill, build, damage, refund and a save without the keep, damage by world (a ball, a charge, a ram), the refund's
+  rounding. Live on production builds (`w67_keep_live.mjs`):
+  a full keep built and battered (ram, two cannonballs, a charge, a raider's blow) — every part's HP, the refunds, the
+  inventory, XP and notices identical on both builds; screenshots from three poses differ only where main differs from
+  itself (HUD portrait, animals, a far hill), never on the keep. Unblocks G-05 (ruin at the one delete), G-02 (footprints,
+  gateOpen), G-15b / G-26 / G-32a (sites in their worlds, drawn by SiteAssembly), G-16b (damageSitePart); OPEN-023 stays
+  open, unblocked (a `rot` on KeepState and seven readers still adding `keep.x + sock.x`). Review round (two lenses,
+  both ship): the charge's world and the refund's rounding pinned by tests, `CarriedKeepExtra` typed as what is
+  carried, and the suite's test timeout raised to 30 s (`vitest.config.ts`: two exhaustive grids ran 3.9 and 5.4 s in
+  the full parallel suite, past vitest's 5 s default, so CI could fail a merge at random). ROADMAP: a new fixed entry,
+  OPEN-023's row updated, a fixed entry for the timeout, and two "Seen, not fixed": a blast or a ram lands on the
+  buildings of every world at its coordinates; a keep foundation set down at a destination leaves its pieces at home.
 
 ## Owner decisions
 
