@@ -45,7 +45,7 @@ export const ZERO_STATS: LifetimeStats = {
 export const UNPERSISTED_SAVE_KEYS = ['version', 'savedAt', 'playerPos', 'stabled', 'mounts'] as const satisfies readonly (keyof SaveGame)[];
 type UnpersistedKey = (typeof UNPERSISTED_SAVE_KEYS)[number];
 
-/** Every SaveGame key that has a same-named live store field (64 today). */
+/** Every SaveGame key that has a same-named live store field (65 today). */
 export type PersistedKey = Exclude<keyof SaveGame, UnpersistedKey>;
 
 /** The live (in-store) type of every persisted field: SaveGame's, minus the
@@ -146,6 +146,7 @@ export const PERSISTED_FIELDS = {
   completedSideQuests: { fresh: () => [] },
   landTier:            { fresh: () => 0 },          // legacy load differs
   keep:                { fresh: () => null },
+  sites:               { fresh: () => [] },
   workshop:            { fresh: () => null },
   builtSets:           { fresh: () => [] },
   falconTamed:         { fresh: () => false },

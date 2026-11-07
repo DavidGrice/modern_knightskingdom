@@ -5,23 +5,28 @@
 // the choice is made AT the corner rather than from a menu of everything. The
 // panel only ever offers what fits this socket kind, and each option shows
 // its own bill of pieces from the parts bin (J45) — you can see what a turret
-// costs in bricks before you commit a corner to it.
+// costs in bricks before you commit a corner to it. Wave 67 (G-36): the socket
+// is one of a socket site's (game/sites/sites.ts), named with its site.
+import { useMemo } from 'react';
 import { useGameStore } from '@/game/store/gameStore';
-import { KEEP_PART_BY_ID, SOCKET_BY_ID, partsFor } from '@/game/data/keep';
+import { KEEP_PART_BY_ID, partsFor } from '@/game/data/keep';
+import { siteById, siteSocket } from '@/game/sites/sites';
 import { costBill } from '@/game/data/buildables';
 import type { ItemId } from '@/game/types';
 import PopupFrame from './PopupFrame';
 
 export default function KeepSocketPanel() {
   const keep = useGameStore((s) => s.keep);
-  const socketId = useGameStore((s) => s.keepSocket);
+  const sites = useGameStore((s) => s.sites);
+  const at = useGameStore((s) => s.keepSocket);
   const inventory = useGameStore((s) => s.inventory);
-  const raise = useGameStore((s) => s.raiseKeepPart);
-  const socket = socketId ? SOCKET_BY_ID[socketId] : null;
+  const raise = useGameStore((s) => s.raiseSitePart);
+  const site = useMemo(() => (at ? siteById({ keep, sites }, at.site) : null), [at, keep, sites]);
+  const socket = site && at ? siteSocket(site, at.socket) : null;
 
-  if (!keep || !socket) return null;
-  const standing = keep.parts[socket.id];
-  const built = keep.built[socket.id] ?? 0;
+  if (!site || !socket) return null;
+  const standing = site.parts[socket.id];
+  const built = site.built[socket.id] ?? 0;
 
   return (
     <PopupFrame minWidth="min(460px, 94vw)">
@@ -51,7 +56,7 @@ export default function KeepSocketPanel() {
                   key={part.id}
                   className={`keep-option${afford ? '' : ' short'}`}
                   disabled={!afford}
-                  onClick={() => raise(socket.id, part.id)}
+                  onClick={() => raise(site.id, socket.id, part.id)}
                   title={afford ? `Raise a ${part.name}` : 'You are short of pieces'}
                 >
                   <img className="keep-option-thumb" src={part.thumb} alt="" />

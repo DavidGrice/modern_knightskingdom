@@ -65,11 +65,12 @@ describe('the sound of a siege blow', () => {
     const north = KEEP_SOCKETS.find((s) => s.id === 'n')!;
     const hit: string[] = [];
     useGameStore.setState({
-      keep: { x: 50, z: 50, y: 0, parts: {}, built: {} }, buildings: [], damageKeepPart: (id: string) => hit.push(id),
+      keep: { x: 50, z: 50, y: 0, parts: {}, built: {} }, buildings: [],
+      damageSitePart: (site: string, id: string) => hit.push(`${site}:${id}`), // wave 67: the keep is socket site 'keep'
     } as never);
     now += 1000;
     ramCheck('ram1', 50 + north.x, 50 + north.z + 0.5);
     expect(sounds).toEqual(['ram']);
-    expect(hit).toEqual(['n']);
+    expect(hit).toEqual(['keep:n']);
   });
 });

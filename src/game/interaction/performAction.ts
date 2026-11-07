@@ -18,6 +18,7 @@ import { dungeonState } from '@/game/dungeon';
 import { isBuilt } from '@/game/types';
 import { labOccupyMode } from '@/game/data/labCapabilities';
 import { KEEP_PART_BY_ID } from '@/game/data/keep';
+import { KEEP_SITE_ID, siteById } from '@/game/sites/sites';
 import { leaveEngine, manEngine } from '@/game/crew';
 import type { Target } from './types';
 import { climbTargetFor } from './climb';
@@ -283,13 +284,14 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
   } else if (t.kind === 'water_plot') {
     st.waterPlot(t.id);
   } else if (t.kind === 'keep_socket') {
-    st.openKeepSocket(t.id);
+    st.openKeepSocket(t.id, t.site);
   } else if (t.kind === 'keep_work') {
     // the same work a building site asks for, scaled by the piece
-    const partId = st.keep?.parts[t.id];
+    const siteId = t.site ?? KEEP_SITE_ID;
+    const partId = siteById(st, siteId)?.parts[t.id];
     const part = partId ? KEEP_PART_BY_ID[partId] : null;
     const swings = part ? Math.min(CONSTRUCT_MAX_SWINGS, Math.max(4, Math.round(part.buildXp / 2.5))) : 8;
-    st.workKeepPart(t.id, 1 / swings);
+    st.workSitePart(siteId, t.id, 1 / swings);
   } else if (t.kind === 'guild_hall') {
     st.setPanel('guild');
   } else if (t.kind === 'challenge_cedric') {

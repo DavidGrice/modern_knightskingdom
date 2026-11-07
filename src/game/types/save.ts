@@ -6,6 +6,7 @@ import type {
 } from './world';
 import type { Alliance, CompanionState, Villager } from './villagers';
 import type { KeepState } from '../data/keep';
+import type { SocketSite } from '../sites/sites';
 
 export interface ActiveSideQuest {
   npcId: string;
@@ -84,6 +85,9 @@ export interface SaveGame {
   /** J51 · the composed castle (game/data/keep.ts). Absent on saves from
    *  before the keep could be assembled. */
   keep?: KeepState | null;
+  /** Wave 67 (G-36) · every socket site but the home keep (game/sites/sites.ts), which stays `keep` above. Absent on
+   *  saves from before sites existed, which reads as none. */
+  sites?: SocketSite[];
   /** M · the set on the workshop bench, and the sets already built */
   workshop?: { setNum: string; step: number } | null;
   builtSets?: string[];

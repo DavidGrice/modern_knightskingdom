@@ -1,0 +1,150 @@
+{
+ "version": 1,
+ "character": {
+  "name": "Golden",
+  "headDonor": "x",
+  "bodyDonor": "x",
+  "armColor": 0,
+  "handColor": 0,
+  "legColor": 0,
+  "hipColor": 0
+ },
+ "difficulty": "normal",
+ "inventory": {
+  "stone": 113,
+  "plank": 46,
+  "wood": 44,
+  "iron_bar": 4
+ },
+ "xp": {
+  "woodcutting": 0,
+  "mining": 0,
+  "smithing": 0,
+  "fishing": 0,
+  "building": 229,
+  "combat": 0,
+  "farming": 0
+ },
+ "unlocks": [
+  "keep",
+  "mining"
+ ],
+ "completedQuests": [],
+ "questProgress": {},
+ "buildings": [
+  {
+   "id": "b1",
+   "type": "keep",
+   "x": 0,
+   "z": 4,
+   "y": 0,
+   "rot": 0,
+   "built": 1,
+   "world": null
+  },
+  {
+   "id": "b2",
+   "type": "stonewall",
+   "x": -12,
+   "z": -12,
+   "y": 0,
+   "rot": 1,
+   "built": 0,
+   "world": null
+  }
+ ],
+ "timeOfDay": 0.3,
+ "dayCount": 0,
+ "sideQuest": null,
+ "trackedQuest": "main",
+ "deeds": [],
+ "bestiary": [],
+ "challengeTiers": {},
+ "plots": {},
+ "gateOpen": {},
+ "buildingHp": {},
+ "reputation": {},
+ "destination": null,
+ "visitedWorlds": [],
+ "discoveredPois": [],
+ "loreSeen": [],
+ "defeatedCedric": false,
+ "cedricCaptures": 0,
+ "cedricCapturedAtDay": -999,
+ "alliance": null,
+ "allegiance": 0,
+ "completedSideQuests": [],
+ "landTier": 0,
+ "keep": {
+  "x": 0,
+  "z": 4,
+  "y": 0,
+  "parts": {
+   "nw": "corner_turret",
+   "n": "wall_crenel",
+   "e": "gatehouse",
+   "hall": "great_hall"
+  },
+  "built": {
+   "nw": 1,
+   "n": 0.4,
+   "e": 1,
+   "hall": 1
+  },
+  "hp": {
+   "nw": 35,
+   "e": 29
+  }
+ },
+ "workshop": null,
+ "builtSets": [],
+ "falconTamed": false,
+ "companionRecruited": false,
+ "companion": {
+  "xp": 0,
+  "level": 0
+ },
+ "betrayedCedric": false,
+ "betrayedLeo": false,
+ "guild": null,
+ "guildRanks": {},
+ "skillTree": [],
+ "attrSpent": {},
+ "dyes": [],
+ "durability": {},
+ "marketState": {},
+ "perks": [],
+ "stats": {
+  "playtimeSec": 0,
+  "resourcesGathered": 0,
+  "kills": 0,
+  "distanceMeters": 0,
+  "buildingsPlaced": 0,
+  "nodesHarvested": {},
+  "buildingsByType": {},
+  "killsByKind": {},
+  "goldEarnedLifetime": 0,
+  "itemsCrafted": 0,
+  "dungeonsCleared": 0
+ },
+ "claimedWorlds": {},
+ "settlements": {},
+ "caravans": {},
+ "cultivatedPlots": {},
+ "waterworks": [],
+ "customBlueprints": [],
+ "lastTaxAt": 0,
+ "villagers": [],
+ "armory": {},
+ "treasureOpened": false,
+ "dragonSeen": false,
+ "dragonSieges": 0,
+ "dragonRouted": false,
+ "blackDragonSieges": 0,
+ "blackDragonRouted": false,
+ "cedricSieges": 0,
+ "cedricRouted": false,
+ "stabled": [],
+ "mounts": {},
+ "savedAt": 1790000000000
+}

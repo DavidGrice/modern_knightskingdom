@@ -23,9 +23,9 @@ export const KEEP_SIZE = 16;
 /** half, for laying sockets out around the edge */
 const H = KEEP_SIZE / 2;
 
-type SocketKind = 'corner' | 'wall' | 'centre';
+export type SocketKind = 'corner' | 'wall' | 'centre';
 
-interface KeepSocket {
+export interface KeepSocket {
   id: string;
   name: string;
   kind: SocketKind;
@@ -134,7 +134,7 @@ export function partsFor(kind: SocketKind): KeepPart[] {
 // half-extents to plant a siege ladder just outside a wall-walk's real
 // footprint, rather than re-deriving its own approximation of this geometry.
 export const WALK_CORNER_HALF = 2;   // 4m corner/turret piece
-const WALK_RUN_HALF = 4;      // 8m wall run, along its own length
+export const WALK_RUN_HALF = 4;      // 8m wall run, along its own length
 export const WALK_DEEP_HALF = 1.2;   // …and 2.4m across it
 
 /** Height of the wall walk at a world point, or 0 where there is none.
@@ -185,11 +185,12 @@ export interface KeepState {
   /** socket id -> current siege HP; absent = full (maxHpForPart). Absent
    *  entirely on saves from before a raised piece could be knocked down. */
   hp?: Record<string, number>;
-}
-
-/** the castle is "finished" once every socket carries a completed piece */
-export function keepComplete(k: KeepState): boolean {
-  return KEEP_SOCKETS.every((s) => k.parts[s.id] && (k.built[s.id] ?? 0) >= 1);
+  /** Wave 67 (G-36) · socket id -> the piece there lies in ruins. Nothing writes it yet: G-05's ruins will. Absent =
+   *  none, on every save before it. */
+  ruined?: Record<string, boolean>;
+  /** Wave 67 (G-36) · socket id -> a gatehouse there stands open; absent = open, the same as the store's `gateOpen`
+   *  for a placed gate. Nothing writes it yet: G-02's gatehouse will. */
+  gateOpen?: Record<string, boolean>;
 }
 
 /** structural HP, the same cost-derived formula buildables.ts's maxHpFor

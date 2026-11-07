@@ -173,7 +173,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 
 | ID | Status | Size | Item | What remains |
 |---|---|---|---|---|
-| OPEN-023 | STILL_OPEN | S | Relocated keep foundation always renders unrotated | Thread a keep.rot field through KeepAssembly's group rotation, socket coordinates, and finishMove; currently hardcoded to 0. |
+| OPEN-023 | STILL_OPEN | S | Relocated keep foundation always renders unrotated | Unblocked by wave 67 (G-36): the keep is a socket site, and `SiteAssembly` (was KeepAssembly), the fort seal, the splash, the ram and the socket prompts follow a site's `rot` through `siteSocketWorld` (`game/sites/sites.ts`). Left: a `rot` on KeepState written by finishMove (forced 0 today), the readers that still add `keep.x + sock.x`, and the turn-while-carrying control ("Bugfix: the Grand Keep was the game's only socket model …", at the end of this file). |
 | OPEN-025 | CLOSED | S | Cart 'glued' quirk: walking toward a just-grabbed cart yields zero net movement | Closed by wave 62.2 (#288): the player's collision passes over the cart he pushes or has hitched (`playerPhysics/collide.ts`; "Bugfix: walking at a cart just taken up pinned the player where it had stood", at the end of this file). |
 | OPEN-026 | STILL_OPEN | M | No general building-repair mechanism for non-dragon damage | Generalize the dragon-only ruin/rebuild mechanic (or add a new heal action) to raider-ram/cannon/siege-ladder damage instead of deleting the building at 0 HP. |
 | OPEN-027 | STILL_OPEN | M | oc6098b1 chest-launcher payload mechanism unbuilt | hasChestLauncher/canLaunchChest capability data exists but there's no chest_arm/chest_basket rig role or projectile type; fires as an ordinary catapult today. |
@@ -10591,3 +10591,173 @@ greeting asked for in a session's first moments (Cedric's, from the raid directo
 preload — it plays, where `main` stayed silent — and in a tree with no assets every call (each duel collision,
 `duel.ts`) fetches again and logs another 404. Harmless where the assets are. To do: let `preload()` register its
 fetches in `load()`'s in-flight map, and remember a missing sound for the session.
+
+## Bugfix: the Grand Keep was the game's only socket model, and a blast at a destination still reached it — FOUND 2026-10-31 (FEATURE_PLAN.md's verification, "The keep is a singleton"; G-36, the owner's siege decision OD-18), FIXED 2026-11-06
+
+**The fault.** A foundation with named sockets, each taking a piece raised, hammered up and battered down, existed
+once: `st.keep`. Everything that read it assumed there was one, laid out unturned at `keep.x + sock.x` —
+`KEEP_SOCKETS` (`data/keep.ts`), `damageKeepPart` (`keepSlice.ts`, a piece at 0 HP deleted with half its materials
+back), `siege.ts`'s `damageKeepNear` and `ramCheck`, the fort seal's own copy of the footprints (`fort.ts`: a run 8 m by
+2.4, a corner and the bailey 4 m square), `KeepAssembly.tsx` (rendered with no rotation: OPEN-023), the socket panel
+and `findTarget`'s socket prompts. There was nowhere to put a ruined piece (G-05) or a shut gatehouse (G-02), and a
+bandit stronghold (G-15b), a settlement's town plan (G-26) or the Rival Castle's breakable sections (G-32a) would each
+have needed a copy of it all. The singleton also hid one real fault: `damageKeepNear` and `ramCheck` never asked which
+world a blow landed in. Measured live on `main` (the evidence pass's `w67_ev_crossworld.mjs`, a full keep at (0, 0),
+the player at home): a ball from a cannon standing at template-02 that burst on the north run's coordinates there took
+the home keep's north run from 24 HP to 6, and a charge set off at template-02 by the gatehouse's coordinates knocked
+the home gatehouse down; the same blows at home did the same on both builds. (A vitest on the unchanged tree cannot
+show it: before this wave a ball has no world.) The buildings' half of the same fault — `explodeBall`, `detonate`
+and `ramCheck` loop over every building with no world check — is logged below, not fixed. Live on `main`
+(production build of base-14 on port 3101, build `wvX8O1bVd34nSGufA4Zde`, digest `3413dc4e82f3`;
+`scripts/cln-tools/w67_keep_live.mjs`): a guest's keep laid by `placeBuilding` at (0, 0) and all nine sockets raised
+and hammered up in eighths — stone/wood/plank/iron bar 588/200/194/20 after the foundation, 470/180/186/18 after the
+nine bills, building XP 481, "Your castle stands complete."; then the raiders' ram (`__kkRam`) 1.5 m off the north run
+took it 42 → 30; a cannonball (`__kkExplode`) by the north-west turret took it 60 → 42; a powder charge (`l394101`,
+`__kkDetonate`) by the gatehouse knocked it down (36 HP) for +5 stone and +1 iron bar ("Gatehouse was blown apart!
+Half materials recovered."); a raider's blow (`damageKeepPart`, as `batterKeep` makes it) took the low south run 24 →
+14; a second cannonball took the north run 30 → 12.
+
+**The fix** (wave 67, G-36; a foundation refactor with no visible change, by design). A new `src/game/sites/sites.ts`:
+a `SocketSite` is a `KeepState` with an `id`, a `world` (null = home), an optional `rot` (radians, as three turns a
+group) and a `layout` (`SITE_LAYOUTS.grandKeep` is the keep's socket ring); `siteSocketWorld(site, socketId)` turns a
+socket's layout position by the site's rot about its origin and gives the piece's facing and the bounds of its
+footprint — fort.ts's footprints, absorbed (a quarter turn's 6e-17 is taken as the 0 it is, so a footprint turned a
+quarter is exact; at rot 0 the position is `keep.x + sock.x` to the bit). The home keep is site `'keep'`, still held in
+`st.keep` and saved as `keep` with its shape unchanged; `siteById` / `sitesIn(world)` read it as a site, `siteWrite`
+writes a change back where a site lives, so the keep's record never takes a site's own fields; `siteComplete` and
+`knockdownRefund` (half of each material, rounded down) replace `keepComplete` and the inline refund. Every other site
+lives in a new `st.sites`, saved in an optional `sites` field (`types/save.ts`, one `PERSISTED_FIELDS` row; absent
+loads as none). `KeepState` takes two optional fields nothing writes yet: `ruined` (socket → in ruins, for G-05) and
+`gateOpen` (socket → a gatehouse stands open, absent = open, for G-02); `pickupKeep` carries all of a keep but where it
+stands, so they move with the foundation. The store's generic actions take a site id — `raiseSitePart`,
+`workSitePart`, `damageSitePart` — and `raiseKeepPart` / `workKeepPart` / `damageKeepPart` are those on site 'keep'.
+`siege.ts`: `damageKeepNear` became `damageSitesNear(world, …)` over every site in the blow's world — a cannonball
+keeps its engine's world (`Cannonball.world`, set by `fireCannon`: a home emplacement goes on firing while the player is
+away), a charge its own, and `ramCheck` reads the sites of the ram's world (a placed ram's, else home: the raiders' ram
+rolls only at home). `fort.ts` stamps every home site's finished pieces by `siteSocketWorld`'s bounds (and rebuilds when
+`st.sites` changes). `KeepAssembly` became `SiteAssembly({ siteId })` (the site's own layout size and rot; the move-the-
+foundation click is the keep's alone); the socket panel's `keepSocket` is `{ site, socket }` and `openKeepSocket` takes
+an optional site; `findTarget`'s socket prompts carry `site` (`Target.site`) and `performAction` works that site. Only
+the home keep is drawn and offered yet. Out of scope, as planned: drawing other sites at destinations (G-15b), solids
+(G-02), ruins (G-05), letting the player turn the keep (OPEN-023 stays open).
+
+What it unblocks. G-05: `damageSitePart` is the one place a piece at 0 HP is deleted, and `ruined` is saved with the
+keep. G-02: `siteSocketWorld`'s footprints are what the solids need, and `gateOpen` is on the keep. G-15b, G-26 and
+G-32a: a stronghold, a town plan or the Rival Castle is a `SocketSite` in its world with its own layout, saved in
+`sites`, drawn by `SiteAssembly` and damaged through `damageSitePart` (G-16b's siege engines too). OPEN-023: the
+renderer, the seal, the splash, the ram and the socket prompts already follow a site's `rot`; what is left is a `rot` on
+`KeepState` written by `finishMove` (it forces 0 today) and the readers that still add `keep.x + sock.x` —
+`enemyAi/targeting.ts`'s `keepInReach`, `enemyAi/blows.ts`'s `fireEngine`, `CedricSiege.tsx`, `Defenders.tsx`,
+`raiderLadder.ts`, `data/keep.ts`'s `keepWalkwayAt` (an inverse turn) and `buildToolsSlice.ts`'s overlap box.
+
+Saves. `SAVE_VERSION` stays 1 and no migration is added: the keep's shape is unchanged, so a save `main` wrote loads
+as it was (tested with a save `main`'s own `toSave()` wrote); `sites` is a new optional field that loads as none when
+absent, and `main` reading a save that has it ignores the key (`applySave` reads only its table's keys). Nothing in
+play makes a site yet, so the list is always empty; the wave that first saves real sites (G-15b) should decide whether
+an older build dropping them on its next write wants a version step.
+
+**Verified** in the worktree. Written first, before any change: `src/game/keepGolden.test.ts`, 13 golden tests of the
+keep as `main` has it (laying the foundation and its cost; filling a socket and the three refusals; hammer work, the XP
+once and the count left; the complete castle; damage on a finished piece only and the 0 HP delete with its half
+refund, and the refund rounded down; the fort seal's footprints — area 77 and the 17 × 17 stamped square at the origin
+and off it; a cannonball's 18 within 3.2 m and the foundation left be; a charge's 45 within 5 m knocking a low wall down
+for 4 stone; the ram's 12 on the first socket within 2.1 m, its 900 ms cooldown and the empty blow; a save round trip;
+and `keepGolden.main-save.json`, a save the base's own `toSave()` wrote, loading and writing back its keep and buildings
+unchanged). All 13 passed on the unchanged base (57761e4) and pass unchanged after (the file's sha1 `b77d8641…` before
+and after). `siege.test.ts`'s keep ram test spied on `damageKeepPart`; it now spies on `damageSitePart` and expects
+`keep:n` (it pins which action the ram calls, and the keep's is now the site's). New, `src/game/sites/sites.test.ts`
+(10): every socket at rot 0 where fort.ts's old formula stood it, to the bit, at three origins; a quarter turn standing
+each socket where its neighbour stood, on its exact footprint; a 30° turn about the origin with its footprint's bounds;
+a second site at template-02 filling, building, damaged and knocked down with its refund without the keep's record
+changing identity; it saving and loading beside the keep, and `main`'s save loading with `sites: []`; the carry keeping
+`ruined` and `gateOpen`; a blast reaching only the sites of its own world; a ball keeping its engine's world with the
+player away; a placed ram at a destination and the raiders' ram at home each ramming their own world's site; the seal
+counting a quarter-turned ring at home (77 m²) and none at a destination. Take-out (`scripts/cln-tools/w67_takeout.py`,
+each alone, the file restored from its saved bytes and its sha1 checked): no turn in `siteSocketWorld` → 3 fail; no
+quarter-turn flattening → 2; `siteWrite` writing every site onto the keep → 4; a blast reading the home sites whatever
+its world → 1; the ram likewise → 1; a ball not keeping its engine's world → 1; no `sites` row → 6 (5 of them golden:
+the store has no `sites`); the carry back to parts/built/hp → 1; the seal stamping the keep only → 1. `git diff` and the
+new files hashed alike before and after. `tsc` clean; unit tests 94 files, 725 passing; `next build` clean. Live, the
+change on port 3102 (build `eJtfoT_NFwvIx7rKpb2av`, digest `6517a77fc869`), the same probe: every one of the eight
+records (foundation, raised, built, ram, cannonball, charge, raider's blow, cannonball) identical to `main`'s, part by
+part, HP, inventory, XP and notices. Screenshots, the canvas alone from three fixed poses (south-east, north-west, in
+the bailey), whole and battered, deterministic frames with the clock held: 568-6,150 pixels differ between the builds
+(of 921,600), all on the HUD's animated portrait, two grazing animals, a bird and one distant hill; `main` against a
+second run of `main` differs in the same places (258-5,730 pixels); not one differing pixel on the keep
+(`w67_png_where.mjs` masks in `scripts/cln-tools/out/w67/`). Evidence pass (independent, 2026-11-06): `tsc` clean;
+unit tests 94 files, 725 passing; `next build` clean (build `QZhvuk02rDTtOhimz-Mq9`). The golden file, byte-identical
+(sha1 `b77d8641…`), run again on an extract of 57761e4 beside `main`'s own code: all 13 pass there (and `siege.test.ts`'s
+3). `main`'s code reading a save the change writes (a `sites` list beside the keep): `parseSave` ok, the keep loaded as
+saved, and `main`'s next write leaves `sites` out, as the Saves paragraph says. Take-out, each alone over the whole
+suite and the file put back from its saved bytes (`scripts/cln-tools/w67_ev_mutate.mjs`; one hash of `git diff` plus the
+new files' bytes, the same before and after): a ball bursting in the home world whatever its own → 1 fails;
+`fireCannon` not giving the ball its engine's world → 1; the ram reading home whatever its world → 1; no turn in
+`siteSocketWorld` → 2; no quarter-turn flattening → 2; `sitesIn` ignoring a site's world → 2; the home keep in every
+world → 2; `siteWrite` writing every site onto the keep → 4; no `sites` row → 11; `main`'s carry (parts/built/hp) → 1;
+the seal stamping the keep only → 1; no refund paid → 5; the complete check on the record before the swing → 1. Three
+take-outs fail no test: a charge bursting in the home world whatever its own (`detonate`'s `charge.world` is pinned
+only by the live probe below; the vitest "blast" is a cannonball), the seal's cache ignoring `st.sites` (nothing puts a
+site at home yet), and the refund rounded up (every keep piece's bill is even, so "rounded down" is not observable with
+today's parts) — the first and the last are closed in the review round below. Live, production builds side by side — `main` from base-14 on port 3101 (build `wvX8O1bVd34nSGufA4Zde`,
+digest `3413dc4e82f3`), the change on 3102 (build `QZhvuk02rDTtOhimz-Mq9`, digest `6517a77fc869`). `w67_keep_live.mjs`
+re-run on both, and `main` twice: all eight records identical across the three runs (588/200/194/20 laid; 470/180/186/18
+raised; XP 481 and "Your castle stands complete."; the ram n 42 → 30; a ball nw 60 → 42; a charge knocks the gatehouse
+down for +5 stone, +1 iron bar, to 475/19; a raider's blow s 24 → 14; a ball n 30 → 12). Screenshots (canvas alone,
+three poses, whole and battered): `main` against the change 341-6,248 pixels of 921,600 differ, `main` against `main`
+32-5,321, in the same places (the HUD portrait, grazing animals, a bird, the far hill) and none on the keep. The fault
+(`w67_ev_crossworld.mjs`; the full keep at (0, 0), the player at home): a ball from a cannon standing at template-02,
+fired by `__kkFire` and flown by the Cannonballs loop, landing by the north run — `main` 24 → 6, the change 24, untouched;
+a ball of template-02 burst by the north-west turret (`__kkExplode`) — `main` 60 → 42, the change untouched; a charge at
+template-02 by the gatehouse (`__kkDetonate`) — `main` knocks it down (+5 stone, +1 iron bar), the change leaves it
+standing. The controls match on both: a home cannon's ball took the north run 42 → 24, and a home charge knocked the
+west run down for +7 stone. Not measured: a placed ram at a destination live (no hook calls `ramCheck` for a placed
+ram; vitest only); the socket panel and the socket prompts driven by a player stood at a socket (the store's hooks were
+used); a turned site drawn (nothing has a `rot` yet); the unit suite on Linux (no new test reads `public/assets`). One
+flaky, older test seen during the take-out: below, fixed in the review round.
+
+**Review round** (2026-11-06; two lenses, both "ship", no defect above low). Two take-outs no test caught are pinned
+now, each failing only its own test when taken out (the file restored byte for byte): a charge set off at template-02 on
+the camp's north run knocks the camp's piece down and leaves the home keep's, on the same coordinates, standing
+(`sites.test.ts`; `detonate`'s world put back to home fails it); and `knockdownRefund` gives back half, rounded down,
+and nothing of a material worth less than two (`floor` made `ceil` fails it). `CarriedKeepExtra` (`storeCounters.ts`)
+is typed as what `pickupKeep` carries — all of `KeepState` but where it stands. The suite's test timeout is 30 s
+(`vitest.config.ts`, the entry below). Still without a test or a live drive: the socket panel's and `performAction`'s
+site paths (the home keep reaches them through the `'keep'` default). The two change builds above, `eJtfoT_…` and
+`QZhvuk02…`, are one source with one script digest (`6517a77fc869`); the review round changed tests, a type and the
+test config only. `tsc` clean; unit tests 94 files, 727 passing. Logged below, not fixed: a keep foundation set down
+at a destination leaves its pieces at home.
+
+## Seen, not fixed: a blast or a ram lands on the buildings of every world at its coordinates — logged 2026-11-06 (wave 67's measurement on main; by the code)
+
+`explodeBall`, `detonate` and `ramCheck` (`siege.ts`) loop over every entry of `st.buildings` with no world check, so a
+blow at a destination damages the homestead's buildings standing at the same local coordinates, and a home
+emplacement firing while the player is away damages a destination's. Measured on `main` (vitest, the player at
+template-02): a cannonball bursting at (10, 10) took a home stone wall there from 30 HP to 12. Wave 67 made the socket
+sites (the keep among them) read the blow's world — a ball keeps its engine's (`Cannonball.world`), a charge its own,
+a ram a placed ram's or home — but left the buildings' loops alone. To do: skip a building not `inWorld` that same
+world in all three loops.
+
+## Bugfix: the buy-then-sell "never pays" unit test ran close to vitest's 5 s timeout in the full suite — FOUND 2026-11-06 (wave 67's evidence pass; measured), FIXED 2026-11-06 (wave 67's review round)
+
+`inventorySlice.test.ts`'s "never pays: bought and sold back all at once or one by one, for every offer, haggle and market
+pressure" (wave 64.5) loops every resold offer by eight Wit values by four perk sets. Alone it takes 1.6 s on `main`
+(57761e4) and on wave 67's tree alike; in the whole suite, run in parallel on this machine, it took 4.7 s when it passed
+and timed out at 5,456 ms in 10 of 19 full-suite runs during wave 67's take-out pass, beside each take-out's own failures. Not
+caused by wave 67 (the test and the code it covers are untouched), but CI's required job runs this suite, so it can
+fail a merge at random. To do: give the test its own timeout (or trim its loops to the cases that differ), and look at
+the other long property tests the same way.
+
+**Fixed** in wave 67's review round, for the whole suite: a full run in parallel on this machine (`--reporter=verbose`)
+timed this test at 5,367 ms and `pricing.test.ts`'s grid ("...or that the market never buys back, costs what it did")
+at 3,918 ms — two tests from two waves near the limit, so the limit is the suite's, not one test's. `vitest.config.ts`
+sets `testTimeout: 30_000`; both tests keep their whole grids, since walking every case is the point of them. A test
+that really hangs still fails, at 30 s. The next slowest were 1,259 ms (`ai/core/curves.test.ts`) and 1,066 ms.
+
+## Seen, not fixed: a keep foundation set down at a destination leaves its pieces at home — logged 2026-11-06 (in the review of wave 67; by the code)
+
+`finishMove` (`buildSlice.ts`) stamps a moved building with `world = st.destination`, and its comment allows picking
+a building up, travelling and setting it down there. For the keep's foundation that puts its PlacedBuilding (and the
+interaction on it) at the destination, while its pieces — the keep site, always home (`keepSite`, `sites/sites.ts`) —
+still draw, take damage and seal the fort at home. `main` does the same (`KeepAssembly` only hid itself at
+destinations). To do: refuse to set the keep's foundation down outside home, or carry the site's world with it once
+sites are drawn at destinations (G-15b).

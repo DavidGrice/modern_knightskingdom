@@ -19,5 +19,9 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // Wave 67 · some tests walk a whole grid of cases on purpose (pricing.test.ts, inventorySlice.test.ts's "never
+    // pays"): 1.5 s alone, but 3.9 and 5.4 s in the full suite run in parallel on a loaded machine, past vitest's 5 s
+    // default, so CI's required job could fail a merge at random. A test that really hangs still fails, at 30 s.
+    testTimeout: 30_000,
   },
 });

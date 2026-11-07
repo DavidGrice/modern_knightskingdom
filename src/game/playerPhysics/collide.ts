@@ -177,7 +177,7 @@ export function collide(st: ReturnType<typeof useGameStore.getState>, riding: bo
       if (isDoorLike(b.type) && (st.gateOpen[b.id] ?? true)) continue;
       // the Keep's own PlacedBuilding entry exists purely for interact-
       // detection (foundKeep, gameStore.ts) — its real footprint is a
-      // flat courtyard plate (KeepAssembly.tsx) with no collision of its
+      // flat courtyard plate (SiteAssembly.tsx) with no collision of its
       // own; the individual raised pieces don't have real collision yet
       // either (a separate, already-flagged gap — "J51 has no damage or
       // move behaviour" — not something to half-fake here)

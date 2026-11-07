@@ -30,7 +30,8 @@ import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { labCanFire, labCanLaunch, labCanOccupy, labIsExplosive, labIsLadder } from '@/game/data/labCapabilities';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
-import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
+import { KEEP_PART_BY_ID } from '@/game/data/keep';
+import { KEEP_SITE_ID, siteById, siteSocketWorld, siteSockets } from '@/game/sites/sites';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { crewState } from '@/game/crew';
 import type { Target } from './types';
@@ -482,23 +483,25 @@ export function findTarget(ctx: TargetCtx, st: ReturnType<typeof useGameStore.ge
 
   // J51 · the castle foundation. Each socket is its own place to stand:
   // an empty one offers what can be raised there, a staked-out one takes
-  // hammer work like any other construction site.
-  if (st.keep) {
-    for (const sock of KEEP_SOCKETS) {
-      const sx = st.keep.x + sock.x;
-      const sz = st.keep.z + sock.z;
-      const partId = st.keep.parts[sock.id];
-      const done = (st.keep.built[sock.id] ?? 0) >= 1;
+  // hammer work like any other construction site. Wave 67 (G-36): the home
+  // keep is one socket site, the only one drawn (SiteAssembly) yet — G-15b's
+  // strongholds join this loop once they are drawn at their destinations.
+  const keepSite = siteById(st, KEEP_SITE_ID);
+  if (keepSite) {
+    for (const sock of siteSockets(keepSite)) {
+      const { x: sx, z: sz } = siteSocketWorld(keepSite, sock.id)!;
+      const partId = keepSite.parts[sock.id];
+      const done = (keepSite.built[sock.id] ?? 0) >= 1;
       if (!partId) {
         consider(sx, sz, 2.6, {
-          id: sock.id, kind: 'keep_socket', duration: 0, actionable: true,
+          id: sock.id, site: keepSite.id, kind: 'keep_socket', duration: 0, actionable: true,
           label: `${sock.name} — choose what to raise`,
         });
       } else if (!done) {
         const part = KEEP_PART_BY_ID[partId];
         consider(sx, sz, 2.6, {
-          id: sock.id, kind: 'keep_work', duration: 0.9, actionable: true,
-          label: `Build ${part?.name ?? 'piece'} (${Math.round((st.keep.built[sock.id] ?? 0) * 100)}%)`,
+          id: sock.id, site: keepSite.id, kind: 'keep_work', duration: 0.9, actionable: true,
+          label: `Build ${part?.name ?? 'piece'} (${Math.round((keepSite.built[sock.id] ?? 0) * 100)}%)`,
         });
       }
     }

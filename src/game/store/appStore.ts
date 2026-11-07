@@ -47,7 +47,7 @@ interface Settings {
    *  preset — see aaModes.ts and PostProcessing.tsx. */
   aaMode: AaMode;
   /** 1/2/4/8/16 — capped against the real device's own max at the point it's
-   *  applied (HomeMeadowWater.tsx/KeepAssembly.tsx), so a value beyond hardware
+   *  applied (HomeMeadowWater.tsx/SiteAssembly.tsx), so a value beyond hardware
    *  support harmlessly clamps rather than erroring. */
   anisotropy: number;
   /** fog/shadow-reach multiplier read by DayNight.tsx, 1 = today's exact

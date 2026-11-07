@@ -11,4 +11,6 @@ export interface Target {
   duration: number; // seconds of holding E; 0 = instant
   kind: InteractKind;
   station?: string;
+  /** Wave 67 (G-36) · the socket site a keep_socket / keep_work target's socket (its `id`) belongs to */
+  site?: string;
 }
