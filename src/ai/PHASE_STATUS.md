@@ -154,8 +154,9 @@ before verification here for a single linear path.
 furniture is **placed by the player at runtime** on a build grid, so there is
 no per-instance scene node to read an anchor from. An anchor has to be derived
 from `type + x + z + rot` via a lookup table instead — which changes the shape
-of the affordance JSON. Also note there are only 15 animation clips and none
-of them is a sit, sleep, eat or use-object clip (`PROJECT_CONTEXT.md` §4).
+of the affordance JSON. Also note that none of the extraction's 92 animation
+clips (all imported since wave 66; `PROJECT_CONTEXT.md` §4) is a sit, sleep
+or eat clip, and `anim_g_drinkgoblet` is the one use-object clip.
 `PHASE_3_4_5_ACTUATION_AND_REASONER.md` §4.4 now specifies this table for
 real; it's superseded as an open question and folded into the iteration plan
 below.

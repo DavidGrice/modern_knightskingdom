@@ -4,11 +4,11 @@
 // `CATEGORY_INTERRUPT_PRIORITY.ambient = 0`, both defined since phase 5 but
 // never used by a real Action until this one). An idle character today
 // plays `anim_r_restpose` forever (Villagers.tsx/Npc.tsx) — there is no
-// dedicated ambient breathing-loop clip in the extraction (only 15 clips
-// exist total, `public/assets/anims/`), but there ARE unused one-shot
-// reaction clips, previously reachable only through the player's own Emotes
-// wheel. This repurposes a curated subset of them as background fidgets for
-// anyone with nothing better to do.
+// dedicated ambient breathing-loop clip in the extraction (it has 92 clips,
+// all imported since wave 66 — src/game/data/assetManifest.json), but there
+// ARE unused one-shot reaction clips, previously reachable only through the
+// player's own Emotes wheel. This repurposes a curated subset of them as
+// background fidgets for anyone with nothing better to do.
 //
 // Lowest weight/interruptPriority of any category by construction, so this
 // only ever wins when every other candidate (needs, work, social, combat)

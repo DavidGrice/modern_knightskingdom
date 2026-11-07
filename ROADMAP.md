@@ -146,7 +146,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-033 | STILL_OPEN | L | Memory.recall is recency-only; no relevance scoring | Real embedding/LLM-based relevance scoring for recall(query,k) — depends on the still-unbuilt dialogue/LLM layer (OPEN-032). |
 | OPEN-034 | STILL_OPEN | M | Pathfound day/night court-NPC movement still doesn't exist | Only a visibility on/off toggle exists for 2 of 5 court NPCs (King/Queen); real navSteer-routed day/night movement between posts is unbuilt for any of them. |
 | OPEN-037 | PARTIALLY_DONE | L | Villager generic-newcomer arrival / worksite-walk logic still homestead-only | Worksite-walk is genuinely per-world now, but checkVillagerArrival/recruitVillageFolk remain hardcoded to the home roster — no arrival mechanism targets a settlement. |
-| OPEN-054 | STILL_OPEN | L | Unused ambient smart-object anchors and missing props/animation clips | bed/workbench/forge anchors have no consuming action; no well/bench/table/hitching-post props exist; no sit/sleep/eat animation clips. |
+| OPEN-054 | STILL_OPEN | L | Unused ambient smart-object anchors and missing props/animation clips | bed/workbench/forge anchors have no consuming action; no well/bench/table/hitching-post props exist; no sit/sleep/eat animation clips (none among the extraction's 92, all imported in wave 66; `anim_g_drinkgoblet` is the nearest to eating). |
 | OPEN-066 | PARTIALLY_DONE | S | AI pathfinding remains flat-only (height-unaware) | Home nav-grid height-awareness was explicitly declined (Wave 59, no consumer); destination-world pathfinding was never even evaluated. |
 
 </details>
@@ -219,7 +219,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 |---|---|---|---|---|
 | OPEN-002 | BLOCKED_EXTERNAL | XL | Horse/dragon mount seat matrices not wired (file absent from repo) | DEFAULT_MINIFIG_HORSE_MOUNT.json / DRAGON_MOUNT.json must be fetched from the sibling Blender-lab repo before real per-donor seat matrices can replace the current hand-tuned constants. |
 | OPEN-003 | BLOCKED_EXTERNAL | L | New forged/crested donor-print texture art for armor tiers | Procedural fallback already ships; genuinely new donor-print art extraction is a texture-pipeline task outside this repo. |
-| OPEN-004 | STILL_OPEN | S | Bespoke catapult sound sample (snd060) | No longer blocked (verified 2026-10-31): the original 92-sample bank in the sibling extraction (`…/knightskingdom/resources/model_files/extracted/sounds`) has snd060 Trebuchet Firing; the remake imported only 46 of its samples. Planned in [`FEATURE_PLAN.md`](./FEATURE_PLAN.md) (the asset-bank import). |
+| OPEN-004 | CLOSED | S | Bespoke catapult sound sample (snd060) | Closed by wave 66 (#304, G-01): the whole original bank is imported through the tracked `src/game/data/assetManifest.json`, and the throwing arms (catapult, stone thrower) loose with snd060 Trebuchet Firing (`trebuchet`, `siege.ts`'s `fireSound`); the ram's blow is snd084 Battering Ram ("Bugfix: catapults loosed with a stand-in and rams with a generic thud …", at the end of this file). |
 | OPEN-005 | BLOCKED_EXTERNAL | S | Grand Keep foundation lacks a green MC00 baseplate mesh | No large green baseplate asset exists anywhere in the extraction; foundation stays a stone/trodden-ground texture until one is supplied. |
 | OPEN-006 | BLOCKED_EXTERNAL | XL | Workshop Option B: instruction-accurate (booklet-faithful) builds | Needs LDraw models per set, a Rebrickable API key/CSVs, and manual PDFs — none exist in-repo; only READMEs sit in the ldraw/manuals_pdf folders. |
 | OPEN-007 | BLOCKED_EXTERNAL | XL | Impulse sets and 4816-4819 have no game models for the Workshop | Only 9 sets have workshop plans; the rest are reachable only once Option B's LDraw pipeline exists. |
@@ -227,7 +227,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-009 | BLOCKED_EXTERNAL | S | Validate user's forthcoming Grok-built item-catalog JSON | Nothing to do until the user delivers the JSON; then diff against BRICK_CATALOG.md. |
 | OPEN-011 | BLOCKED_EXTERNAL | S | Additional ambient wildlife species (deer, rabbit) | Full 264-entry asset catalog has zero deer/rabbit/second-ground-creature meshes; needs new 3D assets before any code work. |
 | OPEN-012 | BLOCKED_EXTERNAL | XL | Animated flags/shields/halberds for the duel bridge (oc6095b5/b4) | No part_roles.json/rig entry exists for either asset; needs rig-lab work before any animation can be wired. |
-| OPEN-013 | STILL_OPEN | M | Dragon-specific villager fear animation clip | Premise corrected 2026-10-31: there is no "~15-clip ceiling" — the sibling extraction has 92 clips and the remake imports 15. None is dragon-specific, but startle, fall and stand-up clips exist (e.g. `anim_c_surprisestartle`), so a fear reaction can reuse one once the bank is imported (FEATURE_PLAN.md's asset-bank item). |
+| OPEN-013 | STILL_OPEN | M | Dragon-specific villager fear animation clip | Premise corrected 2026-10-31: there is no "~15-clip ceiling" — the sibling extraction has 92 clips and the remake imports 15. None is dragon-specific, but startle, fall and stand-up clips exist (e.g. `anim_c_surprisestartle`), so a fear reaction can reuse one once the bank is imported (FEATURE_PLAN.md's asset-bank item). Wave 66 (#304, G-01) imported all 92: `anim_c_surprisestartle` (28 frames) is on disk and arguably covers it, but nothing plays it yet, so this stays open until a fear reaction is wired. |
 | OPEN-038 | PARTIALLY_DONE | M | Dungeon-entrance candidate at Siege Camp/Frozen Pass never pursued | Resident content (NPCs, guilds, quests) fully shipped at all 3 vision-table sites; the 'second dungeon entrance' half was never revisited — Sealed Crypt remains the sole procedural dungeon. |
 | OPEN-040 | PARTIALLY_DONE | S | Interior NPC residents offer quests but no trade/dance interaction | The 4 interior residents (Wave 45) give quests+dialogue only; the original design's trade and dance sub-asks never shipped for them. |
 | OPEN-041 | PARTIALLY_DONE | M | Challenge maps still have no residents, NPC quests, or real unlock gate | Minigame mechanics shipped for all 6 grounds, but zero resident NPCs and claim-gating identical to a plain template (no distinct unlock). |
@@ -10460,3 +10460,134 @@ So making a resident a defender takes them out of their settlement (its yield st
 homestead. To do: either keep the defender job to home folk in the Roster (and `assignJob`),
 or give a settlement its own defenders — the Walls That Hold arc or G-23 should decide.
 
+## Bugfix: catapults loosed with a stand-in and rams with a generic thud, and the original bank stayed in a gitignored script — FOUND 2026-08-06 (Wave 8's corrected catapult line; OPEN-004, unblocked by FEATURE_PLAN.md's survey 2026-10-31), FIXED 2026-11-06
+
+**The fault.** The original game's extraction holds 92 sounds, 92 animation clips and 196 voiced challenge lines with
+transcripts; the remake took 46, 15 and 11 of them, through copy lists (`soundMap`, `loreMap`, `anims`) in the
+gitignored `scripts/prepare-assets.mjs`, so no PR ever showed what the game's assets were. Wave 8 had found no catapult
+sample in what was copied ("there is nothing in this repo to wire up"), so every throwing arm the player looses
+(`siege.ts`'s `fireSound`, through `fireCannon`) went off with a sword swish and the collision thud (the enemies'
+engines play no launch sound at all — logged below), and every ram blow (`ramCheck`, the player's ram and the
+raiders') played that same thud — though snd060 Trebuchet Firing and snd084 Battering Ram were in the extraction all
+along. And the 11 lore lines, voice of 94-473 KB each, sat in `SOUNDS`, so every start-up fetched all of them. Measured
+on `main` (production build of base-14, port 3101, build `A9eZcUp3zNba9CTch44aT`, digest `222ea2f94e08`;
+`scripts/cln-tools/w66_audio.mjs`: an init script tags each fetched WAV's buffer with its URL and logs each
+`AudioBufferSourceNode.start()` by it — `main` has no play log): start-up fetched 57 WAVs, 3,826,399 bytes, 11 of them
+voice (the lore lines, 2,847,440 bytes); `__kkFire` on a stand-in of each catapult-role engine (`oc6096-4`,
+`oc6032b2`, `oc1289`, `oc6098b1`) and the stone thrower (`oc6096-3`) played `sword_swish` + `thud`; the raiders' ram
+(`__kkRam`) set beside a shut gate played `thud` and burst it.
+
+**The fix** (wave 66, G-01). A tracked manifest, `src/game/data/assetManifest.json`, one entry per line: all 92 sounds
+(the 46 under their old names, the other 46 named for what they are, each `eager` or `on-demand`), the 196 voice lines
+(each with its transcript, verbatim from the pak, null for the two it has none for, and the item that wires it: the
+five lines G-09 barks with — `c1s03t1a-c`, `c2s01t2a`, `c2s02t4a` — are `use: bark`; every other line is `campaign`,
+owned by its challenge's item — G-12a, G-12b, G-13, G-14a, G-14b — with `c5s04t3b`/`t4b` given to G-14b), the 11 lore
+lines (each naming the voice line it is a copy of; F-12's `loreTranscripts.generated.json` is folded in and deleted,
+and `loreTranscripts.test.ts` reads the manifest), all 92 clips and Challenge V's four OBJ/MTL bricks (`c5_*`, for
+G-14a, into `props/objrig`). The local script reads it (`KK_ASSET_MANIFEST`, else the one under the working directory,
+else its own checkout's; `--manifest-only` copies just these; its pre-wave copy is kept as
+`scripts/prepare-assets.mjs.bak-w66` until the merge). `lib/audioCatalog.ts`: `SOUNDS` is exactly the manifest's eager
+sounds — `main`'s 57 less the 11 lore lines, plus `trebuchet` and `ram`: 48 (the two add 68,101 bytes, eager because
+each plays the instant its blow lands); the lore ids move to `LORE_VOICES` (`VoiceName`, the type of a cast's `loreLines`); `soundUrl` says where
+each kind is served. `lib/audio.ts`: an on-demand loader (`load`, `playOnDemand`) for everything not preloaded —
+fetched and decoded on first use, one fetch per sound however often it is asked for, the 16 used last kept, a 404 or a
+failed fetch resolving to null (no throw, nothing played); `playVoice` loads a line that is not preloaded and speaks it
+only if no later line or stop came in meanwhile; a play log, `__kkaudio.played` (the latest 100 sounds started).
+`siege.ts`: the catapult and stone thrower loose with `trebuchet` (the siege tower, Cedric's bomb tower, keeps the
+stand-in; bolt-throwers and the cannon are unchanged) and every ram blow is `ram`. Stale notes corrected: the "15
+clips" in `ai/actions/ambient.ts`, `components/character/RiggedFigure.tsx` (the extraction's one mounted clip,
+`anim_horseriderjoust`, is a 281-frame joust that drives the horse too), `DragonSiegeController.tsx`,
+`ai/PROJECT_CONTEXT.md` §4 and `ai/PHASE_STATUS.md`; `siege.ts`'s fire-sound note; `court.ts`'s lore-id note. OPEN-004
+closed; OPEN-013 noted (`anim_c_surprisestartle` is on disk, unwired); OPEN-054 stays open (no sit, sleep or eat clip
+among the 92). None of the new clips or voice lines is used yet (G-09, G-10 on). The import on this machine was
+additive: every one of the 1,047 files under `public/assets` hashed before and after
+(`scripts/cln-tools/w66_hash_assets.mjs`): 327 added (46 sounds, 196 voice lines, 77 clips, 4 OBJ + 4 MTL), 0 changed,
+0 gone; `gen-collision` and `compress-textures` not re-run (nothing they read changed). Every other worktree needs
+`npm run prepare-assets` (or `node scripts/prepare-assets.mjs --manifest-only`) once after the merge.
+
+**Verified** in the worktree: `tsc` clean; unit tests 92 files, 701 passing. New: `data/assetManifest.test.ts` (6
+always: names unique across sounds, voice and lore, and clips and modules once; the whole bank, `snd000`-`snd091`; each
+lore line names a voice line; the eager sounds are exactly `SOUNDS`, the lore exactly `LORE_VOICES`, and `soundUrl`
+serves each kind where the script puts it; who wires each voice line; the two lines without a transcript — and 2 that
+skip without `public/assets`: every file listed is on disk, each lore WAV byte-identical to its voice line);
+`lib/audio.test.ts` (6, on a stand-in Web Audio: the preload fetches exactly `SOUNDS`, `trebuchet` and `ram`, no voice;
+the folders; one fetch for two plays; a 404 and a failed fetch give null, nothing played, a later try fetches again;
+the 16-entry cache and its order; a lore line overtaken by a later line or a stop is never spoken);
+`game/siege.test.ts` (2: each engine role's sound, with the lab roles given — CI has no `capabilities.json`; the ram's
+blow on a gate and on a wall); `lib/minifigAnimator.test.ts` (+1 always: a clip carrying the hands, feet, a `Null`, a
+sword and a horse's body drives the seven joints and passes over the rest; +10 that skip without the clips: one clip of
+each family — g_, r_, c_, horse, dragon — parses with a frame per frame on every track, and four minifig ones play
+against the real rest pose). Take-out (`scripts/cln-tools/w66_takeout.cjs`), each alone: the catapult's stand-in back
+→ 1 fails; the gate blow back to `thud` → 1; a lore line back in `SOUNDS` → 2; the siege samples out of `SOUNDS` → 2;
+no `res.ok` check → 1; no voice guard → 1; no eviction → 1; a cache hit not counted as use → 1; the animator's joint
+guard removed → 5; a voice id duplicated into the sounds → 3; a lore line naming a missing voice line → 2 (and the lore
+test file fails to load); a bark retagged campaign → 1. Restored each time; `git diff` and `git status` byte-identical
+before and after the run. `next build` clean. Live, the change on port 3102 (build `u3DkysoYL_Ugce4sv5S4i`, digest
+`956feb1843d5`, `w66_audio.mjs`): start-up fetched 48 WAVs, 1,047,060 bytes, no voice (the 46 bank sounds as before
+plus `trebuchet` 35,418 and `ram` 32,683 — exactly the two samples more); each catapult-role engine and the stone
+thrower played `trebuchet`, the siege tower `sword_swish` + `thud`, the crossbow and cannon as on `main`; the ram burst
+the gate with `ram`; on demand, `lore_richard_greet` (359,534 bytes) and `mug_empty` (39,708) were fetched when asked
+for and played; a missing sound played nothing (its 404 is the run's one console error); `__kkaudio.played` named each.
+Evidence pass (independent re-run, 2026-11-06): `tsc` clean; unit tests 92 files, 701 passing; the same suite in a
+copy of the tree with an empty `public/` (no assets, as in CI) 689 passing and 12 skipped — exactly the two disk checks
+and the ten clip tests; `next build` clean (build `SAvFtYPg2aPeuUQa8Sy8Y`, digest `956feb1843d5`, the same script files
+as the build above). Take-out again, each alone with its tests (`scripts/cln-tools/w66_ev_mut.cjs`, `w66_ev_mut2.cjs`):
+catapult stand-in back → 1 fails; gate/wall blow back to `thud` → 1; `trebuchet`/`ram` out of `SOUNDS` → 2; a lore line
+back in → 2; the voice folder dropped from `soundUrl` → 2; no `res.ok` → 1; no in-flight dedupe → 1; no eviction → 1; a
+cache hit not counted → 1; no voice guard → 1; `playVoice` back to preloaded-only → 1; no play log → 1; the animator's
+guard line removed → 5; a bark retagged → 1; a duplicate id → 1; a lore line naming a missing voice → 2 (and the lore
+test file fails to load); `ram` made on-demand in the manifest → 1. Two take-outs fail nothing: the keep-socket blow
+back to `thud` (`ramCheck`'s keep branch has no test — the gate and wall branch is pinned) and the
+`!JOINTS.includes(j)` half of the animator's guard alone (equivalent: an animator's joints are keyed by `JOINTS`). Each
+file was restored from its saved bytes; a sha1 of `git diff --binary` + `git status --porcelain` + every untracked
+file's bytes was `de966bb0…` before and after both runs. Live, side by side (`scripts/cln-tools/w66_ev.mjs` —
+`w66_audio.mjs` plus Playwright's own network log and a voice-overtake check; headless, muted; records
+`w66_ev_main.txt`, `w66_ev_change.txt`): `main` on port 3101 (build `A9eZcUp3zNba9CTch44aT`, digest `222ea2f94e08`)
+fetched 57 WAVs, 3,826,399 bytes at start-up, 11 under `sounds/lore` (2,847,440 bytes), the network log agreeing; every
+catapult-role engine and the stone thrower played `sword_swish` + `thud`; the ram burst a shut gate with `thud`. The
+change on port 3102 (build `SAvFtYPg2aPeuUQa8Sy8Y`) fetched 48 WAVs, 1,047,060 bytes, none under `sounds/lore` or
+`sounds/voice` — `main`'s 978,959 bytes of non-voice plus exactly 68,101 (`trebuchet` 35,418 + `ram` 32,683); the same
+five engines played `trebuchet`; the ram burst the gate with `ram`; the siege tower (`sword_swish` + `thud`), the
+crossbow emplacement (`crossbow`), the cannon (`cannon`), the explosions and the gate's `drawbridge` were alike on both.
+On demand, `lore_richard_greet` (359,534) and `mug_empty` (39,708) were fetched and played; a missing sound played
+nothing (its 404 the one console error; `main` had none). `lore_leo_castle` asked for and at once overtaken by
+`greeting_richard`: the change started only `greeting_richard` (the lore line was fetched, never spoken); `main`
+started both, the lore line stopped at once. A lore line alone (`lore_queen_self`) was spoken on both. Assets: a fresh
+hash of `public/assets` against the pre-import record — 1,047 before, 1,374 now, 327 added, 0 changed, 0 gone. Not
+measured: the keep-socket ram blow (by the code it is the same one-word change; no test, no probe); the lore line's
+first play now waits for its fetch (a local fetch here; a slower host would delay it more); the samples by ear —
+nobody listened (the browser is muted); the unit tests on Linux itself (the no-assets run above was on Windows).
+
+**Review round** (2026-11-06; two lenses, both "ship", no defect above low). The keep-socket ram blow is pinned now: a
+third test in `siege.test.ts` rams the keep's north wall and hears `ram` (with the blow put back to `thud`, that test
+and only it fails; the file restored byte for byte). Two more stale clip notes corrected (`data/melee.ts`, where the
+extraction "has ~15 animation clips", and `ai/PHASE_STATUS.md`, which said 15 and then 92), and two comments reflowed.
+Unit tests 92 files, 702 passing. Logged below, not fixed: the enemies' engines loose with no launch sound, and a
+preloaded voice line asked for before the preload ends is fetched twice.
+
+## Seen, not fixed: a ram resting against an open gate still lands a blow every 0.9 s — logged 2026-11-06 (wave 66's probe; by the code)
+
+`ramCheck` (`siege.ts`) sets its cooldown and plays the blow for the first building within 2.1 m before it looks at
+what that building is; on a door, window or gate that is already open it then `continue`s, hitting nothing — so a ram
+stood against an open gate plays a blow every 0.9 s (both builds' probes heard a second one about 0.9 s after the gate
+burst: `thud` on `main`, `ram` on the change), and can then hit a second building in the same check. To do: skip an
+open gate before the cooldown and the sound, so a blow is played only where one lands.
+
+## Seen, not fixed: the enemies' siege engines loose with no sound — logged 2026-11-06 (in the review of wave 66; by the code)
+
+Only the player's own engines make a launch sound (`fireCannon` → `fireSound`, `siege.ts`). Cedric's war-party engines
+(`components/world/CedricSiege.tsx`, the catapult and stone thrower) and the Siege Engineers' engines
+(`game/enemyAi/blows.ts`) call `fireProp`, which only starts the prop's firing animation, and play nothing but the
+explosion where the shot lands. Wave 66 gave the throwing arms the trebuchet sample (snd060), so a raid's catapult is
+now the one throwing arm that looses in silence. To do: play the same role-keyed launch sound at the engine, positional
+(`audio.playAt`), from both — G-16b's siege train (wave 78.2), or the first raid wave before it that touches those
+engines.
+
+## Seen, not fixed: a preloaded voice line asked for before the preload ends is fetched twice — logged 2026-11-06 (in the review of wave 66; by the code)
+
+`playVoice` (`lib/audio.ts`) loads any line it has not decoded yet through `load()`, which shares an in-flight fetch
+only with other `load()` calls, not with start-up's `preload()`, and does not remember a failure. So a preloaded
+greeting asked for in a session's first moments (Cedric's, from the raid director) is fetched a second time beside the
+preload — it plays, where `main` stayed silent — and in a tree with no assets every call (each duel collision,
+`duel.ts`) fetches again and logs another 404. Harmless where the assets are. To do: let `preload()` register its
+fetches in `load()`'s in-flight map, and remember a missing sound for the session.
