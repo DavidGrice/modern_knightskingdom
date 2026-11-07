@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { NPCS } from './npcs';
-import { SOUNDS } from '@/lib/audioCatalog';
-import TRANSCRIPTS from './loreTranscripts.generated.json';
+import { LORE_VOICES } from '@/lib/audioCatalog';
+import MANIFEST from './assetManifest.json';
 
-// Wave 64.4 (F-12) · each lore line shows the words its clip speaks. loreTranscripts.generated.json holds, per lore
-// audio id, the clip the local copy script (scripts/prepare-assets.mjs) takes it from and that clip's transcript out
-// of the original game's pak (Windows-1252, verbatim). It was generated once (scripts/cln-tools/
-// w644_gen_lore_transcripts.mjs) and is committed because CI cannot read the extraction.
+// Wave 64.4 (F-12) · each lore line shows the words its clip speaks. The asset manifest (assetManifest.json, wave 66,
+// which took in F-12's loreTranscripts.generated.json) names, per lore audio id, the voice line the local copy script
+// (scripts/prepare-assets.mjs) copies it from, and holds that line's transcript out of the original game's pak
+// (Windows-1252, verbatim). It is committed because CI cannot read the extraction.
 
-const table: Record<string, { source: string; text: string }> = TRANSCRIPTS;
+const voices = new Map(MANIFEST.voices.map((v) => [v.id, v]));
+/** per lore id: its clip, as challenge<n>/<line>, and that clip's transcript */
+const table: Record<string, { source: string; text: string }> = Object.fromEntries(MANIFEST.lore.map((l) => {
+  const v = voices.get(l.voice)!;
+  return [l.id, { source: v.src.replace(/^pak\/system\/challenges\/sounds\/|\.wav$/g, ''), text: v.text ?? '' }];
+}));
 
 /** what the transcripts differ in without saying anything different: curly apostrophes (0x92), doubled spaces,
  *  trailing spaces and line endings */
@@ -28,7 +33,7 @@ const loreLines = NPCS.flatMap((n) => (n.loreLines ?? []).map((l) => ({ npc: n.i
 
 describe('lore transcripts', () => {
   it('has one transcript for every lore sound, each spoken by exactly one lore line', () => {
-    const loreSounds = SOUNDS.filter((s) => s.startsWith('lore_')).sort();
+    const loreSounds = [...LORE_VOICES].sort();
     expect(Object.keys(table).sort()).toEqual(loreSounds);
     expect(loreLines.map((l) => l.sound).sort()).toEqual(loreSounds);
   });

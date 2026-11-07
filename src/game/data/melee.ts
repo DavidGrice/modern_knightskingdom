@@ -215,8 +215,8 @@ export function meleeStatsFor(kind: MeleeWeaponId, inv: Partial<Record<ItemId, n
 }
 
 // ---- Wave 40 (A6) · real melee depth: dodge-roll, parry timing, i-frames,
-// combo chain. This codebase's whole extraction has ~15 animation clips
-// total and none of them are a roll/parry-flourish/finisher — see the
+// combo chain. None of the extraction's 92 animation clips (all imported
+// since wave 66) is a roll/parry-flourish/finisher — see the
 // dodge's own header comment on `tryDodge` for the honest, non-fabricated
 // stand-in this uses instead of a bespoke clip reference.
 

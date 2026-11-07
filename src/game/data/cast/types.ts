@@ -1,6 +1,6 @@
 // CLN-21 · the NPC and side-quest shapes, moved verbatim out of data/npcs.ts (which re-exports them).
 import type { Alliance, CharacterConfig, ItemId, SkillId } from '../../types';
-import type { SoundName } from '@/lib/audio';
+import type { SoundName, VoiceName } from '@/lib/audio';
 import type { EnemyKind } from '../../combat';
 
 /** Everything about an errand except what it asks for — see `SideQuestGoal`. */
@@ -109,8 +109,8 @@ export interface NpcDef {
   sideQuests: SideQuestDef[];
   /** one-time voiced introduction, played in order the first time you talk to
    *  them (see game/store gameStore's loreSeen) — genuine lines of theirs
-   *  from the original game's 371-line challenge/tutorial voice-over bank */
-  loreLines?: { text: string; sound: SoundName }[];
+   *  from the original game's 371-line challenge/tutorial voice-over bank, loaded when first spoken */
+  loreLines?: { text: string; sound: VoiceName }[];
   /** standing with this NPC specifically (see gameStore's reputation/
    *  addReputation), ascending thresholds — only NPCs with repeatable
    *  errands (or, for Richard, jousting) build a personal standing; King

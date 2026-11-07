@@ -273,6 +273,29 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   3.9 s. The change: Alric joined and five walked in within 3.9 s beside the nine residents (3.6 s on the
   implementer's run; the sweep's timing is wall-clock), stopping at six at home. **This closes the Ground Truth arc:
   waves 62.1-65.3, seventeen PRs (#287-#303).**
+- **#304 — Wave 66** (G-01): the original bank comes in through a tracked manifest. `src/game/data/assetManifest.json`
+  lists all 92 sounds (46 new, named for what they are; each eager or on-demand), the 196 challenge voice lines with
+  their transcripts and owners (G-09's five barks `c1s03t1a-c`, `c2s01t2a`, `c2s02t4a`; every other line the
+  campaign's, by challenge — G-12a, G-12b, G-13, G-14a, G-14b, with `c5s04t3b`/`t4b` G-14b's), the 11 lore lines (F-12's
+  `loreTranscripts.generated.json` folded in and deleted), all 92 clips and the four `c5_*` OBJ/MTL bricks for G-14a; the
+  gitignored `scripts/prepare-assets.mjs` reads it (backed up as `.bak-w66` until the merge; this machine's worktrees
+  share main's `public/assets`, which holds the import already; a fresh checkout runs `npm run prepare-assets`).
+  `lib/audio.ts` gains an on-demand loader (16-entry cache, a 404 or failed fetch gives nothing played and no throw), a
+  voice channel whose slow load never overtakes a later line, and a play log (`__kkaudio.played`). Catapult and stone
+  thrower loose with snd060 (`trebuchet`), every ram blow is snd084 (`ram`), both eager. Premises held, with one
+  correction: the 11 lore lines were voice in the eager preload, so they now load on demand too (start-up audio 57 WAVs,
+  3.83 MB → 48, 1.05 MB; the only growth is the two siege samples, 68 KB). The siege tower keeps its stand-in (Cedric's
+  bomb tower, not a trebuchet). Stale "15 clips" notes corrected in `ambient.ts`, `RiggedFigure.tsx`,
+  `DragonSiegeController.tsx`, `data/melee.ts` and `ai/PROJECT_CONTEXT.md`/`PHASE_STATUS.md`, and the siege note. Tests: the manifest's
+  consistency (6, always) and its disk (2, skipped without `public/assets`); the audio manager on a stand-in Web Audio
+  (6); each engine role's sound and the ram's blow on a gate, a wall and the keep (3); a clip's extra tracks passed over (1, always) and one clip per
+  family parsing and playing (10, skipped without the clips). Measured on main (`w66_audio.mjs`): every throwing arm
+  `sword_swish` + `thud`, the ram `thud`, 11 voice WAVs fetched at start. The import was additive (1,047 files hashed
+  before and after: 327 added, none changed or gone). ROADMAP: OPEN-004 closed, OPEN-013 noted (`anim_c_surprisestartle`
+  is on disk, unwired), OPEN-054 stays open; a new fixed entry, and three "Seen, not fixed": a ram resting against an
+  open gate still lands a blow every 0.9 s; the enemies' engines (Cedric's war party, the Siege Engineers) loose with no
+  launch sound; and a preloaded voice line asked for before the preload ends is fetched twice. Review round (two
+  lenses, both ship): the keep-socket blow pinned by a third siege test, two more stale clip notes corrected.
 
 ## Owner decisions
 

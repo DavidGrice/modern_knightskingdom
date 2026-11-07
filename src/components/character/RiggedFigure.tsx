@@ -32,9 +32,10 @@ const _playerPos = new THREE.Vector3();
 
 // Wave 34 (G6.7) · a mounted rider's legs float above the saddle playing
 // whatever ground-walk clip the FSM picked (anim_c_walk/run, anim_r_restpose,
-// anim_g_swordswish) — there is no seated-rider clip anywhere in the
-// extraction (all 15 clips under public/assets/anims/ are ground-walk/
-// combat/gesture poses), and the rig has no knee joint to bend independently
+// anim_g_swordswish). The extraction's one mounted clip, anim_horseriderjoust
+// (imported in wave 66 with the rest of its 92 clips; unused, untried on
+// this rig), is a 281-frame joust that drives the horse's tracks too, not a
+// seat to hold at any gait — and the rig has no knee joint to bend independently
 // (lib/rig/joints.ts's 7 joints stop at leftleg/rightleg, one rigid segment
 // each). So this is a static bone-pose override applied AFTER the clip drives
 // the figure each frame, not a new animation: head/body/arms/hips stay fully

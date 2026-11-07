@@ -55,22 +55,23 @@ export const useSiegeStore = create<SiegeStore>((set, get) => ({
 }));
 
 /**
- * Wave 8 · what an engine SOUNDS like when it looses.
+ * Wave 8 · what an engine SOUNDS like when it looses, keyed off the lab's own
+ * `siegeRole` rather than an id list (every engine once shared the cannon's
+ * report — a counterweight catapult that goes bang).
  *
- * Every siege piece has shared one `audio.play('cannon')` since the lab pass
- * put nine engines in the catalog — so a counterweight catapult went off with
- * a gunpowder bang, which is the one noise a catapult definitely does not
- * make. There is no new sample to reach for (the extracted bank has 40 named
- * WAVs and no `snd060` anything — see lib/audioCatalog.ts's SOUNDS), so the variety is
- * built from what the bank really holds, keyed off the lab's own `siegeRole`
- * rather than an id list: torsion arms get the timber THUD of the arm hitting
- * its stop under a whoosh, bolt-throwers get the crossbow's release, and only
- * actual powder keeps the cannon's report.
+ * Wave 66 (G-01): the original game's bank has 92 samples, not the 46 the copy
+ * script once took, and among them snd060 Trebuchet Firing — so the throwing
+ * arms (catapult, stone thrower) loose with it, in place of the whoosh-and-thud
+ * of the arm hitting its stop that stood in for it. The siege tower keeps that
+ * stand-in: it is Cedric's bomb tower, not a trebuchet. Bolt-throwers get the
+ * crossbow's release, and only actual powder keeps the cannon's report.
  */
 function fireSound(assetId: string) {
   switch (labSiegeRole(assetId)) {
     case 'catapult':
     case 'stone_thrower':
+      audio.play('trebuchet', 0.9);
+      return;
     case 'siege_tower':
       audio.play('sword_swish', 0.7);
       audio.play('thud', 0.95);
@@ -193,7 +194,9 @@ let lastRamHitAt = 0;
 
 /** the battering ram bashes whatever it's shoved into: a shut gate is forced
  *  open, anything else takes splash-free structural damage — gated by a
- *  cooldown so bumping against something doesn't melt it in one frame. */
+ *  cooldown so bumping against something doesn't melt it in one frame. Each
+ *  blow is the bank's own snd084 Battering Ram (wave 66; the generic collision
+ *  thud before). */
 export function ramCheck(rammerId: string, x: number, z: number) {
   const now = performance.now();
   if (now - lastRamHitAt < 900) return;
@@ -204,7 +207,7 @@ export function ramCheck(rammerId: string, x: number, z: number) {
       const wz = st.keep.z + sock.z;
       if (Math.hypot(wx - x, wz - z) > 2.1) continue;
       lastRamHitAt = now;
-      audio.play('thud', 0.85);
+      audio.play('ram', 0.85);
       st.damageKeepPart(sock.id, 12, 'was rammed');
       return;
     }
@@ -214,7 +217,7 @@ export function ramCheck(rammerId: string, x: number, z: number) {
     const d = Math.hypot(b.x - x, b.z - z);
     if (d > 2.1) continue;
     lastRamHitAt = now;
-    audio.play('thud', 0.85);
+    audio.play('ram', 0.85);
     if (isDoorLike(b.type)) {
       if (st.gateOpen[b.id] ?? true) continue; // already open — nothing to ram
       st.toggleGate(b.id);

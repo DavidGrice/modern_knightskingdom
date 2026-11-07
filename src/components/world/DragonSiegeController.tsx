@@ -220,13 +220,14 @@ export default function DragonSiegeController({ config: cfg }: { config: DragonS
         st.notify(cfg.lines.descends, true);
         audio.play('horn', 0.95);
         audio.play('warcry', 0.7);
-        // Wave 57 (F5): a one-shot, dragon-specific flavor line. This
-        // extraction has no dragon-specific fear/look-up pose (~15 clips
-        // total, confirmed by a prior wave) so reusing flee_to_safety
-        // verbatim (see ai/actions/flee.ts) gives zero dragon flavor on its
-        // own — a named villager's own line, fired once in this same
-        // one-time roll branch (mirrors the horn/warcry calls just above),
-        // is the achievable distinguishing touch without new movement.
+        // Wave 57 (F5): a one-shot, dragon-specific flavor line. The
+        // extraction has no dragon-specific fear/look-up pose (none among its
+        // 92 clips; anim_c_surprisestartle is the nearest, OPEN-013), so
+        // reusing flee_to_safety verbatim (see ai/actions/flee.ts) gives zero
+        // dragon flavor on its own — a named villager's own line, fired once
+        // in this same one-time roll branch (mirrors the horn/warcry calls
+        // just above), is the achievable distinguishing touch without new
+        // movement.
         if (st.villagers.length) {
           const v = pick(st.villagers);
           st.notify(cfg.lines.scream(v.name), true);

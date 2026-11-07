@@ -73,7 +73,12 @@ Realistic concurrent scale: **10–25 actors**, which matches the spec's 6–20.
 
 ## 4. Content inventory — this constrains §4 and §5 hard
 
-### There are exactly 15 animation clips. All of them:
+### The game used 15 animation clips. All of them:
+
+*(Wave 66 correction: the original extraction holds 92 clips, and all 92 are now imported — listed in
+`src/game/data/assetManifest.json`'s `anims`. The other 77 are unused so far: walks and runs with a shield or bow,
+spear, halberd, crossbow and longbow strikes, falls and stand-ups, `anim_g_drinkgoblet`, more court gestures, the
+horse and dragon cycles. Still none sits, sleeps or eats.)*
 
 ```
 anim_c_walk        anim_c_run          anim_c_angry       anim_c_attention
@@ -89,7 +94,7 @@ code fakes "working" with `anim_g_swordswish` (a sword swish standing in for
 a hammer/axe swing) and "resting" with `anim_r_restpose`.
 
 Any affordance content proposed for phase 4/5 must either (a) name one of
-those 15 clips, (b) be a pose held on `anim_r_restpose` with the body
+the manifest's clips, (b) be a pose held on `anim_r_restpose` with the body
 positioned at an anchor, or (c) come with an explicit note that it needs a new
 clip. Do not silently invent clip names — that is the single easiest way to
 produce a spec that looks complete and builds nothing.

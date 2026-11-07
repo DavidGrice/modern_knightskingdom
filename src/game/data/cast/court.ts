@@ -36,7 +36,7 @@ export const COURT_NPCS: NpcDef[] = [
       { text: 'I am King Leo. Do you like my castle? Richard tells me you want to become a knight.', sound: 'lore_leo_castle' },
       { text: "My land is a wonderful place, but for Cedric and his gang. He's always trying to get his hands on my Kingdom... and his bottom on my throne!", sound: 'lore_leo_cedric1' },
       { text: 'For now though, Cedric still lives in the woods!', sound: 'lore_leo_cedric2' },
-      // Wave 64.4 (F-12) · the clip is c1s04t1a, from Leo's scene; the id keeps its old name (the copy script names it). Its text
+      // Wave 64.4 (F-12) · the clip is c1s04t1a, from Leo's scene; the id keeps its old name (assetManifest.json names it). Its text
       // was Richard's c1s01t4a. Every line here is checked against its clip's transcript (loreTranscripts.test.ts).
       { text: "Ignore Cedric! Let me see Richard's new recruit!", sound: 'lore_richard_cedric' },
     ],
