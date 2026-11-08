@@ -162,6 +162,11 @@ export interface PlacedBuilding extends WorldScoped {
    *  `built` back to 1; absent/false for every ordinary construction site
    *  and every older save. */
   ruin?: boolean;
+  /** Wave 68 (G-05) · the piece as it was placed, once siege damage has turned `type` into a damaged form (a castle
+   *  wall breached to mc009, ruined to mc010): what a repair or a rebuild puts back, and whose cost and HP it is
+   *  priced by. Written the first time the piece takes damage; absent on an undamaged piece and on every save from
+   *  before it (repair.ts's buildingBase reads those). */
+  baseType?: string;
   /** which instance this stands in — a claimed template-world plot's own
    *  destination id, or absent/null for the homestead. Every destination's
    *  real coordinates sit far apart in one shared space (see the

@@ -203,6 +203,6 @@ export function fireEngine(data: EnemyData, st: GameState): void {
     fireProp(`siegeCrew_${data.id}`);
     audio.playAt('explosion', target.x, target.z, 0.7);
     if (target.keep) st.damageKeepPart(target.id, SIEGE_CREW_ENGINE_DMG, 'was battered by a Siege Engineer');
-    else st.damageBuilding(target.id, SIEGE_CREW_ENGINE_DMG, 'was battered by a Siege Engineer');
+    else st.damageBuilding(target.id, SIEGE_CREW_ENGINE_DMG, 'was battered by a Siege Engineer', true); // a ruin (G-05)
   }
 }

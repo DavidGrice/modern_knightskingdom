@@ -2,7 +2,7 @@
 // InteractKind) the branch performAction takes when they act on it.
 
 /** every kind of thing the player can act on (findTarget picks one; performAction acts on it) */
-export type InteractKind = 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'dungeon_captive' | 'talk_companion' | 'examine_skeleton' | 'launch';
+export type InteractKind = 'tree' | 'rock' | 'fishing' | 'herb' | 'npc' | 'station' | 'bed' | 'horse' | 'dismount' | 'quintain' | 'cannon' | 'merchant' | 'plot' | 'interior_enter' | 'interior_exit' | 'chest' | 'collect_taxes' | 'gate' | 'travel_board' | 'travel_return' | 'joust' | 'push_cart' | 'hitch_cart' | 'challenge_cedric' | 'construct' | 'guild_hall' | 'detonate' | 'man_engine' | 'leave_engine' | 'keep_socket' | 'keep_work' | 'buy_ground' | 'workshop' | 'set_part' | 'draw_water' | 'plant_plot' | 'water_plot' | 'climb' | 'climb_down' | 'call_falcon' | 'dungeon_relic' | 'dungeon_captive' | 'talk_companion' | 'examine_skeleton' | 'launch' | 'repair';
 
 export interface Target {
   id: string;
@@ -11,6 +11,7 @@ export interface Target {
   duration: number; // seconds of holding E; 0 = instant
   kind: InteractKind;
   station?: string;
-  /** Wave 67 (G-36) · the socket site a keep_socket / keep_work target's socket (its `id`) belongs to */
+  /** Wave 67 (G-36) · the socket site a keep_socket / keep_work target's socket (its `id`) belongs to. Wave 68: and a
+   *  repair target's, when it is a site's piece rather than a building */
   site?: string;
 }

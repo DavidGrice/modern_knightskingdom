@@ -4,7 +4,7 @@
 // cart) first; otherwise everything in reach scored by distance and facing, the best one taken.
 import * as THREE from 'three';
 import { useGameStore, TAX_COOLDOWN_MS } from '@/game/store/gameStore';
-import { LAND_TIERS, BUILDABLE_BY_ID, heightOf, labAssetId, sizeFor } from '@/game/data/buildables';
+import { LAND_TIERS, BUILDABLE_BY_ID, heightOf, labAssetId, maxHpFor, sizeFor } from '@/game/data/buildables';
 import {
   CEDRIC_CAMP, CEDRIC_INTERACT_RANGE, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD,
   BROOK, EYE_HEIGHT, FISH_CAST_RANGE, INTERACT_RANGE, KEEP_CHEST_POS, KEEP_THRONE_POS, PLAYER_RADIUS,
@@ -30,7 +30,8 @@ import { MERCHANT_SPOT, merchantPresent } from '@/game/data/trade';
 import { labCanFire, labCanLaunch, labCanOccupy, labIsExplosive, labIsLadder } from '@/game/data/labCapabilities';
 import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds';
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
-import { KEEP_PART_BY_ID } from '@/game/data/keep';
+import { KEEP_PART_BY_ID, maxHpForPart } from '@/game/data/keep';
+import { billText, buildingBase, repairCost } from '@/game/repair';
 import { KEEP_SITE_ID, siteById, siteSocketWorld, siteSockets } from '@/game/sites/sites';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { crewState } from '@/game/crew';
@@ -501,7 +502,17 @@ export function findTarget(ctx: TargetCtx, st: ReturnType<typeof useGameStore.ge
         const part = KEEP_PART_BY_ID[partId];
         consider(sx, sz, 2.6, {
           id: sock.id, site: keepSite.id, kind: 'keep_work', duration: 0.9, actionable: true,
-          label: `Build ${part?.name ?? 'piece'} (${Math.round((keepSite.built[sock.id] ?? 0) * 100)}%)`,
+          label: `${keepSite.ruined?.[sock.id] ? 'Rebuild' : 'Build'} ${part?.name ?? 'piece'} (${Math.round((keepSite.built[sock.id] ?? 0) * 100)}%)`,
+        });
+      } else if (keepSite.hp?.[sock.id] !== undefined && KEEP_PART_BY_ID[partId]) {
+        // G-05 · a battered piece still standing: made whole for the share of its cost it has lost
+        const part = KEEP_PART_BY_ID[partId];
+        const max = maxHpForPart(part);
+        const hp = keepSite.hp[sock.id];
+        const cost = repairCost(part.cost, max - hp, max);
+        consider(sx, sz, 2.6, {
+          id: sock.id, site: keepSite.id, kind: 'repair', duration: 0.9, actionable: st.canAfford(cost),
+          label: `Repair ${part.name} (${hp}/${max}) — ${billText(cost)}`,
         });
       }
     }
@@ -516,11 +527,28 @@ export function findTarget(ctx: TargetCtx, st: ReturnType<typeof useGameStore.ge
       // Wave 57 (F5): a dragon-fire ruin (b.ruin) reuses this exact same
       // under-construction state — reads as "Rebuild" rather than "Build"
       // so the prompt doesn't imply this piece never existed.
+      // Wave 68 · named for the piece it was, not the ruined form it lies in
+      const name = (b.ruin ? BUILDABLE_BY_ID[buildingBase(b, st.buildingHp[b.id])] : def)?.name;
       consider(b.x, b.z, 1.4, {
         id: b.id, kind: 'construct', duration: 0.9, actionable: true,
-        label: `${b.ruin ? 'Rebuild' : 'Build'} ${def?.name ?? 'structure'} (${Math.round((b.built ?? 0) * 100)}%)`,
+        label: `${b.ruin ? 'Rebuild' : 'Build'} ${name ?? 'structure'} (${Math.round((b.built ?? 0) * 100)}%)`,
       });
       continue;
+    }
+    // Wave 68 (G-05) · a battered building still standing offers its repair, for the share of its cost it has lost —
+    // beside whatever else it does, never in its place: aimed at its footing, so a wall (nothing else to offer) shows
+    // it wherever it is looked at, while a damaged gate, engine, station or bed keeps its own prompt at its own height
+    // and shows the repair only to a look down at its foot. (It took the building's prompt over outright at first, so a
+    // player short of the bill could not open his own gate or fire his own cannon.)
+    const hp = st.buildingHp[b.id];
+    const baseDef = hp !== undefined ? BUILDABLE_BY_ID[buildingBase(b, hp)] : undefined;
+    if (hp !== undefined && baseDef) {
+      const max = maxHpFor(baseDef.id);
+      const cost = repairCost(baseDef.cost, max - hp, max);
+      consider(b.x, b.z, b.y ?? 0, {
+        id: b.id, kind: 'repair', duration: 0.9, actionable: st.canAfford(cost),
+        label: `Repair ${baseDef.name} (${hp}/${max}) — ${billText(cost)}`,
+      }, reachRangeFor(b.type, b.rot));
     }
     if (b.type === 'quintain') {
       consider(b.x, b.z, 1.2, {

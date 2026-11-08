@@ -11,6 +11,11 @@
 // Wave 67 (G-36) · KeepAssembly became SiteAssembly: it draws one socket site
 // (game/sites/sites.ts) by its id — the home keep is site 'keep' — laid out
 // to its layout and turned by the site's own rot.
+//
+// Wave 68 (G-05) · a piece battered down lies in ruins on its socket, built
+// back to 0: it is drawn by the same construction path, as its broken form
+// where the lab charts one (a crenellated run's ruined mold), rising again as
+// it is rebuilt.
 import { Suspense, useMemo } from 'react';
 import * as THREE from 'three';
 import { useTexture } from '@react-three/drei';
@@ -19,6 +24,8 @@ import { useGameStore } from '@/game/store/gameStore';
 import { useAppStore } from '@/game/store/appStore';
 import { KEEP_PART_BY_ID } from '@/game/data/keep';
 import { KEEP_SITE_ID, SITE_LAYOUTS, siteById, siteSockets } from '@/game/sites/sites';
+import { BUILDABLE_BY_ID, buildableForLabAsset } from '@/game/data/buildables';
+import { labDamagedForm } from '@/game/data/labCapabilities';
 import PropModel from './PropModel';
 import ConstructionSiteModel from './ConstructionSite';
 
@@ -44,6 +51,13 @@ function Foundation({ size }: { size: number }) {
       <meshStandardMaterial map={tex} roughness={0.98} metalness={0} side={THREE.DoubleSide} />
     </mesh>
   );
+}
+
+/** the model a ruined piece lies as: its mold's broken phase at 0 HP where the lab charts one, else its own */
+function ruinModel(model: string): string {
+  const ruined = labDamagedForm(model.split('/').pop()?.replace(/\.glb$/i, ''), 0);
+  const id = ruined && buildableForLabAsset(ruined);
+  return (id && BUILDABLE_BY_ID[id]?.model) || model;
 }
 
 export default function SiteAssembly({ siteId }: { siteId: string }) {
@@ -117,7 +131,7 @@ export default function SiteAssembly({ siteId }: { siteId: string }) {
                   // keep.y — the identical pattern Buildings.tsx already uses
                   // (`worldY={y}`, matching its own group's `position-y={y}`).
                   <ConstructionSiteModel
-                    url={part.model}
+                    url={site.ruined?.[sock.id] ? ruinModel(part.model) : part.model}
                     size={[4, part.height, 4]}
                     progress={built}
                     worldY={site.y ?? 0}

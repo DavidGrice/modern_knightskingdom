@@ -12,7 +12,6 @@
 // a change back where that site lives — so the keep's record never takes a site's own fields (id, world, layout).
 //
 // Leaf module: types and data only (no store import), so the store's slices can use it.
-import type { ItemId } from '../types';
 import {
   KEEP_SIZE, KEEP_SOCKETS, SOCKET_BY_ID, WALK_CORNER_HALF, WALK_DEEP_HALF, WALK_RUN_HALF,
   type KeepSocket, type KeepState, type SocketKind,
@@ -84,20 +83,22 @@ export function siteSocket(site: Pick<SocketSite, 'layout'>, socketId: string): 
   return SITE_LAYOUTS[site.layout].byId[socketId] ?? null;
 }
 
+/** G-05 · the first piece lying in ruins on a site in `world` (null = the homestead), and where it stands: the
+ *  builders' work once no building site is waiting (villagerSlice.ts's builder pass, Villagers.tsx's walk to it) */
+export function siteRuinIn(st: SiteHolder, world: string | null): { site: string; socket: string; x: number; z: number } | null {
+  for (const site of sitesIn(st, world)) {
+    for (const sock of siteSockets(site)) {
+      if (!site.ruined?.[sock.id] || !site.parts[sock.id]) continue;
+      const at = siteSocketWorld(site, sock.id)!;
+      return { site: site.id, socket: sock.id, x: at.x, z: at.z };
+    }
+  }
+  return null;
+}
+
 /** the site is "finished" once every socket carries a completed piece */
 export function siteComplete(site: SocketSite): boolean {
   return siteSockets(site).every((s) => site.parts[s.id] && (site.built[s.id] ?? 0) >= 1);
-}
-
-/** what a piece knocked down gives back: half of each of its materials, rounded down — the same rubble rate
- *  damageBuilding uses for an ordinary structure. Materials that round to nothing are left out. */
-export function knockdownRefund(cost: Partial<Record<ItemId, number>>): Partial<Record<ItemId, number>> {
-  const out: Partial<Record<ItemId, number>> = {};
-  for (const [itemId, n] of Object.entries(cost)) {
-    const refund = Math.floor((n as number) / 2);
-    if (refund > 0) out[itemId as ItemId] = refund;
-  }
-  return out;
 }
 
 /** the ground a socket's piece covers, as half extents along its own length and across it: a corner (and the bailey)

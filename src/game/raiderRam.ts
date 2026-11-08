@@ -1,6 +1,7 @@
 'use client';
 
 import { exposeDebug } from '@/lib/debugHooks';
+import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from './types';
 
 // A raider-pushed battering ram: the AI-driven counterpart to the player's
 // own pushable cart (see game/carts.ts's cartState, siege.ts's ramCheck).
@@ -39,6 +40,14 @@ export function resetRaiderRam(x: number, z: number) {
   raiderRamState.travel = 0;
   raiderRamState.wrecked = false;
   raiderRamState.wreckT = 0;
+}
+
+/** whatever is barred against the raiders: the first shut door or gate (Wave 8 — isDoorLike; a ram against a garden
+ *  door is still a ram), else none and the ram makes for the homestead's centre. Wave 68 · one standing at home: ramCheck
+ *  strikes only in the ram's own world and only what stands, so a door shut at a destination, or a shut gate the dragon
+ *  left a ruin, would park the ram on it for the rest of the raid. */
+export function raiderRamGate(buildings: PlacedBuilding[], gateOpen: Record<string, boolean>): PlacedBuilding | undefined {
+  return buildings.find((b) => isDoorLike(b.type) && isHomeBuilding(b) && isBuilt(b) && !(gateOpen[b.id] ?? true));
 }
 
 exposeDebug('__kkRam', raiderRamState);

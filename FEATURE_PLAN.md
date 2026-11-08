@@ -325,6 +325,32 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   the full parallel suite, past vitest's 5 s default, so CI could fail a merge at random). ROADMAP: a new fixed entry,
   OPEN-023's row updated, a fixed entry for the timeout, and two "Seen, not fixed": a blast or a ram lands on the
   buildings of every world at its coordinates; a keep foundation set down at a destination leaves its pieces at home.
+- **#306 — Wave 68** (G-05): ruins and repair. A raid's blows leave ruins: `damageBuilding`'s `leaveRuin` is passed by
+  the raiders' ram (`ramCheck`: the rammer is no PlacedBuilding), a siege crew's engine and Cedric's, beside the dragon
+  (the player's own ram, balls and charges still knock down for half); a keep piece at 0 HP stays on its socket,
+  `built` 0 and `ruined` set (G-36's field), with no refund. `PlacedBuilding.baseType` (written by the first blow)
+  keeps what was placed through the damage phases: HP, refund, repair and rebuild are priced and restored by it, and a
+  save from before it resolves a broken phase to the chain's phase 1 (`labIntactForm`: mc006; `game/repair.ts`'s
+  `buildingBase`). New Repair interaction on a damaged standing building or keep piece, for `repairCost` (each material
+  x HP lost / max, rounded up): a Castle Wall 5 stone at half, a Castle Gate 2 stone + 1 iron bar, a Crenellated run 7,
+  the Gatehouse 5 + 1. A ruin is rebuilt free, by hammer or builders (wave 57's rule; OD-22 recommends it charge the whole
+  bill); the builders take a keep ruin once no building site waits (`siteRuinIn`). Folded in: a
+  blast or a ram no longer lands on another world's buildings (measured on main: a template-02 ball breached a home
+  wall 30 → 12, a template-02 charge knocked one down), and the ram passes an open gate, a ruin and a bare socket by
+  before its cooldown and sound (main: 4 blows in 3 s against an open gate). Premises held, with corrections: the
+  straight chain charts phases 2 and 3 only, so the "phase-1 lookup" names mc006; the damage phases also gave a breached
+  wall the broken mold's breach thresholds and refund (found measuring: main gave +2 stone for a 10-stone wall); ruins rebuild free,
+  so a repair costs only while a piece stands. SAVE_VERSION stays 1 (`baseType` optional, resolved when read). Golden
+  tests changed on purpose (OD-02): five in `keepGolden.test.ts`, two in `sites.test.ts` (and `knockdownRefund`'s test,
+  removed with it), one in `siege.test.ts`. `ruins.test.ts` (16) with a `main`-written save fixture; each of 13
+  take-outs fails its tests. Review round: the repair prompt offered beside a building's own, not in its place (a
+  battered shut gate opens on a short purse); the ram passes an unfinished building; the raiders' ram makes for a gate
+  at home; HP-by-base and the ruin's form pinned (`ruins.test.ts` 22). ROADMAP: a new fixed entry, OPEN-026 closed,
+  the two logged bugs retagged fixed, three "Seen, not fixed" (every ruin's notice says "a smoking ruin"; demolish and
+  undo still refund a battered building by its damaged form), and an open decision, OD-22 (R): a ruin's rebuild should
+  charge its whole bill, for G-07. Visible beside the raid: a legacy save's damaged wall repairs to the plain Castle Wall
+  (mc006); the player's own cannonball or charge refunds a building by what was placed (+5 stone for a Castle Wall, +3 on
+  main) but leaves a keep piece a ruin with no refund; Cedric's ruin flag has no test and was not driven live.
 
 ## Owner decisions
 
@@ -352,6 +378,7 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
 | OD-18 | (A) What do the siege engines attack first, and how is the climax built? | Strongholds, then the castle: bandit strongholds built from castle-set catalog pieces (fully breakable and solid) are the first siege target; the Rival Castle capture is the climax, with breakable sections overlaid where a geometry probe of template-05 allows and ladders over the baked walls. One multi-site socket model (G-36) serves both and the town plans. | G-36, G-15b, G-16a, G-16b, G-32a, G-32b, G-33a, G-33b |
 | OD-19 | (A) How does the plan run? | Run all waves, one PR each, without stopping except for real design questions. | — |
 | OD-20 | (R) Whose men hold the hideouts, and whom do they raid? | Outlaw bands hostile to every allegiance. Their pressure adds an outlaw raid source at settlements even at neutral standing (a deliberate change to settlementRaid.ts:69-75), and Cedric-sworn players face them too. No hideout sits at CEDRIC_WORLD. | G-15a, G-24a |
+| OD-22 | (R) Should rebuilding a ruin cost materials? (logged by wave 68) | Yes: a ruin's rebuild charges its repair bill at 0 HP, the piece's whole cost, the dragon's ruins included, so letting a piece fall is never cheaper than mending it. Until then (wave 68 on) a ruin is raised free, as the dragon's always were, and only a standing repair costs. | G-05, G-07 |
 | OD-21 | (R) Should the graphics-quality tier cap population? | A uniform population cap; the graphics tier limits only how many villagers are simulated as agents, so yields and caravans never depend on a rendering setting. | G-23 |
 
 ## Arcs

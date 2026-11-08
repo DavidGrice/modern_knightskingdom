@@ -11,6 +11,11 @@ import MAIN_SAVE from './keepGolden.main-save.json';
 // footprints, the cannonball's and the charge's splash, the ram, and a save round trip. Written and passing on main
 // before the keep became one socket site among many, and kept unchanged after it. keepGolden.main-save.json is a save
 // main's own toSave() wrote (a keep with a damaged turret, a half-built wall, a knocked-down bastion's refund, a gate).
+//
+// Wave 68 (G-05) changed five of them on purpose (OD-02): a piece at 0 HP now lies in ruins on its socket — its part
+// kept, built back to 0, `ruined` set, no refund — where it was deleted with half its materials (the siege damage, the
+// refund, the charge and the loaded save's tests); and the ram passes by a socket with nothing standing on it, where
+// it landed an empty blow that started its cooldown (the ram's test: the same fault as the open gate it thudded on).
 
 const HERO: CharacterConfig = { name: 'Golden', headDonor: 'x', bodyDonor: 'x', armColor: 0, handColor: 0, legColor: 0, hipColor: 0 };
 const game = () => useGameStore.getState();
@@ -110,7 +115,7 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     expect(sounds.slice(-2)).toEqual(['brick_link', 'treasure']);
   });
 
-  it('takes siege damage on a finished piece only, and knocks it down at 0 HP with half its materials back', () => {
+  it('takes siege damage on a finished piece only, and leaves it a ruin at 0 HP, with nothing back (G-05)', () => {
     lay();
     game().raiseKeepPart('nw', 'corner_turret');
     game().damageKeepPart('nw', 10); // a construction ghost has nothing standing to knock down
@@ -123,27 +128,28 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     expect(game().keep!.hp).toEqual({ nw: 1 });
     const before = inv();
     game().damageKeepPart('nw', 1, 'was rammed');
-    expect(game().keep).toEqual({ x: 0, z: 0, y: 0, parts: {}, built: {}, hp: {} });
-    expect(inv()).toEqual({ ...before, stone: before.stone! + 8, wood: before.wood! + 2 });
-    expect(notes.at(-1)).toBe('Corner Turret was rammed! Half materials recovered.');
-    game().damageKeepPart('nw', 5); // a bare socket again
-    expect(game().keep).toEqual({ x: 0, z: 0, y: 0, parts: {}, built: {}, hp: {} });
+    const ruin = { x: 0, z: 0, y: 0, parts: { nw: 'corner_turret' }, built: { nw: 0 }, hp: {}, ruined: { nw: true } };
+    expect(game().keep).toEqual(ruin);
+    expect(inv()).toEqual(before);
+    expect(notes.at(-1)).toBe('Corner Turret was rammed — it lies in ruins. Rebuild it to restore it.');
+    game().damageKeepPart('nw', 5); // a ruin has nothing standing to knock down
+    expect(game().keep).toEqual(ruin);
   });
 
-  it('refunds half of each material, rounded down, and words the default cause', () => {
+  it('refunds nothing for a ruin, and words the default cause (G-05)', () => {
     lay();
     stand('hall', 'great_hall'); // 20 stone, 12 wood, 8 plank: 120 HP
     stand('e', 'gatehouse');     // 10 stone, 2 iron bar: 36 HP
     const before = inv();
     game().damageKeepPart('hall', 120);
     game().damageKeepPart('e', 36);
-    expect(inv()).toEqual({
-      ...before, stone: before.stone! + 10 + 5, wood: before.wood! + 6, plank: before.plank! + 4, iron_bar: before.iron_bar! + 1,
-    });
+    expect(inv()).toEqual(before);
     expect(notes.slice(-2)).toEqual([
-      'Great Hall was battered down! Half materials recovered.', 'Gatehouse was battered down! Half materials recovered.',
+      'Great Hall was battered down — it lies in ruins. Rebuild it to restore it.',
+      'Gatehouse was battered down — it lies in ruins. Rebuild it to restore it.',
     ]);
-    expect(game().keep!.parts).toEqual({});
+    expect(game().keep!.parts).toEqual({ hall: 'great_hall', e: 'gatehouse' });
+    expect(game().keep!.ruined).toEqual({ hall: true, e: true });
   });
 
   it('seals ground with the old footprints: a ring of eight finished pieces walls in the bailey', () => {
@@ -197,7 +203,7 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     expect(game().buildings).toContainEqual(foundation);
   });
 
-  it('takes a charge\'s blast: 45 within 5 m, enough to bring a low wall down with its refund', () => {
+  it('takes a charge\'s blast: 45 within 5 m, enough to leave a low wall in ruins (G-05: no refund)', () => {
     lay();
     stand('n', 'wall_low');      // 8 stone: 24 HP
     stand('ne', 'corner_turret'); // 60 HP
@@ -206,10 +212,12 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     useGameStore.setState({ buildings: [...game().buildings, charge] });
     const before = inv();
     detonate(charge);
-    expect(game().keep!.parts).toEqual({ ne: 'corner_turret', s: 'wall_crenel' });
+    expect(game().keep!.parts).toEqual({ n: 'wall_low', ne: 'corner_turret', s: 'wall_crenel' });
+    expect(game().keep!.built).toEqual({ n: 0, ne: 1, s: 1 });
+    expect(game().keep!.ruined).toEqual({ n: true });
     expect(game().keep!.hp).toEqual({ ne: 15 });
-    expect(inv()).toEqual({ ...before, stone: before.stone! + 4 });
-    expect(notes).toContain('Low Wall was blown apart! Half materials recovered.');
+    expect(inv()).toEqual(before);
+    expect(notes).toContain('Low Wall was blown apart — it lies in ruins. Rebuild it to restore it.');
     expect(game().buildings.some((b) => b.id === 'c1')).toBe(false);
     expect(game().buildings.some((b) => b.type === 'keep')).toBe(true);
   });
@@ -231,14 +239,14 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     now += 1000;
     ramCheck('ram1', 0, -9.5); // 2.7 m off the north run: nothing
     expect(game().keep!.hp).toEqual({ n: 30, nw: 18 });
-    // a socket the ram reaches with nothing finished on it still takes the blow, and nothing comes of it
+    // G-05 · a socket the ram reaches with nothing finished on it is passed by: no blow, no sound, no cooldown
     sounds = [];
     ramCheck('ram1', 6.8, 0.5);
-    expect(sounds).toEqual(['ram']);
+    expect(sounds).toEqual([]);
     expect(game().keep!.hp).toEqual({ n: 30, nw: 18 });
     now += 500;
     ramCheck('ram1', 0, -7.5);
-    expect(game().keep!.hp).toEqual({ n: 30, nw: 18 }); // that empty blow started the cooldown
+    expect(game().keep!.hp).toEqual({ n: 18, nw: 18 }); // no cooldown was started
   });
 
   it('round-trips a save: the keep and its foundation come back exactly as they went', () => {
@@ -276,10 +284,10 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     const { savedAt: _a, ...rest } = again;
     const { savedAt: _b, ...orig } = fixture;
     expect(rest).toMatchObject(orig);
-    // and the castle on it goes on taking damage as it did
+    // and the castle on it goes on taking damage — to a ruin, since G-05, where it was knocked down for 5 stone back
     useGameStore.setState({ notify: () => {} } as never);
     game().damageKeepPart('e', 29);
-    expect(game().keep!.parts.e).toBeUndefined();
-    expect(game().inventory.stone).toBe(fixture.inventory.stone! + 5);
+    expect([game().keep!.parts.e, game().keep!.built.e, game().keep!.ruined]).toEqual(['gatehouse', 0, { e: true }]);
+    expect(game().inventory.stone).toBe(fixture.inventory.stone);
   });
 });

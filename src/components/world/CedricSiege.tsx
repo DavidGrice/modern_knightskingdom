@@ -102,7 +102,7 @@ function WarParty({ onDone }: { onDone: (routed: boolean) => void }) {
       fireProp(eng.id);
       audio.playAt('explosion', target.x, target.z, 0.8);
       if (target.keep) st.damageKeepPart(target.id, ENGINE_DAMAGE, "battered by Cedric's siege engines");
-      else st.damageBuilding(target.id, ENGINE_DAMAGE, "battered by Cedric's siege engines");
+      else st.damageBuilding(target.id, ENGINE_DAMAGE, "battered by Cedric's siege engines", true); // a ruin (G-05)
     }
   });
 

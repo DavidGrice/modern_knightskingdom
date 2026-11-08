@@ -65,7 +65,8 @@ describe('the sound of a siege blow', () => {
     const north = KEEP_SOCKETS.find((s) => s.id === 'n')!;
     const hit: string[] = [];
     useGameStore.setState({
-      keep: { x: 50, z: 50, y: 0, parts: {}, built: {} }, buildings: [],
+      // a finished north run: since wave 68 the ram passes a socket with nothing standing on it by
+      keep: { x: 50, z: 50, y: 0, parts: { n: 'wall_crenel' }, built: { n: 1 } }, buildings: [],
       damageSitePart: (site: string, id: string) => hit.push(`${site}:${id}`), // wave 67: the keep is socket site 'keep'
     } as never);
     now += 1000;
