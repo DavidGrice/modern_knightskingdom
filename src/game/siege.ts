@@ -11,7 +11,7 @@ import { labExplosive, labSiegeRole } from './data/labCapabilities';
 import { labAssetId } from './data/buildables';
 import { fireProp } from '@/components/world/RiggedProp';
 import { siteSocketWorld, siteSockets, sitesIn } from './sites/sites';
-import { isDoorLike, type PlacedBuilding } from './types';
+import { isBuilt, isDoorLike, type PlacedBuilding } from './types';
 import { exposeDebug } from '@/lib/debugHooks';
 
 /** J51 · every finished keep piece within `radius` of (x, z) takes the same
@@ -138,16 +138,20 @@ export function explodeBall(ball: Cannonball) {
     if (e.hp <= 0) resolveEnemyKill(e, { by: ball.byPlayer ? 'cannonball' : 'emplacement' });
   }
   if (hits > 0) st.addXp('combat', 5);
+  const world = ball.world ?? null;
   for (const b of st.buildings) {
     // the keep's own synthetic entry exists purely for interact-detection —
     // damaging it directly would delete it at 0 HP and orphan the real
     // assembled castle (st.keep), which damageSitesNear below already covers
     if (b.type === 'keep') continue;
+    // Wave 68 · only what stands in the ball's own world: every world shares one coordinate space, so a ball
+    // bursting at a destination landed on the home buildings at the same coordinates too
+    if ((b.world ?? null) !== world) continue;
     const d = Math.hypot(b.x - ball.pos.x, b.z - ball.pos.z);
     if (d > 3.2) continue;
     st.damageBuilding(b.id, 18, 'was blasted');
   }
-  damageSitesNear(ball.world ?? null, ball.pos.x, ball.pos.z, 3.2, 18, 'was blasted');
+  damageSitesNear(world, ball.pos.x, ball.pos.z, 3.2, 18, 'was blasted');
   useSiegeStore.getState().removeBall(ball.id);
 }
 
@@ -179,12 +183,14 @@ export function detonate(charge: PlacedBuilding) {
   // the charge itself always goes; everything else only if the lab says this
   // charge damages structures
   if (traits?.damagesWalls !== false) {
+    const world = charge.world ?? null;
     for (const b of st.buildings) {
       if (b.id === charge.id || b.type === 'keep') continue; // see explodeBall's own note
+      if ((b.world ?? null) !== world) continue; // and only in the charge's own world (explodeBall's too)
       if (Math.hypot(b.x - x, b.z - z) > 5) continue;
       st.damageBuilding(b.id, 45, 'was blown apart');
     }
-    damageSitesNear(charge.world ?? null, x, z, 5, 45, 'was blown apart');
+    damageSitesNear(world, x, z, 5, 45, 'was blown apart');
   }
   // caught in your own blast
   if (Math.hypot(playerState.x - x, playerState.z - z) < 4.5) damagePlayer(2);
@@ -201,16 +207,22 @@ let lastRamHitAt = 0;
  *  open, anything else takes splash-free structural damage — gated by a
  *  cooldown so bumping against something doesn't melt it in one frame. Each
  *  blow is the bank's own snd084 Battering Ram (wave 66; the generic collision
- *  thud before). */
+ *  thud before). Wave 68: only on something standing to take it — an open gate,
+ *  a ruin, an unfinished building or a socket with no finished piece is passed
+ *  by before the cooldown and the sound, so a ram resting against one no longer
+ *  thuds every 0.9 s; and the raiders' ram leaves what it batters down a ruin
+ *  (OD-02), where the player's own ram knocks it down for half its materials. */
 export function ramCheck(rammerId: string, x: number, z: number) {
   const now = performance.now();
   if (now - lastRamHitAt < 900) return;
   const st = useGameStore.getState();
   // Wave 67 · the sites in the ram's own world: a placed ram's, else home (the raiders' ram is not a PlacedBuilding,
   // and only ever rolls at home — on, while the player is away)
-  const world = st.buildings.find((b) => b.id === rammerId)?.world ?? null;
+  const rammer = st.buildings.find((b) => b.id === rammerId);
+  const world = rammer?.world ?? null;
   for (const site of sitesIn(st, world)) {
     for (const sock of siteSockets(site)) {
+      if (!site.parts[sock.id] || (site.built[sock.id] ?? 0) < 1) continue; // nothing standing (a ruin is built 0)
       const at = siteSocketWorld(site, sock.id)!;
       if (Math.hypot(at.x - x, at.z - z) > 2.1) continue;
       lastRamHitAt = now;
@@ -221,12 +233,15 @@ export function ramCheck(rammerId: string, x: number, z: number) {
   }
   for (const b of st.buildings) {
     if (b.id === rammerId || b.type === 'keep') continue; // see explodeBall's own note
+    // another world's, or nothing standing — a ruin, or a building site not yet finished (it would be left a ruin, and
+    // its first raising robbed of the credit a ruin's rebuilding does not earn)
+    if ((b.world ?? null) !== world || !isBuilt(b)) continue;
+    if (isDoorLike(b.type) && (st.gateOpen[b.id] ?? true)) continue; // already open — nothing to ram
     const d = Math.hypot(b.x - x, b.z - z);
     if (d > 2.1) continue;
     lastRamHitAt = now;
     audio.play('ram', 0.85);
     if (isDoorLike(b.type)) {
-      if (st.gateOpen[b.id] ?? true) continue; // already open — nothing to ram
       st.toggleGate(b.id);
       st.notify(
         b.type === 'door' ? 'The ram bursts the door off its hinges!'
@@ -235,7 +250,7 @@ export function ramCheck(rammerId: string, x: number, z: number) {
         true,
       );
     } else {
-      st.damageBuilding(b.id, 12, 'was rammed');
+      st.damageBuilding(b.id, 12, 'was rammed', !rammer);
     }
     return;
   }

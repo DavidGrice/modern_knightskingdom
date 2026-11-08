@@ -5,7 +5,7 @@ import { detonate, explodeBall, fireCannon, ramCheck, useSiegeStore } from '../s
 import { fortState, refreshFort } from '../fort';
 import { KEEP_SOCKETS } from '../data/keep';
 import { useGameStore } from '../store/gameStore';
-import { knockdownRefund, siteSocketWorld, type SocketSite } from './sites';
+import { siteSocketWorld, type SocketSite } from './sites';
 import type { CharacterConfig, PlacedBuilding } from '../types';
 import MAIN_SAVE from '../keepGolden.main-save.json';
 
@@ -108,7 +108,7 @@ const CAMP: SocketSite = { id: 'camp', world: 'template-02', x: 0, z: 0, rot: Ma
 const camp = () => game().sites.find((s) => s.id === 'camp')!;
 
 describe('a second socket site', () => {
-  it('fills, builds, takes damage and is knocked down with its refund, and never touches the keep', () => {
+  it('fills, builds, takes damage and is left a ruin (G-05: no refund), and never touches the keep', () => {
     const keep = homeKeep();
     useGameStore.setState({ sites: [CAMP] });
     const before = { ...game().inventory };
@@ -123,8 +123,8 @@ describe('a second socket site', () => {
     game().damageSitePart('camp', 'n', 10);
     expect(camp().hp).toEqual({ n: 14 }); // a low wall: 8 stone x 3
     game().damageSitePart('camp', 'n', 14, 'was battered down');
-    expect(camp()).toEqual({ ...CAMP, parts: {}, built: {}, hp: {} });
-    expect(game().inventory.stone).toBe(before.stone! - 8 + 4);
+    expect(camp()).toEqual({ ...CAMP, parts: { n: 'wall_low' }, built: { n: 0 }, hp: {}, ruined: { n: true } });
+    expect(game().inventory.stone).toBe(before.stone! - 8);
     expect(game().keep).toBe(keep);
   });
 
@@ -192,7 +192,7 @@ describe('damage by world', () => {
     const charge = { id: 'c9', type: 'charge', x: n.x + 3, z: n.z, rot: 0, built: 1, world: 'template-02' } as PlacedBuilding;
     useGameStore.setState({ buildings: [...game().buildings, charge], destination: 'template-02' });
     detonate(charge);
-    expect(camp().parts.n).toBeUndefined(); // 45 on a 42 HP run: knocked down
+    expect(camp().ruined).toEqual({ n: true }); // 45 on a 42 HP run: in ruins
     expect(game().keep!.parts.n).toBe('wall_crenel');
     expect(game().keep!.hp).toBeUndefined();
   });
@@ -241,11 +241,5 @@ describe('damage by world', () => {
     refreshFort(true);
     // a quarter-turned ring at home seals what the keep's own ring did (keepGolden.test.ts: 77 m²)
     expect({ enclosed: fortState.enclosed, area: fortState.area }).toEqual({ enclosed: true, area: 77 });
-  });
-});
-
-describe('knockdownRefund', () => {
-  it('gives back half of each material, rounded down, and nothing of one worth less than two', () => {
-    expect(knockdownRefund({ stone: 7, plank: 4, iron_bar: 1 })).toEqual({ stone: 3, plank: 2 });
   });
 });

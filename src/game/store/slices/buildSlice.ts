@@ -32,6 +32,7 @@ import {
   activeBuildRegion, BUILDABLE_BY_ID, MAX_STACK_HEIGHT, buildableForLabAsset, heightOf, labAssetId, maxHpFor, sizeFor,
 } from '../../data/buildables';
 import { wallSnap } from '../../walls';
+import { buildingBase, formAt, repairCost } from '../../repair';
 import { audio } from '@/lib/audio';
 import { cartLivePos } from '../../carts';
 import { waterworksInRect } from '../../waterworks';
@@ -54,11 +55,14 @@ export interface BuildSlice {
   setBuildMode: (v: boolean) => void;
   setBuildSelection: (id: string | null) => void;
   toggleGate: (buildingId: string) => void;
-  /** Wave 57 (F5): trailing `leaveRuin` — true only from a dragon's
-   *  breath (game/dragonfire.ts). Every other caller
-   *  (siege.ts, CedricSiege.tsx, game/enemyAi/blows.ts) omits it and keeps today's
-   *  delete+half-refund behavior exactly. */
+  /** Wave 57 (F5): trailing `leaveRuin` — a piece brought to 0 HP is left a ruin to rebuild, not deleted for half its
+   *  materials. Wave 68 (G-05): every blow struck by a raid passes it — a dragon's breath (game/dragonfire.ts), the
+   *  raiders' ram (siege.ts's ramCheck), a siege crew's engine (game/enemyAi/blows.ts) and Cedric's
+   *  (CedricSiege.tsx); the player's own cannonballs, charges and ram omit it and keep the delete and half refund. */
   damageBuilding: (id: string, amount: number, cause?: string, leaveRuin?: boolean) => void;
+  /** Wave 68 (G-05) · make a damaged, standing building whole: its own type back and its HP full, for repair.ts's
+   *  repairCost of its HP lost */
+  repairBuilding: (id: string) => void;
   settleCart: (id: string) => void;
 
   placeBuilding: (type: string, x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number, scale?: number) => boolean;
@@ -153,7 +157,12 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
       if (!b) return;
-      const max = maxHpFor(b.type);
+      // Wave 68 (G-05) · priced by the piece placed, not the damaged form it shows: a breached wall used to take its
+      // HP from mc009's own (cheaper) cost mid-siege, and go down for the ruined mold's refund. The first blow writes
+      // the base down, before the damage phases overwrite `type`.
+      const base = buildingBase(b, st.buildingHp[id]);
+      const stamped = b.baseType === undefined ? st.buildings.map((x) => (x.id === id ? { ...x, baseType: base } : x)) : st.buildings;
+      const max = maxHpFor(base);
       const hp = (st.buildingHp[id] ?? max) - amount;
       if (hp > 0) {
         // labeled destruction phases, now read from the rig lab's own
@@ -167,18 +176,18 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
         if (phase !== b.type) {
           const ruined = !!capOf(labAssetId(phase))?.traits.wall?.isRuined;
           set({
-            buildings: st.buildings.map((x) => (x.id === id ? { ...x, type: phase } : x)),
+            buildings: stamped.map((x) => (x.id === id ? { ...x, type: phase } : x)),
             buildingHp: { ...st.buildingHp, [id]: hp },
             dirty: true,
           });
           st.notify(ruined ? '🔥 The breached wall crumbles to a ruin!' : '🔥 The castle wall is breached!', true);
         } else {
-          set({ buildingHp: { ...st.buildingHp, [id]: hp }, dirty: true });
+          set({ buildings: stamped, buildingHp: { ...st.buildingHp, [id]: hp }, dirty: true });
         }
         audio.play('brick_collide', 0.6);
         return;
       }
-      const def = BUILDABLE_BY_ID[b.type];
+      const def = BUILDABLE_BY_ID[base];
       // Wave 57 (F5): a dragon-fire kill (leaveRuin=true) leaves a RUIN
       // behind instead of deleting the entry — reuses the exact existing
       // "under construction" state (types.ts's own `built` doc comment:
@@ -193,7 +202,9 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       // already mid-type-swap (every `wall_straight` mold in
       // capabilities.json costs pure stone, so flammable() is always false
       // for them), so `b.type` here is always the pristine, stable type —
-      // never a ruined wall mold.
+      // never a ruined wall mold. (Wave 68 · no longer true: the raiders' ram
+      // and the siege engines leave ruins too, so the ruin shows its 0-HP form
+      // — a castle wall's ruined mold — and keeps its base to rebuild.)
       //
       // No materials refund on this path (unlike the hand-demolish half
       // refund below), and constructBuilding charges no new materials to
@@ -209,7 +220,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
         const hpRest = { ...st.buildingHp };
         delete hpRest[id];
         set({
-          buildings: st.buildings.map((x) => (x.id === id ? { ...x, built: 0, ruin: true } : x)),
+          buildings: stamped.map((x) => (x.id === id ? { ...x, type: formAt(base, 0), built: 0, ruin: true } : x)),
           buildingHp: hpRest,
           dirty: true,
         });
@@ -235,6 +246,36 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       });
       audio.play('brick_collide', 0.8);
       st.notify(`${def.name} ${cause ?? 'was smashed'} to rubble! Half materials recovered.`, true);
+    },
+
+    repairBuilding: (id) => {
+      const st = get();
+      const b = st.buildings.find((x) => x.id === id);
+      const hp = st.buildingHp[id];
+      // a ruin is rebuilt (constructBuilding), not repaired; a piece with no HP on record is whole
+      if (!b || !isBuilt(b) || hp === undefined) return;
+      const base = buildingBase(b, hp);
+      const def = BUILDABLE_BY_ID[base];
+      if (!def) return;
+      const max = maxHpFor(base);
+      const cost = repairCost(def.cost, max - hp, max);
+      if (!st.canAfford(cost)) {
+        st.notify(`Not enough materials to repair the ${def.name}.`);
+        audio.play('brick_collide', 0.5);
+        return;
+      }
+      const inv = { ...st.inventory };
+      for (const [itemId, n] of Object.entries(cost)) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) - (n as number);
+      const hpRest = { ...st.buildingHp };
+      delete hpRest[id];
+      set({
+        buildings: st.buildings.map((x) => (x.id === id ? { ...x, type: base } : x)),
+        buildingHp: hpRest,
+        inventory: inv,
+        dirty: true,
+      });
+      audio.play('brick_connect', 0.85);
+      st.notify(`${def.name} repaired.`, true);
     },
 
     settleCart: (id) => {
@@ -481,7 +522,8 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
       if (!b || isBuilt(b)) return;
-      const def = BUILDABLE_BY_ID[b.type];
+      // Wave 68 · a ruin is rebuilt as the piece it was, not the ruined form it lies in
+      const def = BUILDABLE_BY_ID[b.ruin ? buildingBase(b, st.buildingHp[id]) : b.type];
       if (!def) return;
       // Builders' Guild passive + Sure Hammer/Raised Right talents — every
       // swing bonus stacks additively (player's and builder villagers' alike).
@@ -526,7 +568,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
           // — and so can a ruin battered again while it was being rebuilt.
           const hpRest = { ...get().buildingHp };
           delete hpRest[id];
-          set({ buildings: get().buildings.map((x) => (x.id === id ? { ...x, ruin: false } : x)), buildingHp: hpRest, dirty: true });
+          set({ buildings: get().buildings.map((x) => (x.id === id ? { ...x, type: def.id, ruin: false } : x)), buildingHp: hpRest, dirty: true });
           audio.play('brick_connect', 0.85);
           st.notify(`${def.name} rebuilt from the ashes!`, true);
         } else {

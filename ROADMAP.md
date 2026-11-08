@@ -175,7 +175,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 |---|---|---|---|---|
 | OPEN-023 | STILL_OPEN | S | Relocated keep foundation always renders unrotated | Unblocked by wave 67 (G-36): the keep is a socket site, and `SiteAssembly` (was KeepAssembly), the fort seal, the splash, the ram and the socket prompts follow a site's `rot` through `siteSocketWorld` (`game/sites/sites.ts`). Left: a `rot` on KeepState written by finishMove (forced 0 today), the readers that still add `keep.x + sock.x`, and the turn-while-carrying control ("Bugfix: the Grand Keep was the game's only socket model …", at the end of this file). |
 | OPEN-025 | CLOSED | S | Cart 'glued' quirk: walking toward a just-grabbed cart yields zero net movement | Closed by wave 62.2 (#288): the player's collision passes over the cart he pushes or has hitched (`playerPhysics/collide.ts`; "Bugfix: walking at a cart just taken up pinned the player where it had stood", at the end of this file). |
-| OPEN-026 | STILL_OPEN | M | No general building-repair mechanism for non-dragon damage | Generalize the dragon-only ruin/rebuild mechanic (or add a new heal action) to raider-ram/cannon/siege-ladder damage instead of deleting the building at 0 HP. |
+| OPEN-026 | CLOSED | M | No general building-repair mechanism for non-dragon damage | Closed by wave 68 (#306, G-05): a raid's blows (the raiders' ram, a siege crew's engine, Cedric's engines, a raider's blow on the keep) leave ruins the builders raise again, keep pieces lie in ruins on their sockets, and a damaged standing piece is repaired for its cost times the share of HP lost ("Bugfix: a piece a raid battered down vanished …", at the end of this file). |
 | OPEN-027 | STILL_OPEN | M | oc6098b1 chest-launcher payload mechanism unbuilt | hasChestLauncher/canLaunchChest capability data exists but there's no chest_arm/chest_basket rig role or projectile type; fires as an ordinary catapult today. |
 | OPEN-046 | STILL_OPEN | M | Build challenges lack a per-map specific-structure/set objective | Design+implement a per-map objective; still only a generic 'N pieces in 90s' target after the newer Gather/Defend/Joust minigames shipped for the other 5 grounds. |
 | OPEN-057 | PARTIALLY_DONE | S | 2 of 10 'Walls' category generated bricks lack real collision geometry | gen_06_l3013700 and gen_10_l235700 ('Wall Section 1x4'/'2x2') still fall back to a crude single full-footprint box, worse than the deferred WALL_CORE treatment. |
@@ -10565,13 +10565,37 @@ extraction "has ~15 animation clips", and `ai/PHASE_STATUS.md`, which said 15 an
 Unit tests 92 files, 702 passing. Logged below, not fixed: the enemies' engines loose with no launch sound, and a
 preloaded voice line asked for before the preload ends is fetched twice.
 
-## Seen, not fixed: a ram resting against an open gate still lands a blow every 0.9 s — logged 2026-11-06 (wave 66's probe; by the code)
+## Bugfix: a ram resting against an open gate landed a blow every 0.9 s — FOUND 2026-11-06 (wave 66's probe; by the code), FIXED 2026-11-06
 
-`ramCheck` (`siege.ts`) sets its cooldown and plays the blow for the first building within 2.1 m before it looks at
-what that building is; on a door, window or gate that is already open it then `continue`s, hitting nothing — so a ram
-stood against an open gate plays a blow every 0.9 s (both builds' probes heard a second one about 0.9 s after the gate
-burst: `thud` on `main`, `ram` on the change), and can then hit a second building in the same check. To do: skip an
-open gate before the cooldown and the sound, so a blow is played only where one lands.
+**The fault.** `ramCheck` (`siege.ts`) set its cooldown and played the blow for the first building within 2.1 m before
+it looked at what that building was; on a door, window or gate already open it then `continue`d, hitting nothing — so
+a ram stood against an open gate played a blow every 0.9 s (both builds' wave-66 probes heard a second one about 0.9 s
+after the gate burst), and could then hit a second building in the same check. The socket loop had the same fault: a
+socket within reach with nothing finished on it took the blow (sound, cooldown, and a `damageSitePart` that did
+nothing) and ended the check, so a ram against a bare socket thudded on and never reached a building behind it — and
+wave 68's ruins (built back to 0 on their sockets) would have made every battered keep wall such a socket. Measured on
+`main` (production build of base-14 on port 3101, build `bHI6F_qk2MwFFnaci6vJQ`, digest `8f5c7b0d8a72`; `scripts/cln-tools/w68_live.mjs`): the raiders' ram (`__kkRam`) held 3 s against an open Castle Gate played `ram` 4
+times and hit nothing; held 3 s against the keep's bare east socket, 4 times.
+
+**The fix** (wave 68, with G-05). `ramCheck` passes by what has nothing standing to take a blow before it starts the
+cooldown or plays a sound: an open door, window or gate, a building lying in ruins or not yet finished (the review
+round's: see G-05's entry), and a socket whose piece is not finished (a ruin is built 0). A blow is played only where
+one lands; the check goes on to the next thing in reach.
+
+**Verified** (vitest, `src/game/ruins.test.ts`): the raiders' ram against an open gate with a wall 1.8 m behind it
+plays one blow and it lands on the wall at once (the gate started no cooldown); against the open gate alone, four
+checks a second apart play nothing; shut, the gate bursts (`ram`, `drawbridge`); a ruin is passed by. In
+`keepGolden.test.ts` the ram's golden test now expects a bare socket passed by — no sound, no cooldown — where it
+pinned the empty blow (changed on purpose, with four others: see G-05's entry). With each skip taken out its test
+fails, and `git diff` was identical after it was put back. The evidence pass, 2026-11-07, re-ran it independently:
+the open-gate, bare-socket and ruin skips each taken out alone fail their test (one each), the sources restored byte
+for byte. Live, side by side (the evidence pass's own `scripts/cln-tools/w68_ev_live.mjs`; `main` from base-14 on
+port 3101, build `bHI6F_qk2MwFFnaci6vJQ`, digest `8f5c7b0d8a72`; the change from the worktree on port 3102, build
+`FY6GVaRo0YDRJaPwClLC8`, digest `74c3e6f6809f`): the raiders' ram (`__kkRam`) held 3 s against an open Castle Gate
+played `ram` 4 times on `main`, none on the change; the gate shut and rammed, both builds burst it with the one blow
+("The ram splinters the gate open!"); held 3 s more against it, open again, 4 on `main`, none on the change; held 3 s
+against the keep's bare east socket, 4 on `main`, none on the change. No page errors on either. Not measured live: a
+wall standing behind an open gate taking the blow at once (vitest only).
 
 ## Seen, not fixed: the enemies' siege engines loose with no sound — logged 2026-11-06 (in the review of wave 66; by the code)
 
@@ -10727,15 +10751,36 @@ site paths (the home keep reaches them through the `'keep'` default). The two ch
 test config only. `tsc` clean; unit tests 94 files, 727 passing. Logged below, not fixed: a keep foundation set down
 at a destination leaves its pieces at home.
 
-## Seen, not fixed: a blast or a ram lands on the buildings of every world at its coordinates — logged 2026-11-06 (wave 67's measurement on main; by the code)
+## Bugfix: a blast or a ram landed on the buildings of every world at its coordinates — FOUND 2026-11-06 (wave 67's measurement on main; by the code), FIXED 2026-11-06
 
-`explodeBall`, `detonate` and `ramCheck` (`siege.ts`) loop over every entry of `st.buildings` with no world check, so a
-blow at a destination damages the homestead's buildings standing at the same local coordinates, and a home
-emplacement firing while the player is away damages a destination's. Measured on `main` (vitest, the player at
-template-02): a cannonball bursting at (10, 10) took a home stone wall there from 30 HP to 12. Wave 67 made the socket
-sites (the keep among them) read the blow's world — a ball keeps its engine's (`Cannonball.world`), a charge its own,
-a ram a placed ram's or home — but left the buildings' loops alone. To do: skip a building not `inWorld` that same
-world in all three loops.
+**The fault.** `explodeBall`, `detonate` and `ramCheck` (`siege.ts`) looped over every entry of `st.buildings` with
+no world check, so a blow at a destination damaged the homestead's buildings standing at the same local coordinates,
+and a home emplacement firing while the player was away damaged a destination's. Wave 67 made the socket sites (the
+keep among them) read the blow's world — a ball keeps its engine's (`Cannonball.world`), a charge its own, a ram a
+placed ram's or home — but left the buildings' loops alone. Measured on `main` (production build of base-14 on port 3101, build `bHI6F_qk2MwFFnaci6vJQ`, digest `8f5c7b0d8a72`; `scripts/cln-tools/w68_live.mjs`): a ball of
+template-02 (`__kkExplode`) bursting on a home Castle Wall's coordinates took it from 30 HP to 12 and turned it into
+the Breached Wall; a powder charge standing at template-02 set off (`__kkDetonate`) 3 m from another knocked it down
+for +5 stone. (Wave 67's vitest on `main`: a ball at (10, 10), the player at template-02, took a home wall 30 → 12.)
+
+**The fix** (wave 68, with G-05). The three loops skip a building whose world (`b.world ?? null`) is not the blow's:
+the ball's `world`, the charge's own, the ram's PlacedBuilding's (else home — the raiders' ram rolls only there), the
+same world each already passes to `damageSitesNear` / `sitesIn`. The review round found the same root in a caller: the
+raiders' ram (`RaiderRam.tsx`) made for the first shut door or gate in any world, so with the world check in
+`ramCheck` a door shut at a destination would have parked it there all raid; its pick (`raiderRamGate`,
+`game/raiderRam.ts`) now takes a shut one standing at home (measured in G-05's review round, below).
+
+**Verified** (vitest, `src/game/ruins.test.ts`): a ball of template-02 on a home wall's coordinates leaves it whole
+and breaches the template-02 wall on the same spot, and a home ball then breaches the home one; a charge at template-02
+leaves the home wall 3 m off whole; a placed ram at template-02 against the home wall's coordinates lands no blow and
+plays no sound. With each of the three checks taken out its test fails, and `git diff` was identical after it was put
+back (re-run independently in the evidence pass, 2026-11-07: one test fails for each of the three). Live, side by
+side (the evidence pass's `w68_ev_live.mjs`; `main` on port 3101, build `bHI6F_qk2MwFFnaci6vJQ`, digest
+`8f5c7b0d8a72`; the change on port 3102, build `FY6GVaRo0YDRJaPwClLC8`, digest `74c3e6f6809f`): a template-02 ball
+(`__kkExplode`) bursting on home Castle Wall A's coordinates took it 30 → 12 HP and into the Breached Wall (mc009) on
+`main`, and left it whole on the change; a template-02 powder charge (`__kkDetonate`) 3 m from home wall B knocked it
+down for +5 stone on `main`, and left it whole, stone unchanged, on the change. No page errors on either. Not measured
+live: a placed ram at a destination (no hook drives a placed ram's `ramCheck`; vitest only), and a home engine's ball
+landing on a destination's buildings.
 
 ## Bugfix: the buy-then-sell "never pays" unit test ran close to vitest's 5 s timeout in the full suite — FOUND 2026-11-06 (wave 67's evidence pass; measured), FIXED 2026-11-06 (wave 67's review round)
 
@@ -10761,3 +10806,181 @@ interaction on it) at the destination, while its pieces — the keep site, alway
 still draw, take damage and seal the fort at home. `main` does the same (`KeepAssembly` only hid itself at
 destinations). To do: refuse to set the keep's foundation down outside home, or carry the site's world with it once
 sites are drawn at destinations (G-15b).
+
+## Bugfix: a piece a raid battered down vanished for half its materials, and nothing could be repaired — FOUND 2026-10-31 (FEATURE_PLAN.md's verification, "The keep is a singleton" and the critic's "ruins before battering"; OPEN-026, the owner's harsh-raids decision OD-02), FIXED 2026-11-06
+
+**The fault.** Siege damage ended one way. A building at 0 HP was deleted with half its materials back
+(`damageBuilding`, `buildSlice.ts`) unless a dragon had burned it (wave 57's `leaveRuin`); a keep piece at 0 HP was
+deleted the same way (`damageSitePart`, `keepSlice.ts`, wave 67's one delete); and nothing could mend a piece still
+standing. Under the owner's harsh raids (OD-02: battered pieces become repairable ruins; outright destruction is a lost
+raid's, G-07) that had to change before walls turn solid and battering becomes the raiders' plan (G-02, G-03). One more
+fault lay in the same path: the damage phases overwrite a wall's `type` (a Castle Wall becomes mc009, then mc010) and
+`labDamagedForm` never un-breaks, so nothing remembered what had been placed — a breached wall measured its HP against
+the breach's own cheaper cost from then on (mc009's 21 where the Castle Wall has 30), which moved its breach and ruin
+thresholds (at 12 HP and hit for 3 it stood breached at 9 of 21, where 9 of 30 is a ruin; the HP itself is stored as a
+number, so the blows read alike), and went down for the ruined mold's refund. Measured on `main` (production build of base-14 on port 3101, build `bHI6F_qk2MwFFnaci6vJQ`, digest `8f5c7b0d8a72`; `scripts/cln-tools/w68_live.mjs`): the raiders' ram took a home Castle Wall 30 → 18 (mc009), then
+in two blows to 6 of mc009's 21 (mc010) and deleted it for +2 stone ("Ruined Wall was rammed to rubble!" — half of
+mc010's 5, not of the Castle Wall's 10); the keep's Crenellated north run, rammed twice to 18 and then caught by a home
+cannonball, was deleted for +7 stone; the west run, by a home powder charge, deleted for +7; the Low south run, by three
+raider blows of 10, deleted for +4.
+
+**The fix** (wave 68, G-05). *Buildings.* `PlacedBuilding` gains an optional `baseType`, written by the first blow a
+piece takes; `game/repair.ts`'s `buildingBase` reads it, and on a save from before it resolves a wall the damage had
+turned into a broken phase (one with an HP entry, or a ruin) to the straight chain's phase 1 (`labIntactForm`,
+`labCapabilities.ts`: the lab charts phases 2 and 3 only, so phase 1 is named — mc006, the wall whose mold mc009 and
+mc010 are); a broken phase placed as it is and never damaged stays itself. `damageBuilding` takes its HP from the base
+(`maxHpFor(base)`), refunds the base's cost when it deletes, and with `leaveRuin` turns the piece into its 0-HP form (a
+castle wall's ruined mold) at `built: 0`, `ruin: true`. `leaveRuin` is now passed by every blow a raid strikes: the
+raiders' ram (`ramCheck`'s cause flag: the rammer is no PlacedBuilding), a siege crew's engine (`fireEngine`,
+`enemyAi/blows.ts`) and Cedric's engines (`CedricSiege.tsx`), beside the dragon; the player's own cannonballs, charges
+and ram still knock a piece down for half of what it was placed as. `constructBuilding` raises a ruin again as its
+base. *Keep pieces.* `damageSitePart` leaves a piece at 0 HP on its socket with `built` back to 0 and
+`ruined[socket] = true` (wave 67's field; no refund), so everything that reads a finished piece (`built >= 1`: the wall
+walk, the fort seal, the raiders' targets, the ladder, the engines' target lists) reads a ruin as not standing;
+`workSitePart` rebuilds it (no XP, no fanfare, "… rebuilt."), the socket prompt reads "Rebuild …", and `SiteAssembly`
+draws it by the construction path as its mold's broken phase where the lab charts one. The builders work a site's ruin
+once no building site waits (`siteRuinIn`, `sites/sites.ts`; the builder pass in `villagerSlice.ts` and the walk to it
+in `Villagers.tsx`), on the same terms as a building: only those standing at it, at the same rate. `knockdownRefund`
+went with the delete. *Repair.* `repairBuilding` and `repairSitePart` make a damaged standing piece whole — its base
+type back, its HP entry cleared — for `repairCost` (`repair.ts`: each material of the piece's cost times the share of
+HP lost, rounded up; the one function a balance pass tunes). `findTarget` offers it (kind `repair`, 0.9 s hold) on a
+damaged building beside whatever else the building does, aimed at its footing (so a wall shows it looked at anywhere,
+and a gate, engine, station or bed keeps its own prompt and shows the repair to a look down at its foot), and on a
+damaged keep piece, its label naming the bill. What it comes to, at half HP and at 0: a Castle Wall (10
+stone, 30 HP) 5 stone / 10; a Castle Gate (4 stone, 1 iron bar, 15 HP) 2 stone and 1 iron bar / 4 and 1; a
+Crenellated keep run (14 stone, 42 HP) 7 / 14; a Low Wall run (8 stone, 24 HP) 4 / 8; the Gatehouse (10 stone, 2 iron
+bars, 36 HP) 5 and 1 / 10 and 2. A piece at 0 is a ruin, though, and a ruin is rebuilt by hammer or builders for
+nothing, as the dragon's ruins always were (wave 57: an involuntary loss stings less than demolishing by hand) — so a
+battered piece costs its repair only while it still stands. Whether a ruin's rebuild should charge that full bill is
+the owner's call, in `repairCost`'s callers.
+
+Saves. `SAVE_VERSION` stays 1, no migration: `baseType` is optional and resolved when read (the chain needs
+`capabilities.json`, which loads after a save can be parsed, so a load-time migration could not do it), and `ruined`
+was already in the keep's shape and carried by `pickupKeep`. A save `main`'s own `toSave()` wrote
+(`src/game/ruins.main-save.json`) loads and repairs as tested below. For G-02: a ruined keep piece is
+`keep.ruined[socket] === true` with `keep.built[socket] === 0`, and a ruined building is `b.ruin` with `built: 0` —
+each already reads as not standing wherever `built >= 1` is the test, so the breach is what G-02's solids must leave
+open; collision is left as it is here. Out of scope, as planned: outright destruction (G-07), decay, solids (G-02).
+
+**Verified** in the worktree. `src/game/ruins.test.ts` (16 tests, 22 after the review round; the lab's straight chain
+given as it charts it, so CI needs no assets): the raiders' ram breaches a Castle Wall and leaves it a ruin in its
+ruined form keeping its base (that it is priced by the Castle Wall's 30 HP, and that a ruin takes its ruined form, no
+test pinned until the review round, below); the player's own ram knocks it down for 5 stone; a siege crew's engine and a raider's
+blow on the keep leave ruins; `repairCost`'s arithmetic; a breached wall repaired to its own type for 4 stone, a short
+purse and a ruin refused, a battered gatehouse repaired for 3 stone and 1 iron bar; a ruin rebuilt as its base with no
+XP; two builders' worth of work raising a ruined keep run once no building site waits; a `main` save's walls repaired
+through the chain lookup (to mc006), a placed Breached Wall left itself and a dragon's ruin rebuilt as its stable; and
+the two logged bugs' tests (their entries above). Golden tests changed on purpose (OD-02), in `keepGolden.test.ts`:
+siege damage, the refund, the charge and the loaded `main` save now expect a ruin with nothing back where they pinned a
+delete with half the materials, and the ram's test a bare socket passed by; `sites.test.ts`'s second-site and charge
+tests likewise, its `knockdownRefund` test removed with the function; `siege.test.ts`'s keep ram test rams a finished
+run. Each of the thirteen pieces of the fix taken out (`scripts/cln-tools/w68_takeout.py`, `w68_takeout.txt`) fails
+its tests — 1 to 8 each — and `git diff` was identical after each was put back. `tsc` clean; unit tests 95 files, 742
+passing; `next build` clean. Live on production builds of `main` and the change — a wall rammed to half and to 0, the
+keep's runs battered to 0 by the ram, a cannonball, a charge and raider blows, a repair of each kind, two builders
+raising the ruins, screenshots of a ruined keep run and a ruined wall (`w68_live.mjs`, `w68_shots.mjs`).
+
+**The evidence pass** (2026-11-07, run independently). `tsc` clean; unit tests 95 files, 742 passing; `next build`
+clean. Mutation controls (`scripts/cln-tools/w68_ev_mutate.mjs`, `w68_ev_mutate.txt`): 36 single changes, each put
+back to `main`'s behaviour alone, the whole suite run, the file written back from its own bytes; a hash of `git diff
+--binary`, `git status` and every untracked file was identical before and after the run, and `git diff`'s sha256 was
+the same as at the start of the pass. 26 are caught (1 to 8 tests each). Ten are not: pricing the HP by `b.type`
+instead of the base (it moves only the breach and ruin thresholds: 30 → 18 → 6 is the same either way), a building's
+ruin keeping its last type rather than `formAt(base, 0)` (seen only when one blow takes a whole wall straight to 0),
+Cedric's `leaveRuin` (a component; no test, not driven live), `repairBuilding`'s `isBuilt` check (a ruin has no HP
+entry, so the HP check already refuses it), the real `labIntactForm` (the tests mock it; read against
+`capabilities.json` instead: mc009 phase 2 and mc010 phase 3 are the whole chain, mc006 is an unphased
+`wall_straight`), and four the live run below covers — the two repair prompts in `findTarget`, `performAction`'s
+`repair` branch, and the builders' walk to a site ruin in `Villagers.tsx` — and `SiteAssembly`'s ruined model, which
+only the screenshots show.
+
+Live, side by side (`scripts/cln-tools/w68_ev_live.mjs`, written apart from `w68_live.mjs`; output in
+`w68_ev_main.txt` / `.json` and `w68_ev_change.txt` / `.json`): `main` from base-14 on port 3101 (build
+`bHI6F_qk2MwFFnaci6vJQ`, digest `8f5c7b0d8a72`), the change from the worktree on port 3102 (build
+`FY6GVaRo0YDRJaPwClLC8`, digest `74c3e6f6809f`); the keep at (0, 0) with both Crenellated runs, the Low run, four
+corners and the hall, and Castle Walls 26 m south. The raiders' ram on wall C: 30 → 18 (mc009) → 6 (mc010) on both;
+the third blow deleted it for +2 stone on `main` ("Ruined Wall was rammed to rubble! Half materials recovered."),
+and left it a ruin on the change (mc010, built 0, `ruin`, `baseType` stonewall, stone unchanged); a fourth blow found
+nothing on `main` and played no sound on the change. The keep's north run, four raiders' ram blows: 42 → 30 → 18 → 6 on
+both, then deleted for +7 stone on `main`, in ruins on the change (`wall_crenel` kept, built 0, `ruined`, no stone).
+The west run, a home powder charge: deleted for +7 on `main`, in ruins on the change. The south run, three raider blows
+of 10 (`damageKeepPart`, `batterKeep`'s call): deleted for +4 on `main`, in ruins on the change. The control, the
+player's own two cannonballs on wall E: 30 → 12 (mc009), then deleted on both — for +3 stone on `main` ("Breached
+Wall was blasted to rubble!", half the breach's cost) and +5 on the change (half the Castle Wall's 10). Repair by the
+real prompt (the player stood at it, E held 1.5 s): wall D after one ram blow (18/30) read "Hold E — Repair Castle
+Wall (Crenellated) (18/30) — 4 Stone" and came back as stonewall with no HP entry for 4 stone (485 → 481); the
+gatehouse raised on the east socket and given one raider blow (26/36) read "Hold E — Repair Gatehouse (26/36) — 3
+Stone, 1 Iron Bar" and was made whole for 3 stone and 1 iron bar; on `main` neither had a prompt and both stayed
+damaged. At the ruined north run the change reads "Hold E — Rebuild Crenellated Wall (0%)", `main` "E — North Wall —
+choose what to raise". The builders: two builder villagers, day held, rebuilt wall C (as stonewall) between 35 and
+55 s, then the north run by 105 s, the south by 125 s and the west by 140 s, with no materials spent ("Castle Wall
+(Crenellated) rebuilt from the ashes!", "Crenellated Wall rebuilt." twice, "Low Wall rebuilt."); on `main` there was
+nothing left to rebuild. Everything else matched: the keep and its costs, the wall phases and HP, the gate bursting
+under a shut-gate blow, the gatehouse's 10 stone and 2 iron bars. No page errors on either. Screenshots (GPU,
+CLAUDE.md's flags): `w68_ev_change_north_run.png` (the north and west runs lying as wireframe ruins between standing
+corners; `w68_ev_main_north_run.png` shows bare sockets) and `w68_ev_change_wall_c.png` (wall C's ruin, unobstructed).
+Not measured live: a siege crew's engine and Cedric's engines (the crew by vitest; Cedric's by neither), the dragon,
+an old save loaded in the browser (vitest's `main` fixture only), and whether the ruin's wireframe is the broken
+mold rather than the whole one (the screenshots were not compared against a build without it).
+
+**Review round** (2026-11-07; five defects, four distinct — the first was found by both lenses — each fixed at its
+root with a test that fails without it). (1, high) The repair prompt took a damaged building's prompt over: its
+`continue` skipped everything the building does, and an unaffordable repair is not actionable, so a battered shut gate
+could not be opened without the bill (a Portcullis at 4 HP with no iron bar, for good), a battered cannon or catapult
+could not be fired or manned mid-raid, and a scorched stable or forge could not be entered or used. On `main` a
+damaged building kept all of it. Now the repair is offered beside the building's own prompt, aimed at its footing,
+and never `continue`s. (2, medium) The ram still struck a building site not yet finished (it skipped only `b.ruin`),
+and the raiders' ram now leaves a ruin, so a Castle Wall ghost on its line went to `ruin: true` and its finishing took
+the rebuild path: no build XP, no buildings-placed stat, no quest credit, its progress gone. `ramCheck` skips any
+building not finished (`!isBuilt`), as its socket loop already did. (3, medium) The raiders' ram picked its gate in any
+world; fixed in `raiderRamGate` (the cross-world entry above), which also passes by a shut gate lying in ruins, as
+`ramCheck` now does. (4, medium) The first test claimed to pin the HP priced by the base, but 6/21 is below a third as
+well, so pricing by `b.type` passed it (the evidence pass's surviving R1), and its ruin was already mc010 from the
+phase change (R4). Two tests now tell them apart: a breached Castle Wall at 12 HP hit for 3 is ruined at 9/30 (at 9/21
+it would stand breached), and one 45 blow with `leaveRuin` leaves the ruined mold, not the Castle Wall. Added with
+them: the ram passes an unfinished wall and its finishing still earns XP; the raiders' ram makes for a shut gate at
+home, not a door shut at template-02 nor a ruined gate; and, through `findTarget` with a real camera, a shut gate at 4
+HP with no iron bar offers "Open the Gate" straight on and its greyed repair at its foot, while a battered wall offers
+its repair straight on. `ruins.test.ts`'s `labCanFire` mock now answers only for the crew's engine (it made every wall
+a cannon to `findTarget`). Controls (`scripts/cln-tools/w68_fix_mutate.mjs`, `w68_fix_mutate.txt`): the repair's
+`continue` put back, the ram's `!isBuilt` back to `b.ruin`, the gate pick's home check and its standing check each
+dropped, the HP priced by `b.type`, and the ruin left in its last type — each fails one test; each file restored byte
+for byte. (Moving the footing back to 1.4 alone fails nothing: without the `continue` the two aim points still
+differ.) `tsc` clean; unit tests 95 files, 748 passing. Live, side by side (`scripts/cln-tools/w68_fix_live.mjs`,
+`w68_fix_main.txt` / `w68_fix_change.txt`; `main` from base-14 on port 3101, build `bHI6F_qk2MwFFnaci6vJQ`, digest
+`8f5c7b0d8a72`; the change rebuilt on port 3102, build `aPTB-WTE0Ee0vVyialpXh`, digest `89da660049f4`): a shut Castle
+Gate at 4 HP, no iron bar, read "Hold E — Open the Gate" on both and opened under E; a Cannon at 4 HP read "E — Fire
+Cannon (1 stone)" on both; a Castle Wall at 18 HP read "Hold E — Repair Castle Wall (Crenellated) (18/30) — 4 Stone"
+on the change, looked at straight on, and was repaired for 4 stone (no prompt on `main`); the raiders' ram held 3 s
+against an unfinished Castle Wall (built 0.4) played `ram` 3 times on `main`, breached it twice and deleted it for +2
+stone, and played nothing on the change, the site left at 0.4; with a door shut at template-02 listed before a shut
+home gate, the raiders' ram headed straight for the template-02 door's coordinates on `main` (cosine 1.000 to it) and
+straight for the home gate on the change (1.000). No page errors on either. Not measured live: the repair offered at
+a gate's foot (no hook sets the camera's pitch; vitest only).
+
+## Seen, not fixed: every ruin's notice says "a smoking ruin" — logged 2026-11-06 (wave 68; by the code)
+
+`damageBuilding`'s ruin line (`buildSlice.ts`) was written for the dragon: "<piece> <cause> to a smoking ruin! Rebuild
+it to restore it." Since wave 68 the raiders' ram and the siege engines leave ruins too, so a rammed Castle Wall reads
+"Castle Wall (Crenellated) was rammed to a smoking ruin!", and Cedric's cause has no verb ("Stable battered by Cedric's
+siege engines to a smoking ruin!", `CedricSiege.tsx`; it read "… to rubble!" before). To do: word the ruin by its cause
+(the dragon keeps its smoke), and give Cedric's cause its "was"; `dragonfire.test.ts` pins the dragon's line.
+
+## Seen, not fixed: demolishing or undoing a battered building refunds by its damaged form — logged 2026-11-06 (in the review of wave 68; by the code)
+
+Wave 68 made `damageBuilding`'s own delete refund by what was placed (`buildingBase`, `game/repair.ts`), but
+`removeBuilding` and `undoLast` (`buildSlice.ts`) still refund by `b.type`: hand-demolishing a breached Castle Wall
+gives back half of mc009's cost, not of the Castle Wall's, and undoing a just-placed wall that a raid left a ruin refunds
+the ruined mold's full cost (mc010's 5 stone, not 10) — the same edge the wave-57 dragon ruins always had. To do: refund
+by `buildingBase(b, st.buildingHp[b.id])` in both, and test a breached and a ruined piece.
+
+## Open decision: should rebuilding a ruin cost materials? — logged 2026-11-06 (wave 68's implementer; OD-22 in FEATURE_PLAN.md)
+
+Since wave 68 a piece the raid batters to 0 HP lies as a ruin that the hammer or the builders raise again for nothing
+(the rule wave 57 made for the dragon's ruins), while repairing a piece still standing costs its share of the bill
+(`repairCost`, `game/repair.ts`: each material x HP lost / max HP, rounded up). So a damaged piece costs its repair only
+while it stands, and in materials a lost piece now costs less than on `main`, where it was deleted for half its
+materials and paid for again in full. What it costs instead is time and the breach: the evidence pass's two builders took
+140 s over one wall and three keep runs, and a ruin stands open (G-02). Recommended (R, OD-22): a ruin's rebuild charges
+its repair bill at 0 HP — the piece's whole cost — the dragon's ruins included, so letting a piece fall is never cheaper
+than mending it; built with G-07's lost-raid consequences (wave 73), `repairCost` being the one place to tune it.

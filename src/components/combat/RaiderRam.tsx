@@ -18,10 +18,9 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { ramCheck } from '@/game/siege';
-import { raiderRamState } from '@/game/raiderRam';
+import { raiderRamGate, raiderRamState } from '@/game/raiderRam';
 import { settleWreck } from '@/game/raiderProps';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
-import { isDoorLike } from '@/game/types';
 import RiggedProp, { setPropTravel } from '../world/RiggedProp';
 import { homeGroundY } from '../world/TemplateWorld';
 
@@ -59,9 +58,7 @@ export default function RaiderRam() {
     }
 
     const st = useGameStore.getState();
-    // whatever is barred against them: the castle gate first, else any shut
-    // door (Wave 8 — isDoorLike; a ram against a garden door is still a ram)
-    const gate = st.buildings.find((b) => isDoorLike(b.type) && !(st.gateOpen[b.id] ?? true));
+    const gate = raiderRamGate(st.buildings, st.gateOpen);
     const tx = gate ? gate.x : HOME_X;
     const tz = gate ? gate.z : HOME_Z;
     const dx = tx - raiderRamState.x;

@@ -21,6 +21,7 @@ import {
 import { ITEMS } from '../../data/items';
 import { CHESTPLATE_BY_TIER, CHESTPLATE_ITEM, chestplateTierOf } from '../../data/armor';
 import { BUILDABLE_BY_ID } from '../../data/buildables';
+import { siteRuinIn } from '../../sites/sites';
 import { levelFromXp } from '../../data/ranks';
 import { audio } from '@/lib/audio';
 import { worldEnv } from '../../env';
@@ -679,6 +680,15 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
                 }
               }
             }
+          } else {
+            // G-05 · no building site waiting: the builders raise what a siege left in ruins on a socket site (the
+            // keep's battered pieces), on the same terms — only those standing at it, at the same rate
+            const ruin = siteRuinIn(st, world);
+            const atSite = !ruin ? 0 : roster.reduce((t, v) => {
+              const m = villagerMobs[v.id];
+              return v.job === 'builder' && m && Math.hypot(m.x - ruin.x, m.z - ruin.z) <= WORK_RANGE ? t + builderWeightOf(v) : t;
+            }, 0);
+            if (ruin && atSite > 0) st.workSitePart(ruin.site, ruin.socket, dt * 0.04 * atSite);
           }
         }
         for (const v of roster) {

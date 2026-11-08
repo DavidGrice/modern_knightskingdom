@@ -5,9 +5,10 @@ import type { ItemId, PlacedBuilding } from '../../types';
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
 import { KEEP_PART_BY_ID, maxHpForPart } from '../../data/keep';
 import {
-  KEEP_SITE_ID, knockdownRefund, siteById, siteComplete, siteSocket, siteSockets, siteWrite,
+  KEEP_SITE_ID, siteById, siteComplete, siteSocket, siteSockets, siteWrite,
 } from '../../sites/sites';
 import { ITEMS } from '../../data/items';
+import { repairCost } from '../../repair';
 import { audio } from '@/lib/audio';
 import { buildUndo, seq } from '../storeCounters';
 import type { SliceCreator } from './types';
@@ -41,11 +42,13 @@ export interface KeepSlice {
   clearBench: () => void;
   /** G-36 · commit a part to one socket of a site, paying its bill of pieces */
   raiseSitePart: (siteId: string, socketId: string, partId: string) => void;
-  /** G-36 · one hammer swing's worth of work on a site socket's piece */
+  /** G-36 · one hammer swing's worth of work on a site socket's piece — a new one, or a ruin being rebuilt */
   workSitePart: (siteId: string, socketId: string, amount: number) => void;
-  /** G-36 · a raised piece on a site takes siege damage — knocked down (socket cleared, half materials refunded) at
-   *  0 HP, same shape as damageBuilding */
+  /** G-36 · a raised piece on a site takes siege damage. Wave 68 (G-05): at 0 HP it lies in ruins — its part kept,
+   *  `ruined` set and its work back to 0, a breach to rebuild — where it was knocked down for half its materials */
   damageSitePart: (siteId: string, socketId: string, amount: number, cause?: string) => void;
+  /** G-05 · make a damaged, standing piece on a site whole, for repair.ts's repairCost of its HP lost */
+  repairSitePart: (siteId: string, socketId: string) => void;
   /** the same three on the home keep (site 'keep') */
   raiseKeepPart: (socketId: string, partId: string) => void;
   workKeepPart: (socketId: string, amount: number) => void;
@@ -123,6 +126,16 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       if (before >= 1) return;
       const after = Math.min(1, before + amount);
       const built = { ...site.built, [socketId]: after };
+      if (after >= 1 && site.ruined?.[socketId]) {
+        // G-05 · a ruin raised again: whole, and no longer a ruin — but it earns nothing a first raising did (the XP,
+        // the castle's fanfare), the same as a building's ruin (buildSlice.ts's constructBuilding)
+        const ruined = { ...site.ruined };
+        delete ruined[socketId];
+        set({ ...siteWrite(st, siteId, { built, ruined }), dirty: true });
+        audio.play('brick_link', 0.9);
+        st.notify(`${KEEP_PART_BY_ID[site.parts[socketId]]?.name ?? 'Piece'} rebuilt.`, true);
+        return;
+      }
       set({ ...siteWrite(st, siteId, { built }), dirty: true });
       if (after >= 1) {
         const part = KEEP_PART_BY_ID[site.parts[socketId]];
@@ -152,20 +165,42 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
         audio.play('brick_collide', 0.6);
         return;
       }
-      // knocked down: back to a bare socket, half its materials recovered
-      const parts = { ...site.parts };
-      delete parts[socketId];
-      const built = { ...site.built };
-      delete built[socketId];
+      // G-05 · battered down to a ruin: the part stays on its socket, built back to 0 so nothing reads it as standing
+      // (the walk, the seal, the raiders' targets), and rebuilt by hammer or builders for nothing more — no refund
+      // here, as a building's ruin has none (OD-02: outright destruction is a lost raid's, G-07)
       const hpRest = { ...site.hp };
       delete hpRest[socketId];
-      const inv = { ...st.inventory };
-      for (const [itemId, n] of Object.entries(knockdownRefund(part.cost))) {
-        inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + (n as number);
-      }
-      set({ ...siteWrite(st, siteId, { parts, built, hp: hpRest }), inventory: inv, dirty: true });
+      set({
+        ...siteWrite(st, siteId, {
+          built: { ...site.built, [socketId]: 0 }, hp: hpRest, ruined: { ...site.ruined, [socketId]: true },
+        }),
+        dirty: true,
+      });
       audio.play('brick_collide', 0.8);
-      st.notify(`${part.name} ${cause ?? 'was battered down'}! Half materials recovered.`, true);
+      st.notify(`${part.name} ${cause ?? 'was battered down'} — it lies in ruins. Rebuild it to restore it.`, true);
+    },
+
+    repairSitePart: (siteId, socketId) => {
+      const st = get();
+      const site = siteById(st, siteId);
+      const part = site ? KEEP_PART_BY_ID[site.parts[socketId] ?? ''] : null;
+      const hp = site?.hp?.[socketId];
+      // a ruin is rebuilt (workSitePart), not repaired; a piece with no HP on record is whole
+      if (!site || !part || (site.built[socketId] ?? 0) < 1 || hp === undefined) return;
+      const max = maxHpForPart(part);
+      const cost = repairCost(part.cost, max - hp, max);
+      if (!st.canAfford(cost)) {
+        st.notify(`Not enough materials to repair the ${part.name}.`);
+        audio.play('brick_collide', 0.5);
+        return;
+      }
+      const inv = { ...st.inventory };
+      for (const [itemId, n] of Object.entries(cost)) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) - (n as number);
+      const hpRest = { ...site.hp };
+      delete hpRest[socketId];
+      set({ ...siteWrite(st, siteId, { hp: hpRest }), inventory: inv, dirty: true });
+      audio.play('brick_link', 0.85);
+      st.notify(`${part.name} repaired.`, true);
     },
 
     raiseKeepPart: (socketId, partId) => get().raiseSitePart(KEEP_SITE_ID, socketId, partId),
@@ -180,7 +215,7 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       // every socket's part/progress/HP travels with the foundation, lossless
       // — carried outside movingBuilding (a plain PlacedBuilding has nowhere
       // to hold that) and restored by cancelMove/finishMove (buildSlice.ts)
-      // (Wave 67 · and its ruins and gates, once anything writes them: all of KeepState but where it stands)
+      // (Wave 67 · and its ruins and gates: all of KeepState but where it stands)
       const { x: _x, z: _z, y: _y, ...extra } = keep;
       buildUndo.carriedKeepExtra = { ...extra, hp: keep.hp ?? {} };
       set({

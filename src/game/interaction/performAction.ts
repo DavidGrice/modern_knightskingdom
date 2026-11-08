@@ -283,6 +283,10 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
     st.cultivatePlot(t.id);
   } else if (t.kind === 'water_plot') {
     st.waterPlot(t.id);
+  } else if (t.kind === 'repair') {
+    // G-05 · a site's piece, or a building
+    if (t.site) st.repairSitePart(t.site, t.id);
+    else st.repairBuilding(t.id);
   } else if (t.kind === 'keep_socket') {
     st.openKeepSocket(t.id, t.site);
   } else if (t.kind === 'keep_work') {

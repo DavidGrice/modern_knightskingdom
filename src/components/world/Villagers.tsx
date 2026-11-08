@@ -27,6 +27,7 @@ import { registerVillagerCombat, VILLAGER_MAX_HP, villagerGearHpBonus } from '@/
 import { applyDownedGate } from '@/game/actorDowned';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 import { isBuilt, isHomeBuilding } from '@/game/types';
+import { siteRuinIn } from '@/game/sites/sites';
 import type { CharacterConfig, ItemId, PlacedBuilding, Villager } from '@/game/types';
 import { wrapAngle } from '@/lib/math';
 import { hashId } from '@/lib/rng';
@@ -363,8 +364,10 @@ function VillagerFigure({ villager }: { villager: Villager }) {
       // toward it. Same guard shape as `sameWorldAsVillager` two sections up
       // (out of scope here, a different block), null/null for a home builder
       // so this is a no-op for them.
-      const site = useGameStore.getState().buildings
-        .find((b) => !isBuilt(b) && (b.world ?? null) === (villager.world ?? null));
+      // G-05 · and once no building site waits, a socket site's ruin (the builder pass's own order)
+      const gs = useGameStore.getState();
+      const site = gs.buildings.find((b) => !isBuilt(b) && (b.world ?? null) === (villager.world ?? null))
+        ?? siteRuinIn(gs, villager.world ?? null);
       if (site) {
         const { nx, nz, dist: d } = navSteer(s, site.x, site.z, dt);
         if (d < 1.8) {

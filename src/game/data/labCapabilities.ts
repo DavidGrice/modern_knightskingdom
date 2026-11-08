@@ -340,6 +340,20 @@ export function labDamagedForm(assetId: string | undefined, hpFrac: number): str
   return next && next !== assetId ? next : null;
 }
 
+/** Wave 68 (G-05) · the intact phase 1 of the chain: the wall mc009 and mc010 are the broken forms of. The lab charts
+ *  phases 2 and 3 only, so phase 1 is named here — mc006, the plain wall whose mold they are (byte for byte its raw
+ *  size, and the one wall the old hardcoded ladder broke: mc006 → mc009 → mc010). */
+const CHAIN_INTACT = 'mc006';
+
+/** what a broken wall was before it broke: phase 1 of the straight chain for a damaged phase (mc009, mc010), else
+ *  null. Only a save from before PlacedBuilding.baseType needs it — the damage phases overwrite a wall's type, and
+ *  labDamagedForm never un-breaks. */
+export function labIntactForm(assetId: string | undefined): string | null {
+  const phase = capOf(assetId)?.traits.wall?.destructionPhase ?? 1;
+  if (phase < 2 || !straightChain().includes(assetId!)) return null;
+  return capOf(CHAIN_INTACT)?.traits.wall?.structureKind === 'wall_straight' ? CHAIN_INTACT : null;
+}
+
 /** a siege engine the lab marked as able to shoot (`traits.vehicle.canFire`) */
 export function labCanFire(assetId: string | undefined): boolean {
   const c = capOf(assetId);
