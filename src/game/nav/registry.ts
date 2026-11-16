@@ -168,6 +168,12 @@ export function rebuildNav(buildings: PlacedBuilding[]): void {
   homeGrid.rebuild(buildings);
 }
 
+/** Whether there is any way across the home grid from one point to another (NavGrid.reachable) — which findPath's null,
+ *  given at its cap too, does not say. */
+export function navReachable(sx: number, sz: number, tx: number, tz: number): boolean {
+  return homeGrid.reachable(sx, sz, tx, tz);
+}
+
 /** A way across the home grid (NavGrid.findPath; `wide`: for a wide walker, the merchant leading his team). */
 export function findPath(
   sx: number, sz: number, tx: number, tz: number, maxNodes = 4000, wide = false,

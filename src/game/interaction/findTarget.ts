@@ -32,7 +32,7 @@ import { GROUNDS, GROUND_BY_ID, deedName, groundOpen } from '@/game/data/grounds
 import { CULTIVATED_PLOTS, MAX_PLOT_STAGE, plotStakeAt } from '@/game/data/cultivatedPlots';
 import { KEEP_PART_BY_ID, maxHpForPart } from '@/game/data/keep';
 import { billText, buildingBase, repairCost } from '@/game/repair';
-import { KEEP_SITE_ID, siteById, siteSocketWorld, siteSockets } from '@/game/sites/sites';
+import { KEEP_SITE_ID, siteById, siteGate, siteSocketWorld, siteSockets } from '@/game/sites/sites';
 import { SET_PLANS, setStepCount } from '@/lib/setBuild';
 import { crewState } from '@/game/crew';
 import type { Target } from './types';
@@ -504,16 +504,27 @@ export function findTarget(ctx: TargetCtx, st: ReturnType<typeof useGameStore.ge
           id: sock.id, site: keepSite.id, kind: 'keep_work', duration: 0.9, actionable: true,
           label: `${keepSite.ruined?.[sock.id] ? 'Rebuild' : 'Build'} ${part?.name ?? 'piece'} (${Math.round((keepSite.built[sock.id] ?? 0) * 100)}%)`,
         });
-      } else if (keepSite.hp?.[sock.id] !== undefined && KEEP_PART_BY_ID[partId]) {
-        // G-05 · a battered piece still standing: made whole for the share of its cost it has lost
-        const part = KEEP_PART_BY_ID[partId];
-        const max = maxHpForPart(part);
-        const hp = keepSite.hp[sock.id];
-        const cost = repairCost(part.cost, max - hp, max);
-        consider(sx, sz, 2.6, {
-          id: sock.id, site: keepSite.id, kind: 'repair', duration: 0.9, actionable: st.canAfford(cost),
-          label: `Repair ${part.name} (${hp}/${max}) — ${billText(cost)}`,
-        });
+      } else {
+        // G-02 · the gatehouse opens and shuts, from either side, at its own height — the way a placed gate does
+        const gate = siteGate(keepSite, sock.id);
+        if (gate) {
+          consider(sx, sz, (keepSite.y ?? 0) + 1.6, {
+            id: sock.id, site: keepSite.id, kind: 'gate', duration: 1.2, actionable: true,
+            label: `${gate === 'open' ? 'Close' : 'Open'} the Gatehouse`,
+          });
+        }
+        if (keepSite.hp?.[sock.id] !== undefined && KEEP_PART_BY_ID[partId]) {
+          // G-05 · a battered piece still standing: made whole for the share of its cost it has lost — beside the
+          // gatehouse's Open / Close, never in its place (Wave 68's rule for a building): at its foot
+          const part = KEEP_PART_BY_ID[partId];
+          const max = maxHpForPart(part);
+          const hp = keepSite.hp[sock.id];
+          const cost = repairCost(part.cost, max - hp, max);
+          consider(sx, sz, gate ? keepSite.y ?? 0 : 2.6, {
+            id: sock.id, site: keepSite.id, kind: 'repair', duration: 0.9, actionable: st.canAfford(cost),
+            label: `Repair ${part.name} (${hp}/${max}) — ${billText(cost)}`,
+          });
+        }
       }
     }
   }

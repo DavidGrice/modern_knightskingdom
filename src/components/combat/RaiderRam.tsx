@@ -1,8 +1,8 @@
 'use client';
 // Visual + AI for the raiders' own battering ram (see game/raiderRam.ts):
-// trundles toward the nearest shut gate, or the homestead's center if there
-// isn't one, ramming whatever it reaches via the same ramCheck the player's
-// pushed cart already uses.
+// trundles toward the nearest shut gate (or the keep's gatehouse, shut), or the
+// homestead's center if there isn't one, ramming whatever it reaches via the
+// same ramCheck the player's pushed cart already uses.
 //
 // Rendered through RiggedProp rather than PropModel so its WHEELS TURN: the
 // rig lab charted `wheel_0`/`wheel_1` on oc4806, and RiggedProp rotates any
@@ -58,7 +58,7 @@ export default function RaiderRam() {
     }
 
     const st = useGameStore.getState();
-    const gate = raiderRamGate(st.buildings, st.gateOpen);
+    const gate = raiderRamGate(st.buildings, st.gateOpen, st.keep);
     const tx = gate ? gate.x : HOME_X;
     const tz = gate ? gate.z : HOME_Z;
     const dx = tx - raiderRamState.x;

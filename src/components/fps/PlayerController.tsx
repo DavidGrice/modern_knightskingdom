@@ -25,7 +25,7 @@ import { keyboardLook } from './input/look';
 import { publishPlayerState } from './publishPlayerState';
 import { readAim, pinNameplate } from './aimReadout';
 import { useFovEase, placeCamera } from './cameraRig';
-import { relocate, flyPhoto, crewEngine, walk } from '@/game/playerPhysics/locomotion';
+import { relocate, flyPhoto, crewEngine, walk, photoReturn, keepFloorTrack } from '@/game/playerPhysics/locomotion';
 import { newFloorTrack } from '@/game/playerPhysics/vertical';
 import { holdToAct, dropHold } from '@/game/interaction/holdToAct';
 
@@ -67,8 +67,10 @@ export default function PlayerController() {
   // fed by walk in locomotion.ts) needs the PREVIOUS answer, not just this
   // one — see it for why.
   const wasOnOpenGround = useRef(true);
-  // Wave 65.2 · the floor under the player last frame, which tells a slope from a step (floorCarry, vertical.ts)
+  // Wave 65.2 · the floor under the player last frame, which tells a slope from a step (floorCarry, vertical.ts).
+  // Wave 69 · and whether walk ran last frame to set it (locomotion.ts's keepFloorTrack)
   const floorTrack = useRef(newFloorTrack());
+  const walked = useRef(true);
   // requested 2026-08-03: the lava arena's own ambient chip damage — a
   // once-per-second tick through the normal damagePlayer() path (so armor/
   // block still apply), not a per-frame call, which would spam the hit
@@ -108,7 +110,9 @@ export default function PlayerController() {
 
     // knocked out and carried back to camp, or asked to be somewhere else: put there first (CLN-26:
     // game/playerPhysics/locomotion.ts, as is each way of moving below)
-    relocate(pos, yaw);
+    const moved = relocate(pos, yaw);
+    // Photo Mode's flight leaves the player where it found him (G-02: the keep's walls hold against it)
+    photoReturn(st.photoMode, moved, pos, grounded, vel);
 
     // camera orientation
     camera.rotation.order = 'YXZ';
@@ -117,6 +121,7 @@ export default function PlayerController() {
     if (!frozen) {
       keyboardLook(keys, kb, yaw, pitch, dt);
       camera.rotation.set(pitch.current, yaw.current, 0);
+      keepFloorTrack(!st.photoMode && !crewState.engineId, walked, floorTrack);
       if (st.photoMode) {
         flyPhoto(camera, pos, kb, keys, isDown, dt);
       } else if (crewState.engineId) {
@@ -135,8 +140,10 @@ export default function PlayerController() {
       if (ticks) tickWorldFrame(st, pos.current.x, pos.current.z);
 
       // what the player is looking at, its prompt, and acting on it — at once or held (CLN-26:
-      // game/interaction/holdToAct.ts)
-      holdToAct({ camera, pos, kb, isDown, pad, talkCooldown, holdTarget, holdTime, holdJustCompletedId, holdJustCompletedKind, grounded, vel, yaw }, st, dt);
+      // game/interaction/holdToAct.ts). Not from Photo Mode's camera (wave 69): the HUD shows no prompt there, and
+      // acting from where it has flown reached through walls — a gate opened, a keep entered and left inside its ring
+      if (st.photoMode) dropHold(st, holdTarget);
+      else holdToAct({ camera, pos, kb, isDown, pad, talkCooldown, holdTarget, holdTime, holdJustCompletedId, holdJustCompletedKind, grounded, vel, yaw }, st, dt);
 
       // CLN-20 · the world's half-second sweep (nearby stations, the wall
       // ring, respawns, plots, villagers) — game/worldTick.ts, whose

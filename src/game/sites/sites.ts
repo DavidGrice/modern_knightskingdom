@@ -13,7 +13,7 @@
 //
 // Leaf module: types and data only (no store import), so the store's slices can use it.
 import {
-  KEEP_SIZE, KEEP_SOCKETS, SOCKET_BY_ID, WALK_CORNER_HALF, WALK_DEEP_HALF, WALK_RUN_HALF,
+  KEEP_PART_BY_ID, KEEP_SIZE, KEEP_SOCKETS, SOCKET_BY_ID, WALK_CORNER_HALF, WALK_DEEP_HALF, WALK_RUN_HALF,
   type KeepSocket, type KeepState, type SocketKind,
 } from '../data/keep';
 
@@ -121,6 +121,10 @@ export interface SocketWorld {
   /** half extents of the ground the piece covers, along the world's X and Z axes (its turned footprint's bounds) */
   hx: number;
   hz: number;
+  /** Wave 69 (G-02) · half extents of that ground in the piece's own frame: along it (its own x, turned by `yaw`) and
+   *  across it — the footprint itself, where hx and hz bound it */
+  along: number;
+  across: number;
 }
 
 /** where one socket of a site stands in the world: its layout position turned by the site's rot about its origin, the
@@ -141,5 +145,55 @@ export function siteSocketWorld(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layo
     yaw,
     hx: ca * along + sa * across,
     hz: sa * along + ca * across,
+    along,
+    across,
   };
+}
+
+/** G-02 · whether a piece stands on the socket: raised and finished — a ruin is built 0, a breach */
+export function siteStands(site: Pick<SocketSite, 'parts' | 'built'>, socketId: string): boolean {
+  return !!site.parts[socketId] && (site.built[socketId] ?? 0) >= 1;
+}
+
+/** G-02 · the gate standing on a socket (the gatehouse), 'open' or 'shut' — its gateOpen absent is open, as a placed
+ *  gate's `st.gateOpen[id] ?? true` is, so no keep from before the gatehouse shut is shut now; null for any other piece,
+ *  and for a gate not standing (a ruined one is a breach, whichever it was) */
+export function siteGate(site: Pick<SocketSite, 'parts' | 'built' | 'gateOpen'>, socketId: string): 'open' | 'shut' | null {
+  if (!KEEP_PART_BY_ID[site.parts[socketId] ?? '']?.gate || !siteStands(site, socketId)) return null;
+  return (site.gateOpen?.[socketId] ?? true) ? 'open' : 'shut';
+}
+
+/** G-02 · (x, z) in a socket piece's own frame: along it, and across it */
+function socketFrame(at: SocketWorld, x: number, z: number): [number, number] {
+  const c = Math.cos(at.yaw), s = Math.sin(at.yaw), dx = x - at.x, dz = z - at.z;
+  return [dx * c - dz * s, dx * s + dz * c];
+}
+
+/** G-02 · how far (x, z) is from the ground a socket's piece covers (0 on it) */
+export function siteSocketGap(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layout'>, socketId: string, x: number, z: number): number {
+  const at = siteSocketWorld(site, socketId);
+  if (!at) return Infinity;
+  const [u, v] = socketFrame(at, x, z);
+  return Math.hypot(Math.max(0, Math.abs(u) - at.along), Math.max(0, Math.abs(v) - at.across));
+}
+
+/** G-02 · the ground `gap` metres out from a socket's piece on the side away from the site's middle, where someone
+ *  outside comes up against it — straight out from a wall run's face, out from a corner's point */
+export function siteSocketOutside(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layout'>, socketId: string, gap: number): { x: number; z: number } | null {
+  const at = siteSocketWorld(site, socketId);
+  if (!at) return null;
+  const out = Math.hypot(at.x - site.x, at.z - site.z);
+  if (out < 1e-9) return null; // the bailey's middle has no outside
+  const nx = (at.x - site.x) / out, nz = (at.z - site.z) / out;
+  // from the piece's middle along that way to its edge, in its own frame
+  const [u, v] = socketFrame(at, at.x + nx, at.z + nz);
+  const edge = Math.min(Math.abs(u) > 1e-9 ? at.along / Math.abs(u) : Infinity, Math.abs(v) > 1e-9 ? at.across / Math.abs(v) : Infinity);
+  return { x: at.x + nx * (edge + gap), z: at.z + nz * (edge + gap) };
+}
+
+/** G-02 · whether (x, z) lies on a site's plate, inside the ring its sockets stand round */
+export function siteCovers(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layout'>, x: number, z: number): boolean {
+  const rot = site.rot ?? 0, c = Math.cos(rot), s = Math.sin(rot), dx = x - site.x, dz = z - site.z;
+  const half = SITE_LAYOUTS[site.layout].size / 2;
+  return Math.abs(dx * c - dz * s) < half && Math.abs(dx * s + dz * c) < half;
 }

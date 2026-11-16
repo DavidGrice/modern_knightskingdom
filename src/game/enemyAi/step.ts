@@ -4,8 +4,8 @@
 // apart; one on a wall-walk whose wall has gone, felled; then, outside build mode, the climb (climb.ts), the walk in
 // from the road and the flight (movement.ts) each own the frame while they last; otherwise the enemy looks for what it
 // has to fight (targeting.ts) and does the first of the chain below that holds — the order is the order it always was
-// — then is shouldered apart from its pack, kept to the land and stopped at a shut gate. Last, its figure is stood
-// where it is and given its clip.
+// — then is shouldered apart from its pack, kept to the land and stopped at a shut gate and the keep's walls. Last, its
+// figure is stood where it is and given its clip.
 import * as THREE from 'three';
 import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
@@ -13,10 +13,10 @@ import { playerState } from '@/game/playerState';
 import { DEATH_BARK } from '@/game/data/enemies';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { groundUnder, play, stand, type EnemyFrame } from './frame';
-import { distToPlayer, guardOnMyWall, keepInReach, markFor, nearestFighter, nearestGuard, tamInReach } from './targeting';
+import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, tamInReach } from './targeting';
 import { closeIn, engage, rangedProfileOf, swingAt, RANGED_RANGE } from './engage';
 import { batterKeep, blowAtGuard, blowAtTam, blowAtVillager, fireAtPlayer, fireEngine } from './blows';
-import { breaksAndRuns, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtShutGates, walkIn, wander } from './movement';
+import { breaksAndRuns, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtKeepWalls, stopAtShutGates, walkIn, wander } from './movement';
 import { CLIMB_RANGE, climb, holdBattlement, ladderPull, poseOnLadder, takeTheLadder, walkwayStands } from './climb';
 
 export type { EnemyFrame } from './frame';
@@ -141,9 +141,24 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     const fighter = nearestFighter(data, enemyAtHome);
     const ranged = rangedProfileOf(data);
     const { mark, blocked } = markFor(data, d, guard, tam, fighter);
-    const pathStep = makePathStep(path.current, m, dt);
+    const besieger = !!data.raid && enemyAtHome;
+    const pathStep = makePathStep(path.current, m, dt, besieger);
+    // G-02 · a guard, Tam or a villager inside the keep's walls is closed in on by a way round them, as the player is —
+    // straight at him, a raider would stand pressed against the stone for good
+    const walledIn = (p: { x: number; z: number }) => besieger && insideKeep(st, p.x, p.z);
     const wallGuard = guardOnMyWall(m, st);
     const ladder = ladderPull(data, enemyAtHome);
+    // G-02 · a raider battering a piece of the keep works out his way to his mark again on its timer all the while
+    // (pathStep, its direction unused): a breach elsewhere, the gatehouse opened or his mark come out gives him his
+    // way, and he leaves off — not once the piece in front of him is down
+    let battering = !m.elevated && !ladder.eligible
+      && !!keep.target && keep.d < d && keep.d < guard.d && !!path.current.siege;
+    if (battering) {
+      const at = (mark === 'def' && guard.target) || (mark === 'companion' && tam.target)
+        || (mark === 'villager' && fighter.target) || playerState;
+      pathStep(at.x, at.z);
+      battering = !!path.current.siege;
+    }
 
     if (m.elevated) {
       // a raider up here fights only what's genuinely reachable — the ONE
@@ -177,10 +192,13 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     } else if (ladder.eligible && ladder.d < CLIMB_RANGE) {
       takeTheLadder(data, ladder.footX, ladder.footZ);
     } else if (ladder.eligible) {
-      // beeline for the ladder's own foot, the same chase shape as every
-      // other priority target in this chain
-      closeIn(m, dt, () => ({ nx: (ladder.footX - m.x) / ladder.d, nz: (ladder.footZ - m.z) / ladder.d }), speed);
-    } else if (keep.target && keep.d < d && keep.d < guard.d) {
+      // make for the ladder's own foot — G-02: by a way round, as he closes
+      // in on any mark: a beeline from the keep's side ran him into the
+      // very wall the ladder stands against, which now stops him (it went
+      // through it before)
+      closeIn(m, dt, () => pathStep(ladder.footX, ladder.footZ), speed);
+    } else if (battering && keep.target) {
+      // (G-02 · only shut out of the keep his mark is in: his route is a way to a piece of it to batter)
       const piece = keep.target;
       swingAt(m, dt, piece, () => batterKeep(data, st, piece));
     } else if (guard.target && mark === 'def') {
@@ -189,7 +207,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         inReach: guard.d < (data.ranged ? RANGED_RANGE : 1.7) && !blocked,
         face: gt,
         blow: () => blowAtGuard(data, st, gt, guard.id, false),
-        way: () => (blocked ? pathStep(gt.x, gt.z) : { nx: (gt.x - m.x) / guard.d, nz: (gt.z - m.z) / guard.d }),
+        way: () => (blocked || walledIn(gt) ? pathStep(gt.x, gt.z) : { nx: (gt.x - m.x) / guard.d, nz: (gt.z - m.z) / guard.d }),
         pace: paceOf(data, speed, guard.d),
       });
     } else if (tam.target && mark === 'companion') {
@@ -200,7 +218,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         inReach: tam.d < (data.ranged ? RANGED_RANGE : 1.7) && !blocked,
         face: tt,
         blow: () => blowAtTam(data, st, tt),
-        way: () => (blocked ? pathStep(tt.x, tt.z) : { nx: (tt.x - m.x) / tam.d, nz: (tt.z - m.z) / tam.d }),
+        way: () => (blocked || walledIn(tt) ? pathStep(tt.x, tt.z) : { nx: (tt.x - m.x) / tam.d, nz: (tt.z - m.z) / tam.d }),
         pace: paceOf(data, speed, tam.d),
       });
     } else if (fighter.target && mark === 'villager') {
@@ -211,7 +229,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         inReach: fighter.d < (data.ranged ? RANGED_RANGE : 1.7) && !blocked,
         face: vt,
         blow: () => blowAtVillager(data, st, vt),
-        way: () => (blocked ? pathStep(vt.x, vt.z) : { nx: (vt.x - m.x) / fighter.d, nz: (vt.z - m.z) / fighter.d }),
+        way: () => (blocked || walledIn(vt) ? pathStep(vt.x, vt.z) : { nx: (vt.x - m.x) / fighter.d, nz: (vt.z - m.z) / fighter.d }),
         pace: paceOf(data, speed, fighter.d),
       });
     } else if (d < (ranged ? ranged.range : 1.8) && !blocked) {
@@ -250,6 +268,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     // snapping around.
     if (enemyAtHome) keepToLand(m);
     stopAtShutGates(m, st);
+    if (enemyAtHome) stopAtKeepWalls(m);
   }
 
   // Phase 20: away from the flat homestead, enemies stand on the bake's

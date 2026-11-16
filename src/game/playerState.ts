@@ -14,6 +14,10 @@ export const playerState = {
    * relocate (game/playerPhysics/locomotion.ts), at the top of PlayerController's
    * frame, applies it once per frame and clears it. */
   pendingTeleport: null as { x: number; z: number; yaw?: number } | null,
+  /** Wave 69 (G-02) · where Photo Mode found the player (his eye, and whether he stood on the ground), put back when it
+   *  ends (game/playerPhysics/locomotion.ts's photoReturn). Kept here, not in PlayerController, which is remounted —
+   *  build mode, the pause menu's own screens — while Photo Mode stays on. */
+  photoFrom: null as { x: number; y: number; z: number; grounded: boolean } | null,
 };
 
 /** Put the player back at the spawn point. PlayerController resumes from
@@ -31,6 +35,7 @@ export function resetPlayerState() {
   playerState.acting = false;
   playerState.riding = false;
   playerState.pendingTeleport = null;
+  playerState.photoFrom = null;
 }
 
 exposeDebug('__kkp', playerState);

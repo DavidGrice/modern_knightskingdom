@@ -1,12 +1,16 @@
 // CLN-13 · what an enemy has to fight, looked for every frame in this order (step.ts's chain then takes the first that
 // holds): the player, a finished piece of the keep it is up against, the nearest sworn guard, Tam, the nearest
 // villager who chose to fight, and — for a crossbow — which of them it has a clear shot at; up on a wall-walk, the
-// guard posted to the same one.
+// guard posted to the same one. And (wave 69) for a raider with no way to his mark inside the keep's walls, the piece
+// of them he makes for instead (siegeWay).
 import type { EnemyData } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
-import { hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
-import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
+import { findPath, hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
+import { KEEP_PART_BY_ID } from '@/game/data/keep';
+import {
+  KEEP_SITE_ID, siteById, siteCovers, siteGate, siteSocketGap, siteSocketOutside, siteSocketWorld, siteSockets, siteStands,
+} from '@/game/sites/sites';
 import { defenderState, type DefenderState } from '@/game/defenders';
 import { villagerCombatState } from '@/game/villagerCombat';
 import { companionCombatState } from '@/game/companion';
@@ -29,30 +33,73 @@ export interface GuardFound { target: DefenderState | null; id: string; d: numbe
 /** which one an enemy goes for — markFor's pick (a crossbow's after its sightlines are weighed) */
 export type Mark = 'def' | 'companion' | 'villager' | 'player';
 
+/** G-02 · how near the ground a keep piece covers a raider comes to batter it: up against it — he is put back out 0.5 m
+ *  from its face (movement.ts's stopAtKeepWalls), and a siege way brings him to SIEGE_STAND from it — but not walking
+ *  past it on a way round, which the grid keeps a metre and more off */
+const KEEP_REACH = 0.8;
+/** G-02 · how far from a keep piece's face a raider with no way in makes for, to batter it */
+const SIEGE_STAND = 0.6;
+/** G-02 · how many pieces of the keep a raider with no way to his mark tries a way to, each time he works out a route:
+ *  the shut gatehouse, then the nearest */
+export const SIEGE_RETARGETS = 2;
+
 export function keepInReach(data: EnemyData, st: GameState, enemyAtHome: boolean): { target: KeepPiece | null; d: number } {
   const m = data.mob;
   // J51 follow-up: a raid mob that ends up next to a FINISHED keep piece
   // batters it instead of walking through as if it were not there —
-  // proximity only (the keep has no collision volumes of its own yet, so
-  // this is not a chase target the way a defender is — a raider only
-  // ever notices one it has already wandered/chased right up against).
+  // proximity only (this is not a chase target the way a defender is — a
+  // raider only ever notices one he has come right up against; siegeWay
+  // below is how one with no way in comes up against one).
   // Ordinary night skeletons are not raiders and leave the castle alone.
+  // Wave 69 (G-02): measured to the ground the piece covers, not to its
+  // middle — the walls stop him now, and a run is 8 m long — and never a
+  // gatehouse standing open, which is the way in, not a thing to batter.
+  // And battered only by a raider shut out (step.ts: his route a siege
+  // way): one with a way in, through the gate or a breach, takes it — the
+  // walls stopping him, he brushed every one on his way round.
   let keepTarget: KeepPiece | null = null;
   let keepD = Infinity;
-  if (data.raid && enemyAtHome && st.keep) {
-    for (const sock of KEEP_SOCKETS) {
-      const partId = st.keep.parts[sock.id];
-      if (!partId || (st.keep.built[sock.id] ?? 0) < 1) continue;
-      const wx = st.keep.x + sock.x;
-      const wz = st.keep.z + sock.z;
-      const dd = Math.hypot(wx - m.x, wz - m.z);
-      if (dd < 3.4 && dd < keepD) {
+  const site = data.raid && enemyAtHome ? siteById(st, KEEP_SITE_ID) : null;
+  if (site) {
+    for (const sock of siteSockets(site)) {
+      if (!siteStands(site, sock.id) || siteGate(site, sock.id) === 'open') continue;
+      const dd = siteSocketGap(site, sock.id, m.x, m.z);
+      if (dd < KEEP_REACH && dd < keepD) {
+        const at = siteSocketWorld(site, sock.id)!;
         keepD = dd;
-        keepTarget = { socketId: sock.id, x: wx, z: wz, name: KEEP_PART_BY_ID[partId]?.name ?? 'the castle' };
+        keepTarget = { socketId: sock.id, x: at.x, z: at.z, name: KEEP_PART_BY_ID[site.parts[sock.id]]?.name ?? 'the castle' };
       }
     }
   }
   return { target: keepTarget, d: keepD };
+}
+
+/** G-02 · whether (x, z) stands inside the home keep's ring (on its plate), where a raider closes in on his mark by a
+ *  way round its walls (makePathStep), never straight at it through them */
+export function insideKeep(st: Pick<GameState, 'keep' | 'sites'>, x: number, z: number): boolean {
+  const site = siteById(st, KEEP_SITE_ID);
+  return !!site && siteCovers(site, x, z);
+}
+
+/** G-02 · the way a raider at (x, z) takes when he has none to his mark at (tx, tz) and it stands inside the home keep's
+ *  walls (a sealed ring, OD-01): to the ground just outside the gatehouse standing shut, else outside the nearest piece
+ *  standing — a way to at most SIEGE_RETARGETS of them tried, in that order; with a way to none, straight at the
+ *  nearest. There keepInReach has him batter it, and a breach, or the gatehouse opened, gives him his way. Null when
+ *  the mark is not inside the keep or nothing of it stands. */
+export function siegeWay(st: Pick<GameState, 'keep' | 'sites'>, x: number, z: number, tx: number, tz: number): { x: number; z: number }[] | null {
+  const site = siteById(st, KEEP_SITE_ID);
+  if (!site || !insideKeep(st, tx, tz)) return null;
+  const away = (at: { x: number; z: number }) => Math.hypot(at.x - x, at.z - z);
+  const pieces = siteSockets(site)
+    .filter((sock) => sock.kind !== 'centre' && siteStands(site, sock.id) && siteGate(site, sock.id) !== 'open')
+    .map((sock) => ({ shut: siteGate(site, sock.id) === 'shut', at: siteSocketOutside(site, sock.id, SIEGE_STAND)! }))
+    .sort((a, b) => Number(b.shut) - Number(a.shut) || away(a.at) - away(b.at));
+  if (!pieces.length) return null;
+  for (const { at } of pieces.slice(0, SIEGE_RETARGETS)) {
+    const way = findPath(x, z, at.x, at.z);
+    if (way) return [...way, at];
+  }
+  return [pieces.reduce((a, b) => (away(b.at) < away(a.at) ? b : a)).at];
 }
 
 export function nearestGuard(data: EnemyData, enemyAtHome: boolean): GuardFound {

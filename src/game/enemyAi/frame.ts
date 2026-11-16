@@ -10,8 +10,9 @@ import { destinationGroundY, homeGroundY } from '@/components/world/TemplateWorl
 export type Mob = EnemyData['mob'];
 
 /** an enemy's current route: waypoints, which one it is heading for, when to work it out again, and where its mark
- *  stood when it last did */
-export interface Route { pts: { x: number; z: number }[]; i: number; t: number; tx: number; tz: number }
+ *  stood when it last did — and (wave 69, `siege`) whether it was then shut out of the keep his mark is in, so the route
+ *  is to a piece of it to batter (targeting.ts's siegeWay) */
+export interface Route { pts: { x: number; z: number }[]; i: number; t: number; tx: number; tz: number; siege?: boolean }
 
 /** What the Enemy component hands its frame: the enemy, and the component's own refs, state and setters. */
 export interface EnemyFrame {

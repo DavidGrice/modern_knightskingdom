@@ -23,7 +23,7 @@
 import { useGameStore } from './store/gameStore';
 import { landHalf, sizeFor } from './data/buildables';
 import { KEEP_PART_BY_ID } from './data/keep';
-import { siteSocketWorld, siteSockets, sitesIn } from './sites/sites';
+import { siteGate, siteSocketWorld, siteSockets, sitesIn } from './sites/sites';
 import { isRampart, wallLinks } from './walls';
 import { isBuilt, isDoorLike } from './types';
 import { playerState } from './playerState';
@@ -136,11 +136,13 @@ export function refreshFort(force = false) {
   // (they live in KeepState), so they need their own pass here exactly the way
   // siege.ts's damageSitesNear needs one alongside its buildings loop. Wave 67:
   // every socket site at home, each piece by its footprint's bounds as
-  // game/sites/sites.ts's siteSocketWorld turns it
+  // game/sites/sites.ts's siteSocketWorld turns it. Wave 69 (G-02): a
+  // gatehouse standing open is a hole in the ring, as a raised gate is —
+  // the same test that leaves it out of the keep's solids (fixedSolids.ts)
   for (const site of sitesIn(st, null)) {
     for (const s of siteSockets(site)) {
       const part = KEEP_PART_BY_ID[site.parts[s.id] ?? ''];
-      if (!part || (site.built[s.id] ?? 0) < 1) continue;
+      if (!part || (site.built[s.id] ?? 0) < 1 || siteGate(site, s.id) === 'open') continue;
       const at = siteSocketWorld(site, s.id)!;
       stamp(blocked, at.x, at.z, at.hx, at.hz);
     }

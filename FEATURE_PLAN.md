@@ -351,6 +351,44 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   charge its whole bill, for G-07. Visible beside the raid: a legacy save's damaged wall repairs to the plain Castle Wall
   (mc006); the player's own cannonball or charge refunds a building by what was placed (+5 stone for a Castle Wall, +3 on
   main) but leaves a keep piece a ruin with no refund; Cedric's ruin flag has no test and was not driven live.
+- **#307 — Wave 69** (G-02): keep walls that stop people, and a gatehouse that opens and shuts. Each finished
+  home-keep piece on a wall or corner socket is a turned box on its footprint (`keepSolids`, `game/fixedSolids.ts`,
+  from `siteSocketWorld`), drawn with the huts (`drawnSolids`), so the player's collision, the home grid and line of
+  sight take it; the raiders are put back out of it (`stopAtKeepWalls`). Left open: a bare socket, a piece going up, a
+  ruin (a breach, OD-01), a gatehouse standing open, the bailey's hall. The list is remade whenever `st.keep` changes
+  identity. The wall walks stay walkable (a keep box is stepped onto from `WALKWAY_STEP` below its walk). The
+  Gatehouse (`KeepPart.gate`) opens and shuts by its own prompt ("Hold E — Close the Gatehouse", `toggleSiteGate`),
+  beside its repair, never in its place; `gateOpen` absent is open (`siteGate`), so no old save is shut; a ram bursts
+  it shut and passes it open; the raiders' ram makes for it shut; the fort's seal counts it open as a hole (OPEN-076
+  in part). A raider with no way to a mark inside the keep makes for the shut gatehouse, else the nearest piece
+  (`siegeWay`, at most `SIEGE_RETARGETS` = 2 ways tried) and batters it (`keepInReach`, now to the footprint, 0.8 m);
+  he batters only when shut out (`Route.siege`), so one with a way in takes it. Shut out is the grid's word
+  (`navReachable`, `NavGrid.reachable`: the regions of cells a walker can get between), not the search's null: the
+  evidence pass found a far raider battering a corner beside the open gatehouse, the search's 4000-cell cap taken for
+  a sealed ring; fixed before review — with a way he searches to the end (measured again: no blows, all three in by
+  the gate). And the review found a raider at his piece never asked again — once battering, he kept on until it was
+  down, a breach elsewhere or the gatehouse opened or not; fixed: he works his route out again on its timer while he
+  batters, and leaves off for the way in (a `stepEnemy` test, and live: no blow after a breach's first 0.3 s). Premises
+  held but two: `KEEP_INTERIOR` is the Keep's interior pocket, not the bailey's hall (the hall is
+  skipped anyway, and logged); and the plan's consumers missed three the solids broke — the ladder's foot was a
+  beeline (climbers pinned against the wall it leant on, found by `ladder_raid.mjs` on the change), a melee raider's
+  mark inside the walls was a beeline, and a guard posted up on a wall drew his sightline from the ground inside it
+  (`Defenders.tsx`). Folded in: the Photo Mode exploit (ROADMAP's logged entry, retagged fixed) — `photoReturn` puts
+  the player back where the mode found him (`playerState.photoFrom`, kept across remounts), `keepFloorTrack` begins
+  walk's track afresh after a frame it did not run, and nothing is acted on from the flown camera. Measured on `main`:
+  a walk from 12 m south ends in the bailey (1.98 m south of the middle), a Photo Mode flight leaves the player there,
+  the grid finds a way through every piece, the ram rammed the gatehouse to a ruin, and raiders crossed the walls (the
+  ladder raid: 14 of 51 positions inside the wall, and 45 of 1,083 in the evidence pass's run); on the change the walk
+  stops at 8.45 m, the flight puts him back, no way in with the gatehouse shut, the ram bursts it open, 0 of 49 (0 of
+  1,134). `keepWalls.test.ts` (24); 23
+  take-outs each fail 1 to 9 tests. ROADMAP: a new fixed entry, OPEN-022 closed, OPEN-076 partly done, the Photo Mode
+  entry fixed, and nine "Seen, not fixed": a raider stopping his walk in 30 m out waits on chance to notice a player 26
+  m off; villagers, guards and the merchant walk through a shut keep; the Great Hall stops nobody; the Gatehouse is
+  drawn 4 m wide on its 8 m socket; a crossbow never hits a player on a wall walk or a tower; a fleeing or walking-in
+  raider passes through the walls (and `stopAtShutGates` reads every world's gates); and, from the review, a raider shut
+  in the bailey when the gatehouse shuts stays pressed against its inner face; the walls' path and grid work is unbounded
+  per frame (an uncapped search per re-plan, the grid re-stamped on every keep change); a far skeleton stops at the walls
+  instead of walking round to the gate.
 
 ## Owner decisions
 
