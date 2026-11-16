@@ -12,6 +12,6 @@ export interface Target {
   kind: InteractKind;
   station?: string;
   /** Wave 67 (G-36) · the socket site a keep_socket / keep_work target's socket (its `id`) belongs to. Wave 68: and a
-   *  repair target's, when it is a site's piece rather than a building */
+   *  repair target's, when it is a site's piece rather than a building. Wave 69: and a gate target's, the gatehouse */
   site?: string;
 }

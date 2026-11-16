@@ -18,7 +18,7 @@ import { onRoad, ROAD_SPEED_MULT } from '@/game/data/road';
 import { crewEyeHeight, crewState, leaveEngine } from '@/game/crew';
 import { floorUnder, _terrainOut } from './floor';
 import { collide } from './collide';
-import { fall, floorCarry, type FloorTrack } from './vertical';
+import { fall, floorCarry, newFloorTrack, type FloorTrack } from './vertical';
 
 // scratch for the movement maths (moved with it from PlayerController.tsx, where these first replaced per-frame
 // allocations — the GC-pressure fix requested 2026-07-31): never kept past the statement that reads it — safe while there
@@ -29,8 +29,10 @@ const _moveV = new THREE.Vector3();
 const _dirV = new THREE.Vector3();
 const _upV = new THREE.Vector3(0, 1, 0);
 
-/** knocked out -> carried back to camp (set by the combat system); a relocation asked for (keep enter/exit, etc.) */
-export function relocate(pos: { current: THREE.Vector3 }, yaw: { current: number }): void {
+/** knocked out -> carried back to camp (set by the combat system); a relocation asked for (keep enter/exit, etc.).
+ *  Whether either put the player anywhere. */
+export function relocate(pos: { current: THREE.Vector3 }, yaw: { current: number }): boolean {
+  const moved = !!combatState.teleportTo || !!playerState.pendingTeleport;
   // knocked out -> carried back to camp (set by the combat system)
   if (combatState.teleportTo) {
     pos.current.set(combatState.teleportTo[0], EYE_HEIGHT, combatState.teleportTo[1]);
@@ -45,6 +47,34 @@ export function relocate(pos: { current: THREE.Vector3 }, yaw: { current: number
     if (tp.yaw !== undefined) yaw.current = tp.yaw;
     playerState.pendingTeleport = null;
   }
+  return moved;
+}
+
+/** Wave 69 (G-02) · Photo Mode put back: its flight moves the player's own position, with no collision, and leaving
+ *  him where the camera stopped walked him through any wall — over a keep's, into a shut building, out of a raid
+ *  (ROADMAP.md, "Photo Mode's free-fly leaves the player where the camera stopped"). On its first frame, where he stands
+ *  and whether he is on the ground (playerState.photoFrom); on the first frame after it, put back there, still. A
+ *  relocation while it is on (`moved`: knocked out and carried to camp) is where he is now, and is kept. */
+export function photoReturn(photo: boolean, moved: boolean, pos: { current: THREE.Vector3 }, grounded: { current: boolean }, vel: { current: THREE.Vector3 }): void {
+  if (moved) playerState.photoFrom = null;
+  const from = playerState.photoFrom;
+  if (photo) {
+    if (!from) playerState.photoFrom = { x: pos.current.x, y: pos.current.y, z: pos.current.z, grounded: grounded.current };
+  } else if (from) {
+    pos.current.set(from.x, from.y, from.z);
+    grounded.current = from.grounded;
+    vel.current.set(0, 0, 0);
+    playerState.photoFrom = null;
+  }
+}
+
+/** Wave 69 · walk's FloorTrack (vertical.ts) begun afresh when walk did not run the frame before — Photo Mode's
+ *  flight, crewing an engine — where it still held the floor from before, which the first step from wherever the player
+ *  is now could read as a slope carried on (the eye easing down from a short flight). Notes in `walked` whether walk
+ *  runs this frame. */
+export function keepFloorTrack(walking: boolean, walked: { current: boolean }, floorTrack: { current: FloorTrack }): void {
+  if (walking && !walked.current) floorTrack.current = newFloorTrack();
+  walked.current = walking;
 }
 
 /** photo mode: free flight along the view — no collision, no gravity */

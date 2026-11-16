@@ -62,7 +62,8 @@ function losBoxes(region: string | null): LosBox[] {
   // list the navigation grid stamps (game/fixedSolids.ts), remembered by its
   // identity the same way
   const fixed = fixedSolids(region);
-  // and what the world draws that is no placed piece (the village's huts and the signpost), turned as drawn
+  // and what the world draws that is no placed piece (the village's huts and the signpost, the keep's pieces standing
+  // — a new list whenever the keep's record changes), turned as drawn; a keep piece as high as its wall walk
   const drawn = drawnSolids(region);
   const cached = losCaches.get(key);
   if (cached && cached.builtFrom === source && cached.fixed === fixed && cached.drawn === drawn) return cached.boxes;

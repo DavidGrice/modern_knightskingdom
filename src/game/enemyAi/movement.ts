@@ -2,12 +2,13 @@
 // round what stands in its way (makePathStep) and the pack's flanking turn (flank); a raider's walk in from the road
 // (walkIn), a beaten one's flight (breaksAndRuns, flee), an idle one's wander; and after it has moved, the pack
 // shouldered apart (shoulderApart), the homestead's pond, water and edge kept to (keepToLand), and a shut gate's way
-// barred (stopAtShutGates).
+// barred (stopAtShutGates), and the keep's walls' (stopAtKeepWalls).
 import * as THREE from 'three';
 import { useEnemyStore, type EnemyData } from '@/game/combat';
 import { useGameStore, type GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
-import { findPath, steerRound } from '@/game/navgrid';
+import { findPath, navReachable, steerRound } from '@/game/navgrid';
+import { keepSolids, pushOutOfBox } from '@/game/fixedSolids';
 import { isDoorLike } from '@/game/types';
 import { POND, WORLD_HALF } from '@/game/data/world';
 import { sizeFor } from '@/game/data/buildables';
@@ -15,6 +16,7 @@ import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
+import { siegeWay } from './targeting';
 import type { Mob, Route } from './frame';
 
 /** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
@@ -51,10 +53,14 @@ export function paceOf(data: EnemyData, speed: number, dist: number): number {
 }
 
 /** A step along a path to (tx, tz), round structures and through real openings (game/navgrid.ts) — the chase of the
- *  player, and a crossbow raider closing in on a mark he cannot see. The path is recomputed on a timer, and whenever
- *  the mark has moved far enough that the old one is stale; with no route, straight at it. One per frame: the timer
- *  runs down by the frame's `dt` each time it is taken. */
-export function makePathStep(path: Route, m: Mob, dt: number) {
+ *  player, a crossbow raider closing in on a mark he cannot see, and a raider's on a mark inside the keep's walls. The
+ *  path is recomputed on a timer, and whenever the mark has moved far enough that the old one is stale; with no route,
+ *  straight at it — unless `siege` (a raider at home) and the mark is shut in the keep: then the way to the piece of it
+ *  he is to batter (targeting.ts's siegeWay), noted on the route. Shut in is the grid's to say (navReachable), not the
+ *  search's: that gives up at its cap, and from far off the way round a standing ring to its open gate is longer than
+ *  the cap — so a raider at home with a way searches for it to the end. One per frame: the timer runs down by the
+ *  frame's `dt` each time it is taken. */
+export function makePathStep(path: Route, m: Mob, dt: number, siege = false) {
   return (tx: number, tz: number) => {
     path.t -= dt;
     const targetMoved = Math.hypot(tx - path.tx, tz - path.tz) > 3;
@@ -62,7 +68,11 @@ export function makePathStep(path: Route, m: Mob, dt: number) {
       path.t = 0.7 + Math.random() * 0.4;   // desync the herd
       path.tx = tx;
       path.tz = tz;
-      path.pts = findPath(m.x, m.z, tx, tz) ?? [];
+      const noWay = siege && !navReachable(m.x, m.z, tx, tz);
+      const found = noWay ? null : findPath(m.x, m.z, tx, tz, siege ? Infinity : undefined);
+      const shutOut = noWay ? siegeWay(useGameStore.getState(), m.x, m.z, tx, tz) : null;
+      path.pts = found ?? shutOut ?? [];
+      path.siege = !!shutOut;
       path.i = 0;
     }
     // aim at the next corner if we have one, otherwise straight at the mark
@@ -218,6 +228,18 @@ export function keepToLand(m: Mob): void {
   m.z = out.z;
   m.x = THREE.MathUtils.clamp(m.x, -WORLD_HALF + 2, WORLD_HALF - 2);
   m.z = THREE.MathUtils.clamp(m.z, -WORLD_HALF + 2, WORLD_HALF - 2);
+}
+
+/** G-02 · the keep's walls stop an enemy at home as they stop the player (fixedSolids.ts's keepSolids): put back out of
+ *  each piece standing by half a metre, as from a shut gate — except one up on a wall-walk, who stands on it */
+export function stopAtKeepWalls(m: Mob): void {
+  if (m.elevated) return;
+  for (const s of keepSolids(null)) {
+    const out = pushOutOfBox(s, m.x, m.z, 0.5);
+    if (!out) continue;
+    m.x = out.x;
+    m.z = out.z;
+  }
 }
 
 /** a shut gate blocks raiders like a wall (the one building type enemies

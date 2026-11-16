@@ -351,11 +351,14 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     // An arrow lands only on a clear sightline: a bow guard whose raider stands in range behind a wall turns to the
     // nearest raider in range he can see, and with none closes in on his own until he can — he used to stand there
     // for good (game/combat/sightline.ts)
+    // (Wave 69 · a guard posted up on a wall shoots from up there: the keep's walls stop a sightline now, and one drawn
+    // from the ground at his post starts inside his own wall — the same height blows.ts takes for a guard posted up)
+    const eyeY = (elevated ? ds.postY : 0) + GROUND_LOS_Y;
     let blocked = false;
     if (loadout === 'bow') {
       ({ target, blocked } = aimFor(
         target, enemies.filter((e) => e.mob.state !== 'dying'), (e) => Math.hypot(e.mob.x - ds.x, e.mob.z - ds.z), range,
-        (e) => hasLineOfSight(ds.x, GROUND_LOS_Y, ds.z, e.mob.x, GROUND_LOS_Y, e.mob.z),
+        (e) => hasLineOfSight(ds.x, eyeY, ds.z, e.mob.x, GROUND_LOS_Y, e.mob.z),
       ));
     }
     const dxT = target.mob.x - ds.x;
@@ -386,10 +389,10 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
         ds.attackCd = loadout === 'bow' ? 1.6 : 1.1;
         // Wave 20 · a bow shot needs a real unobstructed sightline — melee is
         // 1.8m contact range, never behind a wall in practice, so only the
-        // bow case pays the check. Elevated/tower defenders never reach this
-        // branch (they `return` early above), so ground height is always a
-        // safe assumption here.
-        if (loadout !== 'bow' || hasLineOfSight(ds.x, GROUND_LOS_Y, ds.z, target.mob.x, GROUND_LOS_Y, target.mob.z)) {
+        // bow case pays the check. (An elevated guard does reach this branch
+        // once he has a target — only his idle watch returns early above —
+        // and shoots from his post's height: eyeY.)
+        if (loadout !== 'bow' || hasLineOfSight(ds.x, eyeY, ds.z, target.mob.x, GROUND_LOS_Y, target.mob.z)) {
           // Courage (Phase 24A) weights the swing; Riposte trait adds steel;
           // a bare-fisted defender (no Armory weapon spent on them yet) hits
           // noticeably softer than one armed with sword/halberd — real reason

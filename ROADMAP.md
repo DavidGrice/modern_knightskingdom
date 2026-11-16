@@ -155,7 +155,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 
 | ID | Status | Size | Item | What remains |
 |---|---|---|---|---|
-| OPEN-022 | STILL_OPEN | M | Finished keep has no collision volumes / nav-grid obstacles for raider pathing | Stamp finished keep sockets into navgrid.ts's obstacle grid (like fort.ts already does for its enclosure check) so raider pathing can route around it. |
+| OPEN-022 | CLOSED | M | Finished keep has no collision volumes / nav-grid obstacles for raider pathing | Closed by wave 69 (#307, G-02): each finished keep piece but a ruin and a gatehouse standing open is a solid to the player, the home grid, line of sight and the raiders (`keepSolids`, `game/fixedSolids.ts`); the gatehouse opens and shuts, a ram bursts it, and a raider shut out batters his way in ("Bugfix: a finished keep's walls stopped nobody …", at the end of this file). |
 | OPEN-043 | STILL_OPEN | S | Marketplace square (half of the original Road-models idea) never built | Lay out an open plaza using the existing 4 Road tile models near the settlement/signpost; no new assets needed. |
 | OPEN-048 | PARTIALLY_DONE | M | template-05 still has no resident NPC to ground-truth its walkable classification | template-04 and -07 got residents to verify against; template-05 alone still relies solely on the generic claim-footprint safety net. |
 | OPEN-062 | STILL_OPEN | M | Per-asset target height for template 'set' props still a flat 0.8m default | Source/derive a per-asset target height and wire it in place of DEFAULT_PROP_HEIGHT for every kind:'set' prop. |
@@ -164,7 +164,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-065 | PARTIALLY_DONE | M | Home elevation limited to 2 quadrants (Downs + West Fell) | Further quadrant expansion was explicitly declined (Wave 59) for lack of a real gameplay consumer — a permanent decision, not an oversight. |
 | OPEN-067 | STILL_OPEN | S | terrainConflict() has no slope check | Currently confirmed unreachable (no region overlaps the build fence) but the check itself is still missing from the code. |
 | OPEN-070 | STILL_OPEN | S | Specular-glint material artifact on the natural POND | Diagnose and tune the water material's roughness/metalness/envMapIntensity; confirmed pre-existing, not a regression, but never triaged further. |
-| OPEN-076 | STILL_OPEN | M | Sound Walls flood-fill seal test has known resolution limits | 1m grid tolerates sub-1m gaps as sealed, and only the hardcoded homestead-centre cell is tested (an off-centre ring wouldn't count); self-contained rewrite of fort.ts. |
+| OPEN-076 | PARTIALLY_DONE | M | Sound Walls flood-fill seal test has known resolution limits | Wave 69 (#307, G-02): the keep's pieces seal by the same test as its solids, so a gatehouse standing open is a hole in the ring, as a raised gate is (`siteGate`, `game/sites/sites.ts`). Left: the 1 m grid tolerates sub-1 m gaps as sealed, and only the hardcoded homestead-centre cell is tested (an off-centre ring wouldn't count). |
 | OPEN-087 | PARTIALLY_DONE | S | POI coverage still misses Cedric's camp, all 6 challenge grounds, dungeon, and arena | 7 of the 8 non-Cedric destinations now have a resident-NPC POI; challenge grounds/dungeon/arena and template-05 remain uncovered, and TemplatePopulation lab-props were never used as a POI source. |
 
 </details>
@@ -10363,18 +10363,51 @@ sprint the floor drops past the 0.08 m threshold in that frame and the player le
 if not, to do: let a break that the next frame carries on at its new grade count as a slope after the fact (hold the
 ledge test one frame for a drop under `STEP_UP`), and measure a real ledge still drops the player on its first frame.
 
-## Seen, not fixed: Photo Mode's free-fly leaves the player where the camera stopped, through any wall — logged 2026-11-06 (in the review of wave 65.2)
+## Bugfix: Photo Mode's free-fly left the player where the camera stopped, through any wall — FOUND 2026-11-06 (in the review of wave 65.2), FIXED 2026-11-07
 
-Photo Mode (`P`) flies the player's own position: `flyPhoto` (`playerPhysics/locomotion.ts`) moves `pos` along the
-view with no collision and no gravity, and nothing puts it back when the mode ends. So the player can fly over a wall,
-through a gate, into a closed building or out of a raid, press `P` again and walk on from there. At a destination they
-then fall from wherever they stopped; at home, over open ground, they ease down to it. Wave 65.2 adds a small case of
-the same root: at a destination, flying up less than 1 m sideways and exiting now eases down too, because
-`floorCarry`'s track (`vertical.ts`) still holds the floor from before the flight (both reviewers saw this; one called
-it low and cosmetic). It matters more once walls hold (OD-01, solid to everyone; OD-02, harsh raids), so the Walls That
-Hold arc should take it. To do: remember the player's position (and grounded state) on entering Photo Mode and put it
-back on exit, and forget the `FloorTrack` (`newFloorTrack()`) whenever `walk` did not run the frame before (Photo
-Mode, crewing an engine).
+**The fault.** Photo Mode (`P`) flies the player's own position: `flyPhoto` (`playerPhysics/locomotion.ts`) moves `pos`
+along the view with no collision and no gravity, and nothing put it back when the mode ended. So the player could fly
+over a wall, through a gate, into a closed building or out of a raid, press `P` again and walk on from there. At a
+destination they then fell from wherever they stopped; at home, over open ground, they eased down to it. Wave 65.2
+added a small case of the same root: flying less than 1 m sideways at a destination and exiting eased the player down
+too, because `floorCarry`'s track (`vertical.ts`) still held the floor from before the flight. Its interaction ran on in
+the mode too (`holdToAct`, with no prompt drawn), so from the flown camera the player could act through walls — open a
+gate, enter the keep and leave it inside its ring. It mattered once walls hold (OD-01, G-02, the same wave). Measured on
+`main` (production build of base-14 on port 3101, build `JbYXKesOXlft3pv-NGqdT`, digest `1197cd74422a`;
+`scripts/cln-tools/w69_live.mjs`): from 12 m south of a finished keep's middle, Photo Mode on, flown 1.5 s north (W),
+Photo Mode off — the player stood at 0.12 m north of the middle, in the bailey, through the south run, still there 1.5 s
+later, and walked on from there (2.58 m north after a 0.6 s step).
+
+**The fix** (wave 69, with G-02). `photoReturn` (`locomotion.ts`), run each frame right after `relocate`, remembers
+where Photo Mode found the player — his eye position and whether he stood on the ground, in `playerState.photoFrom`,
+not in `PlayerController`, which is remounted (build mode, the pause menu's screens) while the mode stays on — and on the
+first frame after it puts him back there, still. A relocation made while it is on (`relocate` now says whether it
+moved him: knocked out and carried to camp) is kept. `keepFloorTrack` begins walk's `FloorTrack` afresh after any frame
+walk did not run (Photo Mode, crewing an engine). `holdToAct` does not run in Photo Mode (the HUD shows no prompt
+there). A session start clears `photoFrom` (`resetPlayerState`).
+
+**Verified** in the worktree. `src/game/keepWalls.test.ts` ("Photo Mode puts the player back", 3 tests): flown into the
+bailey off the ground and put back on the ground where he started, his fall stopped, and left be after; a relocation
+during the mode kept; the floor track begun afresh after a frame of flight and kept while walking. Taking out the
+put-back, the relocation's clear or the fresh track each fails its test (`scripts/cln-tools/w69_takeout.py`,
+`w69_takeout.txt`; `git diff` identical after). Live on the change (port 3102, `w69_live.mjs`, `w69_change.txt`): the
+same flight ends with the player back at 12 m south, on the ground. Not unit-tested: `holdToAct` held off in the mode
+(a component's frame).
+
+**Evidence pass** (independent re-run, 2026-11-07). `tsc` clean; unit tests 96 files, 769 passing; `next build` clean.
+Production builds side by side: `main` = base-14 on port 3101 (build `JbYXKesOXlft3pv-NGqdT`, digest `1197cd74422a`),
+the change = the worktree rebuilt, on port 3102 (build `5TCE2rU7sP3z2KoXJekSs`, digest `83e7b31a3014`);
+`scripts/cln-tools/w69_ev.mjs`, `w69_ev_main.txt` / `w69_ev_change.txt`, a full keep ring at (0, 0). The same flight
+(12 m south of the middle, Photo Mode on, W 1.5 s, off): on `main` the camera stopped 0.07 m north of the middle, the
+player was still there 1.5 s after the exit (in the bailey, through the south run) and a 0.6 s step took him on to
+2.49 m north; on the change the camera stopped 0.08 m north, the player was back at 12 m south on the ground after the
+exit, and the step took him to 9.51 m south, outside the wall. Mutation controls (`w69_mut.py`, `w69_mut.txt`; each
+change reverted alone, the whole suite run, the file restored from its bytes; `git diff --binary` byte-identical after,
+checked by `cmp` against a copy taken before and by hash): the put-back out fails 2 tests, the relocation's clear 1, the
+fresh floor track 1; taking out `PlayerController`'s calls to `photoReturn` or `keepFloorTrack`, or letting `holdToAct`
+run in the mode, fails none (the first is covered by the live flight above, the other two by nothing). Not measured:
+acting from the flown camera (no live probe held E in Photo Mode), the floor track's effect after a short flight at a
+destination, and a relocation during the mode (unit test only).
 
 ## Bugfix: founding the settlements stopped every arrival and recruit at the homestead — FOUND 2026-10-31 (FEATURE_PLAN.md's verification, the G-23 verifier: "global MAX_VILLAGERS counts settlement residents"), FIXED 2026-11-06
 
@@ -10984,3 +11017,269 @@ materials and paid for again in full. What it costs instead is time and the brea
 140 s over one wall and three keep runs, and a ruin stands open (G-02). Recommended (R, OD-22): a ruin's rebuild charges
 its repair bill at 0 HP — the piece's whole cost — the dragon's ruins included, so letting a piece fall is never cheaper
 than mending it; built with G-07's lost-raid consequences (wave 73), `repairCost` being the one place to tune it.
+
+## Bugfix: a finished keep's walls stopped nobody, and its gatehouse never shut — FOUND 2026-10-31 (FEATURE_PLAN.md's verification: OPEN-022, DEC-7738, "What stops a walker is decided in four places"; G-02, the owner's walls decision OD-01), FIXED 2026-11-07
+
+**The fault.** A Grand Keep's pieces live in `st.keep` (the home keep's socket site, G-36), not in `st.buildings`, and
+none of what stops a walker read them: the player's collision skipped the keep outright (`collide.ts`, "the individual
+raised pieces don't have real collision yet"), the home grid and line of sight took their obstacles from placed pieces
+and the world's own fixed solids, and the raiders collide with nothing but a shut gate. So a finished keep was scenery
+with a proximity rule: the player walked through its walls, the raiders' ways and their straight chases ran through
+them, an arrow flew through, and the Gatehouse was a wall-socket piece with no open or shut state at all (G-36 gave the
+site an optional `gateOpen` that nothing wrote). Measured on `main` (production build of base-14 on port 3101, build
+`JbYXKesOXlft3pv-NGqdT`, digest `1197cd74422a`; `scripts/cln-tools/w69_live.mjs`, `w69_main.txt`), a full ring at (0, 0)
+— four corners, the south and east runs Crenellated, the west Low, the Gatehouse on the north, away from the road: the
+player held W 2.5 s from 12 m south and ended 1.98 m south of the middle, in the bailey; every home-grid way between
+outside and the bailey was found ("1 corner"; the cells under the south run and the gatehouse open), its `gateOpen` set
+or not; in a raid of the game's own making against the player in the bailey, one raider stood inside the south-east
+corner and the east run for 8 samples (every 250 ms), and with the gatehouse "shut" the raiders battered the south run
+to a ruin in 6.5 s by the proximity rule and walked in through it; the raiders' ram, set down north of the gatehouse,
+rammed it three times into a ruin ("Gatehouse was rammed — it lies in ruins"). In `ladder_raid.mjs` (`KK_NEAR=1`,
+`w69_ladder_main.txt`) 14 of the 51 positions sampled in the last 4 s before each of the three climbs lay inside the
+north run's footprint: they walked through the wall the ladder leant on.
+
+**The fix** (wave 69, G-02). *The solids.* `keepSolids` (`fixedSolids.ts`) makes each piece standing on a wall or corner
+socket of the home keep a turned box on its socket's footprint (`siteSocketWorld`, which now also gives the footprint's
+own `along` / `across`), as tall as its wall walk (or, with none, itself), flagged `walk` where it has one; left out,
+each a way in: a bare socket, a piece still going up, a ruin (a breach, OD-01: built 0, so `siteStands` is false), a
+gatehouse standing open, and the bailey's hall (see "the Great Hall on the keep's bailey stops nobody", below). The list
+is made again whenever the keep's record changes identity — a piece raised, battered, ruined, rebuilt or repaired, the
+gate opened or shut — and kept until then. `drawnSolids` hands it out with the village's huts, so the three readers that
+take the huts take the keep: `collide.ts` (the push now shared as `pushOutOfBox`; a keep box is stepped onto from up to
+`WALKWAY_STEP` below its walk, as `floorHeightAt` does, so the ring's walks stay walkable at their two heights), the
+grid (`rebuild` already re-stamps on the drawn list's identity) and line of sight; the merchant's wide way keys on it
+too (`wideSolids.ts`). The raiders are put back out of them, 0.5 m off the face as from a shut gate, unless up on a walk
+(`stopAtKeepWalls`, `enemyAi/movement.ts`). *The gatehouse.* `KeepPart.gate` marks it; `siteGate` (`sites/sites.ts`)
+reads it 'open' or 'shut' — `gateOpen` absent is open, as a placed gate's `?? true` is, so no old save's keep is shut —
+and null for any other piece or a gate not standing. `toggleSiteGate` (keep slice) opens and shuts a standing one ("The
+gatehouse grinds shut.", the portcullis; "… creaks open.", the drawbridge); `findTarget` offers "Open / Close the
+Gatehouse" at its own height (1.6 m) and a battered one's repair beside it at its foot, never in its place (wave 68's
+rule); `performAction`'s `gate` branch takes a site. `ramCheck` passes a gatehouse standing open by before its cooldown
+and bursts a shut one open ("The ram bursts the gatehouse open!", no damage), as it does a gate; `raiderRamGate` makes
+for the home keep's shut gatehouse after any shut gate of the player's own. The fort's seal (`fort.ts`) leaves a
+gatehouse standing open out, by the same `siteGate` (OPEN-076, in part) — so an old save's keep ring with a gatehouse
+seals only once it is shut, as a ring with a raised gate. *The raiders.* `keepInReach` measures to the ground a piece
+covers (`siteSocketGap`), within 0.8 m, never an open gatehouse; and a raider batters only when shut out (`step.ts`: his
+last route a siege way, `Route.siege`) — with a way in he takes it, where by the old rule he battered every wall he
+brushed on his way round. `makePathStep`, with no way to a mark inside the keep (`insideKeep`) — by the grid's own word
+(`navReachable`), not the search's null, which it gives at its 4000-cell cap too ("After the evidence pass", below) —
+takes `siegeWay` (`targeting.ts`): a way to the ground 0.6 m outside the shut gatehouse, else outside the nearest piece
+standing, at most `SIEGE_RETARGETS` (2) of them tried; with a way to none, straight at the nearest. A guard, Tam or a
+villager inside the walls is closed in on by a way too, not straight through the stone, and the ladder's foot by a way
+round (a beeline from the keep's side pinned the climbers against the very wall the ladder leant on — found by
+`ladder_raid.mjs` on the change). *Sightlines.* A guard posted up on a wall (or a tower) shoots from his post's height
+(`Defenders.tsx`), as `blows.ts` already has a raider aim at one: from the ground at his post his sightline began inside
+his own wall. Premises corrected: `KEEP_INTERIOR` (`collide.ts:292`) is the Keep's interior pocket at (85, 85), not the
+bailey's hall, so the hall is skipped for another reason (it walls nothing in; logged below); the wall-walk floor
+(`keepWalkwayAt`) needed no change. Out of scope, as planned: approach sides and player-built walls as raider targets,
+and the raiders' ram's road (it still drives straight to its gate, ramming what it passes: G-03); a keep set down at a
+destination keeps its pieces at home (logged, wave 67).
+
+**Verified** in the worktree: `tsc` clean; unit tests 96 files, 769 passing. `src/game/keepWalls.test.ts` (21): the grid
+blocks the cells under standing pieces, leaves the bailey open, finds no way in with the gatehouse shut, a way through it
+open and through a ruin with it shut, and stamps a piece only once finished; the wide way's list is new when the keep
+changes; `collide` puts the player out of a wall at either face and out of a corner, lets him walk the run's walk and
+step 0.6 m up onto a turret's, never through the low run, and passes the gatehouse open or ruined; a sightline is stopped
+by a wall, passes over it from its walk, and through the gatehouse only open; a raider is put back out 0.5 m (not up on
+a walk), batters a run anywhere along it (3.8 m from its middle) but not from a metre off, never an open gatehouse, and
+no skeleton; `siegeWay` goes round to the shut gatehouse's face, else to the nearest piece, tries at most
+`SIEGE_RETARGETS`, and stays out of it with the mark outside or nothing standing; `makePathStep` takes it, notes him shut
+out, and drops it once the gate is open; the gatehouse shuts and opens on its action only while standing, a ram bursts
+it shut and passes it open, the raiders' ram makes for it after a placed gate, `findTarget` offers its Open / Close
+straight on and the repair at its foot, and the seal counts it shut, not open. Twenty-three take-outs
+(`scripts/cln-tools/w69_takeout.py`, `w69_takeout.txt`) each fail 1 to 9 tests; `git diff` identical after. Not
+unit-tested (components' frames, checked live): the battering gated on `Route.siege` and the ways to a walled-in guard,
+Tam, villager and the ladder's foot (`step.ts`), and the guard's sightline from his post (`Defenders.tsx`). Live on the
+change (port 3102, build `LIoHuOe9ajVXnevSAGkSD`, digest `83e7b31a3014`; `w69_live.mjs`, `w69_change.txt`): the walk
+into the south run stopped at 8.45 m (its face and the player's radius); "Hold E — Close the Gatehouse", held, shut it
+("Hold E — Open the Gatehouse"); no way in or out with it shut, 10 corners round through it open, 7 through the south
+run ruined; a raid against the player in the bailey, gatehouse shut: no raider in stone, the gatehouse and the corner
+beside it battered to ruins and all three in the bailey by 52.5 s; gatehouse open: no blows and no raider in stone (two
+hung back at the road's 30 m, as on `main`; on an earlier build of the change all three walked in through the gate, by
+66.8 s); the raiders' ram burst the shut gatehouse open in one blow and rolled on through it. `ladder_raid.mjs`
+(`KK_NEAR=1`, `w69_ladder_change.txt`): all three climbed, 0 of 49 positions inside the north run — they went round its
+east end. Who a shut gatehouse shuts in or out: the player opens it from either side; a raider batters his way in;
+villagers, builders, guards and the merchant find no way and walk straight on through the stone, as through any shut
+gate today (logged below); a builder's ruin is a breach, reachable.
+
+**Evidence pass** (independent re-run, 2026-11-07). `tsc` clean; unit tests 96 files, 769 passing; `next build` clean.
+Production builds side by side: `main` = base-14 on port 3101 (build `JbYXKesOXlft3pv-NGqdT`, digest `1197cd74422a`),
+the change = the worktree rebuilt, on port 3102 (build `5TCE2rU7sP3z2KoXJekSs`, digest `83e7b31a3014`); no page errors
+on either in any probe. The same ring as above (`scripts/cln-tools/w69_ev.mjs`, `w69_ev_main.txt` /
+`w69_ev_change.txt`). *Walking in:* W 2.5 s from 12 m south ended 1.81 m south of the middle on `main`, 8.45 m on the
+change; from 12 m east, 1.94 m and 8.45 m. *The wall walks* (`w69_ev_walk.mjs`): on both builds the player climbed a
+Siege Stair onto the south run's walk (3.6 m), walked east up onto the south-east turret's (4.2 m) and off its outer
+end — the same on both. *The gatehouse:* `main` offers nothing and E changes nothing (walking at it took the player to
+3.56 m north of the middle, inside); the change offered "Hold E — Close the Gatehouse", E held shut it ("The gatehouse
+grinds shut.", the portcullis), then offered "Hold E — Open the Gatehouse"; walking at it shut stopped at 8.45 m north;
+E held again opened it ("… creaks open.", the drawbridge). *Who gets where* (home grid; the merchant's wide way; a
+navSteer walker at 2 m/s, as a villager walks): on `main`, with the gatehouse open, shut or the south run ruined alike,
+every way was found (1 corner; wide 6 and 1), no cell under a piece blocked, sightlines clear across the south run and
+through the gatehouse, and the walker passed through the stone (20 samples). On the change, open: 10 corners in and out
+(wide 7 and 15), the sightline across the south run blocked and through the gatehouse clear, the walker in by the gate
+in 24.25 s, 0 samples in stone; shut: no way in or out (wide none), the gatehouse sightline blocked, and the walker
+walked straight through the stone (20 samples, as on `main` — the "Seen, not fixed" below); shut with the south run
+ruined: 7 corners (wide 5), the sightline across the ruin clear, the walker in through the ruin, 0 in stone. A
+sightline from the south walk over the wall to 20 m out was clear on both. *Raids* (75 s, the player in the bailey,
+one roll each, so not like for like): `main`, gate "shut": the south run battered to a ruin 30.3-36.8 s, a raider in
+the bailey at 38.8 s; `main`, gate open: the south-east corner battered to a ruin 41.3-51 s, raiders in at 52.8 and
+67.8 s. The change, shut: the gatehouse battered to a ruin 36.3-41 s, raiders in at 43 and 48 s; no raider sample inside
+a standing piece (of 900) on either build in any raid. **The change, open: the south-west corner battered to a ruin
+18.5-20.3 s with the gatehouse standing open, and no raider reached the bailey in 75 s** (`main`: two did). A second
+open-gate raid (`w69_ev_raid.mjs`, 90 s, `w69_ev_raid_main.txt` / `_change.txt`): on the change no blows, one raider
+round the east side and in through the gatehouse at about 40 s, one at about 68 s, the third wandering 30 m out for the
+whole 90 s with no grid way to the player at any 1 s sample; on `main` the south run was battered down by the proximity
+rule (22.3-27.5 s) and all three were in by about 34 s. The cause (`w69_ev_cap.mjs`): with the gatehouse open, the home
+grid's `findPath` at its default 4000-node cap finds no way to the bailey from (-15, 35) or (-10, 60) relative to the
+keep; at 40000 it finds a 12-corner way. So `makePathStep`'s "no way" also means "the search ran out", `siegeWay` then
+sends a far raider to batter the nearest piece with `Route.siege` set, open gatehouse or not — the "with a way in he
+takes it" above does not hold for a raider who starts far off. *The ram:* on `main` three blows ruined the gatehouse
+("Gatehouse was rammed — it lies in ruins …"); on the change one blow burst it open ("The ram bursts the gatehouse
+open!"), no HP lost, and the ram rolled on through to the middle. *The ladder* (`w69_ev_ladder.mjs`, `ladder_raid.mjs`
+with every track sample counted, `KK_NEAR=1`, deterministic frames, the same rolled raid on both): on `main` 45 of 1083
+on-foot samples over the whole raid stood inside the north run's footprint (22, 11 and 12 of the three raiders); on the
+change 0 of 1134; all three climbed on both. *Mutation controls* (`w69_mut.py`, `w69_mut.txt`; each change reverted
+alone, the whole suite run, the file restored from its bytes; `git diff --binary` byte-identical after, by `cmp` against
+a copy taken before and by hash): failing tests — the keep solids not drawn 9; ruins and unfinished pieces left in 3; an
+open gatehouse left in 5; `KeepPart.gate` removed 11; `siteGate` absent read as shut 12; and 1 each for the wall-walk
+step in `collide`, the wide list's key, the seal's open-gate hole, `toggleSiteGate`'s standing check, the ram bursting
+a shut gatehouse, the ram passing an open one, `raiderRamGate`'s gatehouse, the Open / Close prompt, the repair at its
+foot, `keepInReach` to the footprint, `keepInReach` skipping an open gate, `makePathStep`'s fallback, `Route.siege`
+set, the gatehouse first in `siegeWay`, `SIEGE_RETARGETS`, the `stopAtKeepWalls` push and its elevated skip. Fail
+none (live only, or not at all): `performAction`'s site branch (the live E toggle covers it), every `step.ts` change
+(`stopAtKeepWalls` called, battering gated on `Route.siege`, the ladder foot by a way — the ladder probe covers it —,
+walled-in marks by a way, `makePathStep` given `siege`), the guard's sightline from his post (`Defenders.tsx`, not
+measured live), and `RaiderRam.tsx` passing the keep (the live ram covers it). Not measured: guards and Tam inside the
+walls, a guard posted on a keep wall shooting out, the merchant's or a builder's real walk (only their planner and a
+navSteer stand-in), and anyone at a keep raised off flat ground.
+
+**After the evidence pass** (2026-11-15; its open-gate raid, fixed). The defect was real: `NavGrid.findPath`
+(`nav/grid.ts`) returns null both when there is no way and when its search has taken its 4000 cells, and `makePathStep`
+took either for shut out — so with the ring standing and the gatehouse open, a raider far enough off that the way round
+to the gate ran past the cap was sent to batter the nearest piece. *The fix:* the grid now says whether there is a way
+at all. `NavGrid.reachable` (`navReachable` for the home grid) is true when the two points' cells lie in one region —
+the cells joined by the steps the search takes (straight, a diagonal never between two blocked cells, none over
+`maxStep`), told apart in one pass over the grid (`regionOf`, a union of each open cell with the open ones before it)
+the first time it is asked after a rebuild. `makePathStep` asks it for a raider at home: no way, and he takes `siegeWay`
+as before; a way, and he searches for it with no cap, which is then sure to find it. Everyone else's search is as it
+was. *Tests* (`keepWalls.test.ts`, now 22; the suite 96 files, 770; `tsc` clean): from 60 m south of the ring with the
+gatehouse open, `findPath` at its cap is null and `navReachable` true, the raider's route ends in the bailey and is no
+siege; shut, `navReachable` is false from 60 m and from 20 m (and true between two points outside), and his route is a
+siege; a ruin makes it true again. With `makePathStep`'s three lines put back as they were the test fails (1), restored
+after. A scratch check, not kept: `navReachable` agreed with a search with no cap on 121 pairs with the gatehouse open
+and 121 with it shut. Also added, the evidence pass having found nothing that caught it: the gatehouse's prompt taken up
+through `performAction` shuts it (fails with the site branch taken out). *Live* on the change rebuilt (port 3102, build
+`0jE0TfigJHW0wXhoIeuX1`, digest `2330f84ab4a4`; no page errors). `scripts/cln-tools/w69_fix_reach.mjs`
+(`w69_fix_reach_change.txt`), the evidence pass's ring and points: gatehouse open, `findPath` at its cap finds no way
+from (-15, 35) and (-10, 60) and `navReachable` is true from all eight points, a 12-corner way found with no cap in 8.3
+and 6.9 ms (2 ms and under from the six nearer points); shut, `navReachable` false from all eight; the first ask after a
+rebuild (the regions told apart) took 3.8 to 5.5 ms. The open-gate raid again (`w69_ev_raid.mjs`, 90 s,
+`w69_fix_raid_change.txt`): no blow to any piece in 90 s, and all three raiders in the bailey, at 42, 46 and 62.5 s, by
+the gate. Each first wandered 30 m out for 14.5 to 33.5 s — which is not this defect: the evidence pass's "third
+wandering 30 m out for the whole 90 s" was in `wander`, where `makePathStep` is not taken at all, and `main` does the
+same for 2 to 12 s in its own run (logged at the end of this file). Not re-run: the rest of the evidence pass (`main`
+was not served; of the change's paths only `makePathStep`'s and the grid's new question changed). Not tested:
+`regionOf`'s steps over a height field (a destination's window grid; nothing asks one yet). And `siegeWay`'s own two
+searches keep the cap, as planned — far round from a shut gatehouse, a raider makes for the nearest piece instead. Still
+caught by no unit test, as the evidence pass lists: the `step.ts` frame changes, `Defenders.tsx`'s eye height,
+`RaiderRam.tsx` and `PlayerController`'s calls (a component's frame each).
+
+**After the review** (2026-11-15; a raider battering never left off). The defect was real: `Route.siege` was worked out
+again only inside `makePathStep`, on its timer, and only when it was taken — and the battering branch of `step.ts`
+never takes it. So a raider who had begun on a piece stayed shut out for as long as it stood in front of him: a breach
+made elsewhere (a second raider's piece down), the gatehouse opened, or his mark come out of the keep, and he still
+battered his piece to a ruin before he looked for a way. *The fix* (`step.ts`): a raider who would batter takes his
+`pathStep` to his mark first (its direction unused), so his route is worked out again on its timer all the while, and
+batters only if it is still a siege way; otherwise the chain goes on to his mark. Not up on a wall and not making for
+the ladder, so the frame takes it once. *Tests* (`keepWalls.test.ts`, now 24; the suite 96 files, 772; `tsc` clean):
+`stepEnemy` itself, a raider shut out 0.4 m off the south run with the gatehouse shut and the player in the bailey —
+1.5 s of frames, past his route's timer, and he is still at it (a siege, the run battered); then the gatehouse opened,
+or the east run ruined, and 1.5 s on he is chasing, no siege, the south run's HP unchanged. With the re-plan taken out
+of the battering branch both cases fail, restored byte for byte after. This also puts the battering's gate on
+`Route.siege` under a unit test, which the evidence pass found caught by none. *Live* on the change rebuilt (port 3102,
+build `v6fAieRdhfKo6rbQvIuv3`, digest `ce5f2fbe08d4`; no page errors). `scripts/cln-tools/w69_fix2_batter.mjs`
+(`w69_fix2_batter_change.txt`): the ring with no gatehouse (a Crenellated run on the north), two raiders set down
+1.5 m off the south run and the player in the bailey; they made for the south run and battered it, and at its first
+blow (0.7 s) the north run was ruined. One more blow landed 0.3 s later (the second raider's, inside his route's timer);
+none after. Both left off by 2.3 s, went round, one each side, came in by the breach (in the bailey at 15.5 and 17.5 s)
+and fought the player; the south run ended at 24 of its HP, standing. The gatehouse-opened case was not run live (the
+unit test has it). `main` was not served: it has no siege route to go stale.
+
+## Seen, not fixed: villagers, guards and the merchant walk through a shut keep (or any shut gate) — logged 2026-11-07 (wave 69; measured)
+
+With the gatehouse shut the home grid has no way into or out of the keep (`findPath` null both ways, `w69_live.mjs`),
+and `navSteer` (`nav/steering.ts`) then steers straight at the goal; villagers, builders, defenders and the merchant
+collide with nothing, so one shut in walks out through the wall and one shut out walks in. A shut placed gate in a
+player-built ring did the same before wave 69. To do: give them the raiders' push (`pushOutOfBox`), have one with no way
+wait at the gate (or open it, for the household), and a guard with no way to his raider hold his ground.
+
+## Seen, not fixed: the Great Hall on the keep's bailey stops nobody — logged 2026-11-07 (wave 69; by the code)
+
+G-02 skipped the bailey's socket because "KEEP_INTERIOR already collides" (`collide.ts:292`), but `KEEP_INTERIOR` is the
+Keep's interior pocket at (85, 85) (`data/world.ts`), not the hall on the foundation. So the player and the raiders
+still walk through a finished Great Hall (mc001, drawn 3.2 m square; its socket footprint is 4 m). To do: decide whether
+it should stand solid (it walls nothing in), and if so add it to `keepSolids` at its drawn size, checking that "Enter
+the Keep" (enter range 6 m) is still reached from its foot.
+
+## Seen, not fixed: the Gatehouse is drawn 4 m wide on its 8 m socket — logged 2026-11-07 (wave 69; by the code)
+
+The Gatehouse is the Castle Gate's model (`06_l318500`, 4 m wide) raised to 3.2 m on a wall socket, so 2 m of the socket
+either side of the drawn gate is bare. Shut, it is solid and seals across the whole socket (as the fort's seal always
+took it), so that ground is stone nobody can see; open, the whole socket is the way in. (A Crenellated run is likewise
+drawn 2.8 m deep on its 2.4 m footprint.) To do: draw the gatehouse across its socket (short runs flanking the gate, or
+a wider gate model), or give its solid only the gate's width and flank it.
+
+## Seen, not fixed: a raider's crossbow never hits a player standing on a wall walk or a tower — logged 2026-11-07 (wave 69; by the code)
+
+`fireAtPlayer` (`enemyAi/blows.ts`) and the crossbow's mark (`targeting.ts`) aim the sightline at `playerState.y`, his
+feet, which on a wall walk lie on the top face of the wall's own box; `hasLineOfSight`'s slab test counts that face, so
+every such shot is blocked. Towers have always been so; since wave 69 the keep's walks are too (on `main` the keep had
+no box). To do: aim at the player's body (feet + `GROUND_LOS_Y`), and test a shot at a player on a walk and one behind
+a parapet.
+
+## Seen, not fixed: a fleeing raider, and one still walking in from the road, pass through the keep's walls — logged 2026-11-07 (wave 69; by the code)
+
+`stepEnemy` (`enemyAi/step.ts`) returns early for the flight (`flee`) and the walk in (`walkIn`), before the frame's tail
+that stops a raider at a shut gate and at the keep's walls (`stopAtKeepWalls`). A raider breaking for the treeline from
+inside the bailey runs out through the stone; one walking in would pass a keep standing on his line until he is 30 m
+from home (rare: the walk in is routed round the grid's obstacles). Separately, `stopAtShutGates` reads every world's
+gates, so an enemy at a destination is stopped by a home gate at the same coordinates. To do: run the two pushes after
+the flight and the walk in, and gate `stopAtShutGates` on the enemy's world.
+
+## Seen, not fixed: a raider who stops his walk in 30 m from home waits on chance to notice a player 26 m off — logged 2026-11-15 (wave 69's fix stage; measured)
+
+A raider walks in from the road until he is within 30 m of the homestead's middle or 26 m of the player
+(`enemyAi/step.ts`, `m.approaching`), and chases only a player within 26 m (or while alerted). With the player further
+in than that — in a keep's bailey near the middle — he stops at about 29 to 30 m and wanders (`wander`, random legs)
+until one brings him inside 26 m. Measured in open-gate raids against a player in the bailey (`w69_ev_raid.mjs`): on
+`main` the three wandered 2 to 12 s; on wave 69's change 14.5 to 33.5 s in one run, and one of three for the rest of a
+90 s run in another. Nothing of wave 69's: no route is asked for while he wanders. To do: end the walk in on the
+player's notice range, or have a raid's raiders make for the player (or the keep) once the walk in ends.
+
+## Seen, not fixed: a raider shut in the bailey when the gatehouse shuts stays pressed against its inner face — logged 2026-11-15 (in the review of wave 69; by the code)
+
+A raider who is inside the keep when the gatehouse shuts, going after a player outside it (let in, the player stepped
+out and shut the gate), has no way to his mark (`navReachable` is false), but `siegeWay` (`enemyAi/movement.ts`)
+plans a siege only toward a mark inside the keep, so his route is empty and not a siege: he steers straight at the
+player and `stopAtKeepWalls` pins him to the stone for good — the failure wave 69's own `step.ts` comment names. The
+keep-walls entry's "Who a shut gatehouse shuts in or out" leaves raiders shut in out. To do: let `siegeWay` plan a
+siege outward too (the shut gatehouse from inside, else the nearest piece), and test a raider shut in.
+
+## Seen, not fixed: the walls' path and grid work is unbounded per frame — logged 2026-11-15 (in the review of wave 69; measured and by the code)
+
+Since wave 69 a raider at home whose mark is reachable searches with no node cap on every re-plan (every 0.7-1.1 s, and
+when the mark moves 3 m): the old 4000-cell cap gave up exactly where the way runs round to the gate, and there one
+search took 8.3 and 6.9 ms (`w69_fix_reach_change.txt`), more round a large player-built ring with a far gate, with no
+per-frame budget across raiders. And `keepSolids` (`fixedSolids.ts`) rebuilds its list whenever `st.keep` changes
+identity, so a hammer tick on an unfinished piece or each HP blow in a siege also re-stamps the home grid, the
+line-of-sight box cache, the merchant's wide mask and the regions (3.8-5.5 ms for the regions alone). Frame times in a
+raid were not measured. To do: a finite cap (the grid's cell count) or a per-frame search budget, and compare the
+stamped solids before swapping the list.
+
+## Seen, not fixed: a skeleton far off stops at the keep's walls instead of walking round to the gate — logged 2026-11-15 (in the review of wave 69; by the code)
+
+Wave 69 puts every enemy at home back out of the keep's solids (`stopAtKeepWalls`), but only raiders got the
+reachability check and the uncapped search: a skeleton keeps the 4000-cell cap, so one far off chasing a player in the
+bailey with the gatehouse open steers straight and is pinned against the wall rather than finding the gate. Harmless —
+skeletons never batter — but a change no entry named. To do: give every enemy at home the same `navReachable` and
+search the raiders have.

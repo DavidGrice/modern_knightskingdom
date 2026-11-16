@@ -1,6 +1,8 @@
 'use client';
 
 import { exposeDebug } from '@/lib/debugHooks';
+import type { KeepState } from './data/keep';
+import { KEEP_SITE_ID, siteById, siteGate, siteSocketWorld, siteSockets } from './sites/sites';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from './types';
 
 // A raider-pushed battering ram: the AI-driven counterpart to the player's
@@ -45,9 +47,18 @@ export function resetRaiderRam(x: number, z: number) {
 /** whatever is barred against the raiders: the first shut door or gate (Wave 8 — isDoorLike; a ram against a garden
  *  door is still a ram), else none and the ram makes for the homestead's centre. Wave 68 · one standing at home: ramCheck
  *  strikes only in the ram's own world and only what stands, so a door shut at a destination, or a shut gate the dragon
- *  left a ruin, would park the ram on it for the rest of the raid. */
-export function raiderRamGate(buildings: PlacedBuilding[], gateOpen: Record<string, boolean>): PlacedBuilding | undefined {
-  return buildings.find((b) => isDoorLike(b.type) && isHomeBuilding(b) && isBuilt(b) && !(gateOpen[b.id] ?? true));
+ *  left a ruin, would park the ram on it for the rest of the raid. Wave 69 (G-02) · else the home keep's gatehouse,
+ *  standing shut (its id the socket's, `keep:<socket>`), which ramCheck bursts open as it does a gate. */
+export function raiderRamGate(
+  buildings: PlacedBuilding[], gateOpen: Record<string, boolean>, keep: KeepState | null = null,
+): { id: string; x: number; z: number } | undefined {
+  const gate = buildings.find((b) => isDoorLike(b.type) && isHomeBuilding(b) && isBuilt(b) && !(gateOpen[b.id] ?? true));
+  if (gate) return gate;
+  const site = keep && siteById({ keep, sites: [] }, KEEP_SITE_ID);
+  const sock = site && siteSockets(site).find((s) => siteGate(site, s.id) === 'shut');
+  if (!site || !sock) return undefined;
+  const at = siteSocketWorld(site, sock.id)!;
+  return { id: `keep:${sock.id}`, x: at.x, z: at.z };
 }
 
 exposeDebug('__kkRam', raiderRamState);

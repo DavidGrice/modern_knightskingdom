@@ -167,11 +167,15 @@ export class NavGrid {
   // list is a fresh one until the collision shapes file has been read and one
   // kept list after, so the first rebuild once it has been read re-stamps them.
   private builtFixed: PlacedBuilding[] | null = null;
-  // the fourth: what the world draws that is no placed piece (the village's huts and the signpost: fixedSolids.ts's
-  // drawnSolids) — one list for good today, remembered the same way for what is drawn later
+  // the fourth: what the world draws that is no placed piece (the village's huts and the signpost, and the keep's pieces
+  // standing: fixedSolids.ts's drawnSolids) — a new list whenever the keep's record changes (wave 69), so a piece
+  // raised, ruined or rebuilt, or the gatehouse opened or shut, is stamped at the next rebuild
   private builtDrawn: SolidBox[] | null = null;
   // the mask a wide walker plans on (wideMask), with the obstacle mask and the solids it was made from
   private wide: { from: Uint8Array; solids: WorldSolid[]; mask: Uint8Array } | null = null;
+  // which cells a walker can get between at all (regionOf): the grid's regions, with the obstacle mask and the height
+  // field they were told apart on
+  private regions: { from: Uint8Array; heights: Float32Array | null; of: Int32Array } | null = null;
 
   // Phase 2, iteration 2.5 — ground-height field, window-mode grids only.
   // null means "no height data yet" (nothing mounted, or nothing mounted
@@ -496,8 +500,8 @@ export class NavGrid {
     };
     forEachObstacleBox(buildings, this.region, stamp);
     forEachObstacleBox(fixed, this.region, stamp);
-    // and the village's huts and the signpost, turned as they are drawn: each cell that comes within AGENT_RADIUS
-    // of one (both stand from the ground to above the walker band)
+    // and the village's huts and the signpost, and the keep's pieces, turned as they are drawn: each cell that comes
+    // within AGENT_RADIUS of one (all stand from the ground to above the walker band)
     for (const s of drawn) this.stampSolid(this.blocked, s);
 
     // Phase 2, iteration 2.1 — stamp terrain exclusions (water) in AFTER
@@ -718,6 +722,77 @@ export class NavGrid {
     }
     return (wide ? this.search(sx, sz, gx, gz, maxNodes, this.wideMask()) : null)
       ?? this.search(sx, sz, gx, gz, maxNodes, this.blocked);
+  }
+
+  /**
+   * Whether there is any way at all from one world point to another — which findPath's null does not say: its search
+   * gives up after `maxNodes` cells, so a long way round (a standing ring's, from far off, to its open gate) comes back
+   * null as a sealed one does. True when both ends' cells (the nearest open ones, and a target out of a window's
+   * bounds brought into them, as findPath takes them) lie in one region of the grid (regionOf): a search between them
+   * with no cap on it is then sure of a way.
+   */
+  reachable(sx: number, sz: number, tx: number, tz: number): boolean {
+    this.ensureHeights();
+    if (!this.inBounds(sx, sz)) return false;
+    let gx = tx, gz = tz;
+    if (!this.inBounds(tx, tz)) {
+      if (this.mode !== 'window') return false;
+      const clamped = this.clampToBounds(tx, tz);
+      gx = clamped.x;
+      gz = clamped.z;
+    }
+    const start = this.nearestOpenCell(this.toCellX(sx), this.toCellZ(sz));
+    const goal = this.nearestOpenCell(this.toCellX(gx), this.toCellZ(gz));
+    if (!start || !goal) return false;
+    const of = this.regionOf();
+    return this.regionAt(of, this.idx(start[0], start[1])) === this.regionAt(of, this.idx(goal[0], goal[1]));
+  }
+
+  /**
+   * The grid's regions — the cells a walker can get between, by the steps search takes: to any of the eight round a
+   * cell, never diagonally between two blocked ones, nor up or down more than maxStep — as a forest: each cell points
+   * at another of its region, and the one that points at itself names it (regionAt follows them). One pass over the
+   * grid, each open cell joined to the open ones before it, made when first asked for and again once the grid has been
+   * rebuilt or its heights read anew. (With no heights only the straight steps are joined: a diagonal one is taken
+   * between cells the two straight steps round it join already.)
+   */
+  private regionOf(): Int32Array {
+    if (this.regions && this.regions.from === this.blocked && this.regions.heights === this.heights) return this.regions.of;
+    const dim = this.dim;
+    const blocked = this.blocked;
+    const heights = this.heights;
+    const of = new Int32Array(dim * dim);
+    const join = (a: number, b: number) => {
+      if (heights && Math.abs(heights[a] - heights[b]) > this.maxStep) return;
+      const ra = this.regionAt(of, a);
+      const rb = this.regionAt(of, b);
+      if (ra !== rb) of[ra] = rb;
+    };
+    for (let i = 0; i < dim; i++) {
+      for (let j = 0; j < dim; j++) {
+        const c = i * dim + j;
+        of[c] = c;
+        if (blocked[c]) continue;
+        const west = i > 0 && !blocked[c - dim];
+        const north = j > 0 && !blocked[c - 1];
+        if (west) join(c, c - dim);
+        if (north) join(c, c - 1);
+        if (!heights || !west) continue;
+        if (north && !blocked[c - dim - 1]) join(c, c - dim - 1);
+        if (j < dim - 1 && !blocked[c + 1] && !blocked[c - dim + 1]) join(c, c - dim + 1);
+      }
+    }
+    this.regions = { from: blocked, heights, of };
+    return of;
+  }
+
+  /** The cell that names `cell`'s region in regionOf's forest (the pointers it follows shortened as it goes). */
+  private regionAt(of: Int32Array, cell: number): number {
+    while (of[cell] !== cell) {
+      of[cell] = of[of[cell]];
+      cell = of[cell];
+    }
+    return cell;
   }
 
   /** findPath's A*, from (sx, sz) to (gx, gz) — both in bounds — over the cells `blocked` leaves open. */

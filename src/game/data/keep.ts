@@ -68,6 +68,8 @@ interface KeepPart {
   buildXp: number;
   /** a manned wall walk: defenders posted to the keep stand this high */
   walkway?: number;
+  /** G-02 · it opens and shuts (KeepState.gateOpen): a way in standing open, a wall shut */
+  gate?: boolean;
 }
 
 /**
@@ -98,7 +100,7 @@ const KEEP_PARTS: KeepPart[] = [
   {
     id: 'gatehouse', name: 'Gatehouse', blurb: 'A way in. A castle with no gate is a wall you live behind.',
     fits: ['wall'], model: `${P}/windows_doors/06_l318500.glb`, thumb: `${P}/windows_doors/06_l318500.png`,
-    height: 3.2, cost: { stone: 10, iron_bar: 2 }, buildXp: 40,
+    height: 3.2, cost: { stone: 10, iron_bar: 2 }, buildXp: 40, gate: true,
   },
   {
     id: 'great_hall', name: 'Great Hall', blurb: 'The hall itself. Nothing else on this foundation is a castle without it.',
@@ -189,7 +191,8 @@ export interface KeepState {
    *  none, on every save before it. */
   ruined?: Record<string, boolean>;
   /** Wave 67 (G-36) · socket id -> a gatehouse there stands open; absent = open, the same as the store's `gateOpen`
-   *  for a placed gate. Nothing writes it yet: G-02's gatehouse will. */
+   *  for a placed gate, so no old save's keep is shut. Wave 69 (G-02): written by the gatehouse's own Open / Close
+   *  (toggleSiteGate) and by a ram bursting it. */
   gateOpen?: Record<string, boolean>;
 }
 

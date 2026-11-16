@@ -30,15 +30,27 @@
 // steerRound) and the grid does not hold — stamped there they would send the gatherers of half the trees and of all
 // but one rock to a cell 1.9 to 3.3 m from it, and leave that one rock out of reach (ROADMAP.md, "Bugfix: the
 // village's huts and the signpost stopped nobody"). The merchant's wide way keeps clear of both (nav/wideSolids.ts).
+//
+// Wave 69 (G-02) · and the Grand Keep's finished pieces. They are no placed piece either (they live in st.keep, the home
+// keep's socket site), and the three readers skipped them, so a finished keep stopped nobody: the player walked through
+// its walls, the raiders' ways ran through them, an arrow flew through. Now each piece standing on a socket — a wall
+// run, a corner, a gatehouse shut — is a turned box on its socket's footprint (sites/sites.ts's siteSocketWorld), drawn
+// with the huts (drawnSolids), so the player, the grid and line of sight take it as they take a hut; the raiders, who
+// no grid stops, are put back out of it themselves (enemyAi/movement.ts). Left open, each a way in: a bare socket, a
+// piece still going up, a ruin (a breach, OD-01), a gatehouse standing open, and the bailey's hall, which stands in the
+// middle of the ring and walls nothing in.
 import { knownSolidOffsetRotated } from './data/buildables';
 import { MERCHANT_CAMP_WALLS } from './data/trade';
 import { SIGNPOST, SIGNPOST_HALF, SIGNPOST_TOP, VILLAGE_HUT_HALF, VILLAGE_HUT_HEIGHT, VILLAGE_HUTS } from './data/world';
+import { KEEP_PART_BY_ID, type KeepState } from './data/keep';
+import { KEEP_SITE_ID, siteById, siteGate, siteSocketWorld, siteSockets, siteStands } from './sites/sites';
 import { useGameStore } from './store/gameStore';
 import type { PlacedBuilding } from './types';
 
 /** A turned rectangle standing `top` metres tall: its centre, half its sides along its own x and z, turned by `yaw` as
- *  three.js turns an object about +Y (its own +x lies along (cos yaw, -sin yaw) in the world). */
-export type SolidBox = { kind: 'box'; x: number; z: number; hx: number; hz: number; yaw: number; top: number };
+ *  three.js turns an object about +Y (its own +x lies along (cos yaw, -sin yaw) in the world). `walk`: its top is a wall
+ *  walk, which someone up to playerPhysics/floor.ts's WALKWAY_STEP below it steps onto (a keep piece's). */
+export type SolidBox = { kind: 'box'; x: number; z: number; hx: number; hz: number; yaw: number; top: number; walk?: boolean };
 /** a circle about (x, z) of radius r, from the ground up */
 export type SolidCircle = { kind: 'circle'; x: number; z: number; r: number };
 /** either: what the merchant's wide way keeps clear of (nav/wideSolids.ts) */
@@ -78,10 +90,63 @@ const DRAWN = new Map<string | null, SolidBox[]>([
 ]);
 const NO_BOXES: SolidBox[] = [];
 
+let keptKeep: { keep: KeepState | null; list: SolidBox[] } | null = null;
+
+/** G-02 · the home keep's pieces standing in `region` (home only), as the boxes they stand on: every finished piece on
+ *  a wall or corner socket but a gatehouse standing open, as tall as its wall walk (or, with none, itself) above the
+ *  foundation. Made again whenever the keep's record changes — a piece raised, battered, ruined, rebuilt or repaired,
+ *  the gatehouse opened or shut, the foundation moved — and the same list until then, so that what keeps something
+ *  made from it (the grid, line of sight) makes it again only then. */
+export function keepSolids(region: string | null): SolidBox[] {
+  if (region !== null) return NO_BOXES;
+  const keep = useGameStore.getState().keep;
+  if (keptKeep && keptKeep.keep === keep) return keptKeep.list;
+  const list: SolidBox[] = [];
+  const site = keep && siteById({ keep, sites: [] }, KEEP_SITE_ID);
+  if (site) {
+    for (const sock of siteSockets(site)) {
+      if (sock.kind === 'centre' || !siteStands(site, sock.id) || siteGate(site, sock.id) === 'open') continue;
+      const part = KEEP_PART_BY_ID[site.parts[sock.id]];
+      if (!part) continue;
+      const at = siteSocketWorld(site, sock.id)!;
+      list.push({
+        kind: 'box', x: at.x, z: at.z, hx: at.along, hz: at.across, yaw: at.yaw,
+        top: (site.y ?? 0) + (part.walkway ?? part.height), ...(part.walkway ? { walk: true } : {}),
+      });
+    }
+  }
+  keptKeep = { keep, list: list.length ? list : NO_BOXES };
+  return keptKeep.list;
+}
+
+let keptDrawn: { keep: SolidBox[]; list: SolidBox[] } | null = null;
+
 /** What the world draws in `region` that is no placed piece, as the boxes it stands on — at home the village's two
- *  huts and the signpost (data/world.ts); nowhere else, any. The same list on every call. */
+ *  huts and the signpost (data/world.ts) and the keep's pieces standing (keepSolids); nowhere else, any. The same list
+ *  while the keep's pieces are. */
 export function drawnSolids(region: string | null): SolidBox[] {
-  return DRAWN.get(region) ?? NO_BOXES;
+  const drawn = DRAWN.get(region) ?? NO_BOXES;
+  const keep = keepSolids(region);
+  if (keep === NO_BOXES) return drawn;
+  if (!keptDrawn || keptDrawn.keep !== keep) keptDrawn = { keep, list: [...drawn, ...keep] };
+  return keptDrawn.list;
+}
+
+/** (x, z) put back out of a turned box grown by `r`, along its own nearer side — or null when it is not inside it */
+export function pushOutOfBox(s: SolidBox, x: number, z: number, r: number): { x: number; z: number } | null {
+  const cos = Math.cos(s.yaw);
+  const sin = Math.sin(s.yaw);
+  const dx = x - s.x;
+  const dz = z - s.z;
+  // its own frame: +x along (cos, -sin), +z along (sin, cos)
+  let u = dx * cos - dz * sin;
+  let v = dx * sin + dz * cos;
+  const hx = s.hx + r;
+  const hz = s.hz + r;
+  if (Math.abs(u) >= hx || Math.abs(v) >= hz) return null;
+  if (hx - Math.abs(u) < hz - Math.abs(v)) u = Math.sign(u || 1) * hx;
+  else v = Math.sign(v || 1) * hz;
+  return { x: s.x + u * cos + v * sin, z: s.z - u * sin + v * cos };
 }
 
 const NO_CIRCLES: SolidCircle[] = [];

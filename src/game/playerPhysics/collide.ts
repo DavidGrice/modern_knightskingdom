@@ -1,8 +1,8 @@
 // CLN-26 · where the player's step may take them this frame: the frame's collision block, moved from
 // PlayerController.tsx as it was — inside a building its own room's walls (and the keep's furniture); at a
 // destination its walkable ground and placed pieces; at home placed pieces (stepped onto or walked under when they
-// can be), the village's huts and the signpost, trees and rocks, the pond and water, the world's edge. It takes the
-// step (nx, nz) and hands it back.
+// can be), the village's huts and the signpost, the keep's walls (wave 69), trees and rocks, the pond and water, the
+// world's edge. It takes the step (nx, nz) and hands it back.
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { CLAIM_RADIUS, sizeFor, collisionBoxesFor } from '@/game/data/buildables';
@@ -17,9 +17,9 @@ import { isBuilt, isDoorLike } from '@/game/types';
 import { pushOutOfWater } from '@/game/waterworks';
 import { getBakeOffset, getMountedRegion, TEMPLATE_WORLD_SCALE } from '@/components/world/TemplateWorld';
 import { resolveWorldWalkableRects } from '@/game/data/templateWalkableFootprint';
-import { drawnSolids, fixedSolids } from '@/game/fixedSolids';
+import { drawnSolids, fixedSolids, pushOutOfBox } from '@/game/fixedSolids';
 import { cartState } from '@/game/carts';
-import { STEP_UP } from './floor';
+import { STEP_UP, WALKWAY_STEP } from './floor';
 
 // collisions: buildings (AABB, unless we can step onto or walk under
 // them), the village's huts and the signpost (turned boxes), trees &
@@ -178,9 +178,8 @@ export function collide(st: ReturnType<typeof useGameStore.getState>, riding: bo
       // the Keep's own PlacedBuilding entry exists purely for interact-
       // detection (foundKeep, gameStore.ts) — its real footprint is a
       // flat courtyard plate (SiteAssembly.tsx) with no collision of its
-      // own; the individual raised pieces don't have real collision yet
-      // either (a separate, already-flagged gap — "J51 has no damage or
-      // move behaviour" — not something to half-fake here)
+      // own. Wave 69 (G-02): the pieces raised on it stop the player as
+      // what the world draws does (fixedSolids.ts's keepSolids, below)
       if (b.type === 'keep') continue;
       // the cart being pushed or hitched goes with the player (game/carts.ts, cartLivePos): its stored place is where it
       // stood when it was taken up, and stopping the player there pinned him against a cart that had moved on
@@ -216,23 +215,16 @@ export function collide(st: ReturnType<typeof useGameStore.getState>, riding: bo
         break; // one blocking box is enough; re-derive dx/dz next building
       }
     }
-    // the village's huts and the signpost (game/fixedSolids.ts's drawnSolids): turned boxes from the ground up, the
-    // same push in each one's own frame — +x along (cos, -sin), +z along (sin, cos) — unless the player is above it
+    // the village's huts and the signpost, and the keep's pieces standing (game/fixedSolids.ts's drawnSolids): turned
+    // boxes from the ground up, the same push in each one's own frame, unless the player is above it — or, on a keep
+    // piece's wall walk, close enough under its top to step up onto it as floor.ts's floorHeightAt does (the ring's
+    // walks are not one level: a turret's stands 0.6 m above the run it meets)
     for (const s of drawnSolids(null)) {
-      if (feetY >= s.top) continue;
-      const cos = Math.cos(s.yaw);
-      const sin = Math.sin(s.yaw);
-      const dx = nx - s.x;
-      const dz = nz - s.z;
-      let u = dx * cos - dz * sin;
-      let v = dx * sin + dz * cos;
-      const hx = s.hx + PLAYER_RADIUS;
-      const hz = s.hz + PLAYER_RADIUS;
-      if (Math.abs(u) >= hx || Math.abs(v) >= hz) continue;
-      if (hx - Math.abs(u) < hz - Math.abs(v)) u = Math.sign(u || 1) * hx;
-      else v = Math.sign(v || 1) * hz;
-      nx = s.x + u * cos + v * sin;
-      nz = s.z - u * sin + v * cos;
+      if (feetY + (s.walk ? WALKWAY_STEP : 0) >= s.top) continue;
+      const out = pushOutOfBox(s, nx, nz, PLAYER_RADIUS);
+      if (!out) continue;
+      nx = out.x;
+      nz = out.z;
     }
     for (const n of st.nodes) {
       // herbs are a 0.35m ground prop (ResourceNodes.tsx's HerbGroup) —

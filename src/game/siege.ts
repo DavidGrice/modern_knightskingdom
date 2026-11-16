@@ -10,7 +10,7 @@ import { playerState } from './playerState';
 import { labExplosive, labSiegeRole } from './data/labCapabilities';
 import { labAssetId } from './data/buildables';
 import { fireProp } from '@/components/world/RiggedProp';
-import { siteSocketWorld, siteSockets, sitesIn } from './sites/sites';
+import { siteGate, siteSocketWorld, siteSockets, siteStands, sitesIn } from './sites/sites';
 import { isBuilt, isDoorLike, type PlacedBuilding } from './types';
 import { exposeDebug } from '@/lib/debugHooks';
 
@@ -203,9 +203,10 @@ exposeDebug('__kkDetonate', detonate);
 // push/hitch state both this and the player's step, game/playerPhysics/locomotion.ts, read/write) ----
 let lastRamHitAt = 0;
 
-/** the battering ram bashes whatever it's shoved into: a shut gate is forced
- *  open, anything else takes splash-free structural damage — gated by a
- *  cooldown so bumping against something doesn't melt it in one frame. Each
+/** the battering ram bashes whatever it's shoved into: a shut gate (wave 69:
+ *  and the keep's gatehouse) is forced open, anything else takes splash-free
+ *  structural damage — gated by a cooldown so bumping against something
+ *  doesn't melt it in one frame. Each
  *  blow is the bank's own snd084 Battering Ram (wave 66; the generic collision
  *  thud before). Wave 68: only on something standing to take it — an open gate,
  *  a ruin, an unfinished building or a socket with no finished piece is passed
@@ -222,12 +223,20 @@ export function ramCheck(rammerId: string, x: number, z: number) {
   const world = rammer?.world ?? null;
   for (const site of sitesIn(st, world)) {
     for (const sock of siteSockets(site)) {
-      if (!site.parts[sock.id] || (site.built[sock.id] ?? 0) < 1) continue; // nothing standing (a ruin is built 0)
+      if (!siteStands(site, sock.id)) continue; // nothing standing (a ruin is built 0)
+      // Wave 69 (G-02) · a gatehouse is a gate: standing open there is nothing to ram, and shut it bursts open
+      const gate = siteGate(site, sock.id);
+      if (gate === 'open') continue;
       const at = siteSocketWorld(site, sock.id)!;
       if (Math.hypot(at.x - x, at.z - z) > 2.1) continue;
       lastRamHitAt = now;
       audio.play('ram', 0.85);
-      st.damageSitePart(site.id, sock.id, 12, 'was rammed');
+      if (gate === 'shut') {
+        st.toggleSiteGate(site.id, sock.id);
+        st.notify('The ram bursts the gatehouse open!', true);
+      } else {
+        st.damageSitePart(site.id, sock.id, 12, 'was rammed');
+      }
       return;
     }
   }

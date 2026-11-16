@@ -5,7 +5,7 @@ import type { ItemId, PlacedBuilding } from '../../types';
 import { SET_PLANS, locateStep, setStepCount } from '@/lib/setBuild';
 import { KEEP_PART_BY_ID, maxHpForPart } from '../../data/keep';
 import {
-  KEEP_SITE_ID, siteById, siteComplete, siteSocket, siteSockets, siteWrite,
+  KEEP_SITE_ID, siteById, siteComplete, siteGate, siteSocket, siteSockets, siteWrite,
 } from '../../sites/sites';
 import { ITEMS } from '../../data/items';
 import { repairCost } from '../../repair';
@@ -49,6 +49,8 @@ export interface KeepSlice {
   damageSitePart: (siteId: string, socketId: string, amount: number, cause?: string) => void;
   /** G-05 · make a damaged, standing piece on a site whole, for repair.ts's repairCost of its HP lost */
   repairSitePart: (siteId: string, socketId: string) => void;
+  /** G-02 · open a gate standing on a site's socket (the gatehouse) if it is shut, shut it if it is open */
+  toggleSiteGate: (siteId: string, socketId: string) => void;
   /** the same three on the home keep (site 'keep') */
   raiseKeepPart: (socketId: string, partId: string) => void;
   workKeepPart: (socketId: string, amount: number) => void;
@@ -201,6 +203,17 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       set({ ...siteWrite(st, siteId, { hp: hpRest }), inventory: inv, dirty: true });
       audio.play('brick_link', 0.85);
       st.notify(`${part.name} repaired.`, true);
+    },
+
+    toggleSiteGate: (siteId, socketId) => {
+      const st = get();
+      const site = siteById(st, siteId);
+      const gate = site && siteGate(site, socketId);
+      if (!site || !gate) return; // no gate here, or none standing: a ruined gatehouse is a breach either way
+      // the keep's record is replaced, so the solids, the grid, line of sight and the seal all take the change
+      set({ ...siteWrite(st, siteId, { gateOpen: { ...site.gateOpen, [socketId]: gate !== 'open' } }), dirty: true });
+      audio.play(gate === 'open' ? 'portcullis' : 'drawbridge', 0.8);
+      st.notify(gate === 'open' ? 'The gatehouse grinds shut.' : 'The gatehouse creaks open.');
     },
 
     raiseKeepPart: (socketId, partId) => get().raiseSitePart(KEEP_SITE_ID, socketId, partId),

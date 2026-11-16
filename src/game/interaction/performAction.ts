@@ -209,7 +209,9 @@ export function performAction(ctx: ActionCtx, t: Target, st: ReturnType<typeof u
   } else if (t.kind === 'collect_taxes') {
     st.collectTaxes();
   } else if (t.kind === 'gate') {
-    st.toggleGate(t.id);
+    // G-02 · a site's gatehouse, or a placed gate or door
+    if (t.site) st.toggleSiteGate(t.site, t.id);
+    else st.toggleGate(t.id);
   } else if (t.kind === 'climb') {
     // Wave 8 · up onto the wall. The position is SET, not lerped: every
     // duration-gated interaction in this game pays out at 100% of the hold
