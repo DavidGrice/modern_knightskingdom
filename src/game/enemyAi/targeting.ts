@@ -2,12 +2,15 @@
 // holds): the player, a finished piece of the keep it is up against, the nearest sworn guard, Tam, the nearest
 // villager who chose to fight, and — for a crossbow — which of them it has a clear shot at; up on a wall-walk, the
 // guard posted to the same one. And (wave 69) for a raider with no way to his mark inside the keep's walls, the piece
-// of them he makes for instead (siegeWay).
+// of them he makes for instead (siegeWay) — G-03: or out of them, or behind the player's own walls and gates.
 import type { EnemyData } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
-import { findPath, hasLineOfSight, GROUND_LOS_Y } from '@/game/navgrid';
+import { findPath, hasLineOfSight, navBlocked, navReachable, GROUND_LOS_Y, HOME_NAV_CELLS } from '@/game/navgrid';
 import { KEEP_PART_BY_ID } from '@/game/data/keep';
+import { BUILDABLE_BY_ID, sizeFor } from '@/game/data/buildables';
+import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '@/game/types';
+import { isRampart } from '@/game/walls';
 import {
   KEEP_SITE_ID, siteById, siteCovers, siteGate, siteSocketGap, siteSocketOutside, siteSocketWorld, siteSockets, siteStands,
 } from '@/game/sites/sites';
@@ -26,8 +29,9 @@ export function distToPlayer(x: number, z: number) {
   return Math.hypot(playerState.x - x, playerState.z - z);
 }
 
-/** a piece of the keep within reach: its socket, where it stands, and what it is called */
-export interface KeepPiece { socketId: string; x: number; z: number; name: string }
+/** a piece within reach: its socket — a piece of the keep — or (G-03) its building's id, one of the player's own walls
+ *  or gates; where it stands, and what it is called */
+export interface KeepPiece { socketId?: string; buildingId?: string; x: number; z: number; name: string }
 /** a guard found: his record (null: none), his villager id, and how far off he is (Infinity: none) */
 export interface GuardFound { target: DefenderState | null; id: string; d: number }
 /** which one an enemy goes for — markFor's pick (a crossbow's after its sightlines are weighed) */
@@ -39,9 +43,25 @@ export type Mark = 'def' | 'companion' | 'villager' | 'player';
 const KEEP_REACH = 0.8;
 /** G-02 · how far from a keep piece's face a raider with no way in makes for, to batter it */
 const SIEGE_STAND = 0.6;
-/** G-02 · how many pieces of the keep a raider with no way to his mark tries a way to, each time he works out a route:
- *  the shut gatehouse, then the nearest */
+/** G-02 · how many pieces a raider with no way to his mark tries a way to, each time he works out a route: the keep's
+ *  shut gatehouse, then (G-03) a shut gate of the player's, then the nearest */
 export const SIEGE_RETARGETS = 2;
+/** G-03 · how far out from a face of one of the player's pieces the grid is asked whose side it is: past the cells it
+ *  blocks round the piece (AGENT_RADIUS, and the cell that reaches) */
+const SIDE_PROBE = 1.6;
+
+/** G-03 · one of the player's own pieces a raider shut out batters: a wall (walls.ts's isRampart — tall enough to seal)
+ *  or a gate standing shut, finished, at home — never a gate standing open, which is the way through */
+function batterable(st: Pick<GameState, 'gateOpen'>, b: PlacedBuilding): boolean {
+  return isHomeBuilding(b) && isBuilt(b) && isRampart(b.type) && !(isDoorLike(b.type) && (st.gateOpen[b.id] ?? true));
+}
+
+/** G-03 · the ground `gap` out from each face of one of the player's pieces (its footprint as sizeFor has it, turned
+ *  by quarters only): east, west, south, north */
+function facesOf(b: PlacedBuilding, gap: number): { x: number; z: number }[] {
+  const [sx, sz] = sizeFor(b.type, b.rot);
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ux, uz]) => ({ x: b.x + ux * (sx / 2 + gap), z: b.z + uz * (sz / 2 + gap) }));
+}
 
 export function keepInReach(data: EnemyData, st: GameState, enemyAtHome: boolean): { target: KeepPiece | null; d: number } {
   const m = data.mob;
@@ -71,6 +91,19 @@ export function keepInReach(data: EnemyData, st: GameState, enemyAtHome: boolean
       }
     }
   }
+  // G-03 · and the player's own walls and gates (siegeWay brings him up against one, behind which his mark stands),
+  // measured to the ground each covers as the keep's pieces are
+  if (data.raid && enemyAtHome) {
+    for (const b of st.buildings) {
+      if (!batterable(st, b)) continue;
+      const [sx, sz] = sizeFor(b.type, b.rot);
+      const dd = Math.hypot(Math.max(0, Math.abs(m.x - b.x) - sx / 2), Math.max(0, Math.abs(m.z - b.z) - sz / 2));
+      if (dd < KEEP_REACH && dd < keepD) {
+        keepD = dd;
+        keepTarget = { buildingId: b.id, x: b.x, z: b.z, name: BUILDABLE_BY_ID[b.type]?.name ?? 'the wall' };
+      }
+    }
+  }
   return { target: keepTarget, d: keepD };
 }
 
@@ -81,25 +114,53 @@ export function insideKeep(st: Pick<GameState, 'keep' | 'sites'>, x: number, z: 
   return !!site && siteCovers(site, x, z);
 }
 
-/** G-02 · the way a raider at (x, z) takes when he has none to his mark at (tx, tz) and it stands inside the home keep's
- *  walls (a sealed ring, OD-01): to the ground just outside the gatehouse standing shut, else outside the nearest piece
- *  standing — a way to at most SIEGE_RETARGETS of them tried, in that order; with a way to none, straight at the
- *  nearest. There keepInReach has him batter it, and a breach, or the gatehouse opened, gives him his way. Null when
- *  the mark is not inside the keep or nothing of it stands. */
-export function siegeWay(st: Pick<GameState, 'keep' | 'sites'>, x: number, z: number, tx: number, tz: number): { x: number; z: number }[] | null {
-  const site = siteById(st, KEEP_SITE_ID);
-  if (!site || !insideKeep(st, tx, tz)) return null;
+/** G-02 · the way a raider at (x, z) takes when he has none to his mark at (tx, tz) (the grid's word: navReachable):
+ *  to the ground beside a piece he can batter through to it — the keep's gatehouse standing shut, if the keep's walls
+ *  stand between them; else (G-03) a shut gate of the player's own; else the nearest piece that stands between them
+ *  — a way to at most SIEGE_RETARGETS of them tried, in that order, of those he has a way to; with a way to none,
+ *  straight at the nearest. There keepInReach has him batter it, and a breach, or the gate opened, gives him his way.
+ *  Between them, for the keep: one of the two inside its ring and the other not — he shut out (on his side of each
+ *  piece, outside it), or (G-03) shut in, the gatehouse shut behind him (inside it: siegeWay planned only inward, and
+ *  one shut in stood pressed against the stone for good). For one of the player's pieces, the grid's word again: a face
+ *  of it he has a way to, and one he has not, which his mark has; and after every such piece, one whose far face only
+ *  he has no way to — the outer of two rings, his mark in the inner (a ring of the player's round the keep). Null when
+ *  no piece stands in his way. */
+export function siegeWay(
+  st: Pick<GameState, 'keep' | 'sites' | 'buildings' | 'gateOpen'>, x: number, z: number, tx: number, tz: number,
+): { x: number; z: number }[] | null {
   const away = (at: { x: number; z: number }) => Math.hypot(at.x - x, at.z - z);
-  const pieces = siteSockets(site)
-    .filter((sock) => sock.kind !== 'centre' && siteStands(site, sock.id) && siteGate(site, sock.id) !== 'open')
-    .map((sock) => ({ shut: siteGate(site, sock.id) === 'shut', at: siteSocketOutside(site, sock.id, SIEGE_STAND)! }))
-    .sort((a, b) => Number(b.shut) - Number(a.shut) || away(a.at) - away(b.at));
+  // each piece he could batter through: `to`, his mark is on its far side; `rank`, 0 the keep's gatehouse shut, 1 a gate
+  // of the player's shut, 2 the rest; `at`, the ground he batters it from
+  const pieces: { to: boolean; rank: number; at: { x: number; z: number } }[] = [];
+  const site = siteById(st, KEEP_SITE_ID);
+  const shutIn = !!site && siteCovers(site, x, z);
+  if (site && shutIn !== siteCovers(site, tx, tz)) {
+    for (const sock of siteSockets(site)) {
+      if (sock.kind === 'centre' || !siteStands(site, sock.id) || siteGate(site, sock.id) === 'open') continue;
+      pieces.push({ to: true, rank: siteGate(site, sock.id) === 'shut' ? 0 : 2, at: siteSocketOutside(site, sock.id, SIEGE_STAND, shutIn)! });
+    }
+  }
+  for (const b of st.buildings) {
+    if (!batterable(st, b)) continue;
+    const probes = facesOf(b, SIDE_PROBE);
+    const mine = probes.map((p) => !navBlocked(p.x, p.z) && navReachable(x, z, p.x, p.z));
+    const far = probes.filter((p, k) => !mine[k] && !navBlocked(p.x, p.z));
+    if (!mine.includes(true) || !far.length) continue;
+    pieces.push({
+      to: far.some((p) => navReachable(tx, tz, p.x, p.z)),
+      rank: isDoorLike(b.type) ? 1 : 2,
+      at: facesOf(b, SIEGE_STAND).filter((_, k) => mine[k]).reduce((p, q) => (away(q) < away(p) ? q : p)),
+    });
+  }
   if (!pieces.length) return null;
-  for (const { at } of pieces.slice(0, SIEGE_RETARGETS)) {
-    const way = findPath(x, z, at.x, at.z);
+  const tried = pieces.filter((p) => navReachable(x, z, p.at.x, p.at.z))
+    .sort((a, b) => Number(b.to) - Number(a.to) || a.rank - b.rank || away(a.at) - away(b.at));
+  for (const { at } of tried.slice(0, SIEGE_RETARGETS)) {
+    const way = findPath(x, z, at.x, at.z, HOME_NAV_CELLS);
     if (way) return [...way, at];
   }
-  return [pieces.reduce((a, b) => (away(b.at) < away(a.at) ? b : a)).at];
+  const toward = pieces.some((p) => p.to) ? pieces.filter((p) => p.to) : pieces;
+  return [toward.reduce((a, b) => (away(b.at) < away(a.at) ? b : a)).at];
 }
 
 export function nearestGuard(data: EnemyData, enemyAtHome: boolean): GuardFound {

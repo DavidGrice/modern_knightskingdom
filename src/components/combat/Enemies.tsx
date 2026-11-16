@@ -18,7 +18,7 @@ import { nightSkeletonDirector } from '@/game/directors/nightSkeletons';
 import { pruneLadderClimbers, raidDirector } from '@/game/directors/raidDirector';
 import { campGuardTimer, directorTick, raidActive, raidCooldown, raidLost, skelTimer } from '@/game/directors/state';
 import { stepEnemy } from '@/game/enemyAi/step';
-import { speedOf } from '@/game/enemyAi/movement';
+import { newRouteFrame, speedOf } from '@/game/enemyAi/movement';
 import EnemyFigure from './EnemyFigure';
 
 function Enemy({ data }: { data: EnemyData }) {
@@ -119,6 +119,7 @@ export default function Enemies() {
   // the directors' timers and the raid's flags are module state (game/directors/state.ts), not refs of this
   // component: a raid outlives the scene's unmount behind Options or Stats
   useFrame((_, dt) => {
+    newRouteFrame(); // G-03 · this frame's count of the raiders' routes (enemyAi/movement.ts)
     directorTick.current -= dt;
     if (directorTick.current > 0) return;
     directorTick.current = 1; // 1 Hz is plenty for spawning decisions

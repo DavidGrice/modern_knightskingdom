@@ -1,8 +1,9 @@
 // CLN-13 · the dusk raid on the homestead: started once the homestead is established (bandits led by Gilbert or
 // Cedric — or, for a player sworn to Cedric, the crown's knights — sometimes with a ram or a siege ladder), and
 // resolved when the last raider is gone — with its spoils, unless the player's knock-out called it off; and the siege
-// ladder's climb slots freed as raiders fall.
-import type { EnemyData, EnemyKind } from '@/game/combat';
+// ladder's climb slots freed as raiders fall. G-03 · each raid comes at the homestead from its own sides (approach.ts),
+// its ram by the road and its ladder on the wall nearest where its raiders come.
+import { useEnemyStore, type EnemyData, type EnemyKind } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { isHomeBuilding, type ItemId } from '@/game/types';
 import { worldEnv } from '@/game/env';
@@ -12,9 +13,12 @@ import { ITEMS } from '@/game/data/items';
 import { CEDRIC_REVEAL_QUEST } from '@/game/data/world';
 import { difficultyState, CASTER_TIER, SHIELDED_ELITE_TIER } from '@/game/difficulty';
 import { roadEntry } from '@/game/data/road';
-import { raiderRamState, resetRaiderRam } from '@/game/raiderRam';
+import { raiderRamState, ramSpawn, resetRaiderRam } from '@/game/raiderRam';
 import { raiderLadderState, resetRaiderLadder } from '@/game/raiderLadder';
 import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
+import { KEEP_SITE_ID, siteById, siteSocketWorld } from '@/game/sites/sites';
+import { approachPoint, raidSeedFor, raidSides } from './approach';
+import { raidPlan } from './state';
 import type { Counter, Flag, Spawn } from './types';
 
 /** Wave 37 (A3 remainder) · rolled once per plain-bandit filler slot in the
@@ -101,14 +105,12 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
     raidActive.current = true;
     raidCooldown.current = Math.max(240, worldEnv.dayLength * 1.5);
     if (!st.destination) { audio.play('warcry', 0.9); audio.play('horn', 0.9); }
-    const a0 = Math.random() * Math.PI * 2;
     // N79 (requested 2026-07-28): raiders arrive by the road instead of
     // popping into existence on a ring around the homestead — spawned
     // loosely clustered around the same road entry point newcomers and
     // the merchant already walk in from (roadEntry()), each individually
-    // routed home via the enemies' own walk in from the road
-    // (game/enemyAi/movement.ts's walkIn). a0 (below) still picks the ram's own spot —
-    // see that call's own comment for why it's unchanged.
+    // routed in via the enemies' own walk in from the road
+    // (game/enemyAi/movement.ts's walkIn) — G-03: to his own side of home.
     const entry = roadEntry();
     function roadSpawnPos(i: number): [number, number] {
       const a = (i / 3) * Math.PI * 2;
@@ -163,15 +165,27 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
         spawn(rollBanditFiller(), sx, sz, true, undefined, true, false, 1, false, null);
       }
     }
+    // G-03 · the raid's plan: its sides (approach.ts), drawn from the day's seed and kept for the minimap and the
+    // informants (state.ts's raidPlan), and each raider just spawned his own point on one of them, in turn
+    raidPlan.seed = raidSeedFor(worldEnv.dayCount);
+    raidPlan.sides = raidSides(raidPlan.seed);
+    const points: { x: number; z: number }[] = [];
+    useEnemyStore.getState().enemies.filter((e) => e.raid && e.mob.approaching && !list.includes(e)).forEach((e, i) => {
+      const at = approachPoint(e.mob, raidPlan.sides, i, e.id, raidPlan.seed);
+      if (!at) return;
+      e.mob.approachX = at.x;
+      e.mob.approachZ = at.z;
+      points.push(at);
+    });
     // raiders occasionally bring their own ram — the same threat the
     // player's siege tools already pose, now aimed at the player's gate.
-    // Has no walk-in of its own (raiderRamState is a separate system, not
-    // an EnemyData/mob), so it still starts on the old 34m ring rather
-    // than at the road entry — a rework of its own, out of scope here.
+    // G-03 · rolled in by the road, from back along it past where the
+    // raiders step on (raiderRam.ts's ramSpawn) — it started on a 34 m ring.
     if (Math.random() < 0.4) {
       // full reset, not just `active = true` — a ram that was broken last
       // raid must not roll back in already wrecked and on 0 HP
-      resetRaiderRam(Math.cos(a0) * 34, Math.sin(a0) * 34);
+      const at = ramSpawn();
+      resetRaiderRam(at.x, at.z);
     }
     // Wave 58 (H4): a siege ladder sometimes joins too — a singleton, same
     // as the ram (game/raiderLadder.ts's own header comment) — gated on
@@ -188,7 +202,13 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
           })
         : [];
       if (walkwaySockets.length && Math.random() < Math.min(0.6, 0.25 + difficultyState.tier * 0.07)) {
-        const targetSocket = pick(walkwaySockets);
+        // G-03 · up against the wall-walk nearest where the raiders come: the middle of their approach points (the
+        // road's entry with none) — it was any of them, picked at random, often the far side of the keep
+        const n = points.length;
+        const mean = n ? { x: points.reduce((a, p) => a + p.x, 0) / n, z: points.reduce((a, p) => a + p.z, 0) / n } : entry;
+        const site = siteById(st, KEEP_SITE_ID)!;
+        const away = (id: string) => { const at = siteSocketWorld(site, id)!; return Math.hypot(at.x - mean.x, at.z - mean.z); };
+        const targetSocket = walkwaySockets.reduce((a, b) => (away(b.id) < away(a.id) ? b : a));
         resetRaiderLadder(targetSocket.id);
       }
     }
