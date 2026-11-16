@@ -94,9 +94,11 @@ let keptKeep: { keep: KeepState | null; list: SolidBox[] } | null = null;
 
 /** G-02 · the home keep's pieces standing in `region` (home only), as the boxes they stand on: every finished piece on
  *  a wall or corner socket but a gatehouse standing open, as tall as its wall walk (or, with none, itself) above the
- *  foundation. Made again whenever the keep's record changes — a piece raised, battered, ruined, rebuilt or repaired,
- *  the gatehouse opened or shut, the foundation moved — and the same list until then, so that what keeps something
- *  made from it (the grid, line of sight) makes it again only then. */
+ *  foundation. Looked at again whenever the keep's record changes, and the same list while its boxes are the same, so
+ *  that what keeps something made from it (the grid and its regions, line of sight, the merchant's wide mask) makes it
+ *  again only when a piece is finished, ruined or rebuilt, the gatehouse opened or shut, the foundation moved — G-03:
+ *  not at every blow of a siege or hammer stroke on a piece going up, which change the record and no box, and re-stamped
+ *  the home grid each time (ROADMAP.md, "the walls' path and grid work is unbounded per frame"). */
 export function keepSolids(region: string | null): SolidBox[] {
   if (region !== null) return NO_BOXES;
   const keep = useGameStore.getState().keep;
@@ -115,8 +117,19 @@ export function keepSolids(region: string | null): SolidBox[] {
       });
     }
   }
-  keptKeep = { keep, list: list.length ? list : NO_BOXES };
+  const kept = keptKeep?.list ?? NO_BOXES;
+  keptKeep = { keep, list: !list.length ? NO_BOXES : sameBoxes(kept, list) ? kept : list };
   return keptKeep.list;
+}
+
+/** whether two lists hold the same boxes, in the same order */
+function sameBoxes(a: SolidBox[], b: SolidBox[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let k = 0; k < a.length; k++) {
+    const p = a[k], q = b[k];
+    if (p.x !== q.x || p.z !== q.z || p.hx !== q.hx || p.hz !== q.hz || p.yaw !== q.yaw || p.top !== q.top || p.walk !== q.walk) return false;
+  }
+  return true;
 }
 
 let keptDrawn: { keep: SolidBox[]; list: SolidBox[] } | null = null;

@@ -178,8 +178,11 @@ export function siteSocketGap(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layout
 }
 
 /** G-02 · the ground `gap` metres out from a socket's piece on the side away from the site's middle, where someone
- *  outside comes up against it — straight out from a wall run's face, out from a corner's point */
-export function siteSocketOutside(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layout'>, socketId: string, gap: number): { x: number; z: number } | null {
+ *  outside comes up against it — straight out from a wall run's face, out from a corner's point. G-03 · `inside`: on
+ *  the side toward the middle instead, where someone shut in comes up against it. */
+export function siteSocketOutside(
+  site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'layout'>, socketId: string, gap: number, inside = false,
+): { x: number; z: number } | null {
   const at = siteSocketWorld(site, socketId);
   if (!at) return null;
   const out = Math.hypot(at.x - site.x, at.z - site.z);
@@ -188,7 +191,8 @@ export function siteSocketOutside(site: Pick<SocketSite, 'x' | 'z' | 'rot' | 'la
   // from the piece's middle along that way to its edge, in its own frame
   const [u, v] = socketFrame(at, at.x + nx, at.z + nz);
   const edge = Math.min(Math.abs(u) > 1e-9 ? at.along / Math.abs(u) : Infinity, Math.abs(v) > 1e-9 ? at.across / Math.abs(v) : Infinity);
-  return { x: at.x + nx * (edge + gap), z: at.z + nz * (edge + gap) };
+  const off = (inside ? -1 : 1) * (edge + gap);
+  return { x: at.x + nx * off, z: at.z + nz * off };
 }
 
 /** G-02 · whether (x, z) lies on a site's plate, inside the ring its sockets stand round */

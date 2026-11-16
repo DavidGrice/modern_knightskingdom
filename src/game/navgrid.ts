@@ -21,7 +21,7 @@ import { applyLocalAvoidance, navSteer, setLiveAgents } from './nav/steering';
 // registry nav/registry.ts, the 3D line-of-sight check nav/lineOfSight.ts, and steering + local avoidance
 // nav/steering.ts. Everything this module ever exported is re-exported below, so no importer changed.
 export { NavGrid } from './nav/grid';
-export { findPath, getNavGrid, getNavGridOrNull, navBlocked, navReachable, rebuildNav } from './nav/registry';
+export { findPath, getNavGrid, getNavGridOrNull, navBlocked, navReachable, rebuildNav, HOME_NAV_CELLS } from './nav/registry';
 export { GROUND_LOS_Y, hasLineOfSight } from './nav/lineOfSight';
 export { navSteer, setLiveAgents, steerRound } from './nav/steering';
 export type { NavAgent } from './nav/steering';

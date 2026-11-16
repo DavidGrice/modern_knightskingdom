@@ -1,6 +1,6 @@
 // CLN-13 · the blows an enemy's swing (engage.ts) lands, each its mark's own: at one of the player's side — a sworn
-// guard, Tam, a villager who chose to fight — at the player, at a piece of the keep, and a siege crew's shot from its
-// engine. Each sets the enemy's next cooldown first, as it always did.
+// guard, Tam, a villager who chose to fight — at the player, at a piece of the keep (G-03: or of the player's walls),
+// and a siege crew's shot from its engine. Each sets the enemy's next cooldown first, as it always did.
 import { damagePlayer, resolveDuel, fireSpellBolt, ATTACK_DMG, ATTACK_CD, type EnemyData } from '@/game/combat';
 import { useGameStore, type GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
@@ -174,10 +174,14 @@ export function fireAtPlayer(data: EnemyData, rangedProfile: RangedProfile, feet
 }
 
 /** A finished piece of the keep a raider stands against (targeting.ts's keepInReach), battered with its kind's own
- *  siege damage. */
+ *  siege damage — or (G-03) one of the player's own walls or gates, which goes down a ruin to rebuild (G-05's rule for
+ *  what a raid batters down), not to rubble. */
 export function batterKeep(data: EnemyData, st: GameState, piece: KeepPiece): void {
   data.mob.attackCd = ATTACK_CD[data.kind];
-  st.damageKeepPart(piece.socketId, RAID_SIEGE_DMG[data.kind] ?? 8, `was battered by ${KIND_FIGURE[data.kind].name}`);
+  const dmg = RAID_SIEGE_DMG[data.kind] ?? 8;
+  const cause = `was battered by ${KIND_FIGURE[data.kind].name}`;
+  if (piece.buildingId) st.damageBuilding(piece.buildingId, dmg, cause, true);
+  else if (piece.socketId) st.damageKeepPart(piece.socketId, dmg, cause);
 }
 
 /** Wave 37 (A3 remainder) · a siege crew's shot, when its engine can fire: a real, additive AI behaviour — it never

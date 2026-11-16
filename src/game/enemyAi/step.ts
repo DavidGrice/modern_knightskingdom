@@ -4,19 +4,19 @@
 // apart; one on a wall-walk whose wall has gone, felled; then, outside build mode, the climb (climb.ts), the walk in
 // from the road and the flight (movement.ts) each own the frame while they last; otherwise the enemy looks for what it
 // has to fight (targeting.ts) and does the first of the chain below that holds — the order is the order it always was
-// — then is shouldered apart from its pack, kept to the land and stopped at a shut gate and the keep's walls. Last, its
-// figure is stood where it is and given its clip.
+// — then is shouldered apart from its pack, kept to the land and stopped at a shut gate and the keep's walls (as the
+// walk in and the flight are too, G-03: holdToTheWalls). Last, its figure is stood where it is and given its clip.
 import * as THREE from 'three';
 import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
+import { navReachable } from '@/game/navgrid';
 import { DEATH_BARK } from '@/game/data/enemies';
-import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { groundUnder, play, stand, type EnemyFrame } from './frame';
 import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, tamInReach } from './targeting';
 import { closeIn, engage, rangedProfileOf, swingAt, RANGED_RANGE } from './engage';
 import { batterKeep, blowAtGuard, blowAtTam, blowAtVillager, fireAtPlayer, fireEngine } from './blows';
-import { breaksAndRuns, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtKeepWalls, stopAtShutGates, walkIn, wander } from './movement';
+import { breaksAndRuns, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtKeepWalls, stopAtShutGates, walkIn, walkedIn, wander } from './movement';
 import { CLIMB_RANGE, climb, holdBattlement, ladderPull, poseOnLadder, takeTheLadder, walkwayStands } from './climb';
 
 export type { EnemyFrame } from './frame';
@@ -69,6 +69,15 @@ function fallApart(f: EnemyFrame, dt: number): void {
   if (m.dieT > 1.1) f.remove(data.id);
 }
 
+/** A shut gate in its own world, and at home the keep's walls, stop an enemy wherever it went this frame — after the
+ *  frame's chain, and (G-03) after the walk in from the road and the flight, which return before it and walked
+ *  through both (ROADMAP.md, "a fleeing raider, and one still walking in from the road, pass through the keep's
+ *  walls"). */
+function holdToTheWalls(f: EnemyFrame, st: ReturnType<typeof useGameStore.getState>): void {
+  stopAtShutGates(f.data.mob, st, f.data.world ?? null);
+  if (f.enemyAtHome) stopAtKeepWalls(f.data.mob);
+}
+
 export function stepEnemy(f: EnemyFrame, rawDt: number): void {
   const { data, path, speed, enemyAtHome } = f;
   const dt = Math.min(rawDt, 0.05);
@@ -107,19 +116,24 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
       return;
     }
     // a raider walking in from the road (movement.ts's walkIn) does so until
-    // close enough to the homestead, or the player is already near, at
+    // he has walked in (walkedIn: at his own approach point, G-03, or close
+    // enough to the homestead), or the player is already near, at
     // which point approaching clears and the normal wander/chase/attack
     // chain below takes over on the next frame. Like the flight just
     // below, it stands its own figure and returns early rather than
-    // falling through to the shared tail.
+    // falling through to the shared tail. G-03 · and once his way in is a
+    // siege way that has brought him up against the piece he is to batter
+    // (keepInReach), the chain's battering takes over: walking in still,
+    // he stood at a shut gate for good and the raid never ended.
     if (m.approaching) {
-      if (d < 26 || Math.hypot(m.x - HOME_X, m.z - HOME_Z) < 30) {
+      if (walkedIn(m, d) || (path.current.siege && keepInReach(data, st, enemyAtHome).target)) {
         m.approaching = false; // close enough — the chain below takes over next frame
       } else {
-        walkIn(m, path.current, dt, speed);
+        walkIn(m, path.current, dt, speed, !!data.raid && enemyAtHome);
         // the same pack-separation nudge the shared tail applies to a
         // chase or an attack — here too, since this returns early
         shoulderApart(data);
+        holdToTheWalls(f, st);
         stand(g, m, groundUnder(f));
         play(f, 'anim_c_run');
         return;
@@ -128,6 +142,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     breaksAndRuns(data, st);
     if (m.fleeing) {
       if (flee(m, dt) > 44) { f.remove(data.id); return; }
+      holdToTheWalls(f, st);
       stand(g, m, groundUnder(f));
       play(f, 'anim_c_run');
       return;
@@ -144,8 +159,9 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     const besieger = !!data.raid && enemyAtHome;
     const pathStep = makePathStep(path.current, m, dt, besieger);
     // G-02 · a guard, Tam or a villager inside the keep's walls is closed in on by a way round them, as the player is —
-    // straight at him, a raider would stand pressed against the stone for good
-    const walledIn = (p: { x: number; z: number }) => besieger && insideKeep(st, p.x, p.z);
+    // straight at him, a raider would stand pressed against the stone for good. G-03 · and one shut off from him (the
+    // grid's word), behind the player's own walls: straight at him, he walked through the palisades, which stop no enemy
+    const walledIn = (p: { x: number; z: number }) => besieger && (insideKeep(st, p.x, p.z) || !navReachable(m.x, m.z, p.x, p.z));
     const wallGuard = guardOnMyWall(m, st);
     const ladder = ladderPull(data, enemyAtHome);
     // G-02 · a raider battering a piece of the keep works out his way to his mark again on its timer all the while
@@ -198,7 +214,8 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
       // through it before)
       closeIn(m, dt, () => pathStep(ladder.footX, ladder.footZ), speed);
     } else if (battering && keep.target) {
-      // (G-02 · only shut out of the keep his mark is in: his route is a way to a piece of it to batter)
+      // (G-02 · only shut out of the keep his mark is in — G-03: or in it, or out from behind the player's own walls —
+      // his route a way to a piece to batter)
       const piece = keep.target;
       swingAt(m, dt, piece, () => batterKeep(data, st, piece));
     } else if (guard.target && mark === 'def') {
@@ -267,8 +284,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     // since a room fight is short and its own walls mask a mob's position
     // snapping around.
     if (enemyAtHome) keepToLand(m);
-    stopAtShutGates(m, st);
-    if (enemyAtHome) stopAtKeepWalls(m);
+    holdToTheWalls(f, st);
   }
 
   // Phase 20: away from the flat homestead, enemies stand on the bake's

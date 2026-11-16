@@ -1,8 +1,9 @@
 'use client';
 // Visual + AI for the raiders' own battering ram (see game/raiderRam.ts):
 // trundles toward the nearest shut gate (or the keep's gatehouse, shut), or the
-// homestead's center if there isn't one, ramming whatever it reaches via the
-// same ramCheck the player's pushed cart already uses.
+// homestead's center if there isn't one — G-03: by a way round what stands
+// (raiderRam.ts's rollRaiderRam), not straight at it — ramming whatever it
+// reaches via the same ramCheck the player's pushed cart already uses.
 //
 // Rendered through RiggedProp rather than PropModel so its WHEELS TURN: the
 // rig lab charted `wheel_0`/`wheel_1` on oc4806, and RiggedProp rotates any
@@ -18,13 +19,11 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { ramCheck } from '@/game/siege';
-import { raiderRamGate, raiderRamState } from '@/game/raiderRam';
+import { raiderRamState, rollRaiderRam } from '@/game/raiderRam';
 import { settleWreck } from '@/game/raiderProps';
-import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import RiggedProp, { setPropTravel } from '../world/RiggedProp';
 import { homeGroundY } from '../world/TemplateWorld';
 
-const RAM_SPEED = 1.3; // roughly a slow determined trudge, matching the player's own push pace
 /** id RiggedProp keys its per-instance animation state on */
 const RAM_ID = 'raider_ram';
 
@@ -57,20 +56,8 @@ export default function RaiderRam() {
       return;
     }
 
-    const st = useGameStore.getState();
-    const gate = raiderRamGate(st.buildings, st.gateOpen, st.keep);
-    const tx = gate ? gate.x : HOME_X;
-    const tz = gate ? gate.z : HOME_Z;
-    const dx = tx - raiderRamState.x;
-    const dz = tz - raiderRamState.z;
-    const d = Math.hypot(dx, dz);
-    if (d > 0.3) {
-      const step = RAM_SPEED * dt;
-      raiderRamState.x += (dx / d) * step;
-      raiderRamState.z += (dz / d) * step;
-      raiderRamState.travel += step;
-      yaw.current = Math.atan2(-dx, -dz);
-    }
+    const heading = rollRaiderRam(useGameStore.getState(), dt);
+    if (heading !== null) yaw.current = heading;
     setPropTravel(RAM_ID, raiderRamState.travel);
     ramCheck(RAM_ID, raiderRamState.x, raiderRamState.z);
     g.visible = true;

@@ -232,6 +232,15 @@ export function roadEntry(): { x: number; z: number } {
   return { x: ENTRY_CELL[0] * ROAD_TILE, z: ENTRY_CELL[1] * ROAD_TILE };
 }
 
+/** G-03 · which way the road runs on out of the map at roadEntry(): a unit vector from the cell before the entry on its
+ *  leg to the entry — where the raiders' ram comes rolling up from (raiderRam.ts's ramSpawn). */
+export function roadEntryOut(): { x: number; z: number } {
+  const leg = LEGS.find((l) => l.some(([x, z]) => x === ENTRY_CELL[0] && z === ENTRY_CELL[1]))!;
+  const [px, pz] = leg[leg.findIndex(([x, z]) => x === ENTRY_CELL[0] && z === ENTRY_CELL[1]) - 1];
+  const dx = ENTRY_CELL[0] - px, dz = ENTRY_CELL[1] - pz, d = Math.hypot(dx, dz);
+  return { x: dx / d, z: dz / d };
+}
+
 /** How close a ground's gate has to be to the carriageway to count as
  *  "the road reaches it" — a plate's own half width plus one plate of grass,
  *  i.e. a field gate you can see the road from. Asserted in Grounds.tsx. */

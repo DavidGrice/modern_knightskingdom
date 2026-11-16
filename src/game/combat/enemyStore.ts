@@ -26,6 +26,10 @@ interface EnemyMob {
    *  homestead — game/enemyAi/movement.ts's walkIn routes this via the nav grid instead of the
    *  normal wander/chase FSM until it clears itself close to home. */
   approaching?: boolean;
+  /** G-03 · a raider's own point to walk in to, on his raid's side of home (game/directors/approach.ts) — absent, home's
+   *  middle, to within 30 m (a skeleton walking in, a raider with no point open to him) */
+  approachX?: number;
+  approachZ?: number;
   /** Wave 58 (H4): mid-ascent progress on a siege ladder, seconds since this
    *  raider claimed a climb slot — negative while staggered-queued behind
    *  another climber (game/raiderLadder.ts's own CLIMBER_STAGGER), then

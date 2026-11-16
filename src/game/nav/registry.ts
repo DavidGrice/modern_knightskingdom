@@ -12,6 +12,9 @@ import { CELL, HOME_HALF, NavGrid } from './grid';
 // ---------------------------------------------------------------------------
 
 const homeGrid = new NavGrid({ region: null, originX: 0, originZ: 0, halfExtent: HOME_HALF, cellSize: CELL });
+/** How many cells the home grid holds: the most a search across it can ever visit — the cap for one that knows there is a
+ *  way (navReachable) and must not give up short of it, yet must end. */
+export const HOME_NAV_CELLS = homeGrid.dim * homeGrid.dim;
 
 // Phase 2, iteration 2.4 — destination window grids, lazily created and
 // cached per region so revisiting a template reuses its previous grid

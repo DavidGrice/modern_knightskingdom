@@ -389,6 +389,46 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   in the bailey when the gatehouse shuts stays pressed against its inner face; the walls' path and grid work is unbounded
   per frame (an uncapped search per re-plan, the grid re-stamped on every keep change); a far skeleton stops at the walls
   instead of walking round to the gate.
+- **#308 — Wave 70.1** (G-03): raiders peel off to different sides, the ram comes by the road, the ladder goes up where
+  they are. A raid's sides are drawn from the day's seed (`game/directors/approach.ts`: `raidSeedFor`, `raidSides` — the
+  road's bearing from home and one flank 75° round, or both) and kept in the directors' state (`state.ts`'s `raidPlan`,
+  `__kkdirectors`) for G-04's arrow and G-19's informants; each raider takes the next side in turn, strayed by a hash of
+  his id and the seed, on a ring 22 m round home (`approachPoint`: `nearestWalkable`, reachable, further out if shut
+  off), walks in to it by a raider's way and closes in from there (`walkedIn`: at the point, or for a player met on the
+  way, further out than it). The ram starts 8 m back along the road past `roadEntry()` (`ramSpawn`, `road.ts`'s
+  `roadEntryOut`) and rolls a wide walker's way (`rollRaiderRam`, the merchant's mask) to 1.2 m off its gate's face, then
+  into it. The ladder goes against the wall-walk nearest the raiders' mean approach point. A raider shut off from his
+  mark batters through: `siegeWay` ranks the keep's shut gatehouse, a shut gate of the player's, then the nearest piece
+  (the player's walls and shut gates by the grid's word, a face his and one not), those with his mark behind them before
+  the outer of two rings; `keepInReach` finds a player's piece, and `batterKeep` leaves it a ruin (G-05). Folded in from
+  wave 69, each retagged fixed: a raider shut in the bailey (siegeWay outward, `siteSocketOutside`'s `inside`); the
+  walls' search work (capped at `HOME_NAV_CELLS`, `ROUTES_PER_FRAME` = 2 raiders' routes a frame, `keepSolids` kept
+  while its boxes are the same); and the flight and the walk in passing through walls (`holdToTheWalls`, and
+  `stopAtShutGates` on the enemy's world). Premises held, with corrections: the cited lines had moved (the ram's ring
+  :174, the ladder's pick :191), the ram is `components/combat/RaiderRam.tsx`, `raiderRamGate` already made for the
+  gatehouse, the "mean approach vector" is read as the mean approach point, and the raiders' ladder offers the player no
+  Climb prompt by design (OPEN-094: none live on either build). Measured on `main` (`w701_raid.mjs`, four raids against a
+  shut ring, the player in the bailey): walks in ended 30 m out on bearings 97-104°, every raid alike; the ram from
+  (10.5, 32.3) straight through the south run, on 14-15 blocked cells, the gatehouse burst at 29.5 s; the ladder on the
+  far (north-east) corner; findPath 3.1-4.2 calls and 1.1-2.4 ms a second, 7.6-9.5 ms the worst second. On the change:
+  bearings such as 94/178/35° (three sides when the raid has three), 20-25 m out; the ram from (−12.5, 72.4) on the
+  road, round the keep, the gatehouse at 72 s; the ladder on the south run; 4.8-6.2 calls and 0.8-1.5 ms a second,
+  2.0-2.6 ms the worst. `raidApproach.test.ts` (21); 22 take-outs each fail 1-3 tests; the suite 97 files, 793. The
+  evidence pass found two parts not working live, fixed in the worktree after it: a raider shut in turned back 1.1 m
+  short of the gatehouse (`makePathStep` now walks a siege route's last point, never passes it), and a gate battered to
+  a ruin still barred the raiders (`stopAtShutGates` now skips one not finished, as the player and the grid do; on
+  `main` since wave 68); live, the shut-in raider batters the gatehouse to a ruin and is out at 13 s, and three raiders
+  enter the player's ring through its ruined gate. The review round found two more, fixed: a raider walking in by a
+  siege way (home ringed past every approach point, its gate shut) stood at the gate for good — his walk in now ends
+  once he is up against the piece, and he batters it (live: the gate a ruin by 13.5 s, where `main`'s raiders walked
+  through the palisades); and one closing in on a guard, Tam or a villager behind the player's walls walked through
+  them — `walledIn` now asks the grid too (`navReachable`). ROADMAP:
+  a new fixed entry, OPEN-016 and OPEN-017 closed, OPEN-094 noted, the three wave-69 entries fixed, and three "Seen,
+  not fixed": a raider fleeing inside a shut keep stays against its walls; the ram can pick a gate's end face and ram the
+  palisade beside it; a raider whose mark is out of reach for another reason may batter an unrelated pen's gate. Fixed
+  on the way, on main since wave 68: a gate battered to a ruin still barred raiders. The ram takes 72 s, not 29.5, to a gate across
+  the keep; with the raiders spread, fewer reach a ladder on one side (`ladder_raid` `KK_NEAR=1`: one climber, three on
+  `main`).
 
 ## Owner decisions
 
