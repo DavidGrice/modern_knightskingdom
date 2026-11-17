@@ -22,7 +22,7 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { bossTierScale, BOSS_VICTORY_REWARD, rollBossLegendaryDrop } from '@/game/bossEncounter';
 import { ITEMS } from '@/game/data/items';
-import { dragonAir, dragonAirBlack } from '@/game/dragonAir';
+import { majorEventOn } from '@/game/majorEvents';
 import type { DragonSiegeConfig } from '@/game/dragonSiegeConfig';
 import { breathe, FLARE_SECONDS, MAX_BURNING, newDragonfire } from '@/game/dragonfire';
 import { loadDragonRig, type DragonRig } from './DragonOmen';
@@ -203,13 +203,18 @@ export default function DragonSiegeController({ config: cfg }: { config: DragonS
     });
   }, [active, cfg.debugKey]);
 
+  // G-04 · the pause menu's Options and Stats take the whole game screen down, and this with it: end() never runs, and
+  // a dragon left busy would hold off every major event (game/majorEvents.ts), raids included, for the rest of the
+  // session — left hostile, every villager would flee from it. Its flight is gone with the runner; so is the siege.
+  useEffect(() => () => { cfg.air.busy = false; cfg.air.hostile = false; cfg.air.hit = null; }, [cfg.air]);
+
   useFrame(() => {
     if (destination || active) return;
     const st = useGameStore.getState();
     // deep at night, to a homestead worth burning — one roll per night, never
-    // two dragons at once (Wave 36, A8: each dragon checks the other's flag as
-    // well as its own; this is its half of that mutual guard).
-    if (worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current && !dragonAir.busy && !dragonAirBlack.busy) {
+    // two dragons at once (Wave 36, A8), nor on top of any other major event
+    // (G-04's arbiter, game/majorEvents.ts: Cedric's siege, a raid or its warning)
+    if (worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current && !majorEventOn()) {
       if (!cfg.allowed(st)) return;
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < cfg.rollChance) {

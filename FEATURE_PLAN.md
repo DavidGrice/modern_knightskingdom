@@ -429,6 +429,29 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   on the way, on main since wave 68: a gate battered to a ruin still barred raiders. The ram takes 72 s, not 29.5, to a gate across
   the keep; with the raiders spread, fewer reach a ladder on one side (`ladder_raid` `KK_NEAR=1`: one climber, three on
   `main`).
+- **#309 — Wave 70.2** (G-04): raids at any hour, after a horn; the day-rollover hook and the major-event arbiter. A raid
+  sets out by a chance per hour (`game/directors/raidTiming.ts`: `raidChance(hour, pressure)`, the one curve to tune —
+  weights 1 by day (06-15), 3 at 16:00, 10 at dusk (17-19), 7 then 6 in the evening, 5 to 2 through the small hours, scaled to `RAIDS_PER_DAY` = 0.9 — and `raidDue(day, hour)`, drawn from
+  the day's seed), behind the cooldown, the homestead's gates and the arbiter; the 0.70-0.78 window is gone. A roll that
+  comes up sounds the existing `'horn'` (`raidWarning`), draws the plan's sides and sets `raidPlan.incoming` to
+  `warningLeadTime(st, world)` — 30 s, +15 s for each finished Watch Tower or keep Corner Turret with a defender posted,
+  to 60 — and the raiders come when it runs out (`raidArrives`); away, a toast only. `RaidBanner.tsx` shows the sides
+  and the seconds on its own layer over the panels (z-index 16; OD-08), and the minimap draws an amber arrow on each
+  side; `raidPlan.sides` now clear when the raid ends (the review of 70.1). `game/majorEvents.ts`: each major event
+  registers beside its state (the raid from its warning, Cedric's siege and final stand, either dragon, a settlement
+  raid) and each asks `majorEventOn()` before it starts. `game/dayRollover.ts`: `rollDay`/`onDayRollover` from
+  `DayNight.tsx`'s midnight and `wakeAtDawn` (the bed and the knock-out, which woke on the same day when begun before
+  midnight). Premises held (the dusk gate had moved to :101, Cedric's checks to :205-209); the keep's Corner Turret
+  counts as a watch post; the arbiter now also keeps a dragon off Cedric's siege and a raid, the omen off any event,
+  Cedric off the black dragon. Golden tests first (`majorEventGating.test.ts`, 19, passing on the base and unchanged
+  after); `raidTiming.test.ts` (12), `majorEvents.test.ts` (5), `dayRollover.test.ts` (5); 17 take-outs each fail 1-7
+  tests; the suite 101 files, 834. The ten-day sweep: four raids — day 1 21:00, day 5 03:00, day 6 17:00, day 9 18:00
+  (0.4 a day); over 1,000 days 0.375 a day through the 36-hour cooldown, 27% at dusk, 60% at night, 13% by day (`main`:
+  0.5 a day, every one at dusk). Measured on `main`: nothing at noon in 75 s, a sleep at 0.9 woke on the same day.
+  Live on the change: horn 0.7 s, banner 1.2 s, arrows on the plan's three sides, raiders at 31.8 s; the banner in
+  build mode and over the Satchel; the sleep woke on the next day; Cedric's siege and the dragon still start alone
+  (421 and 715 ms; `main` 648 and 1,051). ROADMAP: a new fixed entry, OPEN-018 closed, OPEN-020 partly done, and one
+  "Seen, not fixed": a night event can roll twice in one night (its day count turns over at midnight inside it).
 
 ## Owner decisions
 

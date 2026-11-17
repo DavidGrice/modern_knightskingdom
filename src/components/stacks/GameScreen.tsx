@@ -25,6 +25,7 @@ import TouchControls from '../hud/TouchControls';
 import FactionTheme from '../hud/FactionTheme';
 import Panels from '../hud/Panels';
 import BuildBar from '../hud/BuildBar';
+import RaidBanner from '../hud/RaidBanner';
 import AIDebugOverlay from '@/ai/debug/AIDebugOverlay';
 import PerfOverlay from '@/components/hud/PerfOverlay';
 // side-effect import: registers window.__kkdata and, in development, logs any quest/cast data violation
@@ -322,6 +323,11 @@ export default function GameScreen() {
         {buildMode && <BuildBar />}
       </div>
       <Panels />
+      {/* G-04 · over the panels (15) and under pause (18): a raid's warning
+          reaches a player who is building or reading a panel (OD-08) */}
+      <div className="hud" style={{ zIndex: 16 }}>
+        <RaidBanner />
+      </div>
       {/* outside .hud on purpose: that layer is pointer-events:none, and the
           overlay's agent tabs have to be clickable when the pointer is free */}
       <AIDebugOverlay />

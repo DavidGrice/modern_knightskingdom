@@ -24,6 +24,19 @@ export function bearingFromHome(x: number, z: number): number {
   return Math.atan2(z - HOME_Z, x - HOME_X);
 }
 
+const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+/** G-04 · a side as the watch would call it: the compass point of a bearing from home (north is −z, as on the map) */
+export function sideName(bearing: number): string {
+  const fromNorth = Math.atan2(Math.cos(bearing), -Math.sin(bearing)); // clockwise from −z
+  return COMPASS[(Math.round(fromNorth / (Math.PI / 4)) + 8) % 8];
+}
+
+/** G-04 · a raid's sides as the watch would call them, each point once: "the south, the west and the south-east" */
+export function sidesNamed(sides: number[]): string {
+  const names = sides.map((b) => `the ${sideName(b)}`).filter((s, i, all) => all.indexOf(s) === i);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '';
+}
+
 /** a raid's seed, the day's: the same day draws the same sides */
 export function raidSeedFor(day: number): number {
   return Math.floor(mulberry32(0x5eed + day * 7919)() * 4294967296);

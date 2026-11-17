@@ -35,6 +35,7 @@ import { WORLD_DESTINATION_BY_ID } from './data/worlds';
 import { worldEnv } from './env';
 import { exposeDebug } from '@/lib/debugHooks';
 import { tickWaveDefense, type EnemyDeps } from './waveDefense';
+import { majorEventOn, registerMajorEvent } from './majorEvents';
 
 const SETTLEMENT_RAID_BASE_COOLDOWN_MS = 15 * 60_000; // real minutes, no pressure
 const SETTLEMENT_RAID_MIN_COOLDOWN_MS = 6 * 60_000;   // floor at max contested pressure
@@ -58,6 +59,8 @@ interface SettlementRaidState {
 export const settlementRaidState: SettlementRaidState = {
   active: false, destId: null, deadline: 0, plotHp: SETTLEMENT_RAID_START_HP,
 };
+// G-04 · a major event (majorEvents.ts): none starts on top of it, and it starts on top of none
+registerMajorEvent('settlementRaid', () => settlementRaidState.active);
 
 /** Interpolates base -> min cooldown by contestedPressure — the more
  *  contested your standing, the more often a claim gets tested. */
@@ -144,6 +147,7 @@ export function tickSettlementRaid(
     if (!kinds) return; // genuinely Unsworn — no raid is possible, by design
     const cooldownMs = settlementRaidCooldownMs(st.allegiance);
     if (Date.now() - (settlement.lastRaidAt ?? settlement.since) < cooldownMs) return;
+    if (majorEventOn()) return; // G-04 · a raid at home (still resolving while the player is here) or its warning
     startSettlementRaid(destId);
     // whichever house you have NOT been leaning toward is the one testing
     // this claim — Cedric's men retaliate against a crown-leaning player,

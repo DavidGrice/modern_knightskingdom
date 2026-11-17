@@ -16,6 +16,7 @@ import { onSessionReset } from './store/sessionHooks';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST } from './data/world';
 import { CEDRIC_SIEGE_TIER, difficultyState } from './difficulty';
 import { exposeDebug } from '@/lib/debugHooks';
+import { registerMajorEvent } from './majorEvents';
 
 // The store's state type, derived, as difficulty.ts does (gameStore exports it as `GameState` since CLN-07; it did
 // not when this was written).
@@ -61,6 +62,10 @@ onSessionReset(() => {
   cedricWarState.finalStandActive = false;
   cedricWarState.reinforced = false;
 });
+
+// G-04 · his siege of the homestead and his final stand are each a major event (majorEvents.ts)
+registerMajorEvent('cedricSiege', () => cedricWarState.active);
+registerMajorEvent('cedricFinalStand', () => cedricWarState.finalStandActive);
 
 /** may the camp duel become the real final stand? Requires having survived
  *  at least one homestead siege first — the direct expression of "vanquished

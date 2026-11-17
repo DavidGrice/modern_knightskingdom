@@ -7,7 +7,7 @@ import { raiderRamState } from '@/game/raiderRam';
 import { useGameStore } from '@/game/store/gameStore';
 import type { CharacterConfig, PlacedBuilding } from '@/game/types';
 import { raidDirector } from './raidDirector';
-import { raidActive, raidCooldown, raidLost } from './state';
+import { raidActive, raidCooldown, raidForce, raidLost, raidPlan } from './state';
 
 const HERO: CharacterConfig = { name: 'Test', headDonor: 'x', bodyDonor: 'x', armColor: 0, handColor: 0, legColor: 0, hipColor: 0 };
 const game = () => useGameStore.getState();
@@ -19,12 +19,14 @@ function tick(): void {
   const st = game();
   raidDirector(st, useEnemyStore.getState().enemies, useEnemyStore.getState().spawn, raidCooldown, raidActive, raidLost);
 }
-/** the homestead established (four pieces, mining unlocked), dusk, and the tick that starts the raid */
+/** the homestead established (four pieces, mining unlocked), dusk, the roll forced (G-04), and the ticks that sound the
+ *  horn and bring the raid */
 function startRaid(): void {
   const walls: PlacedBuilding[] = [0, 1, 2, 3].map((i) => ({ id: 'w' + i, type: 'wall', x: 30 + i * 4, z: 30, rot: 0, built: 1 }));
   useGameStore.setState({ buildings: walls, unlocks: [...game().unlocks, 'mining'] });
   worldEnv.time = 0.71;
-  tick();
+  raidForce.current = true;
+  do tick(); while (raidPlan.incoming > 0);
   raiderRamState.active = true; // as though the raid had brought its ram and its ladder
   raiderLadderState.active = true;
 }
