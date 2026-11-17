@@ -8,7 +8,7 @@ import { roadEntry } from './data/road';
 import { HOME_X, HOME_Z } from './data/villagers';
 import { APPROACH_RING, approachPoint, bearingFromHome, raidSeedFor, raidSides } from './directors/approach';
 import { raidDirector } from './directors/raidDirector';
-import { raidActive, raidCooldown, raidLost, raidPlan } from './directors/state';
+import { raidActive, raidCooldown, raidForce, raidLost, raidPlan } from './directors/state';
 import { keepSolids, pushOutOfBox } from './fixedSolids';
 import { keepInReach, siegeWay } from './enemyAi/targeting';
 import { batterKeep } from './enemyAi/blows';
@@ -92,13 +92,16 @@ const palisadeRing = (cx: number, cz: number, h: number, south: 'palisade' | 'ga
 };
 /** four pieces of the player's own, far off: the homestead is established */
 const established = (): PlacedBuilding[] => [0, 1, 2, 3].map((i) => piece('far' + i, 'palisade', 120 + i * 4, -120));
-/** the raid director's tick, as Enemies.tsx's 1 Hz frame runs it, at dusk, with the dice at `dice` */
+/** the raid director's ticks, as Enemies.tsx's 1 Hz frame runs them, at dusk, with the dice at `dice`: the roll forced
+ *  (G-04), and on through the warning to the raiders' arrival */
 const startRaid = (dice = 0.999) => {
   vi.spyOn(Math, 'random').mockImplementation(() => dice);
   raidActive.current = false;
   raidCooldown.current = 0;
   worldEnv.time = 0.71;
-  raidDirector(game(), useEnemyStore.getState().enemies, useEnemyStore.getState().spawn, raidCooldown, raidActive, raidLost);
+  raidForce.current = true;
+  do raidDirector(game(), useEnemyStore.getState().enemies, useEnemyStore.getState().spawn, raidCooldown, raidActive, raidLost);
+  while (raidPlan.incoming > 0);
   vi.mocked(Math.random).mockRestore();
 };
 const raiders = () => useEnemyStore.getState().enemies.filter((e) => e.raid);

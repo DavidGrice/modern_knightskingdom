@@ -4,6 +4,7 @@ import { LAND_TIERS, MAX_LAND_TIER } from '../../data/landTiers';
 import { poisForDestination } from '../../data/npcs';
 import { audio } from '@/lib/audio';
 import { worldEnv } from '../../env';
+import { DAWN, wakeAtDawn } from '../../dayRollover';
 import { playerState } from '../../playerState';
 import { SIGNPOST } from '../../data/world';
 import { WORLD_DESTINATION_BY_ID, ARENA_ORIGIN, TEMPLATE_ARRIVAL_SPAWN } from '../../data/worlds';
@@ -224,8 +225,9 @@ export const createWorldSlice: SliceCreator<WorldSlice> = (set, get) => {
     setDayCount: (dayCount) => set({ dayCount, dirty: true }),
     setSeason: (season) => set({ season }),
     sleep: () => {
-      worldEnv.time = 0.27; // just before sunrise
-      set({ timeOfDay: 0.27, dirty: true });
+      // G-04 · on to the next dawn: a sleep begun before midnight wakes on the next day (it woke on the same one)
+      wakeAtDawn();
+      set({ timeOfDay: DAWN, dayCount: worldEnv.dayCount, dirty: true });
       audio.play('bird1', 0.5);
       get().notify('You sleep soundly and wake at dawn.', true);
     },

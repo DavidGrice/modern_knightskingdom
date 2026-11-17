@@ -134,9 +134,9 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-015 | PARTIALLY_DONE | S | Wire shared applyLocalAvoidance into Enemies.tsx / Defenders.tsx | Both populations still use their own duplicate hand-rolled pack-separation formulas instead of the shared navgrid.ts primitive; low-value dedup now that both already work. |
 | OPEN-016 | CLOSED | M | Raiders don't peel off toward different approach sides | Closed by wave 70.1 (#308, G-03): each raid has its sides — the road's and one flank or both, drawn from the day's seed (`game/directors/approach.ts`, kept in `state.ts`'s `raidPlan`) — and each raider his own point on one of them, on a ring 22 m round home, which he walks to before he closes in ("Bugfix: raiders came at the homestead in one file off the road …"). |
 | OPEN-017 | CLOSED | S | Raider battering ram still spawns on the old 34m ring, not via road entry | Closed by wave 70.1 (#308, G-03): the raid's ram starts 8 m back along the road past `roadEntry()` (`raiderRam.ts`'s `ramSpawn`) and rolls a wide walker's way round what stands to its gate (`rollRaiderRam`), not straight at it. |
-| OPEN-018 | STILL_OPEN | S | Home raid trigger gated to dusk (0.7-0.78) only | Replace/augment the fixed dusk window so raids can fire at any hour, day or night. |
+| OPEN-018 | CLOSED | S | Home raid trigger gated to dusk (0.7-0.78) only | Closed by wave 70.2 (#309, G-04): a raid may set out in any hour, by a chance per hour weighted to dusk and the night and drawn from the day's count (`game/directors/raidTiming.ts`), always after a horn, a banner and the minimap's arrow ("Bugfix: raids came only at dusk, with no warning …"). |
 | OPEN-019 | STILL_OPEN | S | Downed villager's debug action-label can still read take_cover | Add a downed-state exit/gate to take_cover (mirroring engageThreatVillager.ts) and/or a debug-label override. |
-| OPEN-020 | STILL_OPEN | L | Real watch-post that orients toward raid approaches | Net-new feature: design + build a GuardPost that reads the raid-approach vector and orients/reacts to it — nothing exists to extend. |
+| OPEN-020 | PARTIALLY_DONE | L | Real watch-post that orients toward raid approaches | Wave 70.2 (#309, G-04): a defender posted on a finished Watch Tower or keep Corner Turret lengthens a raid's warning by 15 s each, to a minute (`warningLeadTime`, `game/directors/raidTiming.ts`), and the minimap points at the raid's sides. Left: a post that turns to face the approach and reacts to it (G-26's watchtower). |
 | OPEN-021 | PARTIALLY_DONE | M | Per-world (settlement) autonomous defense doesn't exist | Posted defenders/AI battering ram for settlements still don't exist; only a player-fought raid encounter (settlementRaid.ts) does. |
 | OPEN-024 | STILL_OPEN | S | Seated-rider leg-pose constants need a live screenshot-and-tune pass | SEATED_LEG_X/SEATED_LEG_SPLAY are still starting estimates, never visually tuned against a live mounted defender. |
 | OPEN-028 | STILL_OPEN | M | warm_at_campfire action is spec-only, never implemented | Needs a full new Activity/Action (reserve/travel/align/perform) plus reasoner wiring and archetype intrinsic-list entries. |
@@ -11570,3 +11570,194 @@ To do: drop a face whose stand point is itself blocked, as `siegeWay` does, and 
 can reach and one he cannot. When his mark is out of reach for a reason other than a wall (an island, a ledge the grid
 cannot climb) and no piece stands between them, he can go off and batter the gate of an unrelated walled pen instead.
 Narrow, and unseen live. To do: accept a player's piece only when the mark lies on its unreachable side.
+
+## Bugfix: raids came only at dusk, with no warning, and on top of a dragon; a sleep before midnight never counted the day — FOUND 2026-10-31 (FEATURE_PLAN.md's verification: OPEN-018, OPEN-020, the ideas "Realm Events Director" and "Raids With Stakes"; G-04, the owner's decisions OD-06 and OD-08; the stale raid sides in the review of wave 70.1), FIXED 2026-11-16
+
+**The fault.** The home raid rolled only while the clock stood between 0.70 and 0.78 (`raidDirector.ts:101` on
+`main`; the plan's :86-93 had moved), so a player could set a watch by it, and it came the very tick it was decided:
+the horn, the war cry and the raiders spawning at the road's entry in one moment, with nothing on the map to say from
+where. No one arbitrated the night's big events: Cedric's siege waited on the green dragon, itself, his final stand
+and any raider on the field (`CedricSiege.tsx:205-209`); a dragon siege on the two dragons only
+(`DragonSiegeController.tsx:212`); the omen on the green dragon (`DragonOmen.tsx:221`); and the raid and the
+settlement raid on nothing — so a dragon could come down on Cedric's siege, and the black dragon on a raid. Nothing
+said that a day had turned over: `DayNight.tsx:72` bumped `worldEnv.dayCount` itself, and a bed (`worldSlice`'s
+`sleep`) or a knock-out (`combat/playerDamage.ts`) set the clock to dawn without counting a day at all, so sleeping at
+21:36 woke the player that same morning. And, from the review of wave 70.1, `raidPlan.sides` outlived the raid (cleared
+only at a session start) while its doc said "No sides: no raid has started", so an arrow reading the sides alone would
+have pointed at a raid long over. Measured on `main` (production build of base-14 on port 3101, build
+`tXoNcR4ueWfLAViL2D6io`, digest `8c2768a7017f`; `scripts/cln-tools/w702_noon.mjs`, `w702_noon_main.txt`): the
+homestead established, noon held, the cooldown clear — no horn, no banner, no raider in 75 s; sleeping at 0.9 on day 4
+woke at 0.27 on day 4; with Cedric's siege alone eligible (tier 5, night 0.824) it started in 648 ms, and the green
+dragon alone in 1,051 ms.
+
+**The fix.**
+- *The hour's odds* (`game/directors/raidTiming.ts`, new). `raidChance(hour, pressure)` is the one curve a balance pass
+  tunes: a weight per hour of the clock (1 by day 06-15, 3 at 16:00, 10 at dusk 17-19, 7 then 6 in the evening 20-23, 5
+  in the small hours 00-03, 4 at 04:00 and 2 at 05:00) scaled to `RAIDS_PER_DAY` = 0.9 a day before the gates, and `pressure` (1 today) is what G-15a's hideouts feed.
+  `raidDue(day, hour)` draws each hour from the day's seed (`approach.ts`'s `raidSeedFor`, which draws the sides too),
+  so a day's raids are the same however it is played. The director asks it every tick (`Math.floor(time × 24)`), behind
+  the cooldown (unchanged, a day and a half, now from the warning), the four buildings and mining, and the arbiter below;
+  the dusk window is gone.
+- *The warning* (`raidDirector.ts`). A roll that comes up sounds the horn (`raidWarning`): the plan's seed, sides and
+  `incoming` are set, the cooldown starts, and the raiders come `incoming` 1 Hz ticks later (`raidArrives`, the old
+  start's body, which now spawns them on the sides already drawn). `warningLeadTime(st, world)` is the one function the
+  lead comes from: 30 s, and 15 s more for each finished Watch Tower or keep Corner Turret of that world with a defender
+  posted on it (his `stationId`), to a minute (OD-06's 30-60 s); G-25's dispatches and G-26's watchtowers read the same
+  function. At home: the existing `'horn'` sample (snd091, the asset manifest's only horn), a toast naming the sides and
+  the seconds, the banner and the arrow. Away: a toast only, "Word from home" — the raid still comes and resolves there.
+- *The banner* (`components/hud/RaidBanner.tsx`, new). From the horn to the raiders: "Raiders on the road — from the
+  south, the west and the south-east · 28 s" (`approach.ts`'s `sideName`/`sidesNamed`, north up the map). GameScreen
+  mounts it on a layer of its own at z-index 16, over the panels (15) and under pause (18), because the HUD's layer hides
+  most of itself in build mode and sits under every panel (OD-08). Hidden away from home and in Photo Mode.
+- *The arrow* (`Minimap.tsx`). On the home map, an amber arrow out on each of the raid's sides, at 36% of the map from
+  home, its tip toward home, for as long as the plan has sides.
+- *The plan's sides end with the raid.* `raidDirector` clears `raidPlan.sides` when the raid resolves, won or lost, so
+  the arrow is drawn exactly while a raid is coming or on; the doc says so.
+- *The arbiter* (`game/majorEvents.ts`, new, a leaf). Each major event registers beside its own state — the raid from its
+  warning to its end (`directors/state.ts`), Cedric's siege and his final stand (`cedricSiege.ts`), either dragon in the
+  air, omen or siege (`dragonAir.ts`), a settlement raid (`settlementRaid.ts`) — and each asks `majorEventOn()` before it
+  starts: the raid, Cedric's siege (which keeps its own check for raiders on the field), both dragon sieges, the omen and
+  the settlement raid. Hideout assaults, garrison sieges, the Rival Castle and the field battle register the same way.
+- *An event whose runner unmounts is over* (from the review of this wave). Cedric's siege, the dragon sieges and the
+  omen kept their flags set until their own `end()`/`onDone`, but the pause menu's Options and Stats take the whole
+  game screen down (`App.tsx` draws one screen at a time) and those runners with it, so neither ran: a flag left set
+  would have held off every major event — raids included — for the rest of the session, where on `main` it held off
+  only the other night events. Each runner now clears its own flag in an unmount cleanup (`cedricWarState.active`;
+  the dragon's `busy`, `hostile` and `hit`; the omen's `dragonAir.busy`). His final stand is left alone: the frame loop
+  ends it from the enemy store, which survives the screen.
+- *The day turning over* (`game/dayRollover.ts`, new). `rollDay()` counts the day and calls each `onDayRollover` hook
+  once (for G-15a, G-23 and G-24a); `DayNight.tsx` calls it at midnight, and `wakeAtDawn()` — the bed's sleep and the
+  knock-out — sets the clock to dawn (0.27) and rolls the day when it passes midnight to get there (a sleep begun after
+  midnight wakes that same dawn, the clock having counted the day). The bed also writes the store's day at once.
+- Help text: "raiders test your walls at any hour, most often after dark — a horn sounds first, and a defender posted on
+  a watch tower hears them sooner" (it said "at dusk").
+
+Premises held, with these corrections. The lines had moved: the dusk gate is `raidDirector.ts:101` on `main` (the
+cooldown :99), Cedric's checks :205-209; `DayNight.tsx:72`, `Defenders.tsx:96-103` and `catalog.ts:153` held. "A built
+tower (catalog.ts:153)" is read with the keep's Corner Turret ("A tall watch turret") as a watch post too, since a
+defender is posted on it the same way (`keep:<socket>`). The dragon omen is part of the arbiter because it holds the
+green dragon's sky (`dragonAir.busy`), as it always has for the sieges. The knock-out takes the same `wakeAtDawn` as the
+bed: it jumped the clock to dawn without counting the day, the same fault. What the arbiter changed on purpose, beyond
+what the golden tests pin: a dragon siege now also waits on Cedric's siege, a raid (or its warning) and a settlement
+raid; the omen on any of them; Cedric's siege on the black dragon, a settlement raid and a raid's warning; a settlement
+raid on the home raid (which resolves while the player is away).
+
+**Verified.** `tsc` clean; the unit suite 101 files, 834 tests. Written first, on the unchanged base, and run there:
+`components/world/majorEventGating.test.ts` (19 golden tests of today's gating — Cedric's siege rolls deep in the night
+with his camp known and his tier; not before 0.8, away, below tier, for a sworn ally or while jailed, none of which
+spends the night's roll; never under the dragon, on a siege already on, in his final stand or on a raid's raiders, and
+the same night once they are gone; one roll a night — and the same for each dragon siege, which waits on either dragon,
+and for the omen); they pass on the change with the file byte-identical (sha256 `fb6b4c81…` before and after). New:
+`directors/raidTiming.test.ts` (12: the curve — every hour above 0, dusk the most, the night above the day, 0.9 a day,
+pressure scaling it; the day's draw the same each time; the lead for towers and turrets, finished, posted, of their own
+world, to 60; the compass names; a ten-day seeded sweep of the director at 1 Hz with the clock turning — raids outside
+the old window, none inside the cooldown, every one exactly its lead (≥ 30 s) after its horn, none while a dragon flies
+over where they came before, a manned tower's 45 s on every one, and no sides left once each raid ends; the horn at home
+and a toast only away; the gates and the cooldown holding a forced roll), `majorEvents.test.ts` (5: the arbiter names
+each event; a raid waits on each of the others; Cedric's siege, both dragons and the omen wait on a raid's warning and on
+the raid; no dragon on Cedric's siege, no Cedric under the black dragon; a settlement raid and the home raid wait on each
+other) and `dayRollover.test.ts` (5: midnight by the frame says the day once; a sleep before midnight rolls it once and
+the frame does not again; one after midnight not at all; ten days of both sources say ten days, each once; a knock-out
+at 0.8 rolls it). The raid helpers of `raidDirector.test.ts`, `raidApproach.test.ts` and `Enemies.test.ts` now force the
+roll and tick through the warning. 17 take-outs (`scripts/cln-tools/w702_takeout.py`, `w702_takeout.txt`), each fix out
+alone, each fail 1 to 7 tests; with Cedric's and the dragons' old checks put back, the golden tests pass and only the new
+arbiter tests fail. `git diff` had the same sha256 (`b246b9bc…`) before and after.
+
+The ten-day sweep (dayCount 0-9, the default 12-minute day, each raid beaten back a minute after it comes): four raids —
+day 1 at 21:00, day 5 at 03:00, day 6 at 17:00, day 9 at 18:00 — 0.4 a day, two of the four outside dusk. Over 1,000
+seeded days the curve's hours came up 0.82 times a day, and the 36-hour cooldown let 0.375 raids a day through: 27% at
+16-18, 60% at night (19-05), 13% by day (06-15). On `main` a raid came at every dusk the cooldown allowed: every other
+day, 0.5 a day, all at dusk. `RAIDS_PER_DAY` and the cooldown are the two knobs.
+
+Live (the implementer's run; `w702_noon.mjs`, the change from the worktree on port 3102, build `xSwdcH-MO2B_mOy6X2Fiv`,
+digest `644e9cf7f60d`, `w702_noon_change.txt`; no page errors on either build): the noon roll forced through
+`__kkdirectors.raidForce`, the horn at 0.7 s (`__kkaudio.played`), the banner at 1.2 s ("From the south, the west and
+the south-east · 30 s"), the minimap's amber arrows on bearings 26, 102 and 176° (the plan's sides 101, 176 and 26°),
+the raiders at 31.8 s ("Gilbert the Bad leads a raid") with the horn again; in build mode the banner and the horn
+(`w702_change_2_build.png`); behind the Satchel the banner over the panel (its layer at z-index 16, the panel's 15; its
+box from y 18 to 101, the panel's top at 88: `w702_change_2_panel.png`); sleeping at 0.9 on day 4 woke at 0.27 on day
+5; Cedric's siege alone eligible started in 421 ms and the green dragon alone in 715 ms (648 and 1,051 ms on `main`).
+On `main` the same run gave nothing at noon, no banner in either mode, and day 4 after the sleep.
+
+Evidence pass (independent, re-run from scratch). In the worktree: `tsc --noEmit` clean, `npm run test:unit` 101 files,
+834 tests passing, `next build` exit 0 (build `5kjsajDllwPwWO60ndCBT`). The golden file run on the base: every tracked
+`src` file the change touches put back to HEAD's bytes, `majorEventGating.test.ts` alone — 19 of 19 pass
+(`scripts/cln-tools/w702_ev_golden_on_base.py`, `w702_ev_golden_on_base.txt`). 23 mutation controls
+(`w702_ev_mut.py`; `w702_ev_mut.txt`, and `w702_ev_mut_b.txt` for the five whose text spans lines, re-run after the
+script learnt the files' CRLF endings), each one fix reverted alone, the wave's seven test files run: every one fails
+1 to 7 tests — the sides kept after the raid 1, the dusk window back 1, no warning 5, a manned post adding nothing 3,
+the raid ignoring the arbiter 3, the settlement raid ignoring it 1, the raid, the dragons, Cedric or the settlement raid
+not registered 3/7/4/3, the bed back to the same morning 2, `DayNight` bumping the day itself 4, the knock-out back to
+0.27 1, `wakeAtDawn` never rolling 3, `rollDay` calling no hooks 5, no horn at the warning 1, the horn away too 1, no
+cooldown at the warning 3. Cedric's, the dragon sieges' and the omen's old checks put back fail only the new arbiter
+tests (2 each), the golden ones passing; their gating taken out altogether fails golden tests too (Cedric's 3, the
+sieges' 2, the omen's 1, besides the arbiter's 2). `git diff` sha256 `b54d2a21…` and the eight new files' digests the same before and
+after both runs. The ten-day sweep re-run with `KK_SWEEP=1` printed the same four raids (day 1 at 0.876, day 5 at
+0.126, day 6 at 0.71, day 9 at 0.751); an independent re-implementation of `raidDue` gave 0.82 due hours a day over
+days 0-999 and 0.90 over 10,000 days, and, with the 36-hour cooldown, 0.38 raids a day (26-30% at 16-18, 57-59% at
+19-05, 12-15% at 06-15).
+
+Live, side by side (`w702_ev.mjs`, the same script on both; `w702_ev_main.txt`/`.json` on port 3101, base-14's
+build `tXoNcR4ueWfLAViL2D6io`, digest `8c2768a7017f`; `w702_ev_change.txt`/`.json` on port 3102, the worktree's build
+`5kjsajDllwPwWO60ndCBT`, digest `644e9cf7f60d`; no page errors on either). A *natural* noon roll — day 98, whose only
+due hour is 12, noon held, no hook: on `main` nothing in 79 s; on the change the horn at 0.2 s, the banner at 0.3 s
+("From the south and the south-east · 30 s"), the minimap's amber arrows at 26 and 102° against the plan's 26 and 101°,
+the raiders at 30.5 s with the horn again at 30.4 s. The noon roll *forced* through `__kkdirectors.raidForce` on day 99
+(no hour due; the hook is absent on `main`, where nothing came in 47 s): horn 0.3 s, banner 0.5 s, raiders 30.7 s. Dusk
+(0.71, day 41) with the green dragon's flag up for its first 6 s: on `main` the raiders at 0.3 s under the dragon, the
+horn in the same tick, no warning; on the change nothing while the flag was up, then, the flag down at 6.1 s, the horn at
+6.8 s and the raiders at 37.1 s. Each raid's raiders cleared: on `main` `raidPlan.sides` stayed [101, 176]; on the
+change [], no amber on the minimap (0 pixels), no banner. In build mode the banner showed with the horn (the minimap is
+hidden there, as on `main`); over the Satchel the banner is drawn on top of the panel's top edge
+(`w702_ev_change_E4_panel.png`, banner box y 18-101, panel top 88); `main` showed neither. Sleep at 0.9 on day 4: `main`
+day 4, the change day 5 (the store's day 5 too); at 0.1 on day 4: day 4 on both; the frame's own midnight (0.9995, day 7)
+day 8 on both. Cedric's siege alone eligible (night 0.824, tier 5) started in 74 ms on `main` and 54 ms on the change; the
+green dragon alone in 761 and 632 ms.
+
+Not measured: the away case live (the toast without the horn is unit-tested only); a manned tower's 45 s live; the
+settlement raid and the black dragon against the arbiter live; the knock-out's day live; how often raids come over real
+in-game days in a browser (only the seeded sweep and the offline statistic). The probe's own "no raid" amber baseline
+on the change was taken on day 98 at noon, where the roll came up during it, so it is void; the post-raid reading (0
+pixels) stands in for it. A first attempt to show the banner on top with `elementFromPoint` read the canvas and the
+panel, because the banner's layer is `pointer-events: none`; the screenshot is the evidence instead.
+
+Review fix (the remount defect). `majorEvents.test.ts` gained one test (6 now; the unit suite 101 files, 835 tests):
+each runner rolled, rendered again, then unmounted — Cedric's siege, both dragon sieges, the omen — leaves no major event
+on and neither dragon hostile, and a forced raid then warns (30 s). Its harness now runs effects and their cleanups as
+React does; the golden file is untouched (sha256 `fb6b4c81…`). It fails without the fix, and each cleanup taken out
+alone fails it (Cedric's, the dragon siege's, the omen's, and the dragon's `hostile` left out). Live
+(`scripts/cln-tools/w702_fix.mjs`, the same script on both; `w702_fix_main.txt` on port 3101, build
+`tXoNcR4ueWfLAViL2D6io`, digest `8c2768a7017f`; `w702_fix_change.txt` on port 3102, the worktree rebuilt, build
+`rwv-qHnCsUCsvPWH4WT9V`, digest `812011dcee80`; no page errors on either): each event rolled at deep night, then pause,
+Options (the canvas gone), Back, Resume. On `main` Cedric's flag, the green dragon's `busy` and `hostile`, and the
+omen's `busy` all stayed set after the screen came back. On the change each was clear, and a raid forced through
+`__kkdirectors.raidForce` sounded its warning (30 s) within 0.2-0.4 s of each.
+
+Before merging (2026-11-17). The review's two low findings and one minor, checked: (1) *a bed used in the morning
+counts a day a press* — not reachable: `wakeAtDawn` counts a day for any clock past dawn, but `findTarget` offers the
+bed only while `worldEnv.night > 0.45` (about 17:55 to 06:05 in summer, a little longer in winter) and a sleep wakes at
+`DAWN` (06:29), where it is not offered. `dayRollover.test.ts` now pins that (the bed offered at 0.9 and not at `DAWN`
+or 0.35, summer and winter); loosening the bed's threshold to 0.1 fails it. (2) The docs' description of the curve said
+"4-7 at night" (FEATURE_PLAN) and "4-5 in the small hours" (here); both now give `RAID_HOUR_WEIGHT` as written (5 for
+00-03, 4 at 04:00, 2 at 05:00). (3) `RaidBanner` was a `role="alert"` whose countdown changed every second, so a screen
+reader would say it again each second; the countdown is now `aria-hidden`, so the warning is said once. `tsc` clean;
+the unit suite 101 files, 836 tests.
+
+## Seen, not fixed: a night event can roll twice in one night — logged 2026-11-16 (wave 70.2; by the code)
+
+Cedric's siege (`CedricSiege.tsx`), both dragon sieges (`DragonSiegeController.tsx`), the omen (`DragonOmen.tsx`) and
+Cedric's jailbreak roll once "per night" by remembering the `dayCount` they last rolled on, at night above 0.8 (0.85
+for the omen). But deep night runs from about 0.772 of the clock through midnight to about 0.228, and the day's count
+turns over at midnight in the middle of it, so each may roll once before midnight and again after. To do: key the roll
+on the night (the day the evening began: `dayCount` less one when the clock is before noon), or roll on G-04's
+`onDayRollover` alone.
+
+## Seen, not fixed: a night event cut short by Options or Stats is never recorded or paid — logged 2026-11-16 (wave 70.2; by the review)
+
+The pause menu's Options and Stats take the whole game screen down, and with it the runners of Cedric's siege
+(`CedricSiege.tsx`), the dragon sieges (`DragonSiegeController.tsx`) and the omen (`DragonOmen.tsx`). Wave 70.2 makes
+their flags clear at that unmount, so the homestead is not held for the rest of the session, but the event's own
+`end()` still never runs: a siege under way is not counted (`recordCedricSiege`, which gates his final stand, or the
+dragon's record), pays nothing, sounds no closing horn, and Cedric's war party and his ram stay on the field with no one
+to end them but the next raid's resolution. To do: keep the runners' `active` in state that survives the screen (as
+`directors/state.ts` does for the raid), so a siege resumes when the game screen comes back and ends as it should.

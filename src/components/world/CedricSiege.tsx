@@ -22,7 +22,7 @@ import { heightOf } from '@/game/data/buildables';
 import { roadEntry } from '@/game/data/road';
 import { resetRaiderRam, raiderRamState } from '@/game/raiderRam';
 import { CEDRIC_CAMP } from '@/game/data/world';
-import { dragonAir } from '@/game/dragonAir';
+import { majorEventOn } from '@/game/majorEvents';
 import { cedricSiegeAllowed, cedricJailbreakAllowed, cedricWarState } from '@/game/cedricSiege';
 import { difficultyState, MOUNTED_RAIDER_TIER } from '@/game/difficulty';
 import { BOSS_ENCOUNTERS } from '@/game/bossEncounter';
@@ -157,6 +157,12 @@ export default function CedricSiege() {
     });
   }, [active]);
 
+  // G-04 · the pause menu's Options and Stats take the whole game screen down, and this with it: end() never runs, and
+  // a siege flag left set would hold off every major event (game/majorEvents.ts), raids included, for the rest of the
+  // session. A siege whose runner is gone is over. (His final stand is not this runner's: the frame loop above clears
+  // it from the enemy store, which the screen coming down does not touch.)
+  useEffect(() => () => { cedricWarState.active = false; }, []);
+
   useFrame((_, dt) => {
     // final stand: runs wherever the player is (his own camp, a different
     // `destination` entirely from the homestead) — deliberately NOT behind
@@ -201,12 +207,11 @@ export default function CedricSiege() {
 
     if (destination || active) return;
     const st = useGameStore.getState();
-    // deep night, once per day, never stacked with a dragon siege or the
-    // final stand, and never on top of an ordinary raid's own stragglers
-    if (
-      worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current
-      && !dragonAir.busy && !cedricWarState.active && !cedricWarState.finalStandActive
-    ) {
+    // deep night, once per day, never on top of another major event (G-04's
+    // arbiter: a dragon in the air, a siege already on, his final stand, a
+    // raid or its warning — game/majorEvents.ts), and never on top of an
+    // ordinary raid's own stragglers
+    if (worldEnv.night > 0.8 && worldEnv.dayCount !== lastNightChecked.current && !majorEventOn()) {
       if (!cedricSiegeAllowed(st)) return;
       if (useEnemyStore.getState().enemies.some((e) => e.raid)) return;
       lastNightChecked.current = worldEnv.dayCount;

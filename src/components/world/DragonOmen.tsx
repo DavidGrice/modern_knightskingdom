@@ -16,6 +16,7 @@ import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
 import { difficultyState } from '@/game/difficulty';
 import { dragonAir } from '@/game/dragonAir';
+import { majorEventOn } from '@/game/majorEvents';
 
 const C = '/assets/props/creatures/';
 const FLIGHT_SECONDS = 26;
@@ -205,6 +206,11 @@ export default function DragonOmen() {
   const [active, setActive] = useState(false);
   const lastNightChecked = useRef(-1);
 
+  // G-04 · the game screen coming down (the pause menu's Options or Stats) takes the flight with it, and onDone never
+  // runs: the sky it held would hold off every major event (game/majorEvents.ts) for the rest of the session. It mounts
+  // and unmounts with the dragon sieges (GameWorld.tsx), so the sky is clear of all of them by then.
+  useEffect(() => () => { dragonAir.busy = false; }, []);
+
   useFrame(() => {
     if (destination || active) return;
     // one roll per night, deep in the dark hours. Reported 2026-07-28: the
@@ -218,7 +224,9 @@ export default function DragonOmen() {
     // skill/kills, so the first omen reads as foreshadowing something
     // earned rather than an ambush on day one.
     if (difficultyState.tier < 1) return;
-    if (worldEnv.night > 0.85 && worldEnv.dayCount !== lastNightChecked.current && !dragonAir.busy) {
+    // G-04 · never on top of another major event (game/majorEvents.ts) — it
+    // waited on the dragon alone
+    if (worldEnv.night > 0.85 && worldEnv.dayCount !== lastNightChecked.current && !majorEventOn()) {
       lastNightChecked.current = worldEnv.dayCount;
       if (Math.random() < 0.4) {
         const st = useGameStore.getState();

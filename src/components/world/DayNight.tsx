@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { useAppStore } from '@/game/store/appStore';
 import { useGameStore } from '@/game/store/gameStore';
 import { worldEnv, nightFactor, sampleEnv, seasonOf } from '@/game/env';
+import { rollDay } from '@/game/dayRollover';
 import { audio } from '@/lib/audio';
 import { playerState } from '@/game/playerState';
 import { GRAPHICS_PROFILES } from '@/game/graphicsProfiles';
@@ -69,7 +70,7 @@ export default function DayNight() {
     worldEnv.dayLength = Math.max(120, (useAppStore.getState().settings.dayLengthMin || 12) * 60);
     if (!st.paused && worldEnv.running) {
       const next = (worldEnv.time + dt / worldEnv.dayLength) % 1;
-      if (next < worldEnv.time) worldEnv.dayCount += 1; // wrapped past midnight
+      if (next < worldEnv.time) rollDay(); // wrapped past midnight (G-04: the day counted, and said, in one place)
       worldEnv.time = next;
     }
     const season = seasonOf(worldEnv.dayCount);

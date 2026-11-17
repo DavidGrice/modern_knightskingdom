@@ -21,6 +21,8 @@ import { playerState } from '../fps/PlayerController';
 import { getBakeOffset, getMountedRegion, getMountedRoot, sampleTemplateGroundY, TEMPLATE_WORLD_SCALE } from '../world/TemplateWorld';
 import { useEnemyStore } from '@/game/combat';
 import { villagerMobs } from '@/game/villagerMobs';
+import { raidPlan } from '@/game/directors/state';
+import { HOME_X, HOME_Z } from '@/game/data/villagers';
 
 export default function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -365,6 +367,27 @@ export default function Minimap() {
         ctx.beginPath();
         ctx.arc(px(KEEP_INTERIOR.x), pz(KEEP_INTERIOR.z), 4, 0, Math.PI * 2);
         ctx.stroke();
+      }
+      // G-04 · a raid coming or on: an amber arrow out on each of its sides (the directors' raidPlan), pointing in at
+      // home the way the raiders come — at a fixed share of the map from home, so it reads at either size
+      if (!dest && raidPlan.sides.length) {
+        for (const b of raidPlan.sides) {
+          ctx.save();
+          ctx.translate(px(HOME_X) + Math.cos(b) * S * 0.36, pz(HOME_Z) + Math.sin(b) * S * 0.36);
+          ctx.rotate(b - Math.PI / 2); // its tip, drawn up the canvas, turned toward home
+          ctx.fillStyle = '#ffa526';
+          ctx.strokeStyle = 'rgba(20, 12, 4, 0.9)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, -9);
+          ctx.lineTo(7, 4);
+          ctx.lineTo(0, 1);
+          ctx.lineTo(-7, 4);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.fill();
+          ctx.restore();
+        }
       }
       // player arrow (yaw 0 faces -Z = up on the map)
       ctx.save();

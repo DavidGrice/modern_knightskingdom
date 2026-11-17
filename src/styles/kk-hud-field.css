@@ -430,6 +430,41 @@
   pointer-events: none;
 }
 
+/* --- G-04 · a raid's warning, top centre: on its own layer over the panels (GameScreen.tsx) --- */
+.kk-raid-banner {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 10px 26px 12px;
+  border-radius: 14px;
+  border-color: rgba(255, 165, 38, .7);
+  text-align: center;
+  animation: kkRaidIn .5s ease;
+}
+.kk-raid-banner .r-kicker {
+  font: 600 10.5px/1 var(--kk-font);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #ffa526;
+}
+.kk-raid-banner .r-title {
+  margin-top: 5px;
+  font: 700 22px/1.1 var(--kk-font-display);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .8);
+}
+.kk-raid-banner .r-sub {
+  margin-top: 4px;
+  font: 500 13px/1.2 var(--kk-font);
+  color: rgba(255, 255, 255, .85);
+}
+@keyframes kkRaidIn {
+  0% { opacity: 0; transform: translate(-50%, -10px); }
+  100% { opacity: 1; transform: translate(-50%, 0); }
+}
+
 /* --- toasts, right-middle --- */
 .kk-toasts {
   position: absolute;

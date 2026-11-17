@@ -1,6 +1,6 @@
 'use client';
 // The enemies on the field: each one's figure (EnemyFigure.tsx), moved every frame by its AI (game/enemyAi/), and
-// the once-a-second directors (game/directors/) that bring them: skeletons at night, raids at dusk, the Sealed
+// the once-a-second directors (game/directors/) that bring them: skeletons at night, raids (at any hour, after a horn), the Sealed
 // Crypt's rooms, Cedric's camp guards. Defeated minifigs pop apart into their parts, LEGO-style.
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -125,7 +125,7 @@ export default function Enemies() {
     directorTick.current = 1; // 1 Hz is plenty for spawning decisions
     // the directors (game/directors/), in the order this tick always ran them: the navigation grids, then — with
     // the game running — the siege ladder's freed slots, the Sealed Crypt (which, while the player is inside, is all
-    // there is), Cedric's camp guards, the night's skeletons and the dusk raid
+    // there is), Cedric's camp guards, the night's skeletons and the raid
     maintainNav();
     const st = useGameStore.getState();
     if (st.paused || !st.character) return;

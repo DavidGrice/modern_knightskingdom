@@ -53,7 +53,7 @@ export function helpSteps(b: Bindings, device: InputDevice): Step[] {
     {
       title: '7. Gear Up for Combat',
       img: '/help/07_equipment.png',
-      body: `Open your Satchel with ${k('inventory')} to see your equipped weapon and armor on a rotatable paperdoll. Craft a sword for real melee damage and a shield to block (${blockLabel(device, b)}); ${k('swapWeapon')} cycles between melee, crossbow and longbow once you own them. Skeletons rise at night and raiders test your walls at dusk — armor and a shut gate both help you survive it.`,
+      body: `Open your Satchel with ${k('inventory')} to see your equipped weapon and armor on a rotatable paperdoll. Craft a sword for real melee damage and a shield to block (${blockLabel(device, b)}); ${k('swapWeapon')} cycles between melee, crossbow and longbow once you own them. Skeletons rise at night, and raiders test your walls at any hour, most often after dark — a horn sounds first, and a defender posted on a watch tower hears them sooner. Armor and a shut gate both help you survive it.`,
     },
   ];
 }

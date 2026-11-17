@@ -9,7 +9,7 @@ import { resetDungeon } from '../dungeon';
 import { standDown } from '../standDown';
 import { bestChestplateOwned } from '../data/armor';
 import { PERK_FX } from '../data/effects';
-import { worldEnv } from '../env';
+import { wakeAtDawn } from '../dayRollover';
 import { fortDamageReduction } from '../fort';
 import { raidActive, raidLost } from '../directors/state';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
@@ -147,7 +147,7 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
     const enemies = useEnemyStore.getState();
     if (raidActive.current && enemies.enemies.some((e) => e.raid && e.mob.state !== 'dying')) raidLost.current = true;
     enemies.clear();
-    worldEnv.time = 0.27; // just before sunrise
+    wakeAtDawn(); // just before sunrise — G-04: the next day's, as a night's sleep is
     st.notify('You were knocked out and carried back to camp… you wake at dawn.', true);
     audio.play('horn', 0.5);
   }

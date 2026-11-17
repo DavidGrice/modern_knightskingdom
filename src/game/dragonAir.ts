@@ -17,6 +17,7 @@
 // own public surface changes.
 
 import { exposeDebug } from '@/lib/debugHooks';
+import { registerMajorEvent } from './majorEvents';
 
 /** One dragon in the air at a time — the omen and the siege both check this.
  *  G26 · the siege also publishes WHERE it is each frame, so defenders on the
@@ -44,6 +45,10 @@ export const dragonAirBlack = {
   hit: null as null | ((source: string) => void),
 };
 exposeDebug('__kkdragonAirBlack', dragonAirBlack);
+
+// G-04 · a dragon in the air (the omen's flight or a siege) is a major event (majorEvents.ts)
+registerMajorEvent('dragon', () => dragonAir.busy);
+registerMajorEvent('blackDragon', () => dragonAirBlack.busy);
 
 /** CLN-04 · session start. Both sieges only clear `busy`/`hostile` from their own
  *  end() callbacks; quitting to the menu mid-siege unmounts the runner without

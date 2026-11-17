@@ -57,6 +57,7 @@ import { useEnemyStore, type EnemyData } from '@/game/combat';
 import { useGameStore } from '@/game/store/gameStore';
 import { climbPose, ladderFoot, raiderLadderState, resetRaiderLadder, type ClimbPose } from '@/game/raiderLadder';
 import { worldEnv } from '@/game/env';
+import { raidForce, raidPlan } from '@/game/directors/state';
 import { audio } from '@/lib/audio';
 
 const HERO = { name: 'Test', headDonor: 'x', bodyDonor: 'x', armColor: 0, handColor: 0, legColor: 0, hipColor: 0 };
@@ -282,11 +283,12 @@ describe('a raid, when the game scene is unmounted behind Options or Stats and m
       unlocks: [...st.unlocks, 'mining'],
       notify: (text: string) => { notes.push(text); },
     });
-    worldEnv.time = 0.71; // dusk, the raid's window
+    worldEnv.time = 0.71; // dusk
+    raidForce.current = true; // G-04 · the hour's roll comes up: the horn, and the raiders a warning later
     const raiders = () => useEnemyStore.getState().enemies.filter((e) => e.raid);
     const scene = instance(Enemies as unknown as (p: object) => unknown, {});
     scene.render();
-    scene.frame(1);
+    do scene.frame(1); while (raidPlan.incoming > 0);
     expect(raiders()).toHaveLength(3);
 
     // Options and back: the game screen, its canvas and Enemies unmount, and a fresh Enemies is mounted
