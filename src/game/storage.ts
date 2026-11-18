@@ -131,6 +131,22 @@ export function bestStore(
   return null;
 }
 
+/** G-06 · the store a raider at (x, z) strips: of the stores standing (STORE_TYPES, finished — a ruin is not — and
+ *  passing `extra`), the nearest, whatever its size; null with none. */
+export function nearestStore(
+  buildings: PlacedBuilding[], x: number, z: number,
+  extra?: (b: PlacedBuilding) => boolean,
+): PlacedBuilding | null {
+  let near: PlacedBuilding | null = null;
+  let nearD = Infinity;
+  for (const b of buildings) {
+    if (!STORE_TYPES.includes(b.type) || !isBuilt(b) || (extra && !extra(b))) continue;
+    const d = Math.hypot(b.x - x, b.z - z);
+    if (d < nearD) { near = b; nearD = d; }
+  }
+  return near;
+}
+
 /** Room left for `id` — 0 for a full store, Infinity for anything uncapped.
  *  Never negative, so an over-cap stock reads as "no room", not as a debt. */
 export function roomFor(id: ItemId, held: number, buildings: PlacedBuilding[]): number {

@@ -4,7 +4,9 @@
 // slots freed as raiders fall. G-03 · each raid comes at the homestead from its own sides (approach.ts), its ram by the
 // road and its ladder on the wall nearest where its raiders come. G-04 · at any hour, by the hour's odds
 // (raidTiming.ts), never on top of another major event (game/majorEvents.ts), and never unannounced: the horn sounds,
-// and the raiders come warningLeadTime() seconds later.
+// and the raiders come warningLeadTime() seconds later. G-06 · as many as the homestead's stores are worth (raidSize),
+// every other one behind the leader a thief come to strip them (game/plunder.ts); and its end — which waits for the
+// last thief to fall or get away — names the goods lost and the goods taken back.
 import { useEnemyStore, type EnemyData, type EnemyKind } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { isHomeBuilding, type ItemId } from '@/game/types';
@@ -21,7 +23,8 @@ import { KEEP_PART_BY_ID, KEEP_SOCKETS } from '@/game/data/keep';
 import { KEEP_SITE_ID, siteById, siteSocketWorld } from '@/game/sites/sites';
 import { majorEventOn } from '@/game/majorEvents';
 import { approachPoint, raidSeedFor, raidSides, sidesNamed } from './approach';
-import { raidDue, warningLeadTime } from './raidTiming';
+import { raidDue, raidSize, stockpileValue, thiefSlot, warningLeadTime } from './raidTiming';
+import { goodsNamed, haulOf, raidHaul, resetRaidHaul } from '@/game/plunder';
 import { raidForce, raidPlan } from './state';
 import type { Counter, Flag, Spawn } from './types';
 
@@ -82,9 +85,9 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
     // cooldown it started with runs on, as a won raid's does. What else a lost raid costs is G-07's (FEATURE_PLAN.md).
     if (raidLost.current) {
       raidLost.current = false;
-      st.notify('The raiders had the field. They are gone by dawn, and they left nothing behind.', true);
+      st.notify('The raiders had the field. They are gone by dawn, and they left nothing behind.' + haulReport(), true);
     } else {
-      st.notify('The raid is beaten back! The bandits dropped their spoils.', true);
+      st.notify('The raid is beaten back! The bandits dropped their spoils.' + haulReport(), true);
       st.addItems({ plank: 4, stone: 4, iron_ore: 2 }, 'grant');
       st.addXp('combat', 60);
       // a driven-off raider sometimes leaves gear behind — straight into the
@@ -99,6 +102,7 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
       }
       if (!st.destination) audio.play('horn', 0.8);
     }
+    resetRaidHaul();
   }
   // G-04 · a warning running counts down to the raiders' arrival
   if (raidPlan.incoming > 0) {
@@ -117,6 +121,14 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
     raidForce.current = false;
     raidWarning(st, raidCooldown);
   }
+}
+
+/** G-06 · what a raid's end says of the stores: the goods its thieves got away with, and those taken back from the
+ *  fallen, by name and count (game/plunder.ts's raidHaul) — nothing when no thief took anything */
+function haulReport(): string {
+  const lost = haulOf(raidHaul.lost) ? ` They got away with ${goodsNamed(raidHaul.lost)}.` : '';
+  const back = haulOf(raidHaul.recovered) ? ` Taken back from the fallen: ${goodsNamed(raidHaul.recovered)}.` : '';
+  return lost + back;
 }
 
 /** G-04 · the horn: the raid is coming. Its plan is drawn now, so that the banner and the minimap can say from where,
@@ -141,6 +153,9 @@ function raidWarning(st: GameState, raidCooldown: Counter): void {
 /** the raiders come, at the end of their warning */
 function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive: Flag): void {
   raidActive.current = true;
+  resetRaidHaul();
+  // G-06 · how many follow the leader: a richer homestead draws a hungrier raid (it was always two)
+  const followers = raidSize(stockpileValue(st.inventory));
   if (!st.destination) { audio.play('warcry', 0.9); audio.play('horn', 0.9); }
   // N79 (requested 2026-07-28): raiders arrive by the road instead of
   // popping into existence on a ring around the homestead — spawned
@@ -150,7 +165,7 @@ function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive:
   // (game/enemyAi/movement.ts's walkIn) — G-03: to his own side of home.
   const entry = roadEntry();
   function roadSpawnPos(i: number): [number, number] {
-    const a = (i / 3) * Math.PI * 2;
+    const a = (i / (followers + 1)) * Math.PI * 2;
     return [entry.x + Math.cos(a) * 3, entry.z + Math.sin(a) * 3];
   }
   // Wave 18 #5 bugfix: every spawn() call below now passes `null` as the
@@ -168,7 +183,7 @@ function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive:
     // comes for your homestead — a wave of royal knights, never Cedric's
     // own people (your allies now), and no Weezil bark in the pack
     st.notify('⚔ The crown brands you a traitor — royal knights raid your homestead!', true);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i <= followers; i++) {
       const [sx, sz] = roadSpawnPos(i);
       spawn('royal', sx, sz, true, undefined, true, false, 1, false, null);
     }
@@ -197,14 +212,16 @@ function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive:
     // Wave 37 (A3 remainder): each plain-bandit filler slot can
     // occasionally roll a caster or a shielded elite instead, once the
     // difficulty curve allows it (rollBanditFiller, above)
-    for (let i = 1; i < 3; i++) {
+    for (let i = 1; i <= followers; i++) {
       const [sx, sz] = roadSpawnPos(i);
       spawn(rollBanditFiller(), sx, sz, true, undefined, true, false, 1, false, null);
     }
   }
-  // G-03 · each raider just spawned his own point on one of the plan's sides (drawn at the warning), in turn
+  // G-03 · each raider just spawned his own point on one of the plan's sides (drawn at the warning), in turn — G-06:
+  // and every other one behind the leader (the first spawned) a thief
   const points: { x: number; z: number }[] = [];
   useEnemyStore.getState().enemies.filter((e) => e.raid && e.mob.approaching && !list.includes(e)).forEach((e, i) => {
+    e.thief = i > 0 && thiefSlot(i);
     const at = approachPoint(e.mob, raidPlan.sides, i, e.id, raidPlan.seed);
     if (!at) return;
     e.mob.approachX = at.x;

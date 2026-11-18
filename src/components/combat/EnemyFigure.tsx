@@ -1,15 +1,18 @@
 'use client';
 // CLN-13 · an enemy's figure: its minifig (game/data/enemies.ts's KIND_FIGURE) and what it holds, and — for one of
 // Cedric's riders or a siege crew — the horse under it or the engine it mans. Enemies.tsx's Enemy draws it inside the
-// group its frame (game/enemyAi/step.ts) stands and turns.
-import { Suspense } from 'react';
-import { createPortal } from '@react-three/fiber';
+// group its frame (game/enemyAi/step.ts) stands and turns. G-06 · and a thief's load on his back, once he has one.
+import { Suspense, useRef } from 'react';
+import { createPortal, useFrame } from '@react-three/fiber';
+import type { Group } from 'three';
 import { ArmShield, HeldCrossbow, HeldHalberd, HeldSpear, HeldSword, SpellHandGlow } from '../character/Equipment';
 import { MOUNT_SEAT_Y, type EnemyData } from '@/game/combat';
 import RiggedProp from '../world/RiggedProp';
 import RiggedFigure from '../character/RiggedFigure';
 import type { RiggedMinifig } from '@/lib/minifigRig';
-import { heightOf } from '@/game/data/buildables';
+import { BUILDABLE_BY_ID, heightOf } from '@/game/data/buildables';
+import { haulOf } from '@/game/plunder';
+import PropModel from '../world/PropModel';
 import { labOccupyMode } from '@/game/data/labCapabilities';
 import { KIND_FIGURE } from '@/game/data/enemies';
 
@@ -19,6 +22,31 @@ import { KIND_FIGURE } from '@/game/data/enemies';
  *  computes for the PLAYER crewing an engine, just a fixed approximation
  *  here rather than re-deriving it from the buildable's own depth */
 const SIEGE_CREW_STANDOFF = 2.2;
+
+/** G-06 · the props a thief's load is drawn with — the Barrel's and the Stockpile's crate's own molds, no new asset —
+ *  and how tall each stands on his back */
+const LOADS = [
+  { model: BUILDABLE_BY_ID.barrel.model!, height: 0.5 },
+  { model: BUILDABLE_BY_ID.stockpile.model!, height: 0.42 },
+];
+
+/** G-06 · A thief's load, slung on his back (the body joint, behind the chest the chestplate covers), drawn from the
+ *  first good he takes until he falls or is gone — a barrel or a crate by his id, so that a thief can be told from a
+ *  fighter at a distance. His haul changes in place (blows.ts's takeFromStore), so it is looked at every frame. */
+function CarriedLoad({ data }: { data: EnemyData }) {
+  const group = useRef<Group>(null);
+  const load = LOADS[data.id % LOADS.length];
+  useFrame(() => {
+    if (group.current) group.current.visible = haulOf(data.carried) > 0;
+  });
+  return (
+    <group ref={group} position={[0, -0.04, -0.34]} visible={false}>
+      <Suspense fallback={null}>
+        <PropModel url={load.model} height={load.height} />
+      </Suspense>
+    </group>
+  );
+}
 
 export default function EnemyFigure({ data, clip, ridePace, rig, onReady }: {
   data: EnemyData;
@@ -125,6 +153,7 @@ export default function EnemyFigure({ data, clip, ridePace, rig, onReady }: {
             spellcaster rather than simply unarmed. */}
         {rig && data.kind === 'caster'
           && createPortal(<SpellHandGlow side={-1} />, rig.joints.rightarm)}
+        {rig && data.thief && createPortal(<CarriedLoad data={data} />, rig.joints.body)}
       </group>
     </>
   );

@@ -11,6 +11,7 @@ import { KIND_LABEL, KIND_XP, KIND_XP_RANGED, type EnemyKind } from '../data/ene
 import { resolveDuel } from './duel';
 import type { EnemyData } from './enemyStore';
 import { lootFor } from './loot';
+import { addGoods, raidHaul } from '../plunder';
 
 /** Who, or what, felled the enemy. */
 export type KillCause =
@@ -123,9 +124,11 @@ export function resolveEnemyKill(e: EnemyData, cause: KillCause): void {
   if (cause.by === 'defender') st.gainDefenderXp(cause.villager.id, ALLY_KILL_XP);
   let haul = '';
   if (rules.loot) {
-    // hand over what this individual was actually carrying (rolled at spawn)
+    // hand over what this individual was actually carrying (rolled at spawn) — G-06: and a thief's haul from the
+    // stores, every piece of it, taken back from this raid
     const drop = lootFor(e);
     st.addItems(drop, 'grant');
+    addGoods(raidHaul.recovered, e.carried);
     haul = Object.entries(drop)
       .filter(([, n]) => (n ?? 0) > 0)
       .map(([id, n]) => `${n}× ${ITEMS[id as ItemId]?.name ?? id}`)

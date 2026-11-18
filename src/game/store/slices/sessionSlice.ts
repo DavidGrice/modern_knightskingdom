@@ -8,6 +8,7 @@ import { ZERO_XP, applySave, buildSave, freshPersisted } from '../persistence';
 import { worldEnv, seasonOf } from '../../env';
 import { setWaterworks, waterworks } from '../../waterworks';
 import { buildUndo, saveEdits, seq } from '../storeCounters';
+import { standingHauls } from '../../plunder';
 import type { GameState } from '../gameStore';
 import type { SliceCreator } from './types';
 
@@ -153,6 +154,7 @@ export const createSessionSlice: SliceCreator<SessionSlice> = (set, get) => {
         stabledIds: stabledHorses.ids, stabledAssigned: stabledHorses.assigned,
         waterworks: waterworks.list,
         carriedKeepExtra: buildUndo.carriedKeepExtra,
+        carriedPlunder: standingHauls.read(),
       }),
       savedAt: Date.now(),
     }),

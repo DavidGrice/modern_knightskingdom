@@ -150,6 +150,10 @@ export interface SaveGame {
   /** Cedric's homestead sieges weathered / ever driven off before the timer (Deeds) */
   cedricSieges?: number;
   cedricRouted?: boolean;
+  /** G-06 · goods by kind that raiders' thieves got away with, off the map's edge (game/plunder.ts) — what G-16a's
+   *  hideouts pay a share of back. Absent on saves from before it (version 1), which SAVE_MIGRATIONS gives an empty
+   *  one. */
+  plunder?: Partial<Record<ItemId, number>>;
   /** gate buildings: absent/true = open (passable), false = closed */
   gateOpen?: Record<string, boolean>;
   /** buildings under siege damage: absent = full HP (see data/buildables maxHpFor) */

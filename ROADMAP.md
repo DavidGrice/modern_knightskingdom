@@ -11546,14 +11546,59 @@ were no page errors, and every log ends with the build that answered.
     ring; `findPath` 1.6-4.0 calls and 0-0.3 ms a second, the worst call 3.6 ms. No page errors. Frame times in this
     run were the machine's, not the raid's (the idle S0: 13 fps, p99 200 ms). The guard case was not run live.
 
-## Seen, not fixed: a raider fleeing from inside a shut keep stays pressed against its walls — logged 2026-11-15 (wave 70.1; by the code)
+## Bugfix: a raider fleeing from inside a shut keep stayed pressed against its walls — FOUND 2026-11-15 (wave 70.1; by the code), FIXED 2026-11-17
 
-Wave 70.1 runs the keep's walls after the flight (`holdToTheWalls`, `enemyAi/step.ts`), so a fleeing raider no longer
+FIXED in wave 71 (G-06): a raider who flees at home now takes the thieves' pathed escape, a siege way out when shut in.
+
+**The fault.** Wave 70.1 runs the keep's walls after the flight (`holdToTheWalls`, `enemyAi/step.ts`), so a fleeing raider no longer
 runs out through the stone. But the flight is still a straight run away from the player (`flee`, `movement.ts`) with no
 way worked out, so a raider who breaks inside the bailey with the gatehouse shut runs at the wall on the side away from
 the player and stays there, sliding along it, until he is felled, the player moves, or a way opens; and the raid does
-not resolve while he stands. To do: have a fleeing raider at home take a way out (`makePathStep` toward a point away from
-the player, a siege way out when shut in), or let one with no way out fight on.
+not resolve while he stands. Measured on `main` (production build of base-14 on port 3101, build
+`aVKrY384zIkTlbpypIsEQ`, digest `290d5af925b2`; `scripts/cln-tools/w71_plunder.mjs`, `w71_plunder_main.txt`, phase C):
+a full ring at (0, 0), the gatehouse on the north shut, a bandit spawned in the bailey at (2, 2) with 2 HP (he breaks at
+once), the player 20 m south outside: he ran north to (3.5, −5.1), against the inside of the north run, by 4.6 s and
+stood there for the rest of the 41 s; the gatehouse took no blow, and he was never gone.
+
+**The fix.** A raider at home who flees (`enemyAi/step.ts`'s `runAway`) runs by `escape` (`movement.ts`): by
+`makePathStep`'s raider way to `roadEntry()`, then on along the road to its exit at the map's edge (`roadExit`). Shut in,
+that way is a siege way (`siegeWay`, which already planned outward for one shut in the bailey), and while his route is
+one and a piece is in reach (`keepInReach`) he batters it (`batterKeep`), as the chain does. A raider carrying nothing of
+the player's keeps the old end: gone once he is 44 m (`FLEE_GONE`) from the player — he has nothing to pursue, and a raid
+waits for its last raider; one at the edge is gone too. A thief is gone only at the edge (the wave 71 entry at the end of
+this file). Enemies away from home flee as before (`flee`).
+
+**Verified.** `plunder.test.ts` ("fleeing from inside a shut keep"): the same ring, the player south, the raider at (2, 2)
+fleeing — he lands blows on the gatehouse, leaves the ring and is gone; with `runAway`'s home branch taken out it fails,
+as do the two escape tests. Live on the change (port 3102, build `asWWSEXpVfcXoTnTk2VZZ`, digest `5d9104824c98`;
+`w71_plunder_change.txt`, phase C): the gatehouse battered to a ruin and he out of the ring by 9.7 s, then along the
+road, gone at 36.7 s at (−12.4, 61.1) from the keep, 44 m from the player. Evidence pass (independent;
+`scripts/cln-tools/w71_ev_live.mjs`, the same script on both, phase C: the bandit at (−2, 1) in the bailey with 2 HP,
+the player 20 m south outside; `w71_ev_main.txt`, `w71_ev_change.txt`): `main` (port 3101, build `aVKrY384zIkTlbpypIsEQ`,
+digest `290d5af925b2`) — he stood at (−3.5, −5.1) against the inside of the north run for all 46 s, the gatehouse never
+struck, never gone; the change (port 3102, rebuilt for this pass as `r70mBDjyNRyoNK2vrz19l`, digest `5d9104824c98`, the
+same as the implementer's) — the gatehouse struck to 9 HP and a ruin, he out of the ring after 10.2 s, gone at 45.6 s
+at (−12.4, 61.1) from the keep, 43 m from the player. Taking out the battering in `runAway` alone fails the shut-keep
+test; taking out its home branch fails three (`w71_ev_mutate.py`). No page errors on either.
+
+**Found in the review of wave 71, and fixed.** As first written, `runAway` decided whether to batter from the route the
+raider already held (`path.current.siege`) before `escape` worked out his way out. A raider who broke while battering a
+shut gate from OUTSIDE (a palisade gate with the player in the pen behind it, or the keep's gatehouse) still held his
+siege way IN, and with the gate in reach he only swung at it, so `escape`, the only call that works out the route again,
+never ran: the "fleeing" raider broke the gate open, and only then ran (on `main` he ran straight away from the player
+and left it). Now `escape` works out the way out first, every frame of the flight, and says whether the route he holds
+is it (`out`: its target is the road's entry or exit, not a route left over while `ROUTES_PER_FRAME` was spent); he
+batters only when that way out is itself a siege way. `plunder.test.ts` ("one who breaks while battering a shut gate from
+outside"): the pen of the case above, the player inside, the raider battering its gate and then broken — the gate takes
+no blow after, stays standing, and he is more than 8 m off in 4 s; with the old order back it fails. Live
+(`scripts/cln-tools/w71_fix_live.mjs`, the same script on both, `w71_fix_main.txt`/`.json`, `w71_fix_change.txt`/`.json`;
+`main` port 3101 build `aVKrY384zIkTlbpypIsEQ`, digest `290d5af925b2`; the change rebuilt with the fix, port 3102, build
+`_rouWmFl7MELt7QSBnajp`, digest `5c6bfe81b31d`): phase D, a palisade pen at (−24, −24) with its gate shut, the player in
+it, a raider who struck the gate (to 6 HP) and was then broken — on both he left the gate at once, the gate at 6 HP and
+standing for the 20 s after, he 35 m off and gone at 44 m from the player by 17 s. Phase C again (the shut keep, the
+same set-up as above): the change still battered the gatehouse (to 9 HP and down) and was out of the ring by 12.8 s,
+then on the road, 32 m from the player at the 46 s window's end (`main`: against the north wall all 46 s, the gatehouse
+never struck). No page errors on either.
 
 ## Seen, not fixed: the raiders' ram can pick a gate's end face, and ram the palisade beside it — logged 2026-11-16 (in the review of wave 70.1; by the code)
 
@@ -11564,12 +11609,34 @@ The ram then ends its route beside that palisade and rolls on at the gate, and `
 strikes the palisade first. `siegeWay` avoids this by dropping probes that fall on blocked cells; `ramStand` does not.
 To do: drop a face whose stand point is itself blocked, as `siegeWay` does, and test a gate in a palisade line.
 
-## Seen, not fixed: a raider whose mark is out of reach for another reason may batter an unrelated pen's gate — logged 2026-11-16 (in the review of wave 70.1; by the code)
+## Bugfix: a raider whose mark was out of reach for another reason could batter an unrelated pen's gate — FOUND 2026-11-16 (in the review of wave 70.1; by the code), FIXED 2026-11-17
 
-`siegeWay`'s pass over the player's own pieces (`enemyAi/targeting.ts`) accepts any enclosure with one face the raider
+FIXED in wave 71 (G-06), whose store marks go through `siegeWay`: a player's piece is taken only when its far side is the
+mark's, or lies on the straight line from the mark to the raider. A pen standing on that line can still be battered
+when the mark is shut off for another reason (logged at the end of this file, from the review of wave 71).
+
+**The fault.** `siegeWay`'s pass over the player's own pieces (`enemyAi/targeting.ts`) accepts any enclosure with one face the raider
 can reach and one he cannot. When his mark is out of reach for a reason other than a wall (an island, a ledge the grid
 cannot climb) and no piece stands between them, he can go off and batter the gate of an unrelated walled pen instead.
-Narrow, and unseen live. To do: accept a player's piece only when the mark lies on its unreachable side.
+Narrow, and unseen live (so shown by the code and the unit test, not live).
+
+**The fix.** `siegeWay` (`enemyAi/targeting.ts`) takes one of the player's pieces only when its far side is the mark's
+(`to`, as before), or lies on the straight line from the mark to the raider — the outer of two rings round his mark,
+which the old rule was there to keep. That line is sampled every half metre on the grid, one point for each open stretch
+(`stretchesBetween`, made once a search and only when a piece is not `to`), and a far face reached from any of them
+counts. With no such piece the way is none, as for a mark shut off by water. A thief with no way to his store and none
+to batter leaves it (`step.ts`, `blows.ts`'s `leaveTheStore`), rather than stand at what is in his way: empty-handed he
+gives up thieving and fights; with goods already on him (before merging) he runs for the road with them.
+
+**Verified.** `plunder.test.ts` ("shut off from the store, a thief batters his way to it"): a store inside a walled pen
+with its gate shut — the siege way ends at the gate's outer face, he batters it to a ruin and strips the store; a store
+ringed by barrels (shut off, nothing to batter) beside an unrelated pen with a shut gate — `siegeWay` is null, he gives
+up thieving within two seconds and the pen's gate stands whole after ten; two rings round a mark — the outer ring's gate
+is still the way. Taking the new check out fails the barrels test; taking out the give-up fails it too.
+`raidApproach.test.ts`'s wave 70.1 siege tests pass unchanged. Evidence pass (independent, `w71_ev_mutate.py`): the
+new check taken out alone fails the barrels test; `stretchesBetween` replaced by nothing (every piece not `to`
+refused) fails two, the two-rings test among them; the give-up taken out fails one. Not measured live: the case was
+never seen in play, and this pass, like the implementer's, shows it by the unit test only.
 
 ## Bugfix: raids came only at dusk, with no warning, and on top of a dragon; a sleep before midnight never counted the day — FOUND 2026-10-31 (FEATURE_PLAN.md's verification: OPEN-018, OPEN-020, the ideas "Realm Events Director" and "Raids With Stakes"; G-04, the owner's decisions OD-06 and OD-08; the stale raid sides in the review of wave 70.1), FIXED 2026-11-16
 
@@ -11761,3 +11828,198 @@ their flags clear at that unmount, so the homestead is not held for the rest of 
 dragon's record), pays nothing, sounds no closing horn, and Cedric's war party and his ram stay on the field with no one
 to end them but the next raid's resolution. To do: keep the runners' `active` in state that survives the screen (as
 `directors/state.ts` does for the raid), so a siege resumes when the game screen comes back and ends as it should.
+
+## Bugfix: raiders took nothing from the stores, came three at any wealth, and ran 44 m from the player and vanished — FOUND 2026-10-31 (FEATURE_PLAN.md's verification of G-06: "flee() is player-relative and despawns 44 m from the player"; the owner's harsh-raids decision OD-02), FIXED 2026-11-17
+
+**The fault.** A raid never touched the homestead's goods: its raiders fought the player, his guards, Tam and his
+villagers, battered walls, and went; the one global inventory (`storage.ts`) was never theirs to take. Every raid was
+the leader and two followers, whatever the stores held (`raidDirector.ts`'s spawn block, `rollBanditFiller`). A beaten
+raider ran straight away from the player (`movement.ts`'s `flee`) and was gone 44 m from him — at once while the player
+was away — so he could be caught only by staying within 44 m of him, and nothing he did had a road to follow. Measured on `main`
+(production build of base-14 on port 3101, build `aVKrY384zIkTlbpypIsEQ`, digest `290d5af925b2`;
+`scripts/cln-tools/w71_plunder.mjs`, `w71_plunder_main.txt`/`.json`): a raid forced with the stores worth 40 and again
+worth 3,000 — three raiders both times (Gilbert and two bandits); then a palisade pen with its gate open round a
+stockpile, the stores at wood 120, stone 100, plank 60, wheat 40, gold 50 (worth 520), a raid forced and watched for
+60 s — the four bulk goods the same in all 118 samples, and the raid's end paid its fixed spoils (stone and plank +4).
+The home grid's `findPath`: 2.1 calls and 0.0 ms a second with no raid, 3.1 calls and 0.1 ms a second over the raid
+(0.5 ms the worst second).
+
+**The fix.**
+- *The size* (`directors/raidTiming.ts`, beside G-04's `raidChance`). `stockpileValue(inventory)`: each bulk good
+  (`BULK_GOODS`) at the merchant's price (`SELL_PRICES`, 1 for the herb he does not buy). `raidSize(value)`: the
+  followers behind the leader — 2 below 500, 3 from 500, 4 from 1,500, 5 from 3,000 (`RAID_SIZE_STEPS`, the one table to
+  tune); the royal knights' raid the same. `thiefSlot(i)`: every other follower from the first is a thief (1 of 2, 2 of
+  3 or 4, 3 of 5) — never the leader, at least one a raid, and as many left to hold the field, so the player has to
+  choose between the fight and the chase. `raidArrives` values the stores as the raiders come and marks them.
+- *The theft* (`game/plunder.ts`, new; `enemyAi/targeting.ts`'s `storeFor`; `blows.ts`'s `takeFromStore`). A thief's mark
+  is the nearest store standing at home (`storage.ts`'s `nearestStore` over `STORE_TYPES`, finished — a ruin is not),
+  ahead of every other mark (`markFor`'s `'store'`) and behind only a piece he must batter through to it (a store he
+  cannot reach goes through `siegeWay` like any mark). With no store standing he goes to home's middle, where the
+  villagers carry their hauls when there is no store (`Villagers.tsx`) and the goods lie about the hearth. At it, he
+  takes one bulk good every `GRAB_EVERY` = 0.5 s out of the global inventory (`addItems` with −1), the biggest pile first
+  (`nextGrab`), gold and gear never, with no cap on what a raid takes (OD-02), until his haul reaches `RUN_HAUL` = 20 or
+  there is nothing left; struck (below his full health) with goods on him he runs, struck with none he gives up thieving
+  and fights. Thieves do not take the ladder. The player is told when one starts ("A raider is stripping your stores!")
+  and when he runs ("A raider runs for the road with 20 of your goods!").
+- *The pursuit* (`movement.ts`'s `escape`, `step.ts`'s `runAway`). A raider at home who flees runs by a way to
+  `roadEntry()` and on along the road (`roadEntryOut`) to `roadExit()` at the map's edge, battering out when shut in
+  (the wave 70.1 entry above). A thief is gone only at the edge line (4 m in from it), never by the player's distance; a
+  raider with nothing on him still goes at 44 m from the player.
+- *The prop* (`EnemyFigure.tsx`'s `CarriedLoad`). A thief carries the Barrel's or the Stockpile crate's own mold on his
+  back (the body joint, behind the chestplate's place; which by his id), drawn from his first good until he falls or is
+  gone — no new asset.
+- *The drop* (`combat/loot.ts`'s `lootFor`, `kill.ts`). A kill hands over his purse and every good he carried, landing as
+  loot lands (`addItems` 'grant', past a full store), named in the kill's line, and counted as taken back.
+- *The ledger* (`SaveGame.plunder`, `persistence.ts`, `storySlice`'s `recordPlunder`). A thief off the edge, or on his
+  feet when the player is knocked out (`playerDamage.ts`: he has the field), takes his haul into the saved ledger G-16a
+  pays a share of back. `SAVE_VERSION` is 2, and `SAVE_MIGRATIONS[1]` gives a version-1 save an empty ledger (an older
+  game refuses a version-2 save rather than write it back without one).
+- *The end* (`raidDirector.ts`'s `haulReport`). The raid resolves when its last raider — so its last thief — has fallen
+  or got away, and its notify adds the goods lost and taken back by name and count ("They got away with 20× Wood Log.
+  Taken back from the fallen: 10× Wood Log.").
+
+Premises held, with these corrections: the cited lines had moved (the spawn block is `raidDirector.ts:166-204` after
+wave 70.2, `flee` and `breaksAndRuns` `movement.ts:174-201`, `bestStore` `storage.ts:120`); "through G-04's weight
+function" is read as one function beside it in `raidTiming.ts`, since G-04's weights are the hour's chance, not a size;
+"a storehouse target in targeting.ts beside keepInReach" is `storeFor`, which `markFor` puts first. Out of scope and
+left: knock-out losses and razed buildings (G-07), the garrison (G-08), the hideout (G-15a, G-16a), the ram's end face
+(still logged above).
+
+**Verified.** `tsc` clean; the unit suite 102 files, 851 tests. `plunder.test.ts` (14): the grab rate (a good every
+16th frame of 1/32 s: ten in 5 s, the biggest pile first, gold untouched; at 20 he runs and takes no more); no cap (two
+thieves take a store of 28 to nothing; a third with nothing to take gives up); struck, he runs, or empty-handed fights;
+the nearest store at home, never a ruin or one at a destination, home's middle with none; a kill drops exactly his haul
+and purse past a full store, counted taken back; the escape reaches the road's entry, is gone only past the edge line
+(the player 200 m and more off all the way) and goes into the ledger; a broken raider with nothing of the player's goes
+toward the road and is gone at 44 m from the player; a knock-out ledgers a standing thief's haul and not a falling one's;
+the raid's size at each step and its thieves; the end waits for a thief falling apart, then names "4× Stone, 2× Plank"
+lost and "5× Wood Log" taken back; the pen and barrel cases and the shut keep (the two entries above).
+`saveSchema.test.ts` adds a version-1 save brought up with an empty ledger that loads as none taken, and a ledger kept;
+`keepGolden.test.ts`'s main save now writes back at version 2 with an empty ledger; the save fixtures stamp
+`SAVE_VERSION`; `raidApproach.test.ts` counts four raiders for its stores (worth 1,180). 16 take-outs
+(`scripts/cln-tools/w71_takeout.py`, `w71_takeout.txt`), each alone, each fail 1 to 5 tests; the sha256 of `git diff`
+and the new files the same before and after (`e71dd523…`).
+
+Live, the implementer's run (`w71_plunder.mjs`, the same script on both; the change on port 3102, the worktree's build
+`asWWSEXpVfcXoTnTk2VZZ`, digest `5d9104824c98`, `w71_plunder_change.txt`/`.json`; no page errors on either): raid size —
+three raiders (one thief) worth 40, six (three thieves) worth 3,000 (`main`: three and three). The theft (the same pen,
+gate open, worth 520: four raiders, two thieves): the first thief at the store at 33 s, the wood falling a good every
+half second (120 → 112 by 36.4 s); the screenshot (`w71_change_thief_loaded.png`) shows him at the stockpile with the
+crate on his back; killed by the player's blade with 10 wood on him, the inventory rose by exactly 10 wood in that
+tick; the second took 20 wood from 43.4 to 53.1 s (2.06 a second), ran at 53 s by the road and was last seen at
+(−11.5, 195.7), gone at the edge line at 130 s, the ledger `{ wood: 20 }`; the end: "The raid is beaten back! The
+bandits dropped their spoils. They got away with 20× Wood Log. Taken back from the fallen: 10× Wood Log." `findPath`
+over the raid's 126 s: 3.8 calls and 0.2 ms a second, 1.1 ms the worst second (`main` 3.1, 0.1, 0.5), still within
+`ROUTES_PER_FRAME`, which every thief's and every fleeing raider's route goes through.
+
+Evidence pass (independent; `tsc` clean, the unit suite 102 files / 851 tests, `next build` clean). Mutations
+(`scripts/cln-tools/w71_ev_mutate.py`, `w71_ev_mutate.txt`; each applied alone, the five wave test files run, the file
+put back from its own bytes; `git diff` plus the two new files hashed `458d0267…` before and after, and `git diff`
+alone `a3bf31bd…` before the pass and after it): 30 of 32 fail 1 to 5 tests — the size, the value, the thief slots, the
+grab's decrement, rate, run threshold and biggest pile, the drop, the recovered tally, the knock-out, the home flight,
+the escape's ledger, edge-only gone, the battering out, the road's exit, the struck thief, the store mark and its
+priority, ruins, other worlds, home's middle, the give-up, both `siegeWay` checks, the migration, `recordPlunder`, the
+itemised end and its reset. Two survive, both untested and both minor: the battering test's `store.d` in place of the
+player's distance (`step.ts`; the pen test's player is never nearer than the gate) and the ladder's `!data.thief`
+(`climb.ts`). Live (`scripts/cln-tools/w71_ev_live.mjs`, written apart from the implementer's, the same script on both:
+a palisade pen with its gate open round a storehouse, the stores stone 150, plank 50, wood 30, wheat 20, iron ore 10,
+gold 77 — worth 510 — the player held at a watch point 22 m south of the pen and not moved for the escape;
+`w71_ev_main.txt`/`.json`, `w71_ev_change.txt`/`.json`): `main` (port 3101, build `aVKrY384zIkTlbpypIsEQ`, digest
+`290d5af925b2`) — three raiders at stores worth 40, 499, 1,500 and 3,200; over the raid's 60 s the stores identical in
+all 117 samples; the end paid its fixed spoils only (stone and plank +4, iron ore +2). The change (port 3102, rebuilt for
+this pass as `r70mBDjyNRyoNK2vrz19l`, digest `5d9104824c98`, the implementer's) — three raiders (one thief) worth 40 and
+499, five (two) worth 1,500, six (three) worth 3,200; at 510 four, two thieves, both at the storehouse with a crate on
+their backs (`w71_ev_change_thief.png`); the stone fell from 150, nothing else touched (gold 77 throughout), one thief
+taking 1 → 19 from 34 to 43 s (2.0 a second) and running with 20 at 43.5 s; the other killed by the player's blade with
+8 stone on him and an empty purse — the inventory rose by exactly 8 stone in the same tick; the runner went by the road
+and was gone at (−12.5, 195.6), the edge line, at 118 s, 198 m from the player (so past 44 m long before), the ledger
+`{ stone: 20 }`; the end: "The raid is beaten back! The bandits dropped their spoils. They got away with 20× Stone.
+Taken back from the fallen: 8× Stone." Final stone 134 = 150 − 20 + 4 spoils. In every one of 228 samples the goods gone
+from the stores equalled those on standing thieves plus the ledger. A fighter (no haul) made to flee was gone 43.9 m
+from the player (`main` 43.1 m), as before. `findPath` on the home grid: idle 2.2 calls a second (`main` 1.8), over the
+raid 3.9 calls and 0.1 ms a second, the worst second 1.1 ms and 10 calls (`main` 2.9, 0.1, 0.9 ms, 9 calls; the two
+probes ran at once, so both under the same load). No page errors on either. Not measured live: a knock-out with a thief
+standing (unit test only), the royal knights' raid, a store with no store standing (home's middle), and a save/load of
+the ledger (unit tests only).
+
+Fix pass (after the review): the two surviving mutations are now tested in `plunder.test.ts` — a thief batters the pen's
+gate with the player standing nearer him than it ("batters the pen's gate with the player standing nearer him"), and a
+thief is never drawn to the siege ladder while a fighter is — each failing with its mutation back. The review's two
+findings are fixed and verified in their own entries: a raider broken while battering from outside (the shut-keep entry
+above) and a save taken mid-raid (just below). `tsc` clean; the unit suite 102 files, 855 tests.
+
+Before merging (2026-11-17), from the reviews' minor notes:
+- *With no store standing, a keep wall over home's middle held a thief for good* (`storeFor`, `targeting.ts`). His mark
+  was the point (0, 0) and his reach measured to it; a keep's wall or corner there stops him half a metre off its face
+  (`stopAtKeepWalls`), out of reach, while `navReachable` says yes (the grid's goal snaps to open ground beside it), so
+  he never gave up — and the raid, a major event since wave 70.2, stood with him, holding off every other. (A stable or
+  forge there does not: raiders walk through a building's footprint; and the keep's centre piece is not a solid.) Now,
+  with the point itself blocked on the grid, he takes from the open ground about it nearest it that he can get to
+  (`hearthFor`), and only with none such from the open ground nearest it at all (`NavGrid.nearestWalkable`, where the
+  grid's way to the point ends; he batters his way there). Tests: "with no store standing and a building — or a keep
+  wall — over the middle of home, he still strips the goods" (a stable at the point, a forge over it, the keep at
+  (0, −7) with its south run across the point; the keep case failed on the code before: 0 goods in 30 s, still a thief)
+  and "… a shut keep over the middle of home, he takes from the ground he can get to, not battering in" (the keep at
+  (7, 0), its west run across the point, gatehouse shut: the grid's scan alone put his mark inside the ring, and he
+  battered the gatehouse to a ruin for goods he could take from outside).
+- *A thief shut off from the store with goods already on him turned fighter* (`step.ts`), his load hidden (EnemyFigure
+  draws it for a thief) and a blow no longer sending him off. He now runs for the road with them (`leaveTheStore`, the
+  rule a full haul already followed). The barrels test checks a loaded thief: still a thief, running, his goods on him;
+  it fails with the old line put back.
+- *A gate shut in front of a thief on his way in turned him from the store* (found by an adversarial check of the two
+  fixes above). His give-up read the grid fresh (`navReachable`) against a route worked out while the gate stood open,
+  so on the frame after the gate shut and the grid was rebuilt he left the store — empty-handed to fight, loaded for
+  the map's edge — before `makePathStep`'s timer could make his route the siege way to the gate. The route now carries
+  the planner's own verdict (`Route.noWay`: shut off, and nothing to batter), given when it is worked out, and he gives
+  up only on that. Test: "a gate shut in front of him on his way in: he works out the way to batter it, and does not
+  give up" (empty and loaded; the gate battered to a ruin, the store stripped, never off before).
+- Each change taken out alone fails its test (the give-up read live again; the planner's verdict never given; the
+  hearth as the grid's scan alone; the hearth as the point itself; the cut-off thief turned fighter).
+- The docs: the unrelated-pen entry's FIXED line said more than the code does (its remaining case is logged at the end);
+  this entry's fault paragraph said a fleeing raider "could never be run down" (he could, within 44 m); the save
+  migration's comment was cut short.
+`tsc` clean; the unit suite 102 files, 858 tests.
+
+## Bugfix: a save taken while a thief carried goods lost them, with nothing in the ledger — FOUND 2026-11-17 (wave 71; by the code, and in its review), FIXED 2026-11-17
+
+FIXED in wave 71: a save counts the haul on every thief still on his feet into its plunder ledger.
+
+**The fault.** A thief's haul is taken out of the inventory as he grabs it (`blows.ts`'s `takeFromStore`) and lives on
+him until he falls or gets away. Enemies are not saved, and the raid is forgotten at a load (`directors/state.ts`), so a
+save taken mid-raid (the autosave every 20 s, Save & Quit, the recovery slot) and loaded later had the goods gone from
+the stores, no thief to run down and nothing in the plunder ledger — a loss the wave's own feature made, and the one
+its plan's risk ruled out: uncapped losses must stay itemised and answerable.
+
+**The fix.** As the save is built, every standing thief's haul is counted into the saved `plunder`, as a knock-out
+counts it (`playerDamage.ts`): he had the field when the game was left. `plunder.ts`'s `standingHauls` is the seam (set
+by `combat/enemyStore.ts`, which `sessionSlice.ts` cannot import without closing the store's import cycle), read by
+`toSave` into `SaveLeaves.carriedPlunder`, and `PERSISTED_FIELDS.plunder`'s `save` adds it to the ledger. Only the
+save's copy: the live raid goes on, and a thief cut down after it gives his haul back to the stores, so the next save is
+right again. One falling has dropped his already (`kill.ts`) and is left out.
+
+**Verified.** `plunder.test.ts` ("a save taken mid-raid"): a ledger of 2 stone, two thieves on their feet with 7 wood and
+3 wood and a plank, a fighter with nothing and a falling thief with 9 stone — the save's ledger is 2 stone, 10 wood and
+a plank, the live ledger still 2 stone, and with the thieves gone the save's back to 2 stone; with the leaf left empty
+it fails. Live (`w71_fix_live.mjs` phase E, builds as in the shut-keep entry above): the change's save with two thieves
+carrying 7 wood and 3 stone and a plank over a ledger of 2 stone wrote `{ stone: 5, wood: 7, plank: 1 }`, the live
+ledger `{ stone: 2 }`, and `{ stone: 2 }` with the thieves cleared; `main` writes no ledger.
+
+## Seen, not fixed: a fleeing raider with no way to the road and nothing to batter runs at what is in his way for good — logged 2026-11-17 (wave 71; by the code)
+
+The flight at home (`movement.ts`'s `escape`) runs by a way to the road's entry; shut off from it with a piece of the
+player's or the keep's to batter, he batters it. With neither — boxed in by dug water, barrels or houses, which no raider
+batters — the way is none and he runs straight for the road into whatever stands there, which stops him; a thief is
+gone only at the edge, so the raid never resolves. A thief going *to* a store in that case gives up thieving; a fleeing
+one has no such end. To do: let a raider with no way out at all fight on (a thief dropping his load where he stands), or
+be gone where he stands once out of the player's sight.
+
+## Seen, not fixed: a pen on the line to a store shut off for another reason is still battered — logged 2026-11-17 (in the review of wave 71; by the code)
+
+Wave 71's `siegeWay` (`enemyAi/targeting.ts`) takes one of the player's pieces when its far side is the mark's, or lies
+on the straight line from the mark to the raider (`stretchesBetween`, which keeps the outer of two rings round a mark
+working). A store shut off by something no raider batters — ringed by barrels, cut off by dug water — with one of the
+player's walled pens standing on that line still draws the thief to the pen: an open stretch inside it counts as
+"between", so he batters its gate, then its far wall (also "between"), and only then finds no way and leaves the store.
+The barrels test puts the pen off the line, so it does not see this. To do: count a piece as "between" only when its far
+side is cut off from the raider *and* joined to the mark (a region test on the grid), or end the line at the first
+stretch that is not the mark's.

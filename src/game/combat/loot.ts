@@ -16,8 +16,13 @@ export function rollLoot(kind: EnemyKind): Partial<Record<ItemId, number>> {
 }
 
 /** what a fallen enemy actually hands over: its own rolled inventory, falling
- *  back to a fresh roll for anything spawned before inventories existed */
+ *  back to a fresh roll for anything spawned before inventories existed — and
+ *  (G-06) every good a thief has taken from the stores, on top */
 export function lootFor(kindOrData: EnemyKind | EnemyData): Partial<Record<ItemId, number>> {
   if (typeof kindOrData === 'string') return rollLoot(kindOrData);
-  return kindOrData.inventory ?? rollLoot(kindOrData.kind);
+  const own = kindOrData.inventory ?? rollLoot(kindOrData.kind);
+  if (!kindOrData.carried) return own;
+  const out = { ...own };
+  for (const [id, n] of Object.entries(kindOrData.carried)) out[id as ItemId] = (out[id as ItemId] ?? 0) + (n ?? 0);
+  return out;
 }

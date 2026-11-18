@@ -34,7 +34,9 @@ export function poseOnLadder(climbT: number): ClimbPose {
  *  "a small number of RAIDERS", not the whole raid roster. */
 function canClimbLadder(data: EnemyData): boolean {
   return data.raid && data.kind !== 'storm' && data.kind !== 'cedric'
-    && data.kind !== 'siegeCrew' && data.kind !== 'caster' && !data.mountAsset;
+    && data.kind !== 'siegeCrew' && data.kind !== 'caster' && !data.mountAsset
+    // G-06 · a thief makes for the stores, not the wall-walk
+    && !data.thief;
 }
 
 /** Does the keep's piece at `sockId` still stand finished, with a wall-walk on it? — what a raider on the ladder leans

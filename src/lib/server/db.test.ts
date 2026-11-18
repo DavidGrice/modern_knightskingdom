@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SaveGame } from '@/game/types';
+import { SAVE_VERSION } from '@/lib/saveSchema';
 
 // db.ts keeps its files under process.cwd()/data, decided when it loads: it is loaded here, after the working
 // directory is pointed at a scratch one, so these tests never touch the project's own data/
@@ -19,7 +20,7 @@ afterAll(() => {
 });
 
 const save = (day: number) => ({
-  version: 1, character: { name: 'Test' }, inventory: {}, unlocks: [], completedQuests: [], questProgress: {}, buildings: [], dayCount: day,
+  version: SAVE_VERSION, character: { name: 'Test' }, inventory: {}, unlocks: [], completedQuests: [], questProgress: {}, buildings: [], dayCount: day,
 }) as unknown as SaveGame;
 const file = (id: string) => path.join(dir, 'data', 'saves', `${id}.json`);
 const dayOn = (f: string) => JSON.parse(fs.readFileSync(f, 'utf8')).dayCount;

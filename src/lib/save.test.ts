@@ -3,6 +3,7 @@ import {
   BEACON_MAX_BYTES, dropRecoverySave, fetchSave, flushSave, persistSave, readRecoverySave, writeRecoverySave,
 } from './save';
 import type { SaveGame } from '@/game/types';
+import { SAVE_VERSION } from './saveSchema';
 
 const SAVE = { version: 1 } as unknown as SaveGame;
 
@@ -63,7 +64,7 @@ describe('writing the save (F-08a)', () => {
 
 // a save the schema passes (lib/saveSchema.ts), taken at `savedAt`
 const at = (savedAt: number | undefined, more: object = {}) => ({
-  version: 1, savedAt, character: {}, inventory: {}, unlocks: [], completedQuests: [], questProgress: {}, buildings: [], ...more,
+  version: SAVE_VERSION, savedAt, character: {}, inventory: {}, unlocks: [], completedQuests: [], questProgress: {}, buildings: [], ...more,
 }) as unknown as SaveGame;
 
 function browser(keys: Record<string, string> = {}) {

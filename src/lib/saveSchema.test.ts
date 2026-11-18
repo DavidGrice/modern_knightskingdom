@@ -70,10 +70,27 @@ describe('the migrations (F-09)', () => {
     expect(migrateSave(current, steps, 4)).toBe(current);
   });
 
-  it('are none yet, and the save check runs them: what it hands on is at SAVE_VERSION', () => {
-    expect(SAVE_MIGRATIONS).toEqual({});
+  it('and the save check runs them: what it hands on is at SAVE_VERSION', () => {
     const save = realSave();
-    const { version: _v, ...unversioned } = save; // the oldest a save can be: the first, which has no step yet
+    const { version: _v, ...unversioned } = save; // the oldest a save can be: the first
     expect(parseSave(JSON.stringify(unversioned))).toEqual({ ok: true, save: JSON.parse(JSON.stringify(save)) });
+  });
+
+  it('G-06 · bring a save from before the plunder ledger (version 1) up with an empty one, which loads as none taken', () => {
+    expect(SAVE_VERSION).toBe(2);
+    const { version: _v, plunder: _p, ...old } = realSave();
+    expect('plunder' in old).toBe(false);
+    for (const v1 of [{ ...old, version: 1 }, old]) {
+      const check = checkSave(JSON.parse(JSON.stringify(v1)));
+      expect(check.ok && [check.save.version, check.save.plunder]).toEqual([2, {}]);
+      useGameStore.getState().recordPlunder({ wood: 3 });
+      useGameStore.getState().loadFromSave(check.ok ? check.save : (null as never));
+      expect(useGameStore.getState().plunder).toEqual({});
+    }
+    // a ledger already there is kept as it is
+    expect(SAVE_MIGRATIONS[1]({ version: 1, plunder: { stone: 4 } })).toEqual({ version: 1, plunder: { stone: 4 } });
+    const kept = { ...realSave(), plunder: { stone: 4 } };
+    useGameStore.getState().loadFromSave(JSON.parse(JSON.stringify(kept)));
+    expect(useGameStore.getState().toSave().plunder).toEqual({ stone: 4 });
   });
 });

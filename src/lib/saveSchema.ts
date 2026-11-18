@@ -8,12 +8,16 @@ import type { SaveGame } from '@/game/types';
 
 /** The version toSave() stamps (persistence.ts's buildSave). A save from a newer game is refused rather than loaded by
  *  an older one and written back without whatever it did not know. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
-/** One step up the save's history: a save of version `v` (its key) rewritten as one of `v + 1`. The first change to the
- *  save's shape that an older game could not load as it is raises SAVE_VERSION and adds its step here; none has yet. */
+/** One step up the save's history: a save of version `v` (its key) rewritten as one of `v + 1`. Each change to the
+ *  save's shape that an older game could not load as it is raises SAVE_VERSION and adds its step here. */
 export type SaveMigration = (save: Record<string, unknown>) => Record<string, unknown>;
-export const SAVE_MIGRATIONS: Readonly<Record<number, SaveMigration>> = {};
+export const SAVE_MIGRATIONS: Readonly<Record<number, SaveMigration>> = {
+  // G-06 · the plunder ledger: what raiders got away with, an empty one for a save from before raiders took goods. An
+  // older game would load a save that has one, and write it back without it
+  1: (save) => ({ ...save, plunder: save.plunder ?? {} }),
+};
 
 /** `save` brought up to version `to`, a step at a time and in order (a save with no version is taken as the first, and
  *  stamped; a version with no step only re-stamped). A save already there is handed back as it is. Its version must be

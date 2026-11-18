@@ -8,6 +8,7 @@ import { roadEntry } from './data/road';
 import { HOME_X, HOME_Z } from './data/villagers';
 import { APPROACH_RING, approachPoint, bearingFromHome, raidSeedFor, raidSides } from './directors/approach';
 import { raidDirector } from './directors/raidDirector';
+import { raidSize, stockpileValue } from './directors/raidTiming';
 import { raidActive, raidCooldown, raidForce, raidLost, raidPlan } from './directors/state';
 import { keepSolids, pushOutOfBox } from './fixedSolids';
 import { keepInReach, siegeWay } from './enemyAi/targeting';
@@ -159,7 +160,9 @@ describe('a raid comes from its own sides', () => {
     expect(raidPlan.seed).toBe(raidSeedFor(5));
     expect(raidPlan.sides).toEqual(raidSides(raidSeedFor(5)));
     const rs = raiders();
-    expect(rs).toHaveLength(3);
+    // G-06 · as many as the stores are worth (this file's 1,180: the leader and three)
+    expect(rs).toHaveLength(1 + raidSize(stockpileValue(game().inventory)));
+    expect(rs).toHaveLength(4);
     rs.forEach((e, i) => {
       const at = approachPoint(e.mob, raidPlan.sides, i, e.id, raidPlan.seed)!;
       expect([e.mob.approachX, e.mob.approachZ, e.mob.approaching]).toEqual([at.x, at.z, true]);
