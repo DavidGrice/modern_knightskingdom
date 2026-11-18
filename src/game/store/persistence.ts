@@ -17,7 +17,7 @@
 // setWaterworks, worldEnv), the id sequence counters, and NG+'s xp/skillTree
 // overlay — all order-sensitive side effects or session lifecycle, not state
 // that is saved.
-import type { CharacterConfig, DifficultyId, LifetimeStats, PlacedBuilding, SaveGame, SkillId, WaterFeature } from '../types';
+import type { CharacterConfig, DifficultyId, ItemId, LifetimeStats, PlacedBuilding, SaveGame, SkillId, WaterFeature } from '../types';
 import type { KeepState } from '../data/keep';
 import { MAX_LAND_TIER } from '../data/landTiers';
 import { SAVE_VERSION } from '@/lib/saveSchema';
@@ -45,7 +45,7 @@ export const ZERO_STATS: LifetimeStats = {
 export const UNPERSISTED_SAVE_KEYS = ['version', 'savedAt', 'playerPos', 'stabled', 'mounts'] as const satisfies readonly (keyof SaveGame)[];
 type UnpersistedKey = (typeof UNPERSISTED_SAVE_KEYS)[number];
 
-/** Every SaveGame key that has a same-named live store field (65 today). */
+/** Every SaveGame key that has a same-named live store field (66 today). */
 export type PersistedKey = Exclude<keyof SaveGame, UnpersistedKey>;
 
 /** The live (in-store) type of every persisted field: SaveGame's, minus the
@@ -71,6 +71,8 @@ export interface SaveLeaves {
   waterworks: readonly WaterFeature[];
   /** buildUndo.carriedKeepExtra (storeCounters.ts): the keep's parts while its foundation is carried */
   carriedKeepExtra: CarriedKeepExtra | null;
+  /** G-06 · standingHauls.read() (plunder.ts): the goods on the thieves still on their feet, saved as got away */
+  carriedPlunder: Partial<Record<ItemId, number>>;
 }
 
 /** What buildSave reads from the store: the persisted fields, and the piece in the player's hands (not saved itself —
@@ -184,6 +186,15 @@ export const PERSISTED_FIELDS = {
   blackDragonRouted:   { fresh: () => false },
   cedricSieges:        { fresh: () => 0 },
   cedricRouted:        { fresh: () => false },
+  // G-06 · with the goods on every thief still standing counted in: the raid is not saved, and loaded, they were gone
+  plunder:             {
+    fresh: () => ({}),
+    save: (st, leaves) => {
+      const plunder = { ...st.plunder };
+      for (const [id, n] of Object.entries(leaves.carriedPlunder)) if (n) plunder[id as ItemId] = (plunder[id as ItemId] ?? 0) + n;
+      return plunder;
+    },
+  },
 } satisfies { [K in PersistedKey]: FieldSpec<K> };
 
 /** Every persisted key, in wire order (derived — never hand-listed). */

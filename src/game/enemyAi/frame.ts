@@ -12,7 +12,13 @@ export type Mob = EnemyData['mob'];
 /** an enemy's current route: waypoints, which one it is heading for, when to work it out again, and where its mark
  *  stood when it last did — and (wave 69, `siege`) whether it was then shut out of the keep his mark is in, so the route
  *  is to a piece of it to batter (targeting.ts's siegeWay) */
-export interface Route { pts: { x: number; z: number }[]; i: number; t: number; tx: number; tz: number; siege?: boolean }
+export interface Route {
+  pts: { x: number; z: number }[]; i: number; t: number; tx: number; tz: number; siege?: boolean;
+  /** G-06 · when the route was last worked out (makePathStep, a raider at home): his mark shut off from him with no
+   *  piece to batter through to it either — the grid's word at that moment, which a thief gives up his store on
+   *  (step.ts), never a later reading held against a route worked out before the grid changed */
+  noWay?: boolean;
+}
 
 /** What the Enemy component hands its frame: the enemy, and the component's own refs, state and setters. */
 export interface EnemyFrame {

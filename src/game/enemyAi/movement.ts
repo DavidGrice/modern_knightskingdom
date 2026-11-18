@@ -1,7 +1,7 @@
 // CLN-13 · how an enemy moves: its speed (speedOf) and a skeleton's shamble-then-lunge (paceOf); a step along a route
 // round what stands in its way (makePathStep) and the pack's flanking turn (flank); a raider's walk in from the road
-// (walkIn, to his own point on his raid's side: G-03), a beaten one's flight (breaksAndRuns, flee), an idle one's
-// wander; and after it has moved, the pack shouldered apart (shoulderApart), the homestead's pond, water and edge kept
+// (walkIn, to his own point on his raid's side: G-03), a beaten one's flight (breaksAndRuns, flee) — G-06: a raider's
+// at home by the road and off the map (escape) — an idle one's wander; and after it has moved, the pack shouldered apart (shoulderApart), the homestead's pond, water and edge kept
 // to (keepToLand), and a shut gate's way barred (stopAtShutGates), and the keep's walls' (stopAtKeepWalls). And (G-03)
 // how many routes the raiders at home may work out in one frame (newRouteFrame).
 import * as THREE from 'three';
@@ -14,7 +14,7 @@ import { isBuilt, isDoorLike } from '@/game/types';
 import { POND, WORLD_HALF } from '@/game/data/world';
 import { sizeFor } from '@/game/data/buildables';
 import { HOME_X, HOME_Z } from '@/game/data/villagers';
-import { roadSpeedMult } from '@/game/data/road';
+import { roadEntry, roadEntryOut, roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { siegeWay } from './targeting';
@@ -85,6 +85,7 @@ export function makePathStep(path: Route, m: Mob, dt: number, siege = false) {
       const shutOut = noWay ? siegeWay(useGameStore.getState(), m.x, m.z, tx, tz) : null;
       path.pts = found ?? shutOut ?? [];
       path.siege = !!shutOut;
+      path.noWay = noWay && !shutOut;
       path.i = 0;
     }
     // aim at the next corner if we have one, otherwise straight at the mark — but a siege route's last point, the
@@ -188,16 +189,62 @@ export function breaksAndRuns(data: EnemyData, st: GameState): void {
   }
 }
 
-/** The flight: away from the player at a run. Returns how far off the player was — past 44 m, the enemy is gone. */
+/** how fast a beaten enemy runs */
+const FLEE_SPEED = 3.0;
+/** how far past the player a fleeing enemy with nothing of the player's on him is gone (flee; step.ts) */
+export const FLEE_GONE = 44;
+
+/** The flight: away from the player at a run. Returns how far off the player was — past FLEE_GONE, the enemy is gone. */
 export function flee(m: Mob, dt: number): number {
   m.state = 'chase'; // run animation
   const away = Math.hypot(m.x - playerState.x, m.z - playerState.z) || 1;
   const nx = (m.x - playerState.x) / away;
   const nz = (m.z - playerState.z) / away;
-  m.x += nx * 3.0 * dt;
-  m.z += nz * 3.0 * dt;
+  m.x += nx * FLEE_SPEED * dt;
+  m.z += nz * FLEE_SPEED * dt;
   m.yaw = Math.atan2(-nx, -nz);
   return away;
+}
+
+/** G-06 · how far in from the world's edge (WORLD_HALF) a raider running off the map is gone; he runs for a point a
+ *  little further out (roadExit), so that he always crosses it */
+const EDGE_GONE = 4;
+const EXIT_IN = 2;
+
+/** G-06 · where the road runs off the map: on from its entry (roadEntry) the way it leaves (roadEntryOut) to the
+ *  world's edge */
+export function roadExit(): { x: number; z: number } {
+  const e = roadEntry();
+  const o = roadEntryOut();
+  const edge = WORLD_HALF - EXIT_IN;
+  const to = (p: number, u: number) => (u === 0 ? Infinity : ((u > 0 ? edge : -edge) - p) / u);
+  const t = Math.min(to(e.x, o.x), to(e.z, o.z));
+  return { x: e.x + o.x * t, z: e.z + o.z * t };
+}
+
+/** G-06 · A raider's flight at home: by a way (makePathStep's, a raider's — shut in, a siege way out to batter: the
+ *  frame does the battering) to the road's entry, and on along the road off the map (roadExit) — never straight away
+ *  from the player, which ran one shut in the keep against its wall for good, and never gone by the player's distance
+ *  alone, so that a thief can always be run down. The way out is worked out first, every frame of the flight, and
+ *  `out` says whether the route he holds is it: a raider who breaks while battering his way IN still holds that siege
+ *  way until his way out is worked out (his route's own target, ROUTES_PER_FRAME spent), and battering on it, he broke
+ *  the gate open as he fled. Then `run` takes the step, and says whether he has reached the world's edge, where he is
+ *  gone. */
+export function escape(m: Mob, path: Route, dt: number): { out: boolean; run: () => boolean } {
+  m.state = 'chase'; // run animation
+  const entry = roadEntry();
+  if (!m.pastEntry && Math.hypot(m.x - entry.x, m.z - entry.z) < APPROACH_REACHED) m.pastEntry = true;
+  const to = m.pastEntry ? roadExit() : entry;
+  const { nx, nz } = makePathStep(path, m, dt, true)(to.x, to.z);
+  return {
+    out: path.tx === to.x && path.tz === to.z,
+    run: () => {
+      m.x += nx * FLEE_SPEED * dt;
+      m.z += nz * FLEE_SPEED * dt;
+      m.yaw = Math.atan2(-nx, -nz);
+      return Math.max(Math.abs(m.x), Math.abs(m.z)) >= WORLD_HALF - EDGE_GONE;
+    },
+  };
 }
 
 /** nothing to fight: a slow amble, a new heading every 2–6 s */

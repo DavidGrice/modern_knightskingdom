@@ -5,9 +5,12 @@
 // is played — still behind the cooldown, the homestead's own gates and any other major event (raidDirector.ts). And
 // none comes unannounced: a horn, a banner and the minimap's arrow toward its sides give at least
 // RAID_WARNING_SECONDS, longer for each watch post a defender keeps (warningLeadTime, which G-25's dispatches and
-// G-26's watchtowers read too).
+// G-26's watchtowers read too). G-06 · and how many come: a richer homestead draws a hungrier raid (raidSize, by what
+// its stores are worth), and every other raider behind the leader comes to strip them (thiefSlot).
 import { mulberry32 } from '@/lib/rng';
-import { isBuilt, type PlacedBuilding, type Villager } from '@/game/types';
+import { isBuilt, type ItemId, type PlacedBuilding, type Villager } from '@/game/types';
+import { BULK_GOODS } from '@/game/storage';
+import { SELL_PRICES } from '@/game/data/trade';
 import { KEEP_SITE_ID, sitesIn, type SocketSite } from '@/game/sites/sites';
 import type { KeepState } from '@/game/data/keep';
 import { raidSeedFor } from './approach';
@@ -34,6 +37,31 @@ export function raidChance(hour: number, pressure = 1): number {
  *  decides it, hour by hour: the same day and hour answer the same however often they are asked. */
 export function raidDue(day: number, hour: number, pressure = 1): boolean {
   return mulberry32((raidSeedFor(day) ^ Math.imul(hour + 1, 0x85ebca6b)) >>> 0)() < raidChance(hour, pressure);
+}
+
+/** G-06 · what the homestead's stores are worth: each bulk good held (storage.ts's BULK_GOODS — what a thief takes) at
+ *  the merchant's price for it (data/trade.ts's SELL_PRICES; 1 for one he does not buy) */
+export function stockpileValue(inventory: Partial<Record<ItemId, number>>): number {
+  let v = 0;
+  for (const id of BULK_GOODS) v += (inventory[id] ?? 0) * (SELL_PRICES[id] ?? 1);
+  return v;
+}
+
+/** G-06 · how many raiders follow the leader, by what the stores are worth (stockpileValue): a step up at each of these
+ *  values — the one table a balance pass tunes beside raidChance. Two below the first, as every raid had. */
+const RAID_SIZE_STEPS = [500, 1500, 3000];
+const RAID_BASE_FOLLOWERS = 2;
+
+/** The raiders behind their leader for stores worth `value`: 2, then 3 from 500, 4 from 1,500 and 5 from 3,000. */
+export function raidSize(value: number): number {
+  return RAID_BASE_FOLLOWERS + RAID_SIZE_STEPS.filter((at) => value >= at).length;
+}
+
+/** G-06 · whether the follower in slot `i` (1 the first) is a thief, who strips the stores (game/plunder.ts) rather
+ *  than fights: every other one, from the first — at least one a raid, never the leader, and as many left to hold the
+ *  field with the leader, so that a player must choose between the fight and the chase */
+export function thiefSlot(i: number): boolean {
+  return i % 2 === 1;
 }
 
 /** the warning a raid always gives: the horn to the raiders' arrival (OD-06: 30-60 s) */

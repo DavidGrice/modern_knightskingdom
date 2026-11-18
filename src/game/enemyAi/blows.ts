@@ -1,6 +1,7 @@
 // CLN-13 · the blows an enemy's swing (engage.ts) lands, each its mark's own: at one of the player's side — a sworn
 // guard, Tam, a villager who chose to fight — at the player, at a piece of the keep (G-03: or of the player's walls),
-// and a siege crew's shot from its engine. Each sets the enemy's next cooldown first, as it always did.
+// and a siege crew's shot from its engine. Each sets the enemy's next cooldown first, as it always did. G-06 · and a
+// thief's grab at the stores (takeFromStore), on the same cooldown.
 import { damagePlayer, resolveDuel, fireSpellBolt, ATTACK_DMG, ATTACK_CD, type EnemyData } from '@/game/combat';
 import { useGameStore, type GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
@@ -20,6 +21,7 @@ import { agentManager } from '@/ai/core/AgentManager';
 import { fireProp } from '@/components/world/RiggedProp';
 import { audio } from '@/lib/audio';
 import { pick } from '@/lib/rng';
+import { GRAB_EVERY, RUN_HAUL, haulOf, nextGrab } from '@/game/plunder';
 import { RANGED_ATTACK_CD, type RangedProfile } from './engage';
 import type { KeepPiece } from './targeting';
 
@@ -182,6 +184,35 @@ export function batterKeep(data: EnemyData, st: GameState, piece: KeepPiece): vo
   const cause = `was battered by ${KIND_FIGURE[data.kind].name}`;
   if (piece.buildingId) st.damageBuilding(piece.buildingId, dmg, cause, true);
   else if (piece.socketId) st.damageKeepPart(piece.socketId, dmg, cause);
+}
+
+/** G-06 · A thief's grab at the store: one bulk good out of the stores into his haul (plunder.ts's nextGrab — the
+ *  biggest pile), every GRAB_EVERY seconds and with no cap on what a raid takes (OD-02). With his haul at RUN_HAUL, or
+ *  nothing left to take, he runs for the road with it (step.ts's flight) — or, empty-handed, gives up thieving and
+ *  fights. */
+export function takeFromStore(data: EnemyData, st: GameState): void {
+  data.mob.attackCd = GRAB_EVERY;
+  const id = nextGrab(st.inventory);
+  if (id) {
+    if (!haulOf(data.carried)) st.notify('A raider is stripping your stores!');
+    st.addItems({ [id]: -1 });
+    data.carried = { ...data.carried, [id]: (data.carried?.[id] ?? 0) + 1 };
+  }
+  if (id && haulOf(data.carried) < RUN_HAUL) return;
+  leaveTheStore(data, st);
+}
+
+/** G-06 · A thief done with the stores — his haul full, nothing left to take, or (step.ts) no way to them: with goods
+ *  on him he runs for the road (and stays a thief, his load on his back, as struckThief has it); empty-handed he gives
+ *  up thieving and fights. */
+export function leaveTheStore(data: EnemyData, st: GameState): void {
+  const haul = haulOf(data.carried);
+  if (haul) {
+    data.mob.fleeing = true;
+    st.notify(`A raider runs for the road with ${haul} of your goods!`);
+  } else {
+    data.thief = false;
+  }
 }
 
 /** Wave 37 (A3 remainder) · a siege crew's shot, when its engine can fire: a real, additive AI behaviour — it never

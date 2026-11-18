@@ -8,6 +8,7 @@ import { raidStrength } from '../difficulty';
 import { bossTierScale } from '../bossEncounter';
 import { KIND_HP, type EnemyKind } from '../data/enemies';
 import { rollLoot } from './loot';
+import { addGoods, standingHauls } from '../plunder';
 
 interface EnemyMob {
   x: number; z: number; yaw: number;
@@ -16,8 +17,11 @@ interface EnemyMob {
   wanderT: number;
   homeX: number; homeZ: number;
   dieT: number;
-  /** broken morale (advanced AI): running for the world edge, despawns there */
+  /** broken morale (advanced AI): running for the world edge, despawns there — G-06: a raider at home, by the road
+   *  (game/enemyAi/movement.ts's escape) */
   fleeing?: boolean;
+  /** G-06 · a raider running for the road has come to its entry, and runs on along it off the map */
+  pastEntry?: boolean;
   /** rallied by an ally being struck (AI wave 2): chases regardless of the
    *  normal 26m aggro leash while > 0, ticking down each frame */
   alertT?: number;
@@ -139,6 +143,12 @@ export interface EnemyData {
    *  labOccupyMode/labCanFire rather than branching on the id). Meaningless
    *  for any other kind. */
   siegeAsset?: 'oc6098b1';
+  /** G-06 · a raider who comes to strip the homestead's stores rather than fight (game/directors/raidTiming.ts's
+   *  thiefSlot) — false once he has given up on them: struck with nothing taken yet, or with no way to a store */
+  thief?: boolean;
+  /** G-06 · what a thief has taken from the stores (game/plunder.ts): dropped with his own purse when he falls
+   *  (loot.ts's lootFor), the raid's loss if he gets away */
+  carried?: Partial<Record<ItemId, number>>;
 }
 
 let enemySeq = 1;
@@ -238,6 +248,13 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
 // for the same reason:
 // simplest thing that works, one clear precedent in this codebase already.
 let lastEnemyWorld: string | null = null;
+// G-06 · a save counts the haul on every thief still on his feet into its plunder ledger (plunder.ts's standingHauls) —
+// one falling has dropped his already (kill.ts), as at a knock-out (playerDamage.ts)
+standingHauls.read = () => {
+  const out: Partial<Record<ItemId, number>> = {};
+  for (const e of useEnemyStore.getState().enemies) if (e.mob.state !== 'dying') addGoods(out, e.carried);
+  return out;
+};
 useGameStore.subscribe((s) => {
   const world = s.destination ?? null;
   // Wave 43 (B6): the 5 newly-active challenge grounds spawn real hostiles

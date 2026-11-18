@@ -2,14 +2,18 @@
 // holds): the player, a finished piece of the keep it is up against, the nearest sworn guard, Tam, the nearest
 // villager who chose to fight, and — for a crossbow — which of them it has a clear shot at; up on a wall-walk, the
 // guard posted to the same one. And (wave 69) for a raider with no way to his mark inside the keep's walls, the piece
-// of them he makes for instead (siegeWay) — G-03: or out of them, or behind the player's own walls and gates.
+// of them he makes for instead (siegeWay) — G-03: or out of them, or behind the player's own walls and gates. G-06 · a
+// thief's mark is the homestead's nearest store (storeFor), ahead of every other — he comes to strip it, not to fight —
+// and behind only a piece he has to batter through to it, as any raider's mark is.
 import type { EnemyData } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
-import { findPath, hasLineOfSight, navBlocked, navReachable, GROUND_LOS_Y, HOME_NAV_CELLS } from '@/game/navgrid';
+import { findPath, getNavGrid, hasLineOfSight, navBlocked, navReachable, GROUND_LOS_Y, HOME_NAV_CELLS } from '@/game/navgrid';
 import { KEEP_PART_BY_ID } from '@/game/data/keep';
 import { BUILDABLE_BY_ID, sizeFor } from '@/game/data/buildables';
 import { isBuilt, isDoorLike, isHomeBuilding, type PlacedBuilding } from '@/game/types';
+import { HOME_X, HOME_Z } from '@/game/data/villagers';
+import { nearestStore } from '@/game/storage';
 import { isRampart } from '@/game/walls';
 import {
   KEEP_SITE_ID, siteById, siteCovers, siteGate, siteSocketGap, siteSocketOutside, siteSocketWorld, siteSockets, siteStands,
@@ -34,8 +38,12 @@ export function distToPlayer(x: number, z: number) {
 export interface KeepPiece { socketId?: string; buildingId?: string; x: number; z: number; name: string }
 /** a guard found: his record (null: none), his villager id, and how far off he is (Infinity: none) */
 export interface GuardFound { target: DefenderState | null; id: string; d: number }
-/** which one an enemy goes for — markFor's pick (a crossbow's after its sightlines are weighed) */
-export type Mark = 'def' | 'companion' | 'villager' | 'player';
+/** which one an enemy goes for — markFor's pick (a crossbow's after its sightlines are weighed); G-06 · 'store', a
+ *  thief's */
+export type Mark = 'def' | 'companion' | 'villager' | 'player' | 'store';
+/** G-06 · a store a thief makes for: where it stands, and how far off its footprint (or, with no store, home's middle)
+ *  he is */
+export interface StoreFound { x: number; z: number; d: number }
 
 /** G-02 · how near the ground a keep piece covers a raider comes to batter it: up against it — he is put back out 0.5 m
  *  from its face (movement.ts's stopAtKeepWalls), and a siege way brings him to SIEGE_STAND from it — but not walking
@@ -107,6 +115,46 @@ export function keepInReach(data: EnemyData, st: GameState, enemyAtHome: boolean
   return { target: keepTarget, d: keepD };
 }
 
+/** G-06 · A thief's mark: the nearest store standing at home (storage.ts's nearestStore) — or, with none standing, home's
+ *  middle, where the villagers carry their hauls when there is no store (Villagers.tsx) and the goods lie about the
+ *  hearth (storage.ts's BASE_STORAGE_PER_GOOD) — the ground about it he takes from (hearthFor); measured to the ground
+ *  the store covers. Null for any but a thief at home who has not yet run. */
+export function storeFor(data: EnemyData, st: Pick<GameState, 'buildings'>, enemyAtHome: boolean): StoreFound | null {
+  const m = data.mob;
+  if (!data.thief || !data.raid || !enemyAtHome || m.fleeing) return null;
+  const b = nearestStore(st.buildings, m.x, m.z, isHomeBuilding);
+  if (!b) {
+    const at = hearthFor(m.x, m.z);
+    return { x: at.x, z: at.z, d: Math.hypot(m.x - at.x, m.z - at.z) };
+  }
+  const [sx, sz] = sizeFor(b.type, b.rot);
+  return { x: b.x, z: b.z, d: Math.hypot(Math.max(0, Math.abs(m.x - b.x) - sx / 2), Math.max(0, Math.abs(m.z - b.z) - sz / 2)) };
+}
+
+/** the cells about home's middle (in cells, from it), nearest first — hearthFor's search */
+const HEARTH_CELLS: readonly (readonly [number, number])[] = (() => {
+  const out: [number, number][] = [];
+  for (let i = -7; i <= 6; i++) for (let j = -7; j <= 6; j++) out.push([i + 0.5, j + 0.5]);
+  return out.sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
+})();
+
+/** G-06 · Where a thief at (x, z) takes the goods from with no store standing: home's middle — or, with the player
+ *  having built over it, the open ground about it nearest it that he can get to, and only with none such the open
+ *  ground nearest it at all (where the grid's way to the point ends; he batters his way to it). A keep's wall or
+ *  corner over the point stops him half a metre off its face, out of reach of the point itself, while the grid's way
+ *  ends beside it and navReachable says yes — he stood there for good, and the raid with him; and the nearest open
+ *  ground by the grid's scan could lie inside a shut ring when as near lay outside it, where he had no wall to batter.
+ *  (Before merging wave 71.) */
+function hearthFor(x: number, z: number): { x: number; z: number } {
+  if (!navBlocked(HOME_X, HOME_Z)) return { x: HOME_X, z: HOME_Z };
+  const grid = getNavGrid(null);
+  for (const [i, j] of HEARTH_CELLS) {
+    const at = grid.nearestWalkable(HOME_X + i * grid.cellSize, HOME_Z + j * grid.cellSize, 0);
+    if (at && navReachable(x, z, at.x, at.z)) return at;
+  }
+  return grid.nearestWalkable(HOME_X, HOME_Z) ?? { x: HOME_X, z: HOME_Z };
+}
+
 /** G-02 · whether (x, z) stands inside the home keep's ring (on its plate), where a raider closes in on his mark by a
  *  way round its walls (makePathStep), never straight at it through them */
 export function insideKeep(st: Pick<GameState, 'keep' | 'sites'>, x: number, z: number): boolean {
@@ -123,8 +171,24 @@ export function insideKeep(st: Pick<GameState, 'keep' | 'sites'>, x: number, z: 
  *  piece, outside it), or (G-03) shut in, the gatehouse shut behind him (inside it: siegeWay planned only inward, and
  *  one shut in stood pressed against the stone for good). For one of the player's pieces, the grid's word again: a face
  *  of it he has a way to, and one he has not, which his mark has; and after every such piece, one whose far face only
- *  he has no way to — the outer of two rings, his mark in the inner (a ring of the player's round the keep). Null when
- *  no piece stands in his way. */
+ *  he has no way to — the outer of two rings, his mark in the inner (a ring of the player's round the keep): G-06, its
+ *  far side on the straight line between them, never a pen off to one side. Null when no piece stands in his way. */
+/** G-06 · a point of open ground on the straight line from (ax, az) to (bx, bz) for each stretch of it between what
+ *  stands across it (the grid's cells, every half metre): one in each part of the grid the line runs through */
+function stretchesBetween(ax: number, az: number, bx: number, bz: number): { x: number; z: number }[] {
+  const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) * 2));
+  const out: { x: number; z: number }[] = [];
+  let open = false;
+  for (let k = 0; k <= n; k++) {
+    const x = ax + ((bx - ax) * k) / n;
+    const z = az + ((bz - az) * k) / n;
+    const shut = navBlocked(x, z);
+    if (!shut && !open) out.push({ x, z });
+    open = !shut;
+  }
+  return out;
+}
+
 export function siegeWay(
   st: Pick<GameState, 'keep' | 'sites' | 'buildings' | 'gateOpen'>, x: number, z: number, tx: number, tz: number,
 ): { x: number; z: number }[] | null {
@@ -140,14 +204,23 @@ export function siegeWay(
       pieces.push({ to: true, rank: siteGate(site, sock.id) === 'shut' ? 0 : 2, at: siteSocketOutside(site, sock.id, SIEGE_STAND, shutIn)! });
     }
   }
+  // G-06 · the ground between his mark and him, a point for each stretch of it (made when first asked for)
+  let between: { x: number; z: number }[] | null = null;
   for (const b of st.buildings) {
     if (!batterable(st, b)) continue;
     const probes = facesOf(b, SIDE_PROBE);
     const mine = probes.map((p) => !navBlocked(p.x, p.z) && navReachable(x, z, p.x, p.z));
     const far = probes.filter((p, k) => !mine[k] && !navBlocked(p.x, p.z));
     if (!mine.includes(true) || !far.length) continue;
+    const to = far.some((p) => navReachable(tx, tz, p.x, p.z));
+    // G-06 · and its far side his mark's, or on the way from his mark to him (the outer of two rings round it): a pen
+    // of the player's off to one side was battered by a raider whose mark was out of reach for another reason
+    if (!to) {
+      between ??= stretchesBetween(tx, tz, x, z);
+      if (!far.some((p) => between!.some((q) => navReachable(q.x, q.z, p.x, p.z)))) continue;
+    }
     pieces.push({
-      to: far.some((p) => navReachable(tx, tz, p.x, p.z)),
+      to,
       rank: isDoorLike(b.type) ? 1 : 2,
       at: facesOf(b, SIEGE_STAND).filter((_, k) => mine[k]).reduce((p, q) => (away(q) < away(p) ? q : p)),
     });
@@ -238,8 +311,9 @@ export function nearestFighter(data: EnemyData, enemyAtHome: boolean): { target:
   return { target: villagerTarget, d: villagerD };
 }
 
-/** The mark: the first of a guard, Tam and a villager — in that order, not the nearest of them — who stands closer
- *  than the player, else the player (`d`); and, for a crossbow, whether its shot is blocked. A
+/** The mark: for a thief, his store (G-06: storeFor); else the first of a guard, Tam and a villager — in that order, not
+ *  the nearest of them — who stands closer than the player, else the player (`d`); and, for a crossbow, whether its
+ *  shot is blocked. A
  *  crossbow bolt lands only on a clear sightline. A raider whose mark — a guard, Tam, a villager or the player, as the
  *  chain picks — stands in range behind something turns to the nearest of them in range he can see, and with none
  *  closes in on his mark by a path round what stands between them, until he can see it; he used to stand there for
@@ -249,8 +323,11 @@ export function markFor(
   guard: GuardFound,
   tam: { target: { x: number; z: number } | null; d: number },
   fighter: { target: { id: string; x: number; z: number } | null; d: number },
+  store: StoreFound | null = null,
 ): { mark: Mark; blocked: boolean } {
   const m = data.mob;
+  // G-06 · a thief makes for the stores, whoever stands nearer — struck, he runs (step.ts)
+  if (store) return { mark: 'store', blocked: false };
   let mark: Mark = guard.target && guard.d < d ? 'def'
     : tam.target && tam.d < d ? 'companion'
     : fighter.target && fighter.d < d ? 'villager' : 'player';

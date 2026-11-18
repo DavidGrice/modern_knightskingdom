@@ -12,6 +12,7 @@ import { PERK_FX } from '../data/effects';
 import { wakeAtDawn } from '../dayRollover';
 import { fortDamageReduction } from '../fort';
 import { raidActive, raidLost } from '../directors/state';
+import { gotAway } from '../plunder';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { noiseBeliefId } from '@/ai/perception/Belief';
 import { PARRY_IFRAME_MS, PARRY_KNOCKBACK, PARRY_STAGGER_S, PARRY_STAMINA_COST, PARRY_WINDOW_MS } from '../data/melee';
@@ -146,6 +147,9 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
     // clear takes the home raid either way).
     const enemies = useEnemyStore.getState();
     if (raidActive.current && enemies.enemies.some((e) => e.raid && e.mob.state !== 'dying')) raidLost.current = true;
+    // G-06 · and a thief still on his feet gets away with what he carried, as one off the map's edge does (one falling
+    // has dropped it already: kill.ts)
+    for (const e of enemies.enemies) if (e.mob.state !== 'dying') gotAway(st, e.carried);
     enemies.clear();
     wakeAtDawn(); // just before sunrise — G-04: the next day's, as a night's sleep is
     st.notify('You were knocked out and carried back to camp… you wake at dawn.', true);

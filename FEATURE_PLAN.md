@@ -452,6 +452,29 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   build mode and over the Satchel; the sleep woke on the next day; Cedric's siege and the dragon still start alone
   (421 and 715 ms; `main` 648 and 1,051). ROADMAP: a new fixed entry, OPEN-018 closed, OPEN-020 partly done, and one
   "Seen, not fixed": a night event can roll twice in one night (its day count turns over at midnight inside it).
+- **#310 — Wave 71** (G-06): plunder and pursuit. A raid is as big as the stores are worth
+  (`directors/raidTiming.ts`: `stockpileValue` — each bulk good at the merchant's price — and `raidSize`, the leader
+  and 2 followers below 500, 3 from 500, 4 from 1,500, 5 from 3,000), and every other follower from the first is a thief
+  (`thiefSlot`: 1 of 2, 2 of 3-4, 3 of 5). A thief's mark is the nearest store standing at home (`storeFor`, ahead of
+  every other mark, behind only a piece to batter through to it; home's middle with none), where he takes a bulk good
+  every 0.5 s out of the global inventory, the biggest pile first and with no cap (OD-02), until he carries 20 or is
+  struck (`game/plunder.ts`, `blows.ts`'s `takeFromStore`); struck empty-handed he fights. A raider who flees at home
+  runs by a way to `roadEntry()` and along the road off the map (`movement.ts`'s `escape`, `roadExit`), battering out
+  when shut in; a thief is gone only at the edge, one with nothing on him still at 44 m from the player. A thief
+  carries the Barrel's or the Stockpile crate's mold on his back (`EnemyFigure.tsx`'s `CarriedLoad`). A kill drops his
+  purse and his haul (`loot.ts`'s `lootFor`); an escape, or a thief standing at a knock-out, goes into the saved
+  plunder ledger (`SaveGame.plunder`, `SAVE_VERSION` 2, `SAVE_MIGRATIONS[1]` an empty one for an old save); the raid's
+  end names the goods lost and taken back. Folded in, each retagged fixed: a raider fleeing inside a shut keep (now the
+  same escape: on `main` he stood against the north run for 41 s; on the change the gatehouse a ruin and he out by
+  9.7 s, gone at 36.7 s), and an unrelated pen's gate (`siegeWay` takes a player's piece only with the mark behind it
+  or its far side on the line between them). Premises held, the lines moved; "G-04's weight function" is read as a size
+  function beside it. `plunder.test.ts` (14), a migration test in `saveSchema.test.ts`; 16 take-outs each fail 1-5
+  tests; the suite 102 files, 851. Measured on `main`: three raiders worth 40 and 3,000, the stores unchanged through a
+  60 s raid. Live on the change: three and six raiders; wood falling 2 a second at the store, the crate on the thief's
+  back (screenshot), a kill +10 wood exactly, an escape gone at z 195.7 with `{ wood: 20 }` in the ledger and the end
+  itemised; `findPath` 3.8 calls and 0.2 ms a second over the raid (`main` 3.1 and 0.1). ROADMAP: a new fixed entry,
+  the two "Seen, not fixed" retagged fixed, and two new: a save mid-raid loses a thief's haul unledgered, and a fleeing
+  raider with no way out and nothing to batter stands for good.
 
 ## Owner decisions
 

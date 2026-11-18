@@ -5,6 +5,7 @@ import { fortState, insideWalls, refreshFort } from './fort';
 import { useGameStore } from './store/gameStore';
 import type { CharacterConfig, PlacedBuilding, SaveGame } from './types';
 import MAIN_SAVE from './keepGolden.main-save.json';
+import { SAVE_VERSION } from '@/lib/saveSchema';
 
 // Wave 67 (G-36) · golden tests of the Grand Keep as it behaved while it was the game's one socket model: placing it,
 // filling and building its sockets, siege damage (a piece at 0 HP deleted with half its materials back), the fort seal's
@@ -281,9 +282,11 @@ describe('the Grand Keep, as main had it (G-36 golden)', () => {
     expect(again.keep).toEqual(fixture.keep);
     expect(again.buildings).toEqual(fixture.buildings);
     expect(again.inventory).toEqual(fixture.inventory);
-    const { savedAt: _a, ...rest } = again;
-    const { savedAt: _b, ...orig } = fixture;
+    // G-06 · written back at this game's version, with the plunder ledger main's had not: an empty one
+    const { savedAt: _a, version, plunder, ...rest } = again;
+    const { savedAt: _b, version: _v, ...orig } = fixture;
     expect(rest).toMatchObject(orig);
+    expect([fixture.version, version, plunder]).toEqual([1, SAVE_VERSION, {}]);
     // and the castle on it goes on taking damage — to a ruin, since G-05, where it was knocked down for 5 stone back
     useGameStore.setState({ notify: () => {} } as never);
     game().damageKeepPart('e', 29);

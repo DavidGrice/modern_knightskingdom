@@ -1,5 +1,5 @@
 // CLN-07 · the store's story slice: allegiance and reputation, the guilds, Cedric's and Leo's arcs, Richard's joust,
-// lore, and the dragons' and Cedric's sieges.
+// lore, and the dragons' and Cedric's sieges — and (G-06) what raiders got away with.
 import type { Alliance, ItemId } from '../../types';
 import { NPC_BY_ID, sideQuestBlocker, sideQuestsOf } from '../../data/npcs';
 import { GUILD_BY_ID, guildEligible, guildRankIndex, SWITCH_TITHE } from '../../data/guilds';
@@ -39,6 +39,9 @@ export interface StorySlice {
   /** Cedric's Siege: a homestead siege ended — routed before the timer, or
    *  endured to its end. Mirrors recordDragonSiege exactly. */
   recordCedricSiege: (routed: boolean) => void;
+  /** G-06 · goods a raid's thieves got away with, counted into the saved ledger (`plunder`) that G-16a pays a share
+   *  of back */
+  recordPlunder: (goods: Partial<Record<ItemId, number>>) => void;
 
   addReputation: (npcId: string, amount: number) => void;
 
@@ -440,6 +443,12 @@ export const createStorySlice: SliceCreator<StorySlice> = (set, get) => {
         dirty: true,
       });
       get().checkDeeds();
+    },
+
+    recordPlunder: (goods) => {
+      const plunder = { ...get().plunder };
+      for (const [id, n] of Object.entries(goods)) if (n) plunder[id as ItemId] = (plunder[id as ItemId] ?? 0) + n;
+      set({ plunder, dirty: true });
     },
   };
 };

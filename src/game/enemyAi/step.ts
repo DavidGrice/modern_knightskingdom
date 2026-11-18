@@ -6,6 +6,9 @@
 // has to fight (targeting.ts) and does the first of the chain below that holds — the order is the order it always was
 // — then is shouldered apart from its pack, kept to the land and stopped at a shut gate and the keep's walls (as the
 // walk in and the flight are too, G-03: holdToTheWalls). Last, its figure is stood where it is and given its clip.
+// G-06 · a thief's mark is the store (targeting.ts's storeFor), where he loads up (blows.ts's takeFromStore); struck
+// with goods on him, he runs; and a raider at home runs by the road off the map (movement.ts's escape), battering his
+// way out when shut in.
 import * as THREE from 'three';
 import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
@@ -13,10 +16,14 @@ import { playerState } from '@/game/playerState';
 import { navReachable } from '@/game/navgrid';
 import { DEATH_BARK } from '@/game/data/enemies';
 import { groundUnder, play, stand, type EnemyFrame } from './frame';
-import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, tamInReach } from './targeting';
+import { haulOf, gotAway } from '@/game/plunder';
+import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, storeFor, tamInReach } from './targeting';
 import { closeIn, engage, rangedProfileOf, swingAt, RANGED_RANGE } from './engage';
-import { batterKeep, blowAtGuard, blowAtTam, blowAtVillager, fireAtPlayer, fireEngine } from './blows';
-import { breaksAndRuns, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtKeepWalls, stopAtShutGates, walkIn, walkedIn, wander } from './movement';
+import { batterKeep, blowAtGuard, blowAtTam, blowAtVillager, fireAtPlayer, fireEngine, leaveTheStore, takeFromStore } from './blows';
+import {
+  breaksAndRuns, escape, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtKeepWalls, stopAtShutGates, walkIn,
+  walkedIn, wander, FLEE_GONE,
+} from './movement';
 import { CLIMB_RANGE, climb, holdBattlement, ladderPull, poseOnLadder, takeTheLadder, walkwayStands } from './climb';
 
 export type { EnemyFrame } from './frame';
@@ -67,6 +74,41 @@ function fallApart(f: EnemyFrame, dt: number): void {
     }
   }
   if (m.dieT > 1.1) f.remove(data.id);
+}
+
+/** G-06 · how near a store's footprint (or home's middle, with none) a thief comes to take from it */
+const STORE_REACH = 1.2;
+
+/** G-06 · A thief struck (below his full health) drops the store and runs with what he has; struck with nothing taken
+ *  yet, he gives up thieving and fights like the rest. */
+function struckThief(data: EnemyFrame['data']): void {
+  if (!data.thief || data.mob.fleeing || data.hp >= data.maxHp) return;
+  if (haulOf(data.carried)) data.mob.fleeing = true;
+  else data.thief = false;
+}
+
+/** The flight, which stands its own figure: a raider at home by the road (escape), battering his way out of the
+ *  keep's walls or the player's only when his way OUT is a siege way (keepInReach, as the chain batters; never on the
+ *  siege way in he held when he broke), and gone at the world's edge — a thief's haul with him (plunder.ts's gotAway)
+ *  — or, with nothing of the player's on him, as soon as he is FLEE_GONE from the player, as every fleeing enemy is
+ *  gone elsewhere (flee). Returns whether he is gone. */
+function runAway(f: EnemyFrame, st: ReturnType<typeof useGameStore.getState>, dt: number): boolean {
+  const { data, path, enemyAtHome } = f;
+  const m = data.mob;
+  if (data.raid && enemyAtHome) {
+    const way = escape(m, path.current, dt);
+    const piece = way.out && path.current.siege ? keepInReach(data, st, enemyAtHome).target : null;
+    if (piece) swingAt(m, dt, piece, () => batterKeep(data, st, piece));
+    else if (way.run()) { gotAway(st, data.carried); f.remove(data.id); return true; }
+    if (!haulOf(data.carried) && distToPlayer(m.x, m.z) > FLEE_GONE) { f.remove(data.id); return true; }
+  } else if (flee(m, dt) > FLEE_GONE) {
+    f.remove(data.id);
+    return true;
+  }
+  holdToTheWalls(f, st);
+  stand(f.group.current!, m, groundUnder(f));
+  play(f, m.state === 'attack' ? 'anim_g_swordswish' : 'anim_c_run');
+  return false;
 }
 
 /** A shut gate in its own world, and at home the keep's walls, stop an enemy wherever it went this frame — after the
@@ -139,12 +181,10 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         return;
       }
     }
+    struckThief(data);
     breaksAndRuns(data, st);
     if (m.fleeing) {
-      if (flee(m, dt) > 44) { f.remove(data.id); return; }
-      holdToTheWalls(f, st);
-      stand(g, m, groundUnder(f));
-      play(f, 'anim_c_run');
+      runAway(f, st, dt);
       return;
     }
     if (m.alertT) m.alertT = Math.max(0, m.alertT - dt);
@@ -155,7 +195,8 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     const tam = tamInReach(data);
     const fighter = nearestFighter(data, enemyAtHome);
     const ranged = rangedProfileOf(data);
-    const { mark, blocked } = markFor(data, d, guard, tam, fighter);
+    const store = storeFor(data, st, enemyAtHome);
+    const { mark, blocked } = markFor(data, d, guard, tam, fighter, store);
     const besieger = !!data.raid && enemyAtHome;
     const pathStep = makePathStep(path.current, m, dt, besieger);
     // G-02 · a guard, Tam or a villager inside the keep's walls is closed in on by a way round them, as the player is —
@@ -168,9 +209,9 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     // (pathStep, its direction unused): a breach elsewhere, the gatehouse opened or his mark come out gives him his
     // way, and he leaves off — not once the piece in front of him is down
     let battering = !m.elevated && !ladder.eligible
-      && !!keep.target && keep.d < d && keep.d < guard.d && !!path.current.siege;
+      && !!keep.target && keep.d < (store ? store.d : Math.min(d, guard.d)) && !!path.current.siege;
     if (battering) {
-      const at = (mark === 'def' && guard.target) || (mark === 'companion' && tam.target)
+      const at = (mark === 'store' && store) || (mark === 'def' && guard.target) || (mark === 'companion' && tam.target)
         || (mark === 'villager' && fighter.target) || playerState;
       pathStep(at.x, at.z);
       battering = !!path.current.siege;
@@ -218,6 +259,19 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
       // his route a way to a piece to batter)
       const piece = keep.target;
       swingAt(m, dt, piece, () => batterKeep(data, st, piece));
+    } else if (store && mark === 'store') {
+      // G-06 · at the store, he loads up; on his way, by a way round as to any mark (a siege way when shut off from it,
+      // which the battering just above takes) — and with no way to it at all, nor a piece to batter through, he leaves
+      // it rather than stand at whatever is in his way for good: for the road with what he has already taken (his load
+      // still on his back), or, with nothing, to fight (blows.ts's leaveTheStore). "No way" is the route's own word,
+      // given when it was worked out (makePathStep's noWay): read fresh against a route worked out before a gate shut in
+      // front of him, it turned him from the store before his route could become the siege way to that gate
+      if (store.d < STORE_REACH) swingAt(m, dt, store, () => takeFromStore(data, st));
+      else {
+        closeIn(m, dt, () => pathStep(store.x, store.z), speed);
+        const route = path.current;
+        if (route.tx === store.x && route.tz === store.z && route.noWay) leaveTheStore(data, st);
+      }
     } else if (guard.target && mark === 'def') {
       const gt = guard.target;
       engage(m, dt, {
