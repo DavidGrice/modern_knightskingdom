@@ -475,6 +475,35 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   itemised; `findPath` 3.8 calls and 0.2 ms a second over the raid (`main` 3.1 and 0.1). ROADMAP: a new fixed entry,
   the two "Seen, not fixed" retagged fixed, and two new: a save mid-raid loses a thief's haul unledgered, and a fleeing
   raider with no way out and nothing to batter stands for good.
+- **#311 — Wave 72** (G-08): arm the garrison. Tiered weapons for defenders (OPEN-050): `Villager.loadoutTier` (absent
+  = base, no migration), `loadoutNeeds` swaps the tier's item into `LOADOUT_REQUIRES`, `setDefenderLoadout(id,
+  loadout, tier)` and the unequip spend and refund it (the old loadout back before the stock check), `defenderStrike`
+  adds the player's own tier step (`data/melee.ts`'s `meleeTierBonus`), `LoadoutGear` draws the tint; a Roster tier
+  row, the tiered items in the Armory's donate row; a settlement's resident is refused a tier (the G-24a entry not
+  deepened). The stacking rule (OPEN-051) stated once at `game/garrisonBalance.ts`'s head (all flat, one courage
+  multiplier, `COURAGE_NEUTRAL` 1.0 for G-21; `defenderMaxHp` moved out of `Defenders.tsx`); `garrisonOutcome` /
+  `garrisonBalance` pin held / pressed / lost for 1-4 defenders, unarmed to legendary, threat tier 0-5 and the stores
+  worth 0 / 500 / 1,500 / 3,000 (`raidStrengthAt` added beside `raidStrength`). The rally order: 'Rally Here', the
+  wheel's fifth sector, planted at the look point (`game/rally.ts`), refused away from home, on a solid or with no
+  grid way from any defender who will rally; a rallied defender walks there by `navSteer`, then holds within 2 m
+  mid-fight (`rallyFoe`, `holdWithin`, `rallySpot`). OPEN-030 closed by a `combat4` damage test (+1, armed and bare).
+  Premises held but two: `MELEE_TIERS` was not exported (the helper reads it in place), and the Armory could not take
+  a tiered item from the Satchel (its row listed the base four). Golden tests first (`Defenders.test.ts`, 7, on the
+  unchanged base, unchanged after); new `garrisonBalance.test.ts` (9), `rally.test.ts` (9), 5 rally cases in
+  `Defenders.test.ts`, 5 tier cases in `villagerSlice.test.ts`, a `LoadoutGear` case, the `combat4` delta; 28 of 30
+  take-outs fail 1-4 tests (the two that survived alone, the rally's two clamps, were folded into one that its own
+  test fails without); the evidence pass's 51 mutations, 47 caught. Review (correctness and scope) found three, each
+  fixed with a test that fails without it: the Roster's chip for the loadout held re-armed a tiered defender at the
+  base tier; a defender stopped at the rally's edge was left a rounding past it and out of the fight for a frame; a
+  bow guard rallied off a tower still sighted from up there. Own check: a tier asked for the bow is the base tier;
+  `plantRally` counts only those who will rally (all of them when none will) and measures a guard posted on a wall
+  from where he steps down; a tier through a save pinned. Final counts: `rally.test.ts` 13, `Defenders.test.ts` 13, 8
+  tier cases in `villagerSlice.test.ts`; the suite 105 files, 903. Measured on `main`: the hook's forged issue spent a
+  base Sword and struck 3. Live on the change: Forged spent, blows 3.5; the rally planted at (0, 16) exactly through
+  the wheel's key path, two defenders within 2.00 m of it through 503 frames of fighting; attack, scout and follow
+  frame for frame as `main`; the tint screenshot. ROADMAP: a new fixed entry, OPEN-030/050/051 closed, notes on the
+  settlement-resident and shut-keep walk-through entries, and three "Seen, not fixed": the Armory's stale halberd
+  note, a guard off his post drawn at its height, and a rally planted by looking at a building landing behind it.
 
 ## Owner decisions
 

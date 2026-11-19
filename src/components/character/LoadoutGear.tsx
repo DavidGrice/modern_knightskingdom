@@ -16,14 +16,17 @@ import { ArmShield, Chestplate, HeldCrossbow, HeldHalberd, HeldHelmet, HeldSword
 import { chestplateTierOf } from '@/game/data/armor';
 import type { RiggedMinifig } from '@/lib/minifigRig';
 import type { DefenderLoadout, Villager } from '@/game/types';
+import type { MeleeTier } from '@/game/data/melee';
 
-export default function LoadoutGear({ rig, loadout, gear, crossbow = true, carrier = true }: {
+export default function LoadoutGear({ rig, loadout, tier, gear, crossbow = true, carrier = true }: {
   /** nothing is hung until the figure's rig is ready */
   rig: RiggedMinifig | null;
   /** the weapon in hand; undefined = bare-handed, no weapon portal at all.
    *  Whoever passes it decides what an unset loadout means: a defender's
    *  stays undefined, Tam's falls back to sword and shield (Companion.tsx). */
   loadout?: DefenderLoadout;
+  /** G-08 · the forge's tier of the sword or halberd, drawn in its tint (lib/weaponParts.ts); undefined = base */
+  tier?: MeleeTier;
   gear?: Villager['gear'];
   /** false for Tam, who fights hand to hand: his loadout has no 'bow' by
    *  type, and a save that says so anyway has always left him bare-handed */
@@ -37,9 +40,9 @@ export default function LoadoutGear({ rig, loadout, gear, crossbow = true, carri
   const plate = chestplateTierOf(gear);
   return (
     <>
-      {loadout === 'sword_shield' && createPortal(<HeldSword side={-1} />, rig.joints.rightarm)}
+      {loadout === 'sword_shield' && createPortal(<HeldSword side={-1} tier={tier} />, rig.joints.rightarm)}
       {loadout === 'sword_shield' && createPortal(<ArmShield side={1} />, rig.joints.leftarm)}
-      {loadout === 'halberd' && createPortal(<HeldHalberd side={-1} />, rig.joints.rightarm)}
+      {loadout === 'halberd' && createPortal(<HeldHalberd side={-1} tier={tier} />, rig.joints.rightarm)}
       {crossbow && loadout === 'bow' && createPortal(<HeldCrossbow side={-1} />, rig.joints.rightarm)}
       {gear?.helmet && createPortal(<HeldHelmet />, rig.joints.head)}
       {plate && createPortal(<Chestplate tier={plate} />, rig.joints.body)}

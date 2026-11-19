@@ -9,11 +9,13 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, resolveEnemyKill, KIND_LABEL, type EnemyData } from '@/game/combat';
-import { registerDefender, orderFor, defenderStrike, scoutReported, defenderState, type DefenderState } from '@/game/defenders';
+import {
+  registerDefender, orderFor, defenderStrike, defenderMaxHp, defenderOrders, scoutReported, defenderState, type DefenderState,
+} from '@/game/defenders';
+import { RALLY_HOLD, holdWithin, rallyFoe, rallySpot } from '@/game/rally';
 import { applyDownedGate } from '@/game/actorDowned';
 import { attrsOf } from '@/game/data/attributes';
 import { hasTrait } from '@/game/data/companionTraits';
-import { chestplateHp } from '@/game/data/armor';
 import { playerState } from '../fps/PlayerController';
 import RiggedFigure from '../character/RiggedFigure';
 import LoadoutGear from '../character/LoadoutGear';
@@ -24,7 +26,7 @@ import { dragonAir } from '@/game/dragonAir';
 import { horses, mountOf } from '@/game/riding';
 import RiggedProp from './RiggedProp';
 import { heightOf } from '@/game/data/buildables';
-import { hasLineOfSight, GROUND_LOS_Y, navSteer } from '@/game/navgrid';
+import { hasLineOfSight, GROUND_LOS_Y, navBlocked, navSteer } from '@/game/navgrid';
 import { aimFor } from '@/game/combat/sightline';
 import { KEEP_PART_BY_ID, SOCKET_BY_ID } from '@/game/data/keep';
 import { hashId } from '@/lib/rng';
@@ -129,8 +131,8 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
   // Wave 9 · the plate's contribution is now its TIER's (data/armor.ts:
   // iron 6, forged 10, castle-crested 16) rather than a flat 6 for any plate.
   // A legacy `true` reads as iron, so no existing defender lost a point.
-  ds.maxHp = 18 + level * 6 + (hasTrait(villager, 'def_shieldwall') ? 8 : 0)
-    + chestplateHp(villager.gear) + (villager.gear?.helmet ? 3 : 0);
+  // (G-08 · the sum is game/defenders.ts's defenderMaxHp, which the garrison's balance table reads too.)
+  ds.maxHp = defenderMaxHp(villager);
   if (ds.hp <= 1) ds.hp = ds.maxHp; // first mount
 
   const group = useRef<THREE.Group>(null);
@@ -171,12 +173,38 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     // orderFor() resolves this ONE defender's own roster override first,
     // falling back to the fleet order — see game/defenders.ts.
     const order = useGameStore.getState().destination ? 'patrol' : orderFor(villager.id);
+    // G-08 · the rally order: hold the point the player planted (game/rally.ts) — with none planted, every branch
+    // below takes 'rally' as it takes patrol. A defender rallied off a battlement or a tower is on the ground with the
+    // raiders, and sights them from there (`elevated` is his post's; ds.elevated, where he stands now, is what his eye
+    // below reads).
+    const rally = order === 'rally' ? defenderOrders.rally : null;
+    ds.elevated = elevated && !rally;
+    // Longshot companion trait: +6 bow range
+    const range = loadout === 'bow' ? BOW_RANGE + (hasTrait(villager, 'def_longshot') ? 6 : 0) : MELEE_RANGE;
+    if (rally && Math.hypot(rally.x - ds.x, rally.z - ds.z) > RALLY_HOLD) {
+      // making his way to it, by the home grid's plan round what stands (a shut wall, a building), fighting nothing on
+      // the way: a rally gathers the garrison first
+      const speed = 3.0 * (mountOf(villager.id) ? 1.9 : 1);
+      const step = navSteer(ds, rally.x, rally.z, dt);
+      ds.x += step.nx * speed * dt;
+      ds.z += step.nz * speed * dt;
+      const diff = wrapAngle(Math.atan2(-step.nx, -step.nz) - yaw.current);
+      yaw.current += diff * Math.min(1, dt * 3);
+      if (clip !== 'anim_c_run') setClip('anim_c_run');
+      keepOutOfWater(ds);
+      g.position.set(ds.x, homeGroundY(ds.x, ds.z), ds.z);
+      g.rotation.y = yaw.current + Math.PI;
+      return;
+    }
 
     // target selection by order: Attack converges on the threat nearest the
     // PLAYER from any distance; Follow watches the player's back; Scout sees
     // wider; Patrol spots hostiles from wherever the circuit has them (24C/22)
     let target: EnemyData | null = null;
-    if (order === 'attack') {
+    if (rally) {
+      // holding the rally: what comes within reach of it, nearest the point first (game/rally.ts's rallyFoe)
+      target = rallyFoe(rally, enemies.filter((e) => e.mob.state !== 'dying'), (e) => e.mob, range);
+    } else if (order === 'attack') {
       let bestD = Infinity;
       for (const e of enemies) {
         if (e.mob.state === 'dying') continue;
@@ -205,6 +233,27 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           notify(`👁️ ${villager.name} sights a ${KIND_LABEL[e.kind]}!`, true);
         }
       }
+    }
+
+    if (!target && rally) {
+      // nothing in reach of the rally: his own place by the point, at any hour — a rally is an order given now, as
+      // follow is, not a standing duty that keeps the shift
+      const spot = rallySpot(rally, h, navBlocked);
+      const dxS = spot.x - ds.x;
+      const dzS = spot.z - ds.z;
+      const dS = Math.hypot(dxS, dzS);
+      if (dS > 0.3) {
+        const step = Math.min(dS, 1.5 * dt);
+        ds.x += (dxS / dS) * step;
+        ds.z += (dzS / dS) * step;
+        const diff = wrapAngle(Math.atan2(-dxS, -dzS) - yaw.current);
+        yaw.current += diff * Math.min(1, dt * 3);
+        if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+      } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
+      keepOutOfWater(ds);
+      g.position.set(ds.x, homeGroundY(ds.x, ds.z), ds.z);
+      g.rotation.y = yaw.current + Math.PI;
+      return;
     }
 
     if (!target) {
@@ -329,7 +378,8 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     if (loadout === 'bow' && dragonAir.hostile && dragonAir.hit) {
       const dxD = dragonAir.x - ds.x;
       const dzD = dragonAir.z - ds.z;
-      const slant = Math.hypot(dxD, dzD, dragonAir.y - ds.postY);
+      const standY = rally ? homeGroundY(ds.x, ds.z) : ds.postY;
+      const slant = Math.hypot(dxD, dzD, dragonAir.y - standY);
       if (slant <= AIR_RANGE) {
         const desired = Math.atan2(-dxD, -dzD);
         const diff = wrapAngle(desired - yaw.current);
@@ -340,20 +390,18 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           ds.attackCd = 2.6;
           dragonAir.hit(`${villager.name}'s arrow`);
         }
-        g.position.set(ds.x, ds.postY, ds.z);
+        g.position.set(ds.x, standY, ds.z);
         g.rotation.y = yaw.current + Math.PI;
         return;
       }
     }
 
-    // Longshot companion trait: +6 bow range
-    const range = loadout === 'bow' ? BOW_RANGE + (hasTrait(villager, 'def_longshot') ? 6 : 0) : MELEE_RANGE;
     // An arrow lands only on a clear sightline: a bow guard whose raider stands in range behind a wall turns to the
     // nearest raider in range he can see, and with none closes in on his own until he can — he used to stand there
     // for good (game/combat/sightline.ts)
     // (Wave 69 · a guard posted up on a wall shoots from up there: the keep's walls stop a sightline now, and one drawn
     // from the ground at his post starts inside his own wall — the same height blows.ts takes for a guard posted up)
-    const eyeY = (elevated ? ds.postY : 0) + GROUND_LOS_Y;
+    const eyeY = (ds.elevated ? ds.postY : 0) + GROUND_LOS_Y;
     let blocked = false;
     if (loadout === 'bow') {
       ({ target, blocked } = aimFor(
@@ -446,8 +494,11 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     // branch) actually moves ds.x/z, but the water push belongs here rather
     // than duplicated inside it, since a standing-and-swinging defender is
     // already out of the water by definition (they got there by chasing)
+    // (G-08 · holding a rally, neither the chase step nor the push apart takes him past its edge; he stands on the
+    // ground)
+    if (rally) ({ x: ds.x, z: ds.z } = holdWithin(rally, ds.x, ds.z));
     keepOutOfWater(ds);
-    g.position.set(ds.x, ds.postY, ds.z);
+    g.position.set(ds.x, rally ? homeGroundY(ds.x, ds.z) : ds.postY, ds.z);
     g.rotation.y = yaw.current + Math.PI;
   });
 
@@ -472,7 +523,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           undefined), worn armor, and — Wave 9 — a carrier too (any job may
           wear one): same free hips joint, so it never fights the weapon in
           their hand */}
-      <LoadoutGear rig={rig} loadout={loadout} gear={villager.gear} />
+      <LoadoutGear rig={rig} loadout={loadout} tier={villager.loadoutTier} gear={villager.gear} />
       </group>
     </group>
   );

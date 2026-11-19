@@ -2,6 +2,7 @@
 import { useGameStore } from '@/game/store/gameStore';
 import { CARRIERS, CARRIER_ITEM } from '@/game/data/villagers';
 import { CHESTPLATES } from '@/game/data/armor';
+import { ITEMS } from '@/game/data/items';
 import type { ItemId } from '@/game/types';
 import { SLOT_ITEM, SLOT_ICON, SLOT_LABEL } from './gearSlots';
 
@@ -15,6 +16,9 @@ const WEAPON_ITEMS: { item: ItemId; icon: string; label: string }[] = [
   { item: 'shield', icon: '🛡️', label: 'Shield' },
   { item: 'crossbow', icon: '🏹', label: 'Crossbow' },
   { item: 'halberd', icon: '🔱', label: 'Halberd' },
+  // G-08 · and the forge's tiers of the two, which a defender carries too (the Roster's tier row)
+  ...(['sword_forged', 'sword_crested', 'sword_legendary', 'halberd_forged', 'halberd_crested', 'halberd_legendary'] as const)
+    .map((item) => ({ item, icon: ITEMS[item].icon, label: ITEMS[item].name })),
 ];
 
 /** The Armory: shared homestead gear stock, drag source for the paperdoll

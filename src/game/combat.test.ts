@@ -5,6 +5,7 @@ import {
   stepBolt, tryDodge, useBoltStore, useEnemyStore, type EnemyData, type EnemyKind,
 } from './combat';
 import { lootFor } from './combat/loot';
+import { TALENT_FX } from './data/effects';
 import { arenaState } from './arena';
 import { cartLivePos, cartState, resetCarts } from './carts';
 import { crewState, leaveEngine } from './crew';
@@ -230,6 +231,23 @@ describe('melee', () => {
     expect(near.hp).toBeLessThan(maxHpOf('gilbert'));
     expect(far.hp).toBe(maxHpOf('gilbert'));
     expect(behind.hp).toBe(maxHpOf('gilbert'));
+  });
+
+  // OPEN-030 · the Master-at-Arms talent, measured: one more point on every melee blow, armed or not
+  it('combat4 adds TALENT_FX.combat4.meleePlus (+1) to a blow, with a sword and with bare fists', () => {
+    const blow = (talents: string[], inventory: Record<string, number>) => {
+      useGameStore.setState({ skillTree: talents, inventory: { ...game().inventory, sword: 0, ...inventory } } as never);
+      const e = spawn('cedric', 0, -1.4);
+      combatState.comboCount = 0;
+      combatState.stamina = combatState.maxStamina;
+      playerAttack();
+      clock += 3000;
+      return e.maxHp - e.hp;
+    };
+    const sword = blow([], { sword: 1 }), swordMastered = blow(['combat4'], { sword: 1 });
+    const fists = blow([], {}), fistsMastered = blow(['combat4'], {});
+    expect(TALENT_FX.combat4.meleePlus).toBe(1);
+    expect([sword, swordMastered - sword, fists, fistsMastered - fists]).toEqual([3, 1, 1, 1]);
   });
 
   it('a halberd sweeps everyone in the arc', () => {

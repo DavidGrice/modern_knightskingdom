@@ -218,5 +218,11 @@ export function blackDragonAllowed(st: GameState): boolean {
  *  manual difficulty multiplier layers on top of the tier curve here, not in
  *  place of it — a tier-0 Grueling run still hits like tier 0, only harder. */
 export function raidStrength(): number {
-  return (1 + difficultyState.tier * 0.35) * difficultyState.difficultyMult;
+  return raidStrengthAt(difficultyState);
+}
+
+/** G-08 · raidStrength() of a snapshot of the threat — its tier and the run's difficulty multiplier — for what reads
+ *  the curve at a tier other than the live one (game/garrisonBalance.ts's table). */
+export function raidStrengthAt(at: { tier: number; difficultyMult: number }): number {
+  return (1 + at.tier * 0.35) * at.difficultyMult;
 }

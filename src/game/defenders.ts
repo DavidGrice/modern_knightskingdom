@@ -5,6 +5,9 @@
 // the Villager record itself survives a save).
 import { attrsOf } from './data/attributes';
 import { hasTrait } from './data/companionTraits';
+import { chestplateHp } from './data/armor';
+import { meleeTierBonus } from './data/melee';
+import { LOADOUT_WEAPON } from './data/villagers';
 import type { Villager } from './types';
 import { exposeDebug } from '@/lib/debugHooks';
 
@@ -37,11 +40,17 @@ export const DOWNED_RECOVER_MS = 45000;
 // dedicated to their own standing order via the roster (VillagersPanel),
 // which wins for that defender until cleared. Session-tactical state, not
 // persisted: a reload rallies everyone back to their normal patrol.
-export type DefenderOrder = 'patrol' | 'follow' | 'attack' | 'scout';
-export const defenderOrders: { order: DefenderOrder; targetId: string | null; overrides: Record<string, DefenderOrder> } = {
+// G-08 · 'rally': hold the point the player planted (`rally`, game/rally.ts) and fight what comes within reach of it.
+export type DefenderOrder = 'patrol' | 'follow' | 'attack' | 'scout' | 'rally';
+export const defenderOrders: {
+  order: DefenderOrder; targetId: string | null; overrides: Record<string, DefenderOrder>;
+  /** the rally point, planted at the player's look point with the order (data/defenderOrders.ts); null until then */
+  rally: { x: number; z: number } | null;
+} = {
   order: 'patrol',
   targetId: null,
   overrides: {},
+  rally: null,
 };
 
 /** The order this specific defender actually obeys: their own roster
@@ -53,6 +62,9 @@ export function orderFor(villagerId: string): DefenderOrder {
 }
 // scout reports: enemy ids already called out, so each hostile is announced once
 export const scoutReported = new Set<number>();
+
+/** G-08 · the courage of the garrison, scaling every defender's blow: neutral (1.0) until G-21's morale drives it */
+export const COURAGE_NEUTRAL = 1;
 
 /** What one swing from this defender takes off a raider.
  *
@@ -69,13 +81,27 @@ export const scoutReported = new Set<number>();
  *  hits at the weaker fists tier on purpose; Courage (data/attributes.ts) and
  *  the Riposte companion trait each add their own steel. Lives in this leaf
  *  module rather than in `Defenders.tsx` so both callers can reach it without
- *  either importing a React component. */
-export function defenderStrike(v: Villager): number {
+ *  either importing a React component.
+ *
+ *  G-08 · a forged, crested or legendary weapon adds what that tier adds to the player's own blow (data/melee.ts's
+ *  meleeTierBonus: a Forged Sword +0.5, a Legendary Halberd +2.25), and the garrison's `courage` (COURAGE_NEUTRAL
+ *  until G-21) scales the whole blow. How every term stacks is said once, at garrisonBalance.ts's head. */
+export function defenderStrike(v: Villager, courage = COURAGE_NEUTRAL): number {
   const level = v.level ?? 1;
   const meleeBase = v.loadout ? 3 : 1;
-  return (v.loadout === 'bow' ? 2 : meleeBase) + level
+  const weapon = v.loadout ? LOADOUT_WEAPON[v.loadout] : undefined;
+  return ((v.loadout === 'bow' ? 2 : meleeBase) + level
     + Math.floor((attrsOf(v.id).courage - 5) / 3)
-    + (hasTrait(v, 'def_riposte') ? 1 : 0);
+    + (hasTrait(v, 'def_riposte') ? 1 : 0)
+    + (weapon ? meleeTierBonus(weapon, v.loadoutTier ?? 'base') : 0)) * courage;
+}
+
+/** G-08 · a defender's full health (moved from Defenders.tsx unchanged, for garrisonBalance.ts to read the same
+ *  number): 18, 6 a level, and flat on top of it the Shieldwall trait's 8, the plate's tier (data/armor.ts: iron 6,
+ *  forged 10, castle-crested 16; a legacy `true` is iron) and a helmet's 3. */
+export function defenderMaxHp(v: Villager): number {
+  return 18 + (v.level ?? 1) * 6 + (hasTrait(v, 'def_shieldwall') ? 8 : 0)
+    + chestplateHp(v.gear) + (v.gear?.helmet ? 3 : 0);
 }
 
 export function registerDefender(id: string, postX: number, postY: number, postZ: number): DefenderState {
@@ -125,6 +151,7 @@ export function resetDefenders(keepIds: ReadonlySet<string>): void {
   }
   defenderOrders.order = 'patrol';
   defenderOrders.targetId = null;
+  defenderOrders.rally = null;
   for (const id of Object.keys(defenderOrders.overrides)) delete defenderOrders.overrides[id];
   scoutReported.clear();
 }

@@ -15,10 +15,11 @@ import {
   COMPANION_TRAIT_BY_ID, HAUL_TRAIT, SIDE_TRAIT, hasTrait, traitSlots, traitsOwnedInJob, tripTraitMult,
 } from '../../data/companionTraits';
 import {
-  CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, homeVillagers, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_REQUIRES,
-  MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement,
+  CARRIER_ITEM, CARRIERS, DEFENDER_LOADOUTS, homeVillagers, isWorkingHours, JOB_BY_ID, JOB_NODE_KIND, LOADOUT_WEAPON,
+  loadoutNeeds, MAX_VILLAGERS, settlementAnchor, VILLAGER_NAMES, villagerHomeSpot, villagerRequirement,
 } from '../../data/villagers';
 import { ITEMS } from '../../data/items';
+import { meleeTierItem, type MeleeTier } from '../../data/melee';
 import { CHESTPLATE_BY_TIER, CHESTPLATE_ITEM, chestplateTierOf } from '../../data/armor';
 import { BUILDABLE_BY_ID } from '../../data/buildables';
 import { siteRuinIn } from '../../sites/sites';
@@ -131,7 +132,9 @@ export interface VillagerSlice {
    *  one (persisted on the building itself, see `PlacedBuilding.owner`),
    *  else their own fixed home spot if no bed is available at all */
   claimBed: (villagerId: string) => { x: number; z: number };
-  setDefenderLoadout: (villagerId: string, loadout: DefenderLoadout) => void;
+  /** G-08 · `tier`: the forge's tier of the loadout's weapon, spent from the Armory's own stock of it (absent: the tier
+   *  already carried, for the loadout they hold; else 'base') */
+  setDefenderLoadout: (villagerId: string, loadout: DefenderLoadout, tier?: MeleeTier) => void;
   unequipDefenderLoadout: (villagerId: string) => void;
   /** Wave 9 carriers — tiered, not boolean, so these mirror the loadout pair
    *  directly above (auto-refund on a swap) rather than equipVillagerGear. */
@@ -459,29 +462,47 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
     // whatever they were carrying back to the Armory before spending the new
     // requirement, so the same pieces just move between "in the Armory" and
     // "on a defender."
-    setDefenderLoadout: (villagerId, loadout) => {
+    setDefenderLoadout: (villagerId, loadout, wanted) => {
       const st = get();
       const v = st.villagers.find((x) => x.id === villagerId);
-      if (!v || v.job !== 'defender' || v.loadout === loadout) return;
-      const need = LOADOUT_REQUIRES[loadout];
-      for (const [id, n] of Object.entries(need)) {
-        if ((st.armory[id as ItemId] ?? 0) < (n as number)) {
-          st.notify(`Not enough in the Armory to arm ${v.name} that way.`);
-          return;
-        }
+      if (!v || v.job !== 'defender') return;
+      // (G-08 · a pick that names no tier keeps the tier of the loadout already carried — the Roster's chip for the
+      // loadout they hold is a no-op, as it was before tiers — and is the base tier for any other. A loadout whose
+      // weapon has no ladder, the bow, is the base tier whatever is asked, so the record never carries a tier that
+      // means nothing.)
+      const tier: MeleeTier = !LOADOUT_WEAPON[loadout] ? 'base'
+        : wanted ?? (v.loadout === loadout ? (v.loadoutTier ?? 'base') : 'base');
+      if (v.loadout === loadout && (v.loadoutTier ?? 'base') === tier) return;
+      // G-08 · a settlement's resident made a defender is still drawn at the homestead (ROADMAP's "a settlement
+      // resident made a defender stands guard at the homestead", G-24a's): the forge's tiers go to the homestead's
+      // own garrison only, so that a tiered weapon never goes with someone who is elsewhere
+      if (tier !== 'base' && v.world) {
+        st.notify(`${v.name} keeps a settlement — the forge's tiers arm the homestead's own garrison.`);
+        return;
       }
+      const need = loadoutNeeds(loadout, tier);
+      // what they carry goes back first, so that a new tier of the same loadout takes their own shield back up
       const armory = { ...st.armory };
       if (v.loadout) {
-        for (const [id, n] of Object.entries(LOADOUT_REQUIRES[v.loadout])) {
+        for (const [id, n] of Object.entries(loadoutNeeds(v.loadout, v.loadoutTier))) {
           armory[id as ItemId] = (armory[id as ItemId] ?? 0) + (n as number);
+        }
+      }
+      for (const [id, n] of Object.entries(need)) {
+        if ((armory[id as ItemId] ?? 0) < (n as number)) {
+          st.notify(`Not enough in the Armory to arm ${v.name} that way.`);
+          return;
         }
       }
       for (const [id, n] of Object.entries(need)) {
         armory[id as ItemId] = (armory[id as ItemId] ?? 0) - (n as number);
       }
-      const villagers = st.villagers.map((x) => (x.id === villagerId ? { ...x, loadout } : x));
+      const villagers = st.villagers.map((x) => (x.id === villagerId
+        ? { ...x, loadout, loadoutTier: tier === 'base' ? undefined : tier } : x));
       set({ villagers, armory, dirty: true });
-      const label = DEFENDER_LOADOUTS.find((d) => d.id === loadout)?.label ?? loadout;
+      const weapon = LOADOUT_WEAPON[loadout];
+      const item = weapon && tier !== 'base' ? meleeTierItem(weapon, tier) : null;
+      const label = (item && ITEMS[item]?.name) || (DEFENDER_LOADOUTS.find((d) => d.id === loadout)?.label ?? loadout);
       st.notify(`${v.name} is armed with ${label} from the Armory.`);
     },
 
@@ -490,10 +511,10 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
       const v = st.villagers.find((x) => x.id === villagerId);
       if (!v || !v.loadout) return;
       const armory = { ...st.armory };
-      for (const [id, n] of Object.entries(LOADOUT_REQUIRES[v.loadout])) {
+      for (const [id, n] of Object.entries(loadoutNeeds(v.loadout, v.loadoutTier))) {
         armory[id as ItemId] = (armory[id as ItemId] ?? 0) + (n as number);
       }
-      const villagers = st.villagers.map((x) => (x.id === villagerId ? { ...x, loadout: undefined } : x));
+      const villagers = st.villagers.map((x) => (x.id === villagerId ? { ...x, loadout: undefined, loadoutTier: undefined } : x));
       set({ villagers, armory, dirty: true });
       st.notify(`${v.name} returns their weapon to the Armory — bare-handed for now.`);
     },
