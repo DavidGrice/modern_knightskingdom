@@ -1,6 +1,7 @@
 // Villager/defender/companion vocabulary and the Villager record itself.
 // Split out of the former monolithic game/types.ts (CLN-08).
 import type { WorldScoped } from './world';
+import type { MeleeTier } from '../data/melee';
 
 /** Wave 10 · `herbalist`/`fisherman` join the trades. Both node kinds
  *  (`ResourceNodeState.kind` already has 'herb'/'fishing') existed from the
@@ -53,6 +54,10 @@ export interface Villager extends WorldScoped {
   level?: number;
   xp?: number;
   loadout?: DefenderLoadout;
+  /** G-08 · the forge's tier of the loadout's weapon (data/melee.ts's ladder: a Forged Sword in place of the Sword …),
+   *  spent from and handed back to the Armory with it (data/villagers.ts's loadoutNeeds). Absent means 'base', what
+   *  every defender carried before, so an old save needs no migration; the bow has no tiers. */
+  loadoutTier?: MeleeTier;
   /** a placed building's id to guard (ideally a tower), null/absent = patrol near home */
   stationId?: string | null;
   /** N80 (requested, "if raids can come by day the watch cannot all sleep by

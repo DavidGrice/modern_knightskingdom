@@ -190,9 +190,9 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 
 | ID | Status | Size | Item | What remains |
 |---|---|---|---|---|
-| OPEN-030 | STILL_OPEN | S | Combat mastery talent (+1 melee) verified only by source read | Only a live damage-delta measurement remains; the code itself is complete. |
-| OPEN-050 | STILL_OPEN | L | Defender/Armory loadouts don't use the new tiered weapons | defenderStrike() and DEFENDER_LOADOUTS only reference base sword/halberd/crossbow items, never *_forged/*_crested/*_legendary; deliberately scoped out again in Wave 51. |
-| OPEN-051 | STILL_OPEN | S | Per-defender combat-bonus (Shieldwall/Courage/gear HP) balance pass never scheduled | No design blocker found, just never scheduled — a deliberate numeric review of how HP bonuses stack for defenders. |
+| OPEN-030 | CLOSED | S | Combat mastery talent (+1 melee) verified only by source read | Closed by wave 72 (#311, G-08): `combat.test.ts` measures the blow through `playerAttack` — a sword 3, and 4 with `combat4`; bare fists 1, and 2 ("Bugfix: the garrison carried only base weapons …", at the end of this file). |
+| OPEN-050 | CLOSED | L | Defender/Armory loadouts don't use the new tiered weapons | Closed by wave 72 (#311, G-08): a defender's `loadoutTier` spends and refunds the tier's own Armory item (`loadoutNeeds`), his blow adds the player's own tier step (`meleeTierBonus`), and his figure carries the tier's tint; the Roster picks the tier, the Armory takes the tiered items (same entry). |
+| OPEN-051 | CLOSED | S | Per-defender combat-bonus (Shieldwall/Courage/gear HP) balance pass never scheduled | Closed by wave 72 (#311, G-08): the stacking rule is stated once (`game/garrisonBalance.ts`'s head: health and blow all flat, one courage multiplier at 1.0), and the garrison's balance table against every raid `raidSize` gives is pinned by a vitest snapshot (same entry). |
 | OPEN-052 | STILL_OPEN | M | Spear weapon has no forged/crested tiers | Author spear_forged/spear_crested (optionally legendary) recipes and MELEE_TIERS entries mirroring sword/halberd's Wave 49 treatment. |
 | OPEN-101 | STILL_OPEN | S | Targeting reticle's 'neutral' Standing value declared but never assigned | Pick a case that should read 'neutral' (e.g. wildlife/undecided villagers), assign it in targeting.ts, and add a .kk-reticle.neutral CSS rule. |
 
@@ -10494,6 +10494,10 @@ So making a resident a defender takes them out of their settlement (its yield st
 homestead. To do: either keep the defender job to home folk in the Roster (and `assignJob`),
 or give a settlement its own defenders — the Walls That Hold arc or G-23 should decide.
 
+Wave 72 (G-08) keeps its own part out of this: `setDefenderLoadout` refuses a forged, crested or legendary weapon to a
+defender whose `world` is a settlement (a notice; nothing spent, no record changed — `villagerSlice.test.ts`), so the
+forge's tiers go only to the homestead's own garrison. A base loadout is issued to such a resident as before.
+
 ## Bugfix: catapults loosed with a stand-in and rams with a generic thud, and the original bank stayed in a gitignored script — FOUND 2026-08-06 (Wave 8's corrected catapult line; OPEN-004, unblocked by FEATURE_PLAN.md's survey 2026-10-31), FIXED 2026-11-06
 
 **The fault.** The original game's extraction holds 92 sounds, 92 animation clips and 196 voiced challenge lines with
@@ -11212,7 +11216,10 @@ With the gatehouse shut the home grid has no way into or out of the keep (`findP
 and `navSteer` (`nav/steering.ts`) then steers straight at the goal; villagers, builders, defenders and the merchant
 collide with nothing, so one shut in walks out through the wall and one shut out walks in. A shut placed gate in a
 player-built ring did the same before wave 69. To do: give them the raiders' push (`pushOutOfBox`), have one with no way
-wait at the gate (or open it, for the household), and a guard with no way to his raider hold his ground.
+wait at the gate (or open it, for the household), and a guard with no way to his raider hold his ground. (Wave 72's
+rally walks a defender to its point by the same `navSteer`, so one whose way is shut after it is planted — the
+gatehouse shut behind him — walks through the stone to it too; `plantRally` refuses only a point that none of those
+who will rally has a way to as it is planted.)
 
 ## Seen, not fixed: the Great Hall on the keep's bailey stops nobody — logged 2026-11-07 (wave 69; by the code)
 
@@ -12023,3 +12030,185 @@ player's walled pens standing on that line still draws the thief to the pen: an 
 The barrels test puts the pen off the line, so it does not see this. To do: count a piece as "between" only when its far
 side is cut off from the raider *and* joined to the mark (a region test on the grid), or end the line at the first
 stretch that is not the mark's.
+
+## Bugfix: the garrison carried only base weapons, had no way to hold a spot, and nothing tied it to the raids it meets — FOUND 2026-10-31 (FEATURE_PLAN.md's G-08: OPEN-050, OPEN-051, OPEN-030, the idea "Field Command"; the owner's harsh-raids decision OD-02), FIXED 2026-11-18
+
+**The fault.** The forge has made forged, crested and legendary swords and halberds since waves 49-50, and the Armory
+could hold them, but a defender could be armed only from the base items (`LOADOUT_REQUIRES`: a Sword and a Shield, a
+Halberd, a Crossbow) and struck the same whatever the forge made (`defenderStrike`: 3 with any melee weapon, plus his
+level, Courage and Riposte); the Armory's donate row listed only the base four, and his figure always drew the base
+mold. Since wave 71 a raid is as big as the stores are worth (the leader and 2-5 followers), and nothing said what a
+garrison of a given size and gear does against it: the health bonuses (Shieldwall, the plate's tier, a helmet) were
+summed in `Defenders.tsx` with no rule written anywhere, and G-07's lost-raid resolver had nothing to read. The orders
+were patrol, attack, scout and follow: no way to make the garrison stand its ground at a chosen spot. And the
+Master-at-Arms talent (`combat4`, +1 melee) had only ever been checked by reading the source. Measured on `main`
+(production build of base-14 on port 3101, build `XlmX1cA1qH1do0R9c2Un0`, digest `ec4422a47320`;
+`scripts/cln-tools/w72_live.mjs`, frame-exact, two runs): a level-1 defender, the Armory stocked sword 1, shield 1,
+sword_forged 1, and `setDefenderLoadout('d1', 'sword_shield', 'forged')` through the store's hook — `main` takes no
+tier: the record has no `loadoutTier`, the Armory gave up the base Sword (the Forged Sword still 1), the notice "armed
+with Sword & Shield", and his blows on a debug bandit were 3 and 3.
+
+**The fix.** *Tiered weapons (OPEN-050).* `Villager.loadoutTier` (absent: 'base', which every old save's defender is,
+so no migration; `SAVE_VERSION` stays 2). `data/villagers.ts`'s `loadoutNeeds(loadout, tier)` is `LOADOUT_REQUIRES` with
+the weapon swapped for that tier's item (`data/melee.ts`'s `meleeTierItem`; the bow has no ladder), and
+`setDefenderLoadout(id, loadout, tier)` / `unequipDefenderLoadout` spend and refund by it — the old loadout handed back
+*before* the stock check, so a defender stepping up a tier takes his own shield back up. `defenderStrike` adds
+`meleeTierBonus(weapon, tier)`, read off the player's own `MELEE_TIERS` (a sword +0.5 / +1 / +1.5, a halberd +0.7 /
++1.4 / +2.25), so the two cannot drift. `LoadoutGear` passes the tier to `HeldSword`/`HeldHalberd`, which already drew
+each tier's tinted mold (`lib/weaponParts.ts`). The Roster shows a tier row under an armed defender's loadout, each chip
+with the Armory's stock of that tier; the Armory's weapon row lists the six tiered items to donate. *A settlement's
+resident* made a defender (the "Seen, not fixed" entry above, G-24a's) is refused a tier with a notice, nothing spent.
+
+*The stacking rule and the table (OPEN-051).* `defenders.ts`'s `defenderMaxHp` (moved from `Defenders.tsx` unchanged)
+and `defenderStrike` are the one place each number is made; `game/garrisonBalance.ts`'s head states the rule (health:
+18 + 6 a level, then Shieldwall 8, the plate's tier 6/10/16 and a helmet 3, all flat; a blow: the loadout's base,
+level, Courage, Riposte and the tier step, all flat, then the garrison's courage — the one multiplier,
+`COURAGE_NEUTRAL` = 1.0 until G-21). `garrisonOutcome` settles the garrison alone against a whole raid (`raidFighters`:
+Gilbert and `raidSize(worth)` bandits at `raidStrengthAt`, difficulty.ts's curve at a snapshot of tier and difficulty,
+which `raidStrength()` now calls), every swing on its cooldown, both sides' blows landing together: *held* (no one
+down, over half the garrison's health left), *pressed* (beaten off at a cost) or *lost*. `garrisonBalance()` is the
+table, pinned by `garrisonBalance.test.ts`'s inline snapshot. Level 1, sword and shield, Normal; each block a threat
+tier 0-5, each letter the stores worth 0 / 500 / 1,500 / 3,000 (2-5 followers):
+
+    unarmed   x1: LLLL LLLL LLLL LLLL LLLL LLLL      forged    x1: PLLL LLLL LLLL LLLL LLLL LLLL
+    unarmed   x2: HPLL PLLL LLLL LLLL LLLL LLLL      forged    x2: HHHP HPLL PLLL LLLL LLLL LLLL
+    unarmed   x3: HPPP PPPL PLLL LLLL LLLL LLLL      forged    x3: HHHP HHPP HPLL PPLL PLLL PLLL
+    unarmed   x4: HHHP HPPP PPPL PPLL PLLL LLLL      forged    x4: HHHH HHPP HHPP HPPP PPLL PPLL
+    base      x1: PLLL LLLL LLLL LLLL LLLL LLLL      crested   x1: PLLL LLLL LLLL LLLL LLLL LLLL
+    base      x2: HHHP HPLL PLLL LLLL LLLL LLLL      crested   x2: HHHP HPLL PLLL PLLL LLLL LLLL
+    base      x3: HHHP HHPP HPLL PPLL PLLL PLLL      crested   x3: HHHH HHPP HHPP PPLL PPLL PLLL
+    base      x4: HHHH HHPP HHPP HPPP PPLL PPLL      crested   x4: HHHH HHPP HHPP HPPP HPPL PPLL
+                                                     legendary x1: PLLL LLLL LLLL LLLL LLLL LLLL
+                                                     legendary x2: HHHP HHPP PLLL PLLL LLLL LLLL
+                                                     legendary x3: HHHH HHPP HHPP HPPL PPLL PLLL
+                                                     legendary x4: HHHH HHPP HHPP HPPP HPPL PPPL
+
+A lone level-1 defender holds nothing (pressed at tier 0 below 500 worth, armed); two armed hold a tier-0 raid below
+3,000 worth; four hold tier 0 at any worth and are pressed from tier 1 at 1,500. At level 1 a forged sword wins no fight
+a base one loses (+0.5 takes no swing off an 8-hp bandit at tier 0; the cells match); crested and legendary move the
+line about one threat tier at three and four defenders. The test also pins a level-3 veteran garrison (helmet, crested
+plate, Shieldwall, Riposte: two legendary hold to tier 3), and checks that more defenders, better gear, a smaller raid
+or a lower tier never fare worse.
+
+*The rally order.* A fifth order, 'Rally Here' (`data/defenderOrders.ts`), the wheel's fifth sector. `plantRally` takes
+the player's look point (`game/rally.ts`'s `lookPoint`: his eye along the camera's yaw and pitch to the ground,
+`homeGroundY`, 40 m at most) — refused with a notice away from home, on a solid (`navBlocked`: a shut wall, a
+building), or with no way across the home grid from any defender who will rally (`navReachable`: a ring of shut
+walls round it; a guard posted up measured from where he steps down; with none who will, from every defender); a
+point beyond a shut wall with a way round is walked round. `Defenders.tsx`: a rallied defender beyond `RALLY_HOLD`
+(2 m) of the point makes his way there by `navSteer`, fighting nothing on the way; there, he fights the raider nearest
+the point among those within 2 m and his reach of it (`rallyFoe`: his blade's 1.8, or his bow's), and neither the chase
+nor the push apart takes him past its edge (`holdWithin`); with nothing in reach he stands at his own place a metre off
+it (`rallySpot`), at any hour, as follow keeps no shift. A guard rallied off a tower or the walls is on the ground to
+the raiders (`ds.elevated`). The point is session state, forgotten at a session start (`resetDefenders`); the Roster
+offers Rally to a single defender only while a point is planted. *OPEN-030.* `combat.test.ts` measures `combat4`
+through `playerAttack`: a sword 3 and 4, bare fists 1 and 2.
+
+**Verified.** Golden tests written first and run on the unchanged base (`components/world/Defenders.test.ts`'s "the
+standing orders, as they were before the rally order", 7: patrol's rounds; patrol, attack and scout engaging; follow by
+day; off watch by day; a bow with a roster override — each a track every 15 frames and the raider's health), unchanged
+and passing after. New: `garrisonBalance.test.ts` (9), `rally.test.ts` (9), the rally order in `Defenders.test.ts` (5:
+walks there fighting nothing, then holds within 2 m mid-fight; stands by the point by day; a shieldmate's push stopped
+at the edge; a tower guard on the ground while rallied; round a keep ring to the bailey by the gatehouse, never inside a
+standing piece), five in `villagerSlice.test.ts` (tier stock spent and refunded both ways; refused with none; the blow
+by tier; an old save's defender at the base tier through `toSave`/`loadFromSave`; a settlement resident refused), a
+`LoadoutGear` tier case and the `combat4` delta. 28 of 30 parts of the fix taken out alone fail 1-4 tests, the files
+put back byte for byte (`scripts/cln-tools/w72_takeout.py`, `w72_takeout.txt`; the digest of the diff and the new
+files the same before and after); two clamps that each survived alone were folded into one, whose take-out fails the
+shieldmate test. `tsc` clean; the unit suite 105 files, 895 tests. Live, production builds side by side
+(`w72_live.mjs`, frame-exact; the change on port 3102, build `G__G34XnUJKXA4NLptUiY`, digest `8bace2915be2`): the
+Forged Sword through the hook — `loadoutTier: 'forged'`, the Forged Sword spent and the base Sword left, "armed with
+Forged Sword", blows 3.5 and 3.5 (`main` 3 and 3). The rally planted through the wheel's own key path (the tactics key
+down, the fifth sector, the key up) at the look 10 m ahead: (0, 16) for the player at (0, 26), exactly; two defenders
+against three raid bandits 6-9 m beyond it over 3,200 frames — there by frames 222 and 511, then while a bandit stood in
+reach (503 frames) neither more than 2.00 m from the point; two bandits down, the third at 2 hp, no defender down. The
+other orders: attack, scout and follow wrote the same record on `main` (two runs) and on the change, frame for frame;
+patrol struck the same blows, and his rounds after the kill differ from `main`'s only in his circuit's phase (the
+evidence pass below measures it). Screenshots (d3d11, `w72_shot.mjs`): a defender facing the
+camera with the base sword (dark steel) and the legendary (the amber tint). *Evidence pass* (independent, 2026-11-18):
+`tsc` clean; the unit suite 105 files, 895 tests; `next build` of the worktree clean (build `U4VbxLzoaQNU0iottvKf0`).
+The seven golden tests run again with every changed tracked `src` file put back to HEAD: all 7 pass
+(`scripts/cln-tools/w72_ev_golden.py`). Mutation controls (`w72_ev_mutate.py`, `w72_ev_mutate.txt`): 51 single edits,
+each a part of the change put back to the base's code or broken, against the six wave test files — 47 fail 1-6 tests
+each; four survive: the table's bow cooldown (`defenderFighter`; the table arms only swords), the rallied defender
+drawn at the ground's height rather than his post's (`g.position`), `Defenders.tsx` passing the tier to `LoadoutGear`
+(mocked in its test; the screenshots below show it) and `ds.maxHp` fed a helmetless villager (no test defender wears
+one); the sha256 of `git diff --binary` plus every untracked file, `abdd8773…`, was the same before and after both
+scripts. Live, production builds side by side (`w72_ev_live.mjs`, frame-exact; `main` = base-14 on port 3101, build
+`XlmX1cA1qH1do0R9c2Un0`; the change on port 3102, build `U4VbxLzoaQNU0iottvKf0`; four runs of `main`, three of the
+change, 0 page errors): a Forged Sword through the hook — `main` no `loadoutTier`, the base Sword spent, the Forged
+still 1, "armed with Sword & Shield", blows 3 and 3; the change `forged`, the Forged Sword spent and the Sword left,
+"armed with Forged Sword", blows 3.5 and 3.5. A Legendary Halberd — `main` the base Halberd spent, blows 3 and 3; the
+change the Legendary spent, blows 5.25 and 5.25 (+2.25). The wheel — `main` 4 sectors, the last gives Follow Me; the
+change 5, the last Rally Here, planted at (0, 16) for the player at (0, 26) looking 10 m ahead; two defenders against
+three raid bandits beyond it: 430-447 frames with a bandit in reach of the point, neither defender ever more than 2.00
+m from it, two or three bandits down (the third at 2 hp once), no defender down (three runs). The other orders, a
+bandit 6 m off, 320 frames each: attack, scout and follow wrote identical records on `main` and the change; patrol
+struck the same blows on the same frames (the bandit's health and his own identical) and after the kill walked his
+rounds within 2 cm of `main`'s once the probe started him at the same count of frames since his figure first moved —
+unpinned, the change differed from `main` by 23-31 cm against `main`'s own 1 cm run to run, because the circuit's
+phase (`patrolA`) runs on from every frame before the probe and his state exists from the first render while his loop
+starts only once his figure has loaded. Screenshots (d3d11, headless, `out/w72ev/`): `main` draws the dark base sword
+with a Legendary issued; the change draws the Legendary amber and the Crested a lighter blade. Not measured: a rally
+beyond a shut wall live (unit tests only), the tower guard drawn on the ground live, the Roster's tier chips and the
+Armory's donate row through the UI (the hook was used), the settlement resident's refusal live (unit test only), and
+the balance table against live raids.
+*Fix pass* (2026-11-18, after the review): three defects found by the review are fixed, each with a unit test that
+fails without its fix. (1) The Roster's chip for the loadout a defender already holds called `setDefenderLoadout` with
+no tier, which read as 'base', so a Forged Sword was quietly swapped for a spare base Sword (or the player was told
+the Armory was short); a pick that names no tier now keeps the tier carried for the same loadout (a no-op, as before
+tiers) and is 'base' for any other, and the equipped chip's tooltip names the tier's own item. (2) `holdWithin`
+stopped a defender at point + unit x 2 m, which rounding left past `RALLY_HOLD` at about one bearing in three (722 of
+2,000 in the new test), so the next frame's walk-to-the-point check took him out of the fight; it now stops a hair
+(1e-9 m) inside the edge. (3) A bow guard rallied down off a tower or wall-walk still sighted raiders from his post's
+height (`eyeY` read his post's `elevated`): it now reads `ds.elevated`, which the rally sets false, and the dragon
+volley's slant and his figure there use the ground's height while rallied. `tsc` clean; the unit suite 105 files, 898
+tests. Live on a fresh build of the change (port 3102, build `jlTid0cuekdNmgRG31qN8`, `w72_fix_live.mjs`, 0 page
+errors): the held loadout re-picked with no tier left the Forged Sword in hand and the Armory as it was, with a spare
+Sword and with none, and gave no notice; the Forged Sword struck 3.5 and 3.5, the Legendary Halberd 5.25 and 5.25; the
+rally held both defenders within 2.00 m of the point through 448 frames with a bandit in reach (all three bandits
+down, no defender down). The rallied bow guard's sightline is measured by its unit test only, not live.
+*Own check* (2026-11-18, before the PR): two of the review's low findings fixed, each with a unit test that fails
+without its fix. A tier asked for a loadout with no ladder (the bow, through a hook) was stored on the record, a tier
+that meant nothing; the bow is now the base tier whatever is asked. `plantRally` counted every defender's way to the
+point, one the Roster keeps on an order of his own too, so a point only he could reach was planted for the others to
+walk at through the stone (the entry "villagers, guards and the merchant walk through a shut keep"); only those who
+will rally count now. A third test pins that a defender saved carrying a tier loads carrying it and hands that tier
+back (villagers are saved whole: `store/persistence.ts`). No import cycle added (`import_graph.cjs --diff`: the same
+11 as `main`). An adversarial check of those three (2026-11-19) broke none, each test confirmed failing without its
+fix in a scratch copy, and found two edges of the second, both fixed with a test that fails without it: with none who
+will rally the way check was skipped outright, so a point inside a shut ring that the old check refused was planted
+(every defender's way counts again then, the point standing for whoever the Roster sends later); and a guard posted on
+a keep's wall stands on a solid that the grid measures from its nearest open cell, outside the ring, so a rally into
+the bailey of a shut ring was refused for the guards on its own walls (he is measured now from the first open ground
+straight from him toward the point, where his walk steps down off it). A point one rallying defender can reach is
+still theirs, and the others walk at it (the entry "villagers, guards and the merchant walk through a shut keep").
+`tsc` clean; the unit suite 105 files, 903 tests.
+
+## Seen, not fixed: the Armory's weapon row still says the Halberd has no craft recipe — logged 2026-11-18 (wave 72; by the code)
+
+`components/hud/shared/ArmorySection.tsx`'s Weapons note reads "The Halberd has no craft recipe of its own — it only
+ever turns up as Sealed Crypt salvage", but wave 7 gave it a forge recipe (`data/villagers.ts`'s own header says so),
+and since wave 72 the row also lists the forge's tiered swords and halberds. To do: reword the note to say where each
+weapon comes from.
+
+## Seen, not fixed: a guard posted up who chases a raider on the ground is drawn at his post's height — logged 2026-11-18 (wave 72; by the code)
+
+`Defenders.tsx`'s combat tail sets the figure at `ds.postY` whatever branch moved him, so a tower or wall-walk guard
+whose target is in range only after a chase step (a bow guard closing round a wall by `navSteer`, a melee guard whose
+raider climbed down) walks the ground drawn at the battlement's height, and raiders still skip him (`ds.elevated` is
+his post's). Wave 72's rally sets a rallied guard on the ground (`homeGroundY`, `ds.elevated` false); the other orders
+are left as they were. The rally adds one more way in: given patrol or attack after it, with nothing in reach, a guard
+it took down off a tower or wall-walk slides back to his post (the tower watch) drawn at the battlement's height the
+whole way, and off watch with no bed to claim walks there drawn at it, raiders skipping him all the way (`ds.elevated`
+is his post's again at once). To do: draw and count a guard off his post at the ground's height, as the rally does.
+
+## Seen, not fixed: a rally planted by looking at a building lands on the ground behind it — logged 2026-11-18 (wave 72's own check; by the code)
+
+`game/rally.ts`'s `lookPoint` walks the look out to where it meets `homeGroundY`, which is the home terrain only (the
+knolls), so a look at a hut's face, a palisade or a shut keep wall carries on through it and plants the point on the
+ground behind it, up to `RALLY_REACH` (40 m) off; the defenders then walk round to the far side (or, behind a shut
+ring, the point is refused). A look that comes
+down inside the piece is refused ("Nothing to hold there"), which at least says why. To do: stop the look at the first
+standing solid it meets below its top (the heights `hasLineOfSight` already reads) and plant at its foot on the
+player's side.

@@ -199,7 +199,7 @@ export default function NpcEquipPanel() {
           // what they would be seen wearing in the world: a weapon only on a
           // sworn defender (Defenders.tsx draws it; an ordinary villager's
           // figure has none), armor and a carrier on anyone
-          held={(rig) => <LoadoutGear rig={rig} loadout={isDefender ? loadout : undefined} gear={villager!.gear} />}
+          held={(rig) => <LoadoutGear rig={rig} loadout={isDefender ? loadout : undefined} tier={villager!.loadoutTier} gear={villager!.gear} />}
         />
         <div className="equip-slots">
           <div className="creator-section">Armor</div>

@@ -9,8 +9,10 @@ import { mountOf, stabledHorses } from '@/game/riding';
 import { defenderOrders, orderFor } from '@/game/defenders';
 import { DEFENDER_ORDERS, setDefenderOrder } from '@/game/data/defenderOrders';
 import {
-  CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, homeVillagers, JOBS, MAX_VILLAGERS, villagerRequirement,
+  CARRIERS, CARRIER_ITEM, DEFENDER_LOADOUTS, homeVillagers, JOBS, LOADOUT_WEAPON, MAX_VILLAGERS, villagerRequirement,
 } from '@/game/data/villagers';
+import { MELEE_TIER_ORDER, meleeTierItem } from '@/game/data/melee';
+import { ITEMS } from '@/game/data/items';
 import { ATTRS, attrsOf, carryCapacityOf, tradeLevelOf } from '@/game/data/attributes';
 import { CHESTPLATES, CHESTPLATE_BY_TIER, chestplateTierOf } from '@/game/data/armor';
 import { hasTrait, traitSlots, traitsForJob, traitsOwnedInJob } from '@/game/data/companionTraits';
@@ -279,7 +281,8 @@ export default function VillagersPanel() {
                       : `— following the fleet (${DEFENDER_ORDERS.find((o) => o.id === defenderOrders.order)?.label})`}
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                    {DEFENDER_ORDERS.map((o) => {
+                    {/* (G-08 · a rally joins the point planted from the order wheel: none until one is) */}
+                    {DEFENDER_ORDERS.filter((o) => o.id !== 'rally' || defenderOrders.rally).map((o) => {
                       const active = orderFor(v.id) === o.id;
                       return (
                         <ChoiceChip
@@ -299,11 +302,34 @@ export default function VillagersPanel() {
                   </div>
                   <LoadoutRow
                     current={v.loadout}
+                    tier={v.loadoutTier}
                     loadouts={DEFENDER_LOADOUTS}
                     armory={armory}
                     onBare={() => unequipDefenderLoadout(v.id)}
                     onPick={(id) => setDefenderLoadout(v.id, id)}
                   />
+                  {/* G-08 · the forge's tier of the weapon in hand, each spent from the Armory's own stock of it */}
+                  {v.loadout && LOADOUT_WEAPON[v.loadout] && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                      {MELEE_TIER_ORDER.map((tier) => {
+                        const worn = (v.loadoutTier ?? 'base') === tier;
+                        const item = meleeTierItem(LOADOUT_WEAPON[v.loadout!]!, tier)!;
+                        const stock = armory[item] ?? 0;
+                        return (
+                          <ChoiceChip
+                            key={tier}
+                            disabled={!worn && stock <= 0}
+                            opacity={worn ? 1 : stock > 0 ? 0.85 : 0.4}
+                            selected={worn}
+                            onClick={() => setDefenderLoadout(v.id, v.loadout!, tier)}
+                            title={worn ? `Carried — ${ITEMS[item].name}` : `${ITEMS[item].name} · ${stock} in the Armory`}
+                          >
+                            {ITEMS[item].icon} {ITEMS[item].name}
+                          </ChoiceChip>
+                        );
+                      })}
+                    </div>
+                  )}
                   {/* G27 · a stabled horse turns a defender into a mounted
                       patrol — nearly twice the ground covered */}
                   <div style={{ fontSize: 11.5, color: 'var(--parchment-dark)', marginTop: 8 }}>

@@ -2,6 +2,8 @@ import type { CarrierTier, ClaimedPlot, DefenderLoadout, ItemId, ResourceNodeSta
 import { hashId } from '@/lib/rng';
 import { WORLD_DESTINATION_BY_ID } from './worlds';
 import { activeWindow } from './schedule';
+import { meleeTierItem, type MeleeTier } from './melee';
+import type { MeleeWeaponId } from './weapons';
 
 // Villager recruitment: once your homestead has enough beds and buildings,
 // generic villagers (the extraction's unnamed good/bad minifig variants)
@@ -158,6 +160,22 @@ export const LOADOUT_REQUIRES: Record<DefenderLoadout, Partial<Record<ItemId, nu
   halberd: { halberd: 1 },
   bow: { crossbow: 1 },
 };
+
+/** G-08 · the forge's ladder each loadout's weapon climbs (data/melee.ts): the bow has none */
+export const LOADOUT_WEAPON: Partial<Record<DefenderLoadout, MeleeWeaponId>> = {
+  sword_shield: 'sword',
+  halberd: 'halberd',
+};
+
+/** G-08 · Armory stock a loadout spends at a tier: LOADOUT_REQUIRES with its weapon swapped for that tier's item (a
+ *  Forged Sword and a Shield …). 'base', or a loadout with no ladder, is LOADOUT_REQUIRES itself. */
+export function loadoutNeeds(loadout: DefenderLoadout, tier: MeleeTier = 'base'): Partial<Record<ItemId, number>> {
+  const weapon = LOADOUT_WEAPON[loadout];
+  const item = weapon && tier !== 'base' ? meleeTierItem(weapon, tier) : null;
+  if (!weapon || !item) return LOADOUT_REQUIRES[loadout];
+  const { [weapon]: n, ...rest } = LOADOUT_REQUIRES[loadout];
+  return { ...rest, [item]: n };
+}
 
 // Wave 9 · carriers. Same Armory-backed, mutually-exclusive shape as the
 // loadouts directly above (one field on the villager, the old tier refunded

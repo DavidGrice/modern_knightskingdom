@@ -85,6 +85,8 @@ export const MELEE: Record<MeleeWeaponId, MeleeStats> = {
  * bossEncounter.ts's BOSS_LEGENDARY_DROP.
  */
 export type MeleeTier = 'base' | 'forged' | 'crested' | 'legendary';
+/** G-08 · the tiers, worst first (the Roster's tier row) */
+export const MELEE_TIER_ORDER: readonly MeleeTier[] = ['base', 'forged', 'crested', 'legendary'];
 
 interface MeleeTierDmg { dmg: number; wornDmg: number }
 
@@ -121,6 +123,19 @@ const MELEE_TIER_ITEMS: Partial<Record<MeleeWeaponId, { tier: MeleeTier; item: I
     { tier: 'legendary', item: 'halberd_legendary' },
   ],
 };
+
+/** G-08 · what a tier adds to a weapon's blow over its base: the player's own ladder above, read by a defender's
+ *  swing too (game/defenders.ts's defenderStrike), so the forge's tiers cannot drift apart between the two. 0 for a
+ *  weapon with no ladder (the spear) and for 'base'. */
+export function meleeTierBonus(kind: MeleeWeaponId, tier: MeleeTier): number {
+  const tiers = MELEE_TIERS[kind];
+  return tiers ? Math.round((tiers[tier].dmg - tiers.base.dmg) * 100) / 100 : 0;
+}
+
+/** G-08 · the item a tier of `kind` is (`sword_forged` …), or null for a weapon with no ladder */
+export function meleeTierItem(kind: MeleeWeaponId, tier: MeleeTier): ItemId | null {
+  return MELEE_TIER_ITEMS[kind]?.find((t) => t.tier === tier)?.item ?? null;
+}
 
 /** The best tier of `kind` currently owned, or null (nothing owned — bare
  *  fists for a sword, no polearm in hand for the other two). Mirrors

@@ -33,6 +33,12 @@ describe('LoadoutGear', () => {
     expect(hung({ loadout: 'bow', gear: FULL })).toEqual(['crossbow/-1@rightarm', 'helmet@head', 'plate:forged@body', 'carrier:basket@hips']);
   });
 
+  it("G-08 · a defender's tier, on the sword or the halberd it is of (lib/weaponParts.ts tints it); none on the shield or a bow", () => {
+    expect(hung({ loadout: 'sword_shield', tier: 'forged' })).toEqual(['sword/-1:forged@rightarm', 'shield/1@leftarm']);
+    expect(hung({ loadout: 'halberd', tier: 'legendary' })).toEqual(['halberd/-1:legendary@rightarm']);
+    expect(hung({ loadout: 'bow', tier: 'crested' })).toEqual(['crossbow/-1@rightarm']);
+  });
+
   it('bare-handed with no loadout: an ordinary villager, or a defender not yet armed', () => {
     expect(hung({ gear: FULL })).toEqual(['helmet@head', 'plate:forged@body', 'carrier:basket@hips']);
     expect(hung({})).toEqual([]);
