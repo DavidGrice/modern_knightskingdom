@@ -11,7 +11,7 @@ import { bestChestplateOwned } from '../data/armor';
 import { PERK_FX } from '../data/effects';
 import { wakeAtDawn } from '../dayRollover';
 import { fortDamageReduction } from '../fort';
-import { raidActive, raidLost } from '../directors/state';
+import { settleRaid } from '../directors/raidSettle';
 import { gotAway } from '../plunder';
 import { emitSound, SOUND_LOUDNESS } from '@/ai/perception/sounds';
 import { noiseBeliefId } from '@/ai/perception/Belief';
@@ -142,13 +142,14 @@ export function damagePlayer(amount: number, opts?: { melee?: boolean; attacker?
     // called off, and any dungeon-room fight is abandoned along with the
     // layout reset above (an orphaned dungeon-room enemy surviving a
     // discarded layout was already a latent gap this incidentally closes).
-    // F-17 · a raid called off with raiders still standing was not beaten back: the raid director, finding none left
-    // on its next tick, used to pay its spoils. It is told the raid was lost — whether he fell at home or away (the
-    // clear takes the home raid either way).
+    // G-07 · a home raid with raiders still standing is not simply called off: the garrison fights on without him, and
+    // the raid is settled as that fight goes — held, pressed or lost, with what it cost (directors/raidSettle.ts; the
+    // raid director's next tick then pays a raid beaten back, or none for one lost) — whether he fell at home or away
+    // (the clear below takes the home raid either way). F-17 called every such raid lost.
+    settleRaid(useGameStore.getState());
+    // G-06 · and a thief still on his feet anywhere else gets away with what he carried, as one off the map's edge does
+    // (one falling has dropped it already: kill.ts)
     const enemies = useEnemyStore.getState();
-    if (raidActive.current && enemies.enemies.some((e) => e.raid && e.mob.state !== 'dying')) raidLost.current = true;
-    // G-06 · and a thief still on his feet gets away with what he carried, as one off the map's edge does (one falling
-    // has dropped it already: kill.ts)
     for (const e of enemies.enemies) if (e.mob.state !== 'dying') gotAway(st, e.carried);
     enemies.clear();
     wakeAtDawn(); // just before sunrise — G-04: the next day's, as a night's sleep is

@@ -69,6 +69,18 @@ export const ATTACK_CD: Record<EnemyKind, number> = {
   caster: 1.6, shieldedElite: 1.5, siegeCrew: 1.6,
 };
 
+/** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
+ *  every appearance except his own sanctioned final stand — a real fight
+ *  first, then he bails, same shape as the bandit morale-break (breaksAndRuns) */
+const CEDRIC_FLEE_HP = 9;
+
+/** broken morale (enemyAi/movement.ts's breaksAndRuns): the health at or below which an enemy of this kind loses heart
+ *  and runs — a bandit at 2, Cedric at CEDRIC_FLEE_HP but in his final stand; -Infinity for every kind that fights to
+ *  the end. Moved here (G-07) so that the lost-raid resolver counts a broken raider out of the fight as the world does. */
+export function breakPoint(kind: EnemyKind, finalStand?: boolean): number {
+  return kind === 'bandit' ? 2 : kind === 'cedric' && !finalStand ? CEDRIC_FLEE_HP : -Infinity;
+}
+
 /** J51 follow-up: structural damage per hit against a keep piece — a
  *  different scale from ATTACK_DMG (tuned against the PLAYER's small HP
  *  pool), closer to what the player's own ram/cannon already deal it (a kind

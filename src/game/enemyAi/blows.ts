@@ -22,11 +22,10 @@ import { fireProp } from '@/components/world/RiggedProp';
 import { audio } from '@/lib/audio';
 import { pick } from '@/lib/rng';
 import { GRAB_EVERY, RUN_HAUL, haulOf, nextGrab } from '@/game/plunder';
-import { RANGED_ATTACK_CD, type RangedProfile } from './engage';
+import { raidDowned } from '@/game/directors/state';
+import { RANGED_ATTACK_CD, RANGED_DMG, type RangedProfile } from './engage';
 import type { KeepPiece } from './targeting';
 
-/** a crossbow bandit's hit-scan damage (its range and cooldown are engage.ts's) */
-export const RANGED_DMG = 1.2;
 /** a caster's spell bolt's damage (its range and cooldown are engage.ts's) */
 export const CASTER_SPELL_DMG = 1.3;
 /** Wave 37 (A3 remainder) · a siege crew's own manned-engine reload — much
@@ -75,6 +74,7 @@ export function blowAtGuard(data: EnemyData, st: GameState, guard: DefenderState
   if (guard.hp <= 0 && guard.state === 'ok') {
     guard.state = 'downed';
     guard.downedUntil = Date.now() + DOWNED_RECOVER_MS;
+    if (data.raid) raidDowned.add(id); // G-07 · for the raid's report, should the raid be settled
     const name = st.villagers.find((v) => v.id === id)?.name ?? 'A defender';
     st.notify(`${name} is knocked down defending ${onWall ? 'the battlements' : 'the homestead'}!`);
   }

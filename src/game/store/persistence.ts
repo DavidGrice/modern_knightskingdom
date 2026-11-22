@@ -195,6 +195,9 @@ export const PERSISTED_FIELDS = {
       return plunder;
     },
   },
+  // G-07 · a raid's report waiting to be read (settled away: it opens on his return); one read is left out. No
+  // migration: an older game loads a save that has one and loses only the report
+  raidReport:          { fresh: () => null, save: (st) => (st.raidReport && !st.raidReport.shown ? st.raidReport : undefined) },
 } satisfies { [K in PersistedKey]: FieldSpec<K> };
 
 /** Every persisted key, in wire order (derived — never hand-listed). */

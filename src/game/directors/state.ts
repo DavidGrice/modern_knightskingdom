@@ -23,6 +23,10 @@ export const raidLost: Flag = { current: false };
  *  its raiders come (the director's 1 Hz ticks: above 0 while the warning runs, 0 once they have come). No sides: no
  *  raid is coming or on — the sides go when the raid ends, won or lost, and at a session start. */
 export const raidPlan: { seed: number; sides: number[]; incoming: number } = { seed: 0, sides: [], incoming: 0 };
+/** G-07 · the defenders the home raid's raiders have knocked down so far (enemyAi/blows.ts), by villager id: the raid
+ *  report names them beside those its settling puts down (raidSettle.ts) — a garrison fallen away from home is settled
+ *  only once none stands, so the settling itself finds no one left to put down. Emptied as each raid comes. */
+export const raidDowned = new Set<string>();
 /** G-04 · test hook: the next roll for a raid comes up whatever the hour's odds (raidTiming.ts) — still behind the
  *  cooldown, the homestead's gates and any other major event; spent when the warning sounds */
 export const raidForce: Flag = { current: false };
@@ -38,6 +42,7 @@ export function resetDirectors(): void {
   raidPlan.sides = [];
   raidPlan.incoming = 0;
   raidForce.current = false;
+  raidDowned.clear();
 }
 
 onSessionReset(resetDirectors);

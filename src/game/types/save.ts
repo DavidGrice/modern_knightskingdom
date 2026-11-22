@@ -7,6 +7,7 @@ import type {
 import type { Alliance, CompanionState, Villager } from './villagers';
 import type { KeepState } from '../data/keep';
 import type { SocketSite } from '../sites/sites';
+import type { RaidReport } from '../raidResolver';
 
 export interface ActiveSideQuest {
   npcId: string;
@@ -154,6 +155,10 @@ export interface SaveGame {
    *  hideouts pay a share of back. Absent on saves from before it (version 1), which SAVE_MIGRATIONS gives an empty
    *  one. */
   plunder?: Partial<Record<ItemId, number>>;
+  /** G-07 · the report of a raid the player fell out of, not yet read (directors/raidSettle.ts): one settled while he
+   *  was away waits for his return, and a reload before it must not lose it. One read is not saved; absent (every
+   *  save from before it), none waits. */
+  raidReport?: RaidReport | null;
   /** gate buildings: absent/true = open (passable), false = closed */
   gateOpen?: Record<string, boolean>;
   /** buildings under siege damage: absent = full HP (see data/buildables maxHpFor) */

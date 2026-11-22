@@ -285,7 +285,7 @@ describe('the escape', () => {
     expect(game().plunder).toEqual({ stone: 6 });
     tick();
     expect(notes.find((n) => n.startsWith('The raiders had the field.'))).toBe(
-      'The raiders had the field. They are gone by dawn, and they left nothing behind. They got away with 6× Stone.');
+      'The raiders had the field. They are gone by dawn, and they took and tore down what they could. They got away with 6× Stone.');
   });
 });
 

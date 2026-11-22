@@ -9,6 +9,7 @@ import { useGameStore } from './store/gameStore';
 import { villagerMobs } from './villagerMobs';
 import { worldEnv } from './env';
 import { repairCost } from './repair';
+import { runSessionResetHooks } from './store/sessionHooks';
 import type { EnemyData } from './combat';
 import type { CharacterConfig, PlacedBuilding, SaveGame } from './types';
 import RUINS_SAVE from './ruins.main-save.json';
@@ -92,6 +93,17 @@ describe('a raid leaves ruins', () => {
     // 9/30 is below a third: ruined. Priced by the breach (9/21), it would still stand breached
     game().damageBuilding('w1', 3, 'was rammed', true);
     expect(state('w1')).toEqual(['mc010', 1, false, 'stonewall', 9]);
+  });
+
+  it('a lost raid wrecks as the blows do: a breached wall left a ruin in its ruined form, keeping what it was; one razed is gone', () => {
+    add(put('w1', 'stonewall', 0, 0), put('w2', 'stonewall', 8, 0));
+    game().damageBuilding('w1', 12, 'was rammed', true); // breached: 18 HP, mc009
+    game().wreckPieces(['w1'], ['w2']);
+    expect([state('w1'), state('w2')]).toEqual([['mc010', 0, true, 'stonewall', null], 'gone']);
+    // and it is raised again for its whole bill (OD-22), as a blow's ruin is
+    const before = stone();
+    game().constructBuilding('w1', 0.25);
+    expect(before - stone()).toBe(10);
   });
 
   it('one blow that takes a whole wall to 0 leaves the ruin in its ruined form', () => {
@@ -207,6 +219,142 @@ describe('rebuilding a ruin', () => {
   });
 });
 
+describe('a ruin\'s rebuild costs its whole bill (G-07, OD-22)', () => {
+  it('a building\'s ruin takes the bill as the work starts, once; short, it waits with a word and is not raised', () => {
+    add(put('w1', 'stonewall', 0, 0), put('w2', 'stonewall', 20, 0));
+    game().damageBuilding('w1', 999, 'was rammed', true);
+    game().damageBuilding('w2', 999, 'was rammed', true);
+    const before = stone();
+    game().constructBuilding('w1', 0.25);
+    expect([stone(), state('w1')[1]]).toEqual([before - 10, 0.25]); // the Castle Wall (Crenellated)'s 10, by repairCost at 0 HP
+    for (let i = 0; i < 3; i++) game().constructBuilding('w1', 0.25);
+    expect([stone(), state('w1')]).toEqual([before - 10, ['stonewall', 1, false, 'stonewall', null]]);
+    // short of stone: no progress, no stock spent (nor below nothing), and the word why
+    useGameStore.setState({ inventory: { ...game().inventory, stone: 9 } });
+    game().constructBuilding('w2', 0.25);
+    expect([stone(), state('w2')[1], state('w2')[2]]).toEqual([9, 0, true]);
+    expect(notes.at(-1)).toBe('Not enough materials to rebuild the Castle Wall (Crenellated) — it needs 10 Stone.');
+  });
+
+  it('a keep piece lying in ruins, the same — and the dragon\'s ruins too', () => {
+    expect(game().placeBuilding('keep', 0, 0, 0)).toBe(true);
+    game().raiseKeepPart('n', 'wall_crenel');
+    game().workKeepPart('n', 1);
+    game().damageKeepPart('n', 999);
+    useGameStore.setState({ inventory: { ...game().inventory, stone: 13 } });
+    game().workKeepPart('n', 0.5);
+    expect([game().keep!.built.n, stone()]).toEqual([0, 13]);
+    expect(notes.at(-1)).toBe('Not enough materials to rebuild the Crenellated Wall — it needs 14 Stone.');
+    useGameStore.setState({ inventory: { ...game().inventory, stone: 20 } });
+    game().workKeepPart('n', 0.5);
+    game().workKeepPart('n', 0.5);
+    expect([game().keep!.built.n, game().keep!.ruined, stone()]).toEqual([1, {}, 6]);
+    // a stable the dragon left in ruins (wood 14, plank 8)
+    add({ ...put('st', 'stable', 30, 30), built: 0, ruin: true });
+    useGameStore.setState({ inventory: { wood: 20, plank: 8 } });
+    game().constructBuilding('st', 1);
+    expect([game().inventory, state('st')[0], state('st')[2]]).toEqual([{ wood: 6, plank: 0 }, 'stable', false]);
+  });
+
+  it('the builders at a ruin the stores cannot pay for are told once, with no thud, however long they stand there', () => {
+    add(put('w1', 'stonewall', 0, 0));
+    game().damageBuilding('w1', 999, 'was rammed', true);
+    useGameStore.setState({ villagers: [{ id: 'b1', name: 'Bo', job: 'builder' }], inventory: { ...game().inventory, stone: 3 } });
+    worldEnv.time = 0.4;
+    villagerMobs.b1 = { x: 0, z: 2 };
+    const short = () => notes.filter((n) => n.startsWith('Not enough materials to rebuild')).length;
+    sounds = [];
+    for (let i = 0; i < 40; i++) game().tickVillagers(0.5); // twenty seconds of their sweeps
+    expect([short(), sounds.filter((s) => s === 'brick_collide').length, state('w1')[1]]).toEqual([1, 0, 0]);
+    // a swing of the hammer is told each time, with its thud
+    game().constructBuilding('w1', 0.25);
+    expect([short(), sounds.filter((s) => s === 'brick_collide').length]).toEqual([2, 1]);
+    // paid, and raised; left a ruin again with the stores short, they are told again
+    useGameStore.setState({ inventory: { ...game().inventory, stone: 20 } });
+    game().tickVillagers(0.5);
+    expect([stone(), state('w1')[1]]).toEqual([10, 0.02]);
+    useGameStore.setState({
+      buildings: game().buildings.map((b) => (b.id === 'w1' ? { ...b, built: 0 } : b)), inventory: { ...game().inventory, stone: 3 },
+    });
+    for (let i = 0; i < 4; i++) game().tickVillagers(0.5);
+    expect(short()).toBe(3);
+    // a save loaded brings its pieces' ids back (the same ruin, reloaded): what the builders were told goes with the session
+    runSessionResetHooks();
+    villagerMobs.b1 = { x: 0, z: 2 };
+    worldEnv.time = 0.4;
+    for (let i = 0; i < 4; i++) game().tickVillagers(0.5);
+    expect(short()).toBe(4);
+    delete villagerMobs.b1;
+  });
+});
+
+// G-07 · by what was placed, priced as it stands: the piece's bill less the repair it wants (repair.ts's pieceWorth),
+// nothing for a ruin not yet paid to raise (OD-22). By the whole bill, a ruin undone and placed anew was raised for
+// nothing, and one pulled down and placed anew for half its rebuild.
+describe('demolish and undo refund what was placed, as it stands (ROADMAP: they refunded by the damaged form)', () => {
+  /** a Castle Wall (Plain) placed by the player's own hand, so that undo has it (the first open spot from home's middle out) */
+  const placeWall = () => {
+    const spot = [0, 8, 16, 24].flatMap((x) => [0, 8, 16, 24].map((z) => [x, z])).find(([x, z]) => game().evalPlacement('mc006', x, z, 0).valid)!;
+    expect(game().placeBuilding('mc006', spot[0], spot[1], 0)).toBe(true);
+    return game().buildings.at(-1)!.id;
+  };
+
+  it('a breached Castle Wall (Plain), half its HP gone, pulled down gives back half of its 10 stone less the 5 to mend it', () => {
+    add(put('w1', 'mc006', 0, 0), put('w2', 'mc006', 20, 0));
+    game().damageBuilding('w1', 15, 'was rammed');
+    expect(state('w1')[0]).toBe('mc009');
+    const before = stone();
+    game().removeBuilding('w1');
+    expect(stone()).toBe(before + 2); // was 3, half the breach's own 6
+    expect(notes.at(-1)).toBe('Castle Wall (Plain) removed (half materials refunded)');
+    game().removeBuilding('w2'); // a whole one, half its 10
+    expect(stone()).toBe(before + 7);
+  });
+
+  it('a just-placed wall battered, undone, gives back its 10 stone less its repair — undone and placed anew costs the repair', () => {
+    const id = placeWall();
+    game().damageBuilding(id, 15, 'was rammed');
+    const before = stone();
+    game().undoLast();
+    expect([stone(), bld(id)]).toEqual([before + 5, undefined]);
+    expect(notes.at(-1)).toBe('Undid Castle Wall (Plain) (materials returned)');
+  });
+
+  it('a ruin not yet paid to raise gives nothing back, pulled down or undone (OD-22: its rebuild is its whole bill)', () => {
+    const id = placeWall();
+    game().damageBuilding(id, 999, 'was rammed', true);
+    expect(state(id)[0]).toBe('mc010');
+    const before = stone();
+    game().undoLast();
+    expect([stone(), bld(id)]).toEqual([before, undefined]); // was 10: placed anew, raised for nothing
+    expect(notes.at(-1)).toBe('Undid Castle Wall (Plain) (nothing to return from a ruin)');
+    add(put('w3', 'mc006', 30, 30));
+    game().damageBuilding('w3', 999, 'was rammed', true);
+    game().removeBuilding('w3');
+    expect(stone()).toBe(before); // was 5 by the whole bill: placed anew for half its rebuild
+    expect(notes.at(-1)).toBe('Castle Wall (Plain) removed (nothing to salvage from a ruin)');
+    // one whose rebuild is paid is a site like any other: half its bill
+    add(put('w4', 'mc006', 30, 30));
+    game().damageBuilding('w4', 999, 'was rammed', true);
+    game().constructBuilding('w4', 0.25);
+    expect(stone()).toBe(before - 10);
+    game().removeBuilding('w4');
+    expect(stone()).toBe(before - 5);
+  });
+
+  it('the wrecking tool\'s patch shows what pulling its pieces down gives back', () => {
+    add(put('w1', 'mc006', 0, 0), put('w2', 'mc006', 0, 8), put('w3', 'mc006', 0, 16));
+    game().damageBuilding('w1', 15, 'was rammed');
+    game().damageBuilding('w2', 999, 'was rammed', true);
+    useGameStore.setState({ demolishRect: { minX: -2, maxX: 2, minZ: -2, maxZ: 18 } });
+    const { ids, refund } = game().demolishPreview();
+    expect([ids, refund]).toEqual([['w1', 'w2', 'w3'], { stone: 7 }]); // 2 + 0 + 5 (it read 3 + 2 + 5, by the damaged form)
+    const before = stone();
+    game().demolishArea();
+    expect(stone()).toBe(before + 7);
+  });
+});
+
 describe('a save from before baseType', () => {
   it('repairs a wall the damage had turned into a broken phase to the chain\'s intact wall, and leaves a placed one be', () => {
     game().loadFromSave(JSON.parse(JSON.stringify(RUINS_SAVE)) as SaveGame);
@@ -223,7 +371,9 @@ describe('a save from before baseType', () => {
     // a Breached Wall placed as it is, never damaged, is itself
     game().damageBuilding('d1', 6, 'was rammed');
     expect(state('d1')).toEqual(['mc009', 1, false, 'mc009', 15]);
-    // the dragon's ruin is rebuilt as the stable it was
+    // the dragon's ruin is rebuilt as the stable it was — G-07 (OD-22) changed this on purpose: for the stable's whole
+    // bill, paid as the work starts (it was raised for nothing)
+    useGameStore.setState({ inventory: { ...game().inventory, plank: 50, stone: 50, wood: 50 } });
     game().constructBuilding('h1', 1);
     expect(state('h1')).toEqual(['stable', 1, false, null, null]);
   });

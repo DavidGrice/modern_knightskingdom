@@ -18,12 +18,8 @@ import { roadEntry, roadEntryOut, roadSpeedMult } from '@/game/data/road';
 import { pushOutOfWater } from '@/game/waterworks';
 import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { siegeWay } from './targeting';
+import { breakPoint } from '@/game/data/enemies';
 import type { Mob, Route } from './frame';
-
-/** Cedric's Siege: he breaks and flees at ~20% of his unscaled 45 HP in
- *  every appearance except his own sanctioned final stand — a real fight
- *  first, then he bails, same shape as the bandit morale-break (breaksAndRuns) */
-const CEDRIC_FLEE_HP = 9;
 
 /** An enemy's speed, worked out when its figure renders. */
 export function speedOf(data: EnemyData): number {
@@ -174,9 +170,9 @@ export function walkedIn(m: Mob, d: number): boolean {
  *  are excluded — that is the one fight he does not walk away from. */
 export function breaksAndRuns(data: EnemyData, st: GameState): void {
   const m = data.mob;
+  // (G-07 · the health each breaks at is data/enemies.ts's breakPoint, which the lost-raid resolver reads too)
   if (
-    (data.kind === 'bandit' && data.hp <= 2
-      || (data.kind === 'cedric' && !data.finalStand && data.hp <= CEDRIC_FLEE_HP))
+    data.hp <= breakPoint(data.kind, data.finalStand)
     && !m.fleeing && !m.elevated
     // Wave 58 (H4): an elevated raider never breaks for the treeline —
     // the flight (step.ts) stands him on the ground under him,

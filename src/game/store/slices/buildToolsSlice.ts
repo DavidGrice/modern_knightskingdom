@@ -11,6 +11,7 @@ import {
   FILL_REFUND, MAX_WATERWORKS, digCost, setWaterworks, shapeConflict, snapDigRect, terrainConflict, waterworksInRect,
 } from '../../waterworks';
 import { buildUndo, seq } from '../storeCounters';
+import { salvageOf } from '../../repair';
 import type { SliceCreator } from './types';
 
 export interface BuildToolsSlice {
@@ -215,11 +216,11 @@ export const createBuildToolsSlice: SliceCreator<BuildToolsSlice> = (set, get) =
       if (!r) return { ids: [], refund };
       const hit = buildingsInRect(st.buildings, st.destination ?? null, r);
       for (const b of hit) {
-        for (const [itemId, n] of Object.entries(BUILDABLE_BY_ID[b.type]?.cost ?? {})) {
-          // the same half-of-cost removeBuilding actually pays back, so the
-          // number shown before the click is the number that arrives after it
-          const back = Math.floor((n as number) / 2);
-          if (back > 0) refund[itemId as ItemId] = (refund[itemId as ItemId] ?? 0) + back;
+        // the same salvage removeBuilding actually pays back (repair.ts's
+        // salvageOf: half of what the piece is worth now), so the number shown
+        // before the click is the number that arrives after it
+        for (const [itemId, n] of Object.entries(salvageOf(b, st.buildingHp[b.id]))) {
+          refund[itemId as ItemId] = (refund[itemId as ItemId] ?? 0) + (n as number);
         }
       }
       return { ids: hit.map((b) => b.id), refund };

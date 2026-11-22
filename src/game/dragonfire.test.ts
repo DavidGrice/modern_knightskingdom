@@ -146,8 +146,10 @@ describe('dragonfire', () => {
   it('a ruin that is rebuilt comes back whole, whatever was on record for it', () => {
     // what the old second breath left behind in a save: a ruin with hit points
     build({ ...piece('hall', 'storehouse', 0, 0), built: 0, ruin: true }, piece('shed', 'storehouse', 30, 0));
-    useGameStore.setState({ buildingHp: { hall: 34, shed: 20 } });
+    // (G-07, OD-22, on purpose: the rebuild is paid for now — the storehouse's whole bill, as the work starts)
+    useGameStore.setState({ buildingHp: { hall: 34, shed: 20 }, inventory: { plank: 10, stone: 6 } });
     game().constructBuilding('hall', 0.5);
+    expect(game().inventory).toEqual({ plank: 0, stone: 0 });
     expect([town(), game().buildings[0].ruin]).toEqual([[['hall', 'ruin', 34], ['shed', 'standing', 20]], true]); // still a ruin
     game().constructBuilding('hall', 1);
     // rebuilt: the flag and the stale hit points go together; nobody else's are touched

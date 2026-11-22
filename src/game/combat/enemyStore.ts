@@ -179,7 +179,7 @@ export const useEnemyStore = create<EnemyStore>((set, get) => ({
     // Wave 38 (A1): Cedric now reads the shared boss curve instead of a flat
     // 1 — applies to every 'cedric' spawn (final stand, the pre-final-stand
     // camp duel, the raid-leader cameo), harmless for the latter two since he
-    // still flees at the same flat CEDRIC_FLEE_HP (game/enemyAi/movement.ts), just takes a
+    // still flees at the same flat CEDRIC_FLEE_HP (game/data/enemies.ts), just takes a
     // few more hits to get there at high tier. Storm stays flat 1: a 1-HP
     // duel has nothing to scale (see bossEncounter.ts's own header comment).
     const scale = (kind === 'storm' ? 1 : kind === 'cedric' ? bossTierScale('cedric') : raidStrength()) * extraScale;
