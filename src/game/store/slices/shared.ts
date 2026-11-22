@@ -1,8 +1,9 @@
 // CLN-07 · the store's internal helpers that act through set/get and that more than one slice calls: the quest
 // counters (the main quest's objectives and a side errand's), a quest's completion, and the announcement of a rank
-// crossed. They were functions inside createGameStore's closure; each slice that calls one takes it from here under
-// the same name, so every action reads as it did.
-import type { Quest, SkillId } from '../../types';
+// crossed (and, OD-22, a ruin's rebuild paid for: a building's and a keep piece's alike). They were functions inside
+// createGameStore's closure; each slice that calls one takes it from here under the same name, so every action reads
+// as it did.
+import type { ItemId, Quest, SkillId } from '../../types';
 import { NPCS, sideQuestGiverName, sideQuestsOf } from '../../data/npcs';
 import { RECIPES } from '../../data/recipes';
 import { BUILDABLE_BY_ID } from '../../data/buildables';
@@ -10,7 +11,14 @@ import { perkSlotsEarned, SKILLS, type RankDef } from '../../data/ranks';
 import { audio } from '@/lib/audio';
 import { WORLD_DESTINATION_BY_ID } from '../../data/worlds';
 import { activeQuestOf } from '../storeHelpers';
+import { billText, rebuildCost } from '../../repair';
+import { onSessionReset } from '../sessionHooks';
 import type { StoreGet, StoreSet } from './types';
+
+/** OD-22 · the ruins the builders have been told they cannot pay for, by piece (`payRebuild`'s `crew`): their pass asks
+ *  every sweep of the day, and the word is given them once — until the bill is paid */
+const crewToldShort = new Set<string>();
+onSessionReset(() => crewToldShort.clear()); // a save loaded brings its pieces' ids back (seq.build is recomputed from it)
 
 export function sharedActions(set: StoreSet, get: StoreGet) {
   function bumpSideQuest(kind: 'gather' | 'craft' | 'build' | 'kill' | 'joust' | 'duel' | 'caravan' | 'defend', target: string, amount: number) {
@@ -133,5 +141,26 @@ export function sharedActions(set: StoreSet, get: StoreGet) {
     }
   }
 
-  return { bumpSideQuest, bumpQuestCounters, completeQuest, announceRankChange };
+  /** OD-22 · a ruin's rebuild paid for as the work on it starts: its whole bill (repair.ts's rebuildCost) out of the
+   *  stores — or, with them short, nothing paid and nothing raised, and a word why: to a swing of the hammer, with its
+   *  thud, each time (once while it shows); to the builders (`crew`), whose pass asks every sweep all day wherever the
+   *  player is, the word once for the piece (`ref`) until its bill is paid, and no thud. True if paid. */
+  function payRebuild(ref: string, name: string, cost: Partial<Record<ItemId, number>>, crew = false): boolean {
+    const st = get();
+    const bill = rebuildCost(cost);
+    if (!st.canAfford(bill)) {
+      const text = `Not enough materials to rebuild the ${name} — it needs ${billText(bill)}.`;
+      if (crew ? !crewToldShort.has(ref) : !st.notifications.some((n) => n.text === text)) st.notify(text);
+      if (crew) crewToldShort.add(ref);
+      else audio.play('brick_collide', 0.5);
+      return false;
+    }
+    crewToldShort.delete(ref);
+    const inv = { ...st.inventory };
+    for (const [id, n] of Object.entries(bill)) inv[id as ItemId] = (inv[id as ItemId] ?? 0) - (n as number);
+    set({ inventory: inv, dirty: true });
+    return true;
+  }
+
+  return { bumpSideQuest, bumpQuestCounters, completeQuest, announceRankChange, payRebuild };
 }

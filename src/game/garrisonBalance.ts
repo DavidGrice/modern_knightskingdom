@@ -21,6 +21,13 @@
 // half its health gone); lost — every defender down. A raid is the leader (Gilbert the Bad) and raidSize(worth)
 // bandits (directors/raidTiming.ts); the casters and shieldbearers a filler slot may roll at tier 1 and 2 are left
 // out, as are Cedric's own raids and the crown's knights.
+//
+// G-07 · the same fight settles a raid the player has fallen out of (game/raidResolver.ts), with two things the live
+// fight has and the table leaves out (garrisonFight's `field`): a defender posted up on a tower or a keep's wall-walk,
+// whom the raiders on the ground skip outright (enemyAi/targeting.ts's nearestGuard: DefenderState.elevated) — he is
+// struck by none of them and fights on; a thief, who strips the stores rather than fight (G-06), so strikes no one and
+// is struck only once every raider who fights is down; and a raider's broken morale (data/enemies.ts's breakPoint: a
+// bandit at 2 health runs), out of the fight from then on. With none of them, the fight is the table's, step for step.
 import { COURAGE_NEUTRAL, defenderMaxHp, defenderStrike } from './defenders';
 import { raidStrengthAt } from './difficulty';
 import { raidSize } from './directors/raidTiming';
@@ -51,22 +58,43 @@ export function raidFighters(followers: number, threat: { tier: number; difficul
   return [...Array.from({ length: followers }, () => one('bandit')), one(leader)];
 }
 
+/** G-07 · what the live fight has beyond the table's (this file's head): which defenders stand posted up, which
+ *  raiders are thieves, and the health at or below which each raider runs — each by its place in the garrison or the
+ *  raid; absent, none (and every raider fights to the end) */
+export interface FightField { up?: readonly boolean[]; thieves?: readonly boolean[]; breaksAt?: readonly number[] }
+/** How a fight went: its outcome, the seconds it took (to the last raider down, or to the garrison's fall), every
+ *  fighter's health at its end (0 or below: down), and when each raider was first struck (Infinity: never) */
+export interface FightResult { outcome: GarrisonOutcome; time: number; garrison: number[]; raid: number[]; struck: number[] }
+
 /** How a garrison fares against a raid alone (this file's head says how the fight is settled). */
 export function garrisonOutcome(garrison: readonly Fighter[], raid: readonly Fighter[]): GarrisonOutcome {
-  const g = garrison.map((f) => ({ ...f, t: 0 }));
-  const r = raid.map((f) => ({ ...f, t: 0 }));
+  return garrisonFight(garrison, raid).outcome;
+}
+
+/** The fight itself, stepped as this file's head says, on the `field` the live one has (G-07): what garrisonOutcome
+ *  reads, and the lost-raid resolver with it. */
+export function garrisonFight(garrison: readonly Fighter[], raid: readonly Fighter[], field: FightField = {}): FightResult {
+  const g = garrison.map((f, i) => ({ ...f, t: 0, up: !!field.up?.[i] }));
+  const r = raid.map((f, i) => ({ ...f, t: 0, thief: !!field.thieves?.[i], struck: Infinity, breaks: field.breaksAt?.[i] ?? 0 }));
+  /** a raider still in the fight: on his feet, and not run */
+  const fights = (f: (typeof r)[number]) => f.hp > 0 && f.hp > f.breaks;
   const full = g.reduce((a, f) => a + f.hp, 0);
-  const up = (side: typeof g) => side.find((f) => f.hp > 0);
+  const result = (outcome: GarrisonOutcome, time: number): FightResult =>
+    ({ outcome, time, garrison: g.map((f) => f.hp), raid: r.map((f) => f.hp), struck: r.map((f) => f.struck) });
   for (let time = 0; time < FIGHT_CAP; time += FIGHT_STEP) {
-    // both sides' swings land together: whoever stood as the step began swings, at whom he stood against
-    const gFoe = up(r), rFoe = up(g);
-    if (!rFoe) return 'lost';
-    if (!gFoe) return g.every((f) => f.hp > 0) && g.reduce((a, f) => a + f.hp, 0) > full / 2 ? 'held' : 'pressed';
-    const gUp = g.map((f) => f.hp > 0), rUp = r.map((f) => f.hp > 0);
-    g.forEach((f, i) => { if (gUp[i] && (f.t -= FIGHT_STEP) <= 0) { gFoe.hp -= f.dmg; f.t += f.cd; } });
-    r.forEach((f, i) => { if (rUp[i] && (f.t -= FIGHT_STEP) <= 0) { rFoe.hp -= f.dmg; f.t += f.cd; } });
+    // both sides' swings land together: whoever stood as the step began swings, at whom he stood against — the
+    // garrison at the first raider standing who fights (a thief once none does), the raiders at the first defender
+    // standing on the ground
+    const gFoe = r.find((f) => fights(f) && !f.thief) ?? r.find(fights), rFoe = g.find((f) => f.hp > 0 && !f.up);
+    if (!g.some((f) => f.hp > 0)) return result('lost', time);
+    if (!gFoe) return result(g.every((f) => f.hp > 0) && g.reduce((a, f) => a + f.hp, 0) > full / 2 ? 'held' : 'pressed', time);
+    const gUp = g.map((f) => f.hp > 0), rUp = r.map((f) => fights(f) && !f.thief);
+    g.forEach((f, i) => {
+      if (gUp[i] && (f.t -= FIGHT_STEP) <= 0) { gFoe.hp -= f.dmg; gFoe.struck = Math.min(gFoe.struck, time); f.t += f.cd; }
+    });
+    if (rFoe) r.forEach((f, i) => { if (rUp[i] && (f.t -= FIGHT_STEP) <= 0) { rFoe.hp -= f.dmg; f.t += f.cd; } });
   }
-  return 'pressed';
+  return result('pressed', FIGHT_CAP);
 }
 
 /** what the table arms its garrison with: bare hands, or a sword and shield of a tier */

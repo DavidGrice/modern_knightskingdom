@@ -22,6 +22,7 @@ import CraftingPanel from './CraftingPanel';
 import SkillsPanel from './SkillsPanel';
 import ParleyPanel from './ParleyPanel';
 import GuildPanel from './GuildPanel';
+import RaidReportPanel from './RaidReportPanel';
 
 // Quest Log moved to its own file (QuestLogPanel.tsx) — a regional parchment
 // journal replacing this flat list, see that file's header comment.
@@ -65,6 +66,7 @@ function Panel({ panel }: { panel: PanelId }) {
     case 'workshop': return <WorkshopPanel />;
     case 'appearance': return <AppearancePanel />;
     case 'bestiary': return <BestiaryPanel />;
+    case 'raidReport': return <RaidReportPanel />;
     default: return null;
   }
 }

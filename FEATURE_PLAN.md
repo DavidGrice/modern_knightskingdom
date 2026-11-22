@@ -504,6 +504,39 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   frame for frame as `main`; the tint screenshot. ROADMAP: a new fixed entry, OPEN-030/050/051 closed, notes on the
   settlement-resident and shut-keep walk-through entries, and three "Seen, not fixed": the Armory's stale halberd
   note, a guard off his post drawn at its height, and a rally planted by looking at a building landing behind it.
+- **#312 — Wave 73** (G-07): lost raids. A pure, seeded resolver (`game/raidResolver.ts`) settles a raid the player
+  falls out of by G-08's one fight model (`garrisonBalance.ts`'s stepping, now `garrisonFight`; `garrisonOutcome` and
+  the pinned table unchanged) on the live garrison (each defender not downed at his live health, posted up or not:
+  struck by no raider on the ground) against the raiders standing (live health, blow, cooldown, crossbow or not; a
+  thief strikes no one; a bandit breaks at 2, `data/enemies.ts`'s `breakPoint`, shared with `breaksAndRuns`), and
+  counts what it costs: goods stolen (each thief's grabs in `nextGrab`'s order from when he is at the stores), pieces
+  ruined (pressed: a share of the batterable pieces; lost: one per raider standing), buildings razed (lost:
+  `raidStrength()` x raiders standing x 0.5, one at least, nearest `raidPlan.sides` first, strayed by `raidSeedFor`;
+  keep pieces to bare sockets, never the foundation; nothing ruined or razed once no raider who came to fight stands),
+  defenders downed. `directors/raidSettle.ts` applies it (`wreckPieces`, `gotAway`, the downed fields a blow sets) at
+  a knock-out, at home or away, in place of F-17's clear-all — held and pressed paid as a raid beaten back; lost pays
+  nothing, and its notice says "tore down" only if something was, and "by dawn" only after a knock-out — and, away,
+  once a raider is up at the homestead with no defender standing (measured on `main`: an away raid is stepped live,
+  but with the garrison down it never ended). A raid-report panel (`RaidReportPanel.tsx`) opens at dawn or on return;
+  an unread report is saved (`SaveGame.raidReport`, no version step). OD-22 built: a ruin's rebuild costs its whole
+  bill (`repair.ts`'s `rebuildCost`, paid as the work starts, waiting with a notice when short — to the builders once,
+  with no thud); demolish, undo and the wrecking tool's preview refund by what was placed, priced as the piece stands
+  (`pieceWorth`: its bill less its repair, nothing for an unpaid ruin), so neither dodges OD-22 — a breached wall
+  pulled down gives back 2 stone (`main` 3) and a ruin undone nothing (`main` 5), the fix pass's choice past the
+  plan's literal "refund by `buildingBase`", for the owner to confirm. The report names every defender downed in the
+  raid, and the guard at the merchant's camp is not home garrison (`homeGuard`). Golden tests first
+  (`lostRaid.test.ts`, 4, on the unchanged base: the won ending unchanged, the three knock-out cases changed on
+  purpose); `raidResolver.test.ts` (9), `lostRaid.test.ts`'s settle block (12), `ruins.test.ts`'s OD-22 (3), refund
+  (4) and wreck cases; the implementer's 47 take-outs each fail; the evidence pass's 31 reverts, 29 caught (the
+  wreck's ruin branch, now pinned by a test, and the `Panels.tsx` case, checked live); the own check's 8 take-outs
+  each fail; the suite 107 files, 936. Calibrated live (six configurations, the player held out of it): the first
+  build, two runs each, 10 of 12 agree; the final build, one run each, 5 of 6 — the lone level-1 sword on open ground
+  forecast pressed, held live on the first build and still going at 150 s on the final; the forecast's theft runs
+  kinder than live where a garrison stands on the ground (0 goods against 8-35). For the owner: one level-1 sword on
+  the ground loses buildings in 14 of 18 cells (stores worth 500-3,000, tiers 0-5), two in 7; posted up on a keep's
+  walks they hold every cell. ROADMAP: a new fixed entry, the refund entry FIXED, OD-22 decided and built, and three
+  "Seen, not fixed": a ruin waiting on its bill holds the builders; the resolver leaves out the ladder, siege time,
+  wall charges and engines; away, a raid kept out of a posted-up garrison's reach never ends.
 
 ## Owner decisions
 
@@ -531,7 +564,7 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
 | OD-18 | (A) What do the siege engines attack first, and how is the climax built? | Strongholds, then the castle: bandit strongholds built from castle-set catalog pieces (fully breakable and solid) are the first siege target; the Rival Castle capture is the climax, with breakable sections overlaid where a geometry probe of template-05 allows and ladders over the baked walls. One multi-site socket model (G-36) serves both and the town plans. | G-36, G-15b, G-16a, G-16b, G-32a, G-32b, G-33a, G-33b |
 | OD-19 | (A) How does the plan run? | Run all waves, one PR each, without stopping except for real design questions. | — |
 | OD-20 | (R) Whose men hold the hideouts, and whom do they raid? | Outlaw bands hostile to every allegiance. Their pressure adds an outlaw raid source at settlements even at neutral standing (a deliberate change to settlementRaid.ts:69-75), and Cedric-sworn players face them too. No hideout sits at CEDRIC_WORLD. | G-15a, G-24a |
-| OD-22 | (R) Should rebuilding a ruin cost materials? (logged by wave 68) | Yes: a ruin's rebuild charges its repair bill at 0 HP, the piece's whole cost, the dragon's ruins included, so letting a piece fall is never cheaper than mending it. Until then (wave 68 on) a ruin is raised free, as the dragon's always were, and only a standing repair costs. | G-05, G-07 |
+| OD-22 | (R) Should rebuilding a ruin cost materials? (logged by wave 68) | Yes: a ruin's rebuild charges its repair bill at 0 HP, the piece's whole cost, the dragon's ruins included, so letting a piece fall is never cheaper than mending it. Built in wave 73 (#312): `repair.ts`'s `rebuildCost` (repairCost at 0 HP), paid as the work starts; short, the rebuild waits with a notice (told the builders once, not every sweep). A ruin pulled down or undone gives nothing back, and a battered piece refunds what it is worth as it stands (`pieceWorth`: its bill less its repair), so no pull-down or undo dodges the bill. (Waves 68-72 raised a ruin free, as the dragon's always were.) | G-05, G-07 |
 | OD-21 | (R) Should the graphics-quality tier cap population? | A uniform population cap; the graphics tier limits only how many villagers are simulated as agents, so yields and caravans never depend on a rendering setting. | G-23 |
 
 ## Arcs

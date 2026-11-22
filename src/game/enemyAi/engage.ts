@@ -9,9 +9,12 @@ import type { Mob } from './frame';
 /** crossbow-armed bandits (`data.ranged`): hold at range and hit-scan
  *  instead of closing to melee, mirroring Defenders.tsx's own bow loadout
  *  (`target.hp -= dmg` applied directly at range-check time, no projectile —
- *  the damage is blows.ts's RANGED_DMG) */
+ *  the damage is RANGED_DMG, below) */
 export const RANGED_RANGE = 14;
 export const RANGED_ATTACK_CD = 1.8;
+/** a crossbow bandit's hit-scan damage (moved from blows.ts, G-07: the lost-raid resolver reads it, and blows.ts's
+ *  imports would close a cycle through the knock-out) */
+export const RANGED_DMG = 1.2;
 /** Wave 37 (A3 remainder) · a caster's own ranged profile — a real, visible
  *  spell bolt (fireSpellBolt) rather than another silent hit-scan, but the
  *  same range/no-kiting AI SHAPE as a ranged bandit (see rangedProfileOf

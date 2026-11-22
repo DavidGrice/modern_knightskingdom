@@ -59,8 +59,9 @@ export const SIEGE_RETARGETS = 2;
 const SIDE_PROBE = 1.6;
 
 /** G-03 · one of the player's own pieces a raider shut out batters: a wall (walls.ts's isRampart — tall enough to seal)
- *  or a gate standing shut, finished, at home — never a gate standing open, which is the way through */
-function batterable(st: Pick<GameState, 'gateOpen'>, b: PlacedBuilding): boolean {
+ *  or a gate standing shut, finished, at home — never a gate standing open, which is the way through (G-07: the pieces
+ *  a lost raid's resolver ruins, directors/raidSettle.ts) */
+export function batterable(st: Pick<GameState, 'gateOpen'>, b: PlacedBuilding): boolean {
   return isHomeBuilding(b) && isBuilt(b) && isRampart(b.type) && !(isDoorLike(b.type) && (st.gateOpen[b.id] ?? true));
 }
 

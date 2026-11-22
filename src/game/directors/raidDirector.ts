@@ -6,7 +6,9 @@
 // (raidTiming.ts), never on top of another major event (game/majorEvents.ts), and never unannounced: the horn sounds,
 // and the raiders come warningLeadTime() seconds later. G-06 · as many as the homestead's stores are worth (raidSize),
 // every other one behind the leader a thief come to strip them (game/plunder.ts); and its end — which waits for the
-// last thief to fall or get away — names the goods lost and the goods taken back.
+// last thief to fall or get away — names the goods lost and the goods taken back. G-07 · a raid the player falls out of
+// is settled as his garrison's fight goes (raidSettle.ts): knocked out, or away with the garrison fallen and raiders
+// on the field, which nothing in the world would end.
 import { useEnemyStore, type EnemyData, type EnemyKind } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { isHomeBuilding, type ItemId } from '@/game/types';
@@ -25,7 +27,8 @@ import { majorEventOn } from '@/game/majorEvents';
 import { approachPoint, raidSeedFor, raidSides, sidesNamed } from './approach';
 import { raidDue, raidSize, stockpileValue, thiefSlot, warningLeadTime } from './raidTiming';
 import { goodsNamed, haulOf, raidHaul, resetRaidHaul } from '@/game/plunder';
-import { raidForce, raidPlan } from './state';
+import { raidDowned, raidForce, raidPlan } from './state';
+import { garrisonStands, homeRaiders, settleRaid } from './raidSettle';
 import type { Counter, Flag, Spawn } from './types';
 
 /** Wave 37 (A3 remainder) · rolled once per plain-bandit filler slot in the
@@ -74,18 +77,30 @@ export function raidDirector(st: GameState, list: EnemyData[], spawn: Spawn, rai
   // (never gated) is what delivers that notification regardless of where
   // the player is.
   raidCooldown.current = Math.max(0, raidCooldown.current - 1);
+  // G-07 · away, the raid goes on live (measured on main: two level-1 defenders beat off Gilbert and three in 36 s with
+  // the player at The King's Approach); but with no defender standing, nothing ends it — the thieves strip the stores
+  // and run, and the rest stand about the homestead for good. Once raiders have come up to it and the garrison is down
+  // (or there is none), the raid is settled as lost, and the report waits for the player's return.
+  if (raidActive.current && st.destination && !garrisonStands(st)
+    && homeRaiders().some((e) => !e.mob.approaching) && settleRaid(st, true)) {
+    st.notify('Word from home: the garrison is down, and the raiders have the homestead.', true);
+  }
   const raiders = list.filter((e) => e.raid);
   if (raidActive.current && raiders.length === 0) {
     raidActive.current = false;
     raiderRamState.active = false;
     raiderLadderState.active = false; // Wave 58 (H4) · same singleton cleanup as the ram
     raidPlan.sides = []; // G-04 · the raid is over: no sides for the minimap's arrow to point at
-    // F-17 · no raiders left is not always a raid beaten back: a knock-out clears the field with them still standing
-    // (combat/playerDamage.ts), and it used to pay this very reward on the next tick. A raid lost pays nothing; the
-    // cooldown it started with runs on, as a won raid's does. What else a lost raid costs is G-07's (FEATURE_PLAN.md).
+    // F-17 · no raiders left is not always a raid beaten back: a raid the player fell out of is settled at once
+    // (raidSettle.ts), and one lost pays nothing; the cooldown it started with runs on, as a won raid's does. G-07 ·
+    // what it cost was settled with it: the report names it all.
     if (raidLost.current) {
       raidLost.current = false;
-      st.notify('The raiders had the field. They are gone by dawn, and they left nothing behind.' + haulReport(), true);
+      // G-07 · said as it was settled (raidSettle.ts's report): away, at the hour the garrison fell, with no night
+      // between; and torn down only if the raiders wrecked anything
+      const r = st.raidReport;
+      const tore = !!r && r.ruined.length + r.razed.length > 0;
+      st.notify(`The raiders had the field. They are gone${r?.away ? '' : ' by dawn'}, and they took${tore ? ' and tore down' : ''} what they could.` + haulReport(), true);
     } else {
       st.notify('The raid is beaten back! The bandits dropped their spoils.' + haulReport(), true);
       st.addItems({ plank: 4, stone: 4, iron_ore: 2 }, 'grant');
@@ -154,6 +169,7 @@ function raidWarning(st: GameState, raidCooldown: Counter): void {
 function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive: Flag): void {
   raidActive.current = true;
   resetRaidHaul();
+  raidDowned.clear(); // G-07 · this raid's own
   // G-06 · how many follow the leader: a richer homestead draws a hungrier raid (it was always two)
   const followers = raidSize(stockpileValue(st.inventory));
   if (!st.destination) { audio.play('warcry', 0.9); audio.play('horn', 0.9); }

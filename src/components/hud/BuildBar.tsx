@@ -33,9 +33,11 @@ function DemolishConfirm() {
   // around it, so a piece torn down by hand in the meantime has to drop out of
   // the count before they press the button
   const buildings = useGameStore((s) => s.buildings);
+  // and a piece battered meanwhile is worth less (repair.ts's salvageOf)
+  const buildingHp = useGameStore((s) => s.buildingHp);
   const { ids, refund } = useMemo(
     () => demolishPreview(),
-    [demolishRect, buildings, demolishPreview],
+    [demolishRect, buildings, buildingHp, demolishPreview],
   );
   if (!demolishRect) return null;
   const back = Object.entries(refund);

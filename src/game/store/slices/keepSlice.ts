@@ -11,6 +11,7 @@ import { ITEMS } from '../../data/items';
 import { repairCost } from '../../repair';
 import { audio } from '@/lib/audio';
 import { buildUndo, seq } from '../storeCounters';
+import { sharedActions } from './shared';
 import type { SliceCreator } from './types';
 
 /**
@@ -43,7 +44,7 @@ export interface KeepSlice {
   /** G-36 · commit a part to one socket of a site, paying its bill of pieces */
   raiseSitePart: (siteId: string, socketId: string, partId: string) => void;
   /** G-36 · one hammer swing's worth of work on a site socket's piece — a new one, or a ruin being rebuilt */
-  workSitePart: (siteId: string, socketId: string, amount: number) => void;
+  workSitePart: (siteId: string, socketId: string, amount: number, crew?: boolean) => void;
   /** G-36 · a raised piece on a site takes siege damage. Wave 68 (G-05): at 0 HP it lies in ruins — its part kept,
    *  `ruined` set and its work back to 0, a breach to rebuild — where it was knocked down for half its materials */
   damageSitePart: (siteId: string, socketId: string, amount: number, cause?: string) => void;
@@ -63,6 +64,7 @@ export interface KeepSlice {
 }
 
 export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
+  const { payRebuild } = sharedActions(set, get);
   return {
     keepSocket: null,
 
@@ -120,12 +122,16 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
       st.notify(`${part.name} staked out on ${socket.name} — now build it.`, true);
     },
 
-    workSitePart: (siteId, socketId, amount) => {
+    workSitePart: (siteId, socketId, amount, crew = false) => {
       const st = get();
       const site = siteById(st, siteId);
       if (!site || !site.parts[socketId]) return;
       const before = site.built[socketId] ?? 0;
       if (before >= 1) return;
+      // G-07 (OD-22) · a ruin is raised again for its whole bill, paid as the work on it starts (shared.ts's payRebuild);
+      // with the stores short it waits, as a building's does
+      const ruinPart = site.ruined?.[socketId] && before === 0 ? KEEP_PART_BY_ID[site.parts[socketId]] : null;
+      if (ruinPart && !payRebuild(`${siteId}:${socketId}`, ruinPart.name, ruinPart.cost, crew)) return;
       const after = Math.min(1, before + amount);
       const built = { ...site.built, [socketId]: after };
       if (after >= 1 && site.ruined?.[socketId]) {
@@ -168,8 +174,8 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
         return;
       }
       // G-05 · battered down to a ruin: the part stays on its socket, built back to 0 so nothing reads it as standing
-      // (the walk, the seal, the raiders' targets), and rebuilt by hammer or builders for nothing more — no refund
-      // here, as a building's ruin has none (OD-02: outright destruction is a lost raid's, G-07)
+      // (the walk, the seal, the raiders' targets), and rebuilt by hammer or builders (G-07, OD-22: for its whole bill)
+      // — no refund here, as a building's ruin has none (OD-02: outright destruction is a lost raid's, G-07)
       const hpRest = { ...site.hp };
       delete hpRest[socketId];
       set({

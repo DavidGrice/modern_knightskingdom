@@ -3,12 +3,13 @@
 // Siege damage used to end one way: a piece at 0 HP came down for half its materials. Under the owner's harsh raids
 // (OD-02) a piece battered in a fight is left standing as a RUIN instead — a breach (OD-01) the builders raise again —
 // and anything damaged but standing can be repaired, for a share of its cost as large as the share of its HP it has
-// lost. What is left here is the arithmetic both kinds of piece share: what a damaged building was before the damage
-// phases overwrote its type, the form it shows at a given HP, and what a repair costs.
+// lost (G-07, OD-22: and a ruin is raised again for its whole bill). What is left here is the arithmetic both kinds of
+// piece share: what a damaged building was before the damage phases overwrote its type, the form it shows at a given
+// HP, and what a repair costs.
 //
 // Leaf module: data only (no store import), so the store's slices can use it.
 import type { ItemId, PlacedBuilding } from './types';
-import { buildableForLabAsset, labAssetId } from './data/buildables';
+import { BUILDABLE_BY_ID, buildableForLabAsset, labAssetId, maxHpFor } from './data/buildables';
 import { ITEMS } from './data/items';
 import { labDamagedForm, labIntactForm } from './data/labCapabilities';
 
@@ -39,6 +40,41 @@ export function repairCost(cost: Partial<Record<ItemId, number>>, missing: numbe
   for (const [itemId, n] of Object.entries(cost)) {
     const due = Math.ceil((n as number) * share - 1e-9);
     if (due > 0) out[itemId as ItemId] = due;
+  }
+  return out;
+}
+
+/** OD-22 · what raising a ruin again costs: the repair of all its HP — the piece's whole bill, rounded as repairCost
+ *  rounds — for every ruin (a raid's, a lost raid's, the dragon's), by hammer or builders alike */
+export function rebuildCost(cost: Partial<Record<ItemId, number>>): Partial<Record<ItemId, number>> {
+  return repairCost(cost, 1, 1);
+}
+
+/** G-07 · what a placed piece is worth now, in materials: its base's bill less the repair it wants (repairCost), and
+ *  nothing for a ruin not yet paid to raise (OD-22: raising it is its whole bill) — a ruin whose rebuild is paid, like
+ *  any site, is worth its bill. Undoing a piece gives all of it back and pulling one down half (salvageOf), so that
+ *  neither, with the piece then placed anew, comes cheaper than mending it. */
+export function pieceWorth(b: PlacedBuilding, hp: number | undefined): Partial<Record<ItemId, number>> {
+  const base = buildingBase(b, hp);
+  const cost = BUILDABLE_BY_ID[base]?.cost ?? {};
+  if (b.ruin && !(b.built ?? 0)) return {};
+  const max = maxHpFor(base);
+  const due = hp === undefined ? {} : repairCost(cost, max - hp, max);
+  const out: Partial<Record<ItemId, number>> = {};
+  for (const [itemId, n] of Object.entries(cost)) {
+    const left = (n as number) - (due[itemId as ItemId] ?? 0);
+    if (left > 0) out[itemId as ItemId] = left;
+  }
+  return out;
+}
+
+/** what pulling a piece down gives back: half its worth (pieceWorth), rounded down — by hand, or the wrecking tool's
+ *  patch, whose preview reads the same figure */
+export function salvageOf(b: PlacedBuilding, hp: number | undefined): Partial<Record<ItemId, number>> {
+  const out: Partial<Record<ItemId, number>> = {};
+  for (const [itemId, n] of Object.entries(pieceWorth(b, hp))) {
+    const back = Math.floor((n as number) / 2);
+    if (back > 0) out[itemId as ItemId] = back;
   }
   return out;
 }

@@ -32,12 +32,13 @@ import {
   activeBuildRegion, BUILDABLE_BY_ID, MAX_STACK_HEIGHT, buildableForLabAsset, heightOf, labAssetId, maxHpFor, sizeFor,
 } from '../../data/buildables';
 import { wallSnap } from '../../walls';
-import { buildingBase, formAt, repairCost } from '../../repair';
+import { buildingBase, formAt, pieceWorth, repairCost, salvageOf } from '../../repair';
 import { audio } from '@/lib/audio';
 import { cartLivePos } from '../../carts';
 import { waterworksInRect } from '../../waterworks';
 import { buildChallengeState, BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET } from '../../buildChallenge';
 import { buildUndo, seq } from '../storeCounters';
+import { KEEP_SITE_ID, siteById, siteWrite } from '../../sites/sites';
 import { atGuildMaxRank } from '../storeHelpers';
 import { sharedActions } from './shared';
 import type { SliceCreator } from './types';
@@ -74,7 +75,8 @@ export interface BuildSlice {
    *  first cell that will not take — out of materials, off the region, blocked.
    *  Returns how many actually went down. One undo entry for the lot. */
   placeRow: (type: string, cells: { x: number; z: number }[], rot: 0 | 1 | 2 | 3) => number;
-  constructBuilding: (id: string, amount: number) => void;
+  /** one swing's worth of work on a building site (or a ruin raised again) — the hammer's, or (`crew`) the builders' */
+  constructBuilding: (id: string, amount: number, crew?: boolean) => void;
   /** L72 · open the action menu for a placed building */
   openBuildingMenu: (id: string) => void;
   /** L72 · mount an explosive charge on a wall piece */
@@ -89,10 +91,14 @@ export interface BuildSlice {
   cancelMove: () => void;
   finishMove: (x: number, z: number, rot: 0 | 1 | 2 | 3, yaw?: number, scale?: number) => boolean;
   undoLast: () => void;
+  /** G-07 · what a raid the player fell out of wrecked (directors/raidSettle.ts), each named by a building's id or
+   *  `keep:<socket>`: those in `ruin` left ruins, as a raid's blows leave them; those in `raze` gone outright, with no
+   *  refund — a keep piece down to its bare socket. Quiet: the raid's report names them. */
+  wreckPieces: (ruin: string[], raze: string[]) => void;
 }
 
 export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
-  const { bumpQuestCounters } = sharedActions(set, get);
+  const { bumpQuestCounters, payRebuild } = sharedActions(set, get);
 
   return {
     buildMode: false,
@@ -207,15 +213,13 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       // — a castle wall's ruined mold — and keeps its base to rebuild.)
       //
       // No materials refund on this path (unlike the hand-demolish half
-      // refund below), and constructBuilding charges no new materials to
-      // finish rebuilding it either (it never has, for any construction
-      // site) — so the net material cost of surviving a dragon hit is
-      // exactly zero: you neither profit nor pay twice. That's deliberately
-      // CHEAPER than the existing half-cost loss of voluntarily demolishing
-      // and replacing a building by hand (refund granted, then full cost
-      // paid again) — an involuntary loss should sting less than a
-      // voluntary one, without ever making being sieged profitable, which a
-      // refund-plus-free-rebuild combination would have been.
+      // refund below). G-07 (OD-22) · and a ruin is no longer raised again
+      // for nothing, as wave 57 made it (a lost piece cost nothing but the
+      // time, cheaper than mending one, which costs its share of the bill):
+      // constructBuilding charges its whole bill as the work on it starts
+      // (repair.ts's rebuildCost), and pulling the ruin down or undoing it
+      // gives nothing back (pieceWorth), so letting a piece fall is never
+      // cheaper than repairing it.
       if (leaveRuin) {
         const hpRest = { ...st.buildingHp };
         delete hpRest[id];
@@ -518,13 +522,16 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       st.notify(`${def.name} mounted on the wall — it arms itself when a raider comes close.`, true);
     },
 
-    constructBuilding: (id, amount) => {
+    constructBuilding: (id, amount, crew = false) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
       if (!b || isBuilt(b)) return;
       // Wave 68 · a ruin is rebuilt as the piece it was, not the ruined form it lies in
       const def = BUILDABLE_BY_ID[b.ruin ? buildingBase(b, st.buildingHp[id]) : b.type];
       if (!def) return;
+      // G-07 (OD-22) · a ruin is raised again for its whole bill, paid as the work on it starts (shared.ts's
+      // payRebuild); with the stores short it waits — and the builders at it with it
+      if (b.ruin && !(b.built ?? 0) && !payRebuild(id, def.name, def.cost, crew)) return;
       // Builders' Guild passive + Sure Hammer/Raised Right talents — every
       // swing bonus stacks additively (player's and builder villagers' alike).
       // Wave 22: Warden of the Siege Works (max guild rank) sharpens the
@@ -690,40 +697,82 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
         const gone = group.filter((id) => st.buildings.some((x) => x.id === id));
         if (gone.length === 0) continue;
         const inv = { ...st.inventory };
+        // G-07 · what each piece is worth now (repair.ts's pieceWorth): what was placed, less the repair it wants, and
+        // nothing for a ruin not yet paid to raise — it refunded by the damaged form, and by what was placed a battered
+        // piece undone and placed anew would have been mended for nothing
+        const placed = (id: string) => st.buildings.find((x) => x.id === id)!;
+        let back = 0;
         for (const id of gone) {
-          const b = st.buildings.find((x) => x.id === id)!;
-          for (const [itemId, n] of Object.entries(BUILDABLE_BY_ID[b.type].cost)) {
+          for (const [itemId, n] of Object.entries(pieceWorth(placed(id), st.buildingHp[id]))) {
             inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + (n as number);
+            back += n as number;
           }
         }
-        const def = BUILDABLE_BY_ID[st.buildings.find((x) => x.id === gone[0])!.type];
+        const def = BUILDABLE_BY_ID[buildingBase(placed(gone[0]), st.buildingHp[gone[0]])];
+        const said = back > 0 ? 'materials returned' : 'nothing to return from a ruin';
         set({ buildings: st.buildings.filter((x) => !gone.includes(x.id)), inventory: inv, dirty: true });
         audio.play('brick_collide', 0.6);
         st.notify(gone.length > 1
-          ? `Undid ${gone.length} × ${def.name} (materials returned)`
-          : `Undid ${def.name} (materials returned)`);
+          ? `Undid ${gone.length} × ${def.name} (${said})`
+          : `Undid ${def.name} (${said})`);
         return;
       }
       st.notify('Nothing to undo.');
+    },
+
+    wreckPieces: (ruin, raze) => {
+      const st = get();
+      const hp = { ...st.buildingHp };
+      let buildings = st.buildings;
+      const site = siteById(st, KEEP_SITE_ID);
+      const keep = site
+        ? { parts: { ...site.parts }, built: { ...site.built }, hp: { ...site.hp }, ruined: { ...site.ruined }, gateOpen: { ...site.gateOpen } }
+        : null;
+      for (const ref of ruin) {
+        const socket = ref.startsWith('keep:') ? ref.slice(5) : null;
+        if (socket) {
+          if (keep?.parts[socket]) { keep.built[socket] = 0; keep.ruined[socket] = true; delete keep.hp[socket]; }
+          continue;
+        }
+        const b = buildings.find((x) => x.id === ref);
+        if (!b) continue;
+        // the ruin a raid's blow leaves (damageBuilding's leaveRuin): its 0-HP form, its base kept to rebuild
+        const base = buildingBase(b, hp[ref]);
+        buildings = buildings.map((x) => (x.id === ref ? { ...x, baseType: base, type: formAt(base, 0), built: 0, ruin: true } : x));
+        delete hp[ref];
+      }
+      for (const ref of raze) {
+        const socket = ref.startsWith('keep:') ? ref.slice(5) : null;
+        if (socket) {
+          if (keep) for (const field of [keep.parts, keep.built, keep.hp, keep.ruined, keep.gateOpen]) delete field[socket];
+          continue;
+        }
+        buildings = buildings.filter((x) => x.id !== ref);
+        delete hp[ref];
+      }
+      set({ buildings, buildingHp: hp, ...(keep ? siteWrite(st, KEEP_SITE_ID, keep) : {}), dirty: true });
     },
 
     removeBuilding: (id, consumed = false, quiet = false) => {
       const st = get();
       const b = st.buildings.find((x) => x.id === id);
       if (!b) return;
-      const def = BUILDABLE_BY_ID[b.type];
+      // G-07 · named and refunded by what was placed (repair.ts's buildingBase), as damageBuilding's own delete is —
+      // half of what it is worth now (salvageOf: less the repair it wants, nothing from a ruin not yet paid to raise):
+      // a breached wall pulled down gave back half the breached mold's cost
+      const def = BUILDABLE_BY_ID[buildingBase(b, st.buildingHp[id])];
       const inv = { ...st.inventory };
       // `consumed` = the piece destroyed itself (a detonated charge), so
       // there's nothing left to salvage — only a deliberate teardown refunds
-      for (const [itemId, n] of Object.entries(consumed ? {} : def.cost)) {
-        const refund = Math.floor((n as number) / 2);
-        if (refund > 0) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + refund;
-      }
+      const salvage = consumed ? {} : salvageOf(b, st.buildingHp[id]);
+      for (const [itemId, n] of Object.entries(salvage)) inv[itemId as ItemId] = (inv[itemId as ItemId] ?? 0) + (n as number);
       set({ buildings: st.buildings.filter((x) => x.id !== id), inventory: inv, dirty: true });
       if (!quiet) audio.play('brick_collide', 0.6);
       // a consumed piece (a charge that went off) left nothing to salvage —
       // don't claim a refund that didn't happen
-      if (!consumed && !quiet) st.notify(`${def.name} removed (half materials refunded)`);
+      if (!consumed && !quiet) {
+        st.notify(`${def.name} removed (${Object.keys(salvage).length ? 'half materials refunded' : 'nothing to salvage from a ruin'})`);
+      }
     },
   };
 };

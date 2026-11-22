@@ -11004,24 +11004,81 @@ it to restore it." Since wave 68 the raiders' ram and the siege engines leave ru
 siege engines to a smoking ruin!", `CedricSiege.tsx`; it read "… to rubble!" before). To do: word the ruin by its cause
 (the dragon keeps its smoke), and give Cedric's cause its "was"; `dragonfire.test.ts` pins the dragon's line.
 
-## Seen, not fixed: demolishing or undoing a battered building refunds by its damaged form — logged 2026-11-06 (in the review of wave 68; by the code)
+## Bugfix: demolishing or undoing a battered building refunded by its damaged form — FOUND 2026-11-06 (in the review of wave 68; by the code), FIXED 2026-11-20
 
-Wave 68 made `damageBuilding`'s own delete refund by what was placed (`buildingBase`, `game/repair.ts`), but
-`removeBuilding` and `undoLast` (`buildSlice.ts`) still refund by `b.type`: hand-demolishing a breached Castle Wall
-gives back half of mc009's cost, not of the Castle Wall's, and undoing a just-placed wall that a raid left a ruin refunds
-the ruined mold's full cost (mc010's 5 stone, not 10) — the same edge the wave-57 dragon ruins always had. To do: refund
-by `buildingBase(b, st.buildingHp[b.id])` in both, and test a breached and a ruined piece.
+**The fault.** Wave 68 made `damageBuilding`'s own delete refund by what was placed (`buildingBase`, `game/repair.ts`),
+but `removeBuilding` and `undoLast` (`buildSlice.ts`) still refunded by `b.type`: hand-demolishing a breached Castle
+Wall gave back half of mc009's cost, not of the Castle Wall's, and undoing a just-placed wall that a raid left a ruin
+refunded the ruined mold's full cost (mc010's 5 stone, not 10) — the same edge the wave-57 dragon ruins always had.
+Measured on `main` (production build of base-14 on port 3101, build `8TiQ92rXEyu72VeUF_9lM`;
+`scripts/cln-tools/w73_measure.mjs`, phase D, `w73_measure_main_DE.txt`): a Castle Wall (Plain, 10 stone) breached to
+mc009 and pulled down gave back 3 stone (half the breach's 6), and one placed by hand, left a ruin and undone, 5.
 
-## Open decision: should rebuilding a ruin cost materials? — logged 2026-11-06 (wave 68's implementer; OD-22 in FEATURE_PLAN.md)
+**The fix.** Wave 73 (G-07): `removeBuilding` and `undoLast` refund by `buildingBase(b, st.buildingHp[b.id])`, as
+`damageBuilding`'s delete does — and, since the wave's review, by what that piece is worth as it stands
+(`game/repair.ts`'s `pieceWorth`: its base's bill less the repair it wants, `repairCost`; nothing for a ruin not yet paid
+to raise), undo all of it and a pull-down half (`salvageOf`), which the wrecking tool's preview (`buildToolsSlice.ts`'s
+`demolishPreview`, which still read `b.type`) now reads too. By the whole bill, OD-22 (below) could be dodged: a ruin
+undone and placed anew was raised for nothing, one pulled down and placed anew for half its bill, and a battered piece
+undone and placed anew was mended for nothing. Priced as it stands, undoing and placing anew costs exactly the repair,
+pulling down and placing anew at least it, and a ruin gives nothing back (as a ruin a raid leaves gives nothing).
 
-Since wave 68 a piece the raid batters to 0 HP lies as a ruin that the hammer or the builders raise again for nothing
-(the rule wave 57 made for the dragon's ruins), while repairing a piece still standing costs its share of the bill
-(`repairCost`, `game/repair.ts`: each material x HP lost / max HP, rounded up). So a damaged piece costs its repair only
-while it stands, and in materials a lost piece now costs less than on `main`, where it was deleted for half its
-materials and paid for again in full. What it costs instead is time and the breach: the evidence pass's two builders took
-140 s over one wall and three keep runs, and a ruin stands open (G-02). Recommended (R, OD-22): a ruin's rebuild charges
-its repair bill at 0 HP — the piece's whole cost — the dragon's ruins included, so letting a piece fall is never cheaper
-than mending it; built with G-07's lost-raid consequences (wave 73), `repairCost` being the one place to tune it.
+**Verified.** `ruins.test.ts`'s "demolish and undo refund what was placed" (2: a breached wall pulled down, a ruined one
+undone), each failing with its half of the fix taken out (`w73_takeout.py`, R1 and R2). Live on the first change build
+(port 3102, `Pqxme9-8brONe4eIr_u-n`, `w73_measure_change.txt`; the code it measures unchanged since): 5 and 10.
+Evidence pass (2026-11-20, independent re-run; production builds side by side, `main` = base-14 on 3101, build
+`8TiQ92rXEyu72VeUF_9lM`, the change = the worktree's final code on 3102, build `OUEqXkgkgdcJqgneEtFB0`;
+`scripts/cln-tools/w73_ev.mjs` phase D, `w73_ev_main_DE.txt` / `w73_ev_change_DE.txt`, 0 page errors on either): the
+breached Castle Wall (Plain, mc009 at 15 HP) pulled down gave back 3 stone on `main`, 5 on the change; the hand-placed
+wall left a ruin (mc010) and undone gave back 5 on `main`, 10 on the change. Each half reverted alone
+(`w73_ev_takeout.py`, B1 demolish by `b.type`, B2 undo by `b.type`) fails 1 test in the full suite; the tree restored
+exactly (the `git diff` text byte-identical before and after). `tsc` clean, the suite 107 files / 928 tests passing.
+Fix pass (2026-11-20, the review's defects; the change rebuilt on 3102, build `3lc5do_Q1uGJQIh60cNWi`, `main` = base-14 on 3101, build `8TiQ92rXEyu72VeUF_9lM`; `scripts/cln-tools/w73_fix.mjs`, 0 page errors), phase D: the breached wall (15 of 30 HP) pulled down gives back 2 stone (half of 10 less its
+5 repair; `main` 3, the evidence build 5); the ruin undone gives back 0 ("Undid Castle Wall (Plain) (nothing to return
+from a ruin)"; `main` 5, the evidence build 10) and one pulled down 0 (`main` 2); the wrecking tool's patch over a
+breached wall, a ruin and a whole one previews 7 stone and pays 7 (`main` 10 and 10). `ruins.test.ts`'s refund block
+now 4 (the breached wall and a whole one, a battered wall undone, a ruin undone and pulled down and a paid ruin pulled
+down, the wrecking tool's preview against what it pays); worth ignoring damage fails 3, a ruin worth its bill 2, the
+preview by `b.type` 1.
+
+## Decided and built: rebuilding a ruin costs its whole bill — logged 2026-11-06 (wave 68's implementer; OD-22 in FEATURE_PLAN.md), DECIDED as OD-22's recommended default (R; the owner may override), BUILT 2026-11-20 (wave 73, G-07)
+
+**As it was logged.** Since wave 68 a piece the raid batters to 0 HP lies as a ruin that the hammer or the builders
+raise again for nothing (the rule wave 57 made for the dragon's ruins), while repairing a piece still standing costs its
+share of the bill (`repairCost`, `game/repair.ts`: each material x HP lost / max HP, rounded up). So a damaged piece
+costs its repair only while it stands, and in materials a lost piece costs less than on `main` before wave 68, where it
+was deleted for half its materials and paid for again in full. Recommended (R, OD-22): a ruin's rebuild charges its
+repair bill at 0 HP — the piece's whole cost — the dragon's ruins included, so letting a piece fall is never cheaper
+than mending it. Measured on `main` (phase E of `w73_measure.mjs`): a Castle Wall (Plain) left a ruin rose in 16 swings
+for 0 stone, and with 3 stone in the stores it rose all the same.
+
+**The fix.** Wave 73: a ruin — a raid's, a lost raid's, the dragon's — is raised again for `game/repair.ts`'s
+`rebuildCost` (`repairCost` at 0 HP: the one place to tune it), paid out of the stores as the work on it starts
+(`store/slices/shared.ts`'s `payRebuild`, from `constructBuilding` for a building and `workSitePart` for a keep piece),
+by the hammer and the builders alike. With the stores short nothing is spent and nothing raised, with the notice "Not
+enough materials to rebuild the <piece> — it needs <bill>.": to a hammer swing, with its thud, once while it shows; to
+the builders, whose pass asks every half-second sweep of the day wherever the player is, once for the piece until its
+bill is paid, and no thud (`payRebuild`'s `crew`; it was the thud twice a second all day, and the notice back every
+4-5 s as it expired). Pulling the ruin down or undoing it gives nothing back (the refund entry above), so letting a
+piece fall is never cheaper than mending it.
+
+**Verified.** `ruins.test.ts`'s "a ruin's rebuild costs its whole bill" (2: a building's ruin, paid once, waiting when
+short; a keep piece's and the dragon's), the dragon test and the legacy-save stable changed on purpose (their stores now
+pay); take-outs O1-O4 each fail. Live on the first change build (`w73_measure_change.txt`): 10 stone, and with 3 it
+stays a ruin, built 0, the stone untouched. Left over (logged at the end of this file): a ruin waiting on its bill holds
+the builders. Evidence pass (2026-11-20, independent re-run; `main` = base-14 on 3101, build `8TiQ92rXEyu72VeUF_9lM`;
+the change on 3102, build `OUEqXkgkgdcJqgneEtFB0`; `w73_ev.mjs` phase E, `w73_ev_main_DE.txt` /
+`w73_ev_change_DE.txt`): a Castle Wall (Plain) left a ruin and raised by 16 hammer swings cost 0 stone on `main`, 10 on
+the change; with 3 stone in the stores, 20 swings raised it all the same on `main` ("rebuilt from the ashes!", the 3
+stone untouched), while on the change it stayed a ruin, built 0, the 3 stone untouched, with the one notice "Not enough
+materials to rebuild the Castle Wall (Plain) — it needs 10 Stone." Reverted alone (`w73_ev_takeout.py`): a building's
+ruin rebuilt free (O1) fails 3 tests, a keep piece's (O2) 1, a half bill (O3, `rebuildCost` at half) 3, a short rebuild
+going on (O4) 2. Not measured live: a keep piece's ruin and the dragon's ruin charging the bill (unit tests only), and
+builders (rather than the hammer) paying it. Fix pass (2026-11-20, the review's defects; the change rebuilt on 3102, build `3lc5do_Q1uGJQIh60cNWi`, `main` = base-14 on 3101, build `8TiQ92rXEyu72VeUF_9lM`; `scripts/cln-tools/w73_fix.mjs`, 0 page errors), phase N: a builder working at a Castle Wall's
+ruin with 3 stone in the stores, 20 s of working hours — no notice and no brick thud in those 20 s (the one notice came
+as he started), built 0, the 3 stone untouched; on `main` he raised it free to 0.78 in the same 20 s. `ruins.test.ts`'s
+"the builders at a ruin the stores cannot pay for are told once" (40 sweeps: one notice, no thud; a hammer swing told
+with its thud; paid, then short again, told again) fails with the builders' pass not passing `crew`.
 
 ## Bugfix: a finished keep's walls stopped nobody, and its gatehouse never shut — FOUND 2026-10-31 (FEATURE_PLAN.md's verification: OPEN-022, DEC-7738, "What stops a walker is decided in four places"; G-02, the owner's walls decision OD-01), FIXED 2026-11-07
 
@@ -12212,3 +12269,223 @@ ring, the point is refused). A look that comes
 down inside the piece is refused ("Nothing to hold there"), which at least says why. To do: stop the look at the first
 standing solid it meets below its top (the heights `hasLineOfSight` already reads) and plant at its foot on the
 player's side.
+
+## Bugfix: a knock-out mid-raid lost the raid whatever the garrison was doing, a lost raid cost nothing, and a raid fought while away with the garrison down never ended — FOUND 2026-10-31 (FEATURE_PLAN.md's verification of G-07: the knock-out paid the win, F-17's stopgap; the idea "Raids With Stakes"; the owner's harsh-raids decision OD-02), FIXED 2026-11-20
+
+**The fault.** Since F-17 (wave 62.1) a knock-out with raiders standing (`combat/playerDamage.ts`'s 0-HP branch) set
+`raidLost`, put each standing thief's haul in the ledger, cleared every enemy and jumped to dawn; the raid director's
+next tick said "The raiders had the field. They are gone by dawn, and they left nothing behind." and paid nothing. What
+the garrison was doing did not count: four level-3 defenders who had all but beaten the raid lost it with the player,
+and a raid lost cost nothing but the thieves' haul — no building, no keep piece, no defender. Away from home the raid
+goes on live (Defenders and Enemies stay mounted wherever the player is), but with no defender standing nothing ended
+it. Measured on `main` (production build of base-14 on port 3101, build `8TiQ92rXEyu72VeUF_9lM`;
+`scripts/cln-tools/w73_measure.mjs`, records `w73_measure_main.txt`, `_C`, `_F`, `_K`): (A) four level-3 defenders
+standing, Gilbert dead and his three bandits fleeing at 1-2 health, the player knocked out — "had the field", nothing
+paid, every building standing; (B) no garrison, two thieves carrying 9 and 8 — the same notice, 17 wood in the ledger,
+nothing else lost; (K) a walled keep, its gatehouse shut, two bows posted up on its walks — "had the field", nothing
+paid. Away (the player at The King's Approach as the raid came): (C1) two level-1 swords beat off Gilbert and three in
+36 s, paid as won; (C2) no garrison — the two thieves took 40 wood and were gone by 111 s; Gilbert and a bandit then
+wandered 20-50 m from home to the end of the 181 s record, and still on the player's return: the raid never ended; (F)
+one bare-handed level-1 defender against Gilbert and four — down at 33 s, the thieves away with 40 stone, up again at
+78 s (the 45 s downed timer), Gilbert and a bandit cut down, down again at 114 s, up at 160 s, down at 181 s against
+the last bandit, who never left: a raid cycling for good.
+
+**The fix.** *The resolver* (`game/raidResolver.ts`, pure and seeded): the live garrison against the raiders still
+standing, by G-08's one model of that fight (`garrisonBalance.ts`'s stepping, now `garrisonFight`, which
+`garrisonOutcome` and the pinned table call unchanged) with three things the table leaves out, as `garrisonFight`'s
+`field`: a defender posted up (a tower, a keep's wall-walk), whom raiders on the ground skip outright (`nearestGuard`:
+`DefenderState.elevated`, crossbows included) — struck by none of them, he fights on; a thief, who strikes no one and
+is struck once every raider who fights is down; and a raider's broken morale (`data/enemies.ts`'s `breakPoint`, moved
+out of `movement.ts`'s `breaksAndRuns` so both read one rule: a bandit at 2 health runs, Cedric at 9 outside his final
+stand), out of the fight from then on. Held / pressed / lost as the table has them. What it costs: theft — each thief
+takes a good every `GRAB_EVERY` from when he is at the stores (his distance over a bandit's pace) until struck, full
+(`RUN_HAUL`) or, the garrison fallen, never stopped, in `nextGrab`'s order out of the one store; a thief full, run or
+standing at the fall is gone with his haul, one cut down drops it. Ruins — pressed: the pieces raiders batter (a wall
+tall enough to seal, a shut gate, a keep piece standing: `targeting.ts`'s `batterable`, exported) in the share of the
+garrison's health lost, one at most for each raider who came to fight; lost: one for each raider standing. Razed —
+lost only: `raidStrength()` x the raiders standing x `RAZE_SHARE` (0.5), one at the least. Pieces are taken nearest the
+raid's sides (`raidPlan.sides`) first, each strayed by the raid's seed (`raidSeedFor`): the same raid on the same
+homestead settles the same way. Never offered: the keep's foundation. *Applied* (`directors/raidSettle.ts`'s
+`settleRaid`): the goods out of and back into the stores, the escaped into the ledger (`gotAway`), the pieces through a
+new quiet store action (`buildSlice.ts`'s `wreckPieces`: a building left the ruin a raid's blow leaves — its 0-HP form,
+its base kept; razed with no refund; a keep piece ruined on its socket or razed to the bare socket), the defenders it
+put down marked downed (`state`, `hp` 0, `downedUntil` + `DOWNED_RECOVER_MS`, as a blow does), `raidLost` set for a
+raid lost, its raiders taken off the field, and the report set. *The knock-out* calls it in place of F-17's line, at
+home or away (the clear takes the home raid either way); held and pressed are then a raid beaten back on the director's
+next tick — its spoils, experience, Armory roll and notice as before; lost pays nothing, and its notice now reads "…
+They are gone by dawn, and they took and tore down what they could." with the haul. *Away*, the raid director settles
+it the same way once a raider has come up to the homestead (no longer walking in) and no home defender stands (or there
+is none; the guard posted at the merchant's camp, 78 m off, is none: `raidSettle.ts`'s `homeGuard`, for the resolver's
+garrison too): "Word from home: the garrison is down, and the raiders have the homestead." *The report*
+(`components/hud/RaidReportPanel.tsx`, panel `raidReport`, a `PopupFrame` like the others): the outcome, the goods
+carried off and taken back (the raid's `raidHaul`), the pieces left in ruins and razed by name, the defenders downed
+(those the raiders knocked down in the fight, `directors/state.ts`'s `raidDowned` written by `blowAtGuard`, and those
+the settling put down);
+opened once the player is home with nothing else up (at once after a knock-out, which carries him home; on his return
+for one settled away). *Saved* while unread (`SaveGame.raidReport`, one row in `persistence.ts`; one read is left out):
+a report settled away waits for his return, and a reload before it would have lost it. No `SAVE_VERSION` step: an
+older game loads a save that has one and loses only the report. *OD-22* and *the refunds by base*: their own entries
+(logged in wave 68). Premises held, with corrections: the plan's "defenders posted up whom only ranged raiders can strike" —
+no raider on the ground strikes one (`nearestGuard` skips `elevated` for every kind); `RANGED_DMG` moved from `blows.ts`
+to `engage.ts` beside the crossbow's range and cooldown (`blows.ts`'s imports would have closed a cycle through the
+knock-out); the "on return" settle the plan allowed for was not needed — measured, an away raid is stepped live. The
+enemy-AI edits move or export constants only (`breakPoint` returns 2 for a bandit, `CEDRIC_FLEE_HP` for Cedric outside
+his final stand and -Infinity otherwise, the same test `breaksAndRuns` made; `RANGED_DMG` 1.2 unchanged; `batterable`
+exported): no live fight without a knock-out changes.
+
+**For the owner** (the resolver over G-08's table, `w73_owner_table.txt`, the same on the final code: level-1
+defenders, Gilbert and `raidSize(worth)` bandits, every other one a thief and at the stores from the start, threat tiers
+0-5, stores worth 500 / 1,500 / 3,000, the player down at the start). An early homestead: one sword on the ground loses
+— buildings razed, 2 to 8 — in 14 of the 18 cells (2 of the 6 at tiers 0-1, razing 2-3); two swords lose in 7 of 18
+(none at tiers 0-2; from tier 3, razing 3-7); bare-handed, one loses in 17 of 18 and two in 11; three or four swords
+never lose. A walled keep with the same one or two posted up on its walks holds every cell, bare-handed or armed —
+though the thieves strip 20-60 goods while the guards work through the fighters.
+
+**Verified.** Golden tests written first and run on the unchanged base (`directors/lostRaid.test.ts`'s golden block, 4;
+the base copy kept as `scripts/cln-tools/w73_golden_on_base.test.ts.txt`): the won ending (spoils 4/4/2, 60 combat XP,
+"The raid is beaten back! … They got away with 3× Stone.", an Armory drop at the roll, the horn), a knock-out with no
+garrison ("had the field … left nothing behind. They got away with 6× Wood Log.", the ledger, dawn, nothing else lost),
+a knock-out with four level-3 defenders standing (lost, nothing paid) and one away from home. The won ending passes
+unchanged; the other three changed on purpose, each marked in the file: no garrison now razes two pieces, the notice
+reads "took and tore down what they could" and the report opens; the strong garrison holds and is paid; the away
+knock-out reads the new notice and razes. `plunder.test.ts`'s knock-out notice changed on purpose too. New:
+`raidResolver.test.ts` (8: a garrison-by-raid table, the razing by strength and by raiders standing, the seed, the
+sides, a guard posted up, the theft, pressed ruins, broken morale), `lostRaid.test.ts`'s settle block (9: the keep
+razed to bare sockets and never its foundation, defenders downed, the away settle and the report on return, the report
+saved while unread and opened on a load, the away settle with no garrison, the live fight read — health, posting, the
+stores, breaking). 47 parts of the fix taken out one at a time (`scripts/cln-tools/w73_takeout.py`, `w73_takeout_final.txt`): every one
+fails 1-11 tests, and the digest of the diff and the new files is the same before and after. `tsc` clean; the unit suite 107 files, 928 tests. Live, production builds (`main` =
+base-14 on 3101; the change on 3102, builds `Pqxme9-8brONe4eIr_u-n` and, after the morale term,
+`PsV5zfM1lS5tUJTPA7SCJ`; 0 page errors; the first implementer's runs): on the change (A) the four level-3 defenders
+hold, the raid is paid as beaten back (plank and stone +4), the report "held", nothing lost; (B) no garrison — lost, the
+two thieves away with 40 wood (20 carried, 20 more taken), the Stockpile and a Barrel razed, the report names them;
+(K) the walled keep with two bows posted up — held, paid, nothing lost (`w73_measure_change.txt`). The resolver against
+the same fight played out live with the player 210 m off (`w73_calib.mjs`, `w73_calib_change.txt`, build
+`PsV5zfM1lS5tUJTPA7SCJ`; six configurations, two runs each, the forecast taken as the first raider came within 35 m):
+10 of 12 agree — four level-1 swords, two against a richer raid, the keep with bows posted up and on the ground: held
+and held; none: lost and lost (forecast 40 wood stolen, live the thieves had taken 40 by 60 s); the two that differ are
+one level-1 sword on open ground, forecast pressed (nothing stolen, nothing ruined), live held — both paid as beaten
+back. GPU screenshots (d3d11, headless) of the report: `w73_report_A.png`, `_B.png`, `_K.png` (taken before the panel's
+last wording: a lost raid with no defender in the fight now reads "no defender stood against the raiders").
+
+Evidence pass (2026-11-20, independent re-run of everything; production builds side by side: `main` = base-14 on 3101,
+build `8TiQ92rXEyu72VeUF_9lM`; the change = the worktree's final code on 3102, build `OUEqXkgkgdcJqgneEtFB0`; headless
+d3d11, muted, virtual pointer lock; `scripts/cln-tools/w73_ev.mjs` — `w73_measure.mjs` plus the guards' posting, the
+resolver's forecast, a wreck check and a save phase — records `w73_ev_{main,change}_{ABKWS,CF}.txt`,
+`w73_ev_change_S.txt`; 0 page errors in every run). `tsc` clean; the suite 107 files / 928 tests passing; `next build`
+clean. *Knock-outs at home* (the player's HP to 0 through `__kkDamagePlayer`): (A) four level-3 defenders standing, two
+bandits fleeing at 2 health — `main`: "had the field … left nothing behind", nothing paid, raidLost set, no report; the
+change: forecast and outcome held, "The raid is beaten back!", plank and stone +4, the report "held", nothing lost, 5 of
+5 buildings standing on both. (B) no garrison, two thieves carrying 17 each — `main`: "had the field … left nothing
+behind. They got away with 34× Wood Log.", ledger 34 wood, all 5 buildings standing, stores 171 wood; the change: lost,
+ledger 40 wood (the 34 carried and 6 more taken: stores 165), the Stockpile and a Barrel razed, the notice "… took and
+tore down what they could. They got away with 40× Wood Log.", the report naming them. (K) the walled keep, gatehouse
+shut, two level-1 bows posted up (`elevated` true for both, read live) — `main`: "had the field", nothing paid; the
+change: forecast and outcome held, paid, nothing lost. *Away* (the player at The King's Approach as the raid comes):
+(C1) two level-1 swords — the same on both: beaten back, at 36 s on `main` and 33 s on the change, 4 and 5 wood taken
+back; (C2) no garrison — `main`: the thieves away with 40 wood, Gilbert and a bandit still wandering 22-38 m from home at
+181 s and after the return, raidActive true, no report: the raid never ended; the change: "Word from home: the garrison
+is down…" at 15 s as the raiders came up, lost, 40 wood in the ledger, the raid ended; (F) one bare-handed level-1
+defender against Gilbert and four, stores worth ~1,600 — `main`: down, up, down again (three "knocked down" notices), 20
+stone stolen, the last bandit still standing at 181 s and on return, the raid never ended; the change: down at ~33 s,
+settled at once as lost (20 stone stolen), the raid over by 36 s. *The saved report* (phase S, the change): a raid
+settled away with no garrison — the report set (lost, 40 wood, Stockpile and Barrel razed, `away`, unread); the save
+taken through JSON holds it; `loadFromSave` of that JSON put the player home and opened the panel on it (now read); a
+save taken after that has no `raidReport`. On `main` the save has no such field and nothing settles. *Wreck path*
+(phase W, the change): `wreckPieces` left a Castle Wall (Plain) at 15 HP a ruin — mc010, `baseType` mc006, built 0, HP
+entry cleared — and razed the other outright. GPU screenshots (d3d11, headless) of the panel on the final build:
+`w73_ev_report_A.png` (held), `_B.png` (lost, "no defender stood against the raiders", 40× Wood Log, Stockpile and
+Barrel), `_K.png` (held), `_S.png` (lost, "Word from home, while you were away: …", after the load). *Calibration*
+re-run once per configuration on the final build (`w73_calib.mjs`, `w73_ev_calib_change.txt`): 5 of 6 outcomes agree
+(four swords, none, two against a richer raid, the keep posted up and on the ground); one level-1 sword on open ground
+was forecast pressed and was still going live at 150 s (35 wood got away). The forecast's theft runs kinder than live
+where a garrison stands on the ground: it took nothing in each of those configurations, while live 8 (two against a
+richer raid) and 35 (the lone sword) goods got away — the resolver counts the garrison at the thieves the moment the fighters fall,
+where live the guards are still walking to them. Never harsher, as the plan's risk line asks; worth knowing for the
+tuning. *Mutation controls* (`scripts/cln-tools/w73_ev_takeout.py`, `w73_ev_takeout.txt`: each change reverted alone,
+the whole suite run): 29 of 31 fail 1-11 tests — the knock-out back to F-17 (9), the lost notice (3), no away settle
+(3), posted-up guards struck (2), thieves fighting (3), no morale (1), no theft (2), no razing (9), no lost ruins (2),
+no pressed ruins (1), no side weighting (3), an unseeded order (3), no downed (3), downed not marked (1), nothing
+wrecked (2), no ledger (3), no report (11), the report never opened (3), the foundation offered (1), the taken left in
+the stores (1), a keep raze leaving the part (1), the OD-22 four and the refund two (see their entries), the report not
+saved (1), bandits never breaking live (2). Two survive: `wreckPieces` removing a building it should leave a ruin (no
+unit test reaches a building ruined by the settle: the tests' homesteads have no wall a raid batters — checked live
+instead, phase W above) and the panel's `Panels.tsx` case removed (no unit test renders panels — checked live: the panel
+opened in A, B, K and S). The tree was restored exactly: the sha256 of `git diff` plus the untracked files, and the raw
+`git diff` text, identical before and after. Not measured: the owner table (re-run by the implementer, not here); a
+pressed outcome live with pieces ruined; a lost raid ruining or razing keep pieces live (unit tests only); a full
+browser reload through the main menu (the save was round-tripped through JSON and `loadFromSave` in the page).
+Fix pass (2026-11-20, the review's defects; the change rebuilt on 3102, build `3lc5do_Q1uGJQIh60cNWi`, `main` = base-14 on 3101, build `8TiQ92rXEyu72VeUF_9lM`; `scripts/cln-tools/w73_fix.mjs`, 0 page errors): the report named only the defenders the settling put down, so an away loss — settled only once
+no defender stands — always read "no defender stood … Defenders downed: none" (probe F's lone guard fought and fell);
+and the camp's guard counted as home garrison, so with him sworn an away raid whose home guard fell never ended, and a
+knock-out had him fight the homestead's raid. Now, on the change: (F) one bare-handed level-1 guard against Gilbert and
+four, away — down, settled lost at 39 s, the report `downed: ["Guard 0"]`, the panel reading "every defender went down"
+(GPU screenshot `w73_fix_report_F.png`); (M) the home guard bare-handed, a second (sword) posted at the merchant's camp —
+the home guard down at 33 s, the raid settled lost by 36 s with the camp's guard untouched at 24 HP, `downed: ["Guard
+0"]` (`w73_fix_change_M.txt`, `w73_fix_report_M.png`). `lostRaid.test.ts` adds 2 (the guard knocked down live named,
+and the next raid's report starting afresh; the camp's guard no part of the garrison, away and at a knock-out): leaving
+`raidDowned` out of the report fails 2, never recording it 2, counting the camp's guard 1. `tsc` clean; the suite 107
+files, 933 tests.
+*Own check* (2026-11-20, before the PR): the review's three low findings and two of its notes fixed, each with a unit
+test that fails without its fix (`scripts/cln-tools/w73_own_takeout.py`: 8 take-outs, each failing 1-2 tests, the tree
+restored to the same digest). A raid lost razed a piece, one at the least, even with no raider who came to fight still
+standing — every raider running for the road already, or only thieves left at the stores, the fighters down before the
+knock-out — where fighting on, the thieves fill their sacks and go and nothing is razed; now a raid lost wrecks
+nothing once its fighters are all down or gone (`raidResolver.ts`; the theft and the outcome are as they were). Live,
+a thief shut out of the stores batters his way to them (the wave-71 entry "a pen on the line to a store shut off for
+another reason is still battered"); the resolver leaves that out, as it leaves out every raider's siege time (the
+ladder entry below): kinder, never harsher. The end notice said "They are gone by dawn" of a raid settled away at the
+hour the garrison fell, with no night between, and "took and tore down" of a raid that tore nothing down; it says each
+only when it happened now, and the panel's words follow the same rule (`RaidReportPanel.tsx`'s `reportSaying`, now
+tested). Setting the report and reading it did not mark the save dirty, so an autosave could keep a read report
+unread, to open again after a reload; both mark it now. The builders' told-once set outlived the session it was told
+in: a save loaded brings back its pieces' ids (`seq.build` is recomputed from the save; a new game keeps counting), so
+builders at a ruin they were told of before the same save was loaded again were never told; a session start empties
+it. And the evidence pass's surviving mutation W1 is pinned: a test wrecks a breached Castle Wall to a ruin through
+`wreckPieces` (its ruined form, its base kept, raised again for its whole bill) and razes another. These are
+unit-tested only, not measured live again: none of the live scenarios above settles a raid with no fighter standing,
+so their numbers stand; the owner table re-run on this code is identical (`w73_owner_table_own.txt`). An adversarial
+check of these fixes (two lenses: the code with its take-outs, and the docs' claims) was cut off by the usage limit
+before either returned; the code lens had re-run the eight take-outs (each failing, the tree restored to the same
+digest), and its three open leads were checked by hand: the reason first given for the builders' reset (a new game's
+ids — wrong: a load's, corrected above), any other copy of the lost raid's words (none), and a claim that thieves tear
+nothing down in the world (reworded above). Left as they are: a pressed raid's survivors keep the health they had
+before the settle (the resolver's end-of-fight health is not written back: kinder); a raider up on a wall-walk at or
+below his break point is counted as run, where live he never breaks up there (kinder); the report can open over build
+mode, Photo Mode or a ceremony begun at home (the subscription reads only the destination, the panel and the pause; it
+opens on a knock-out or on coming home, so this was not measured); the resolver leaves out wall charges and manned
+engines (added to the ladder entry below). `tsc` clean; the unit suite 107 files, 936 tests; no import cycle added
+(`import_graph.cjs --diff`: the same 11 as `main`).
+
+## Seen, not fixed: a ruin waiting on its bill holds the builders, and the sites behind it — logged 2026-11-20 (wave 73; by the code)
+
+Since OD-22 (wave 73) a ruin is raised again only once its bill is paid, and with the stores short `constructBuilding`
+and `workSitePart` refuse it. But the builders' pass (`villagerSlice.ts`) and their walk (`Villagers.tsx`) still take the
+oldest unfinished building first, then the first keep piece in ruins (`siteRuinIn`): a ruin the stores cannot pay for
+keeps them standing at it, and a construction site placed after it waits with it until the stores fill (since the
+wave's review they are told so once, with no thud each sweep). To do: pass over a ruin waiting on its bill in both, as a
+site's queue would.
+
+## Seen, not fixed: the lost-raid resolver leaves out the raiders' ladder and their siege time — logged 2026-11-20 (wave 73; by the code)
+
+`raidResolver.ts` counts a guard posted up out of every raider's reach, as the ground raiders' targeting has it
+(`nearestGuard` skips `elevated`); but a raider who has climbed the siege ladder onto that guard's wall-walk strikes him
+(`blowAtGuard`'s `onWall`), so a keep's walk guards facing a laddered raid are settled kinder than the live fight. The
+resolver has no siege time either: raiders shut out batter their way in for many seconds live, which the stepped fight
+leaves out. And it reads a guard posted up as the live code has him today — he walks off his post to strike a raider
+within 22 m of it, drawn at its height, and the raiders still skip him (the wave-72 entry "a guard posted up who chases
+a raider on the ground is drawn at his post's height"): fixing that entry changes what `garrisonFight`'s `up` must
+mean, so change both together. Nor does it count the homestead's wall charges (one arms itself when a raider comes
+close) or its manned engines: with no garrison an away raid is settled as its first raider comes up, before a charge
+could go off (noted in the wave's own check). To do: a raider on a walk (`mob.elevated`, `ladderSocketId`) strikes the
+guards posted to it in `garrisonFight`'s field, and the charges and engines a raid would meet are counted in it.
+
+## Seen, not fixed: away, a raid whose raiders keep out of a posted-up garrison's reach never ends — logged 2026-11-20 (wave 73; by the code)
+
+Wave 73 settles a raid fought while the player is away once no defender stands. A garrison all posted up (towers, a
+keep's walks) stands for good, though: the raiders on the ground skip its guards, and a guard engages only a raider
+within 22 m of himself (`Defenders.tsx`'s `ENGAGE_RADIUS`). Raiders who come up to the homestead and stay farther off
+his post — the thieves at a store across the yard, the fighters wandering 20-50 m from home once nothing is in reach,
+as measured with no garrison (`w73_measure_main_C.txt`) — are never struck, and the raid runs until the player comes
+home. To do: once the thieves are gone and no raider has struck or been struck for a while, settle the raid as the
+knock-out does.

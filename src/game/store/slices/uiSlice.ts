@@ -1,6 +1,7 @@
 // CLN-07 · the store's UI slice: which panel is up and the pause, the camera, notifications and prompts, what the
 // player is looking at and handling, emotes and greetings, and the dialogue and station a panel is open on.
 import type { InputDevice } from '../../inputMode';
+import type { RaidReport } from '../../raidResolver';
 import { audio } from '@/lib/audio';
 import { playerState } from '../../playerState';
 import { stationsInReach } from '../../stations';
@@ -10,7 +11,7 @@ import type { SliceCreator } from './types';
 
 interface Notification { id: number; text: string; gold?: boolean }
 
-export type PanelId = 'none' | 'inventory' | 'crafting' | 'quests' | 'skills' | 'emotes' | 'dialogue' | 'shop' | 'villagers' | 'travel' | 'chronicle' | 'parley' | 'guild' | 'npcEquip' | 'stationMenu' | 'appearance' | 'bestiary' | 'keepSocket' | 'buildingMenu' | 'workshop';
+export type PanelId = 'none' | 'inventory' | 'crafting' | 'quests' | 'skills' | 'emotes' | 'dialogue' | 'shop' | 'villagers' | 'travel' | 'chronicle' | 'parley' | 'guild' | 'npcEquip' | 'stationMenu' | 'appearance' | 'bestiary' | 'keepSocket' | 'buildingMenu' | 'workshop' | 'raidReport';
 
 type CameraMode = 'fps' | 'third';
 
@@ -62,6 +63,12 @@ export interface UiSlice {
   openStationMenu: (station: 'workbench' | 'forge' | 'campfire') => void;
 
   notify: (text: string, gold?: boolean) => void;
+
+  /** G-07 · a raid settled: its report (`raidReport`, saved while unread: persistence.ts), to be shown once the player
+   *  is home with nothing else up */
+  setRaidReport: (r: RaidReport) => void;
+  /** G-07 · open the raid-report panel on the report waiting */
+  showRaidReport: () => void;
 }
 
 export const createUiSlice: SliceCreator<UiSlice> = (set, get) => {
@@ -145,6 +152,13 @@ export const createUiSlice: SliceCreator<UiSlice> = (set, get) => {
     setNearStations: (s) => {
       const cur = get().nearStations;
       if (cur.length !== s.length || cur.some((v, i) => v !== s[i])) set({ nearStations: s });
+    },
+
+    // (each marks the save dirty: a report unread is saved, one read is not — persistence.ts)
+    setRaidReport: (raidReport) => set({ raidReport, dirty: true }),
+    showRaidReport: () => {
+      const r = get().raidReport;
+      if (r) set({ raidReport: { ...r, shown: true }, panel: 'raidReport', dirty: true });
     },
 
     notify: (text, gold) => {

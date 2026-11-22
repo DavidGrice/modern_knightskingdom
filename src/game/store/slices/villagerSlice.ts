@@ -672,7 +672,7 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
             const atSite = atSiteBuilders.reduce((t, v) => t + builderWeightOf(v), 0);
             if (atSite > 0) {
               const before = site.built ?? 0;
-              st.constructBuilding(site.id, dt * 0.04 * atSite);
+              st.constructBuilding(site.id, dt * 0.04 * atSite, true);
               // Salvage Eye (Wave 32): the builder side-goods analog. Building
               // has no discrete "trip" to roll this once-per like gathering
               // does, so it fires once per completed PIECE instead — the
@@ -709,7 +709,7 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
               const m = villagerMobs[v.id];
               return v.job === 'builder' && m && Math.hypot(m.x - ruin.x, m.z - ruin.z) <= WORK_RANGE ? t + builderWeightOf(v) : t;
             }, 0);
-            if (ruin && atSite > 0) st.workSitePart(ruin.site, ruin.socket, dt * 0.04 * atSite);
+            if (ruin && atSite > 0) st.workSitePart(ruin.site, ruin.socket, dt * 0.04 * atSite, true);
           }
         }
         for (const v of roster) {

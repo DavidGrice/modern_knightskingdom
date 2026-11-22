@@ -7,8 +7,8 @@ vi.mock('@/game/navgrid', async (original) => ({ ...(await original<object>()), 
 vi.mock('@/ai/perception/Senses', async (original) => ({ ...(await original<object>()), reportAgentDamaged: (id: string) => { H.damaged.push(id); } }));
 vi.mock('@/ai/actions/combatState', async (original) => ({ ...(await original<object>()), clearCombatState: (id: string) => { H.cleared.push(id); } }));
 
-import { closeIn, engage, swingAt, RANGED_ATTACK_CD } from './engage';
-import { blowAtGuard, blowAtTam, blowAtVillager, RANGED_DMG } from './blows';
+import { closeIn, engage, swingAt, RANGED_ATTACK_CD, RANGED_DMG } from './engage';
+import { blowAtGuard, blowAtTam, blowAtVillager } from './blows';
 import { ATTACK_DMG } from '@/game/data/enemies';
 import { walkwayStands } from './climb';
 import { flank, paceOf, speedOf } from './movement';
