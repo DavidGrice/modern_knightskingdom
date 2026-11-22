@@ -36,6 +36,9 @@ interface Settings {
   masterVolume: number;
   musicVolume: number;
   sfxVolume: number;
+  /** G-09 · silences the ambient barks — greetings, the court's random and collision lines, the raiders' and the
+   *  defenders' voices, Cedric's taunts — but never a lore line the player asks for in dialogue (lib/audio.ts) */
+  muteBarks: boolean;
   mouseSensitivity: number;
   invertY: boolean;
   fov: number;
@@ -79,6 +82,7 @@ const DEFAULT_SETTINGS: Settings = {
   masterVolume: 0.8,
   musicVolume: 0.5,
   sfxVolume: 0.9,
+  muteBarks: false,
   mouseSensitivity: 0.5,
   invertY: false,
   fov: 75,

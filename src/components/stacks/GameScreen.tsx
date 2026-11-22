@@ -26,6 +26,7 @@ import FactionTheme from '../hud/FactionTheme';
 import Panels from '../hud/Panels';
 import BuildBar from '../hud/BuildBar';
 import RaidBanner from '../hud/RaidBanner';
+import Subtitles from '../hud/Subtitles';
 import AIDebugOverlay from '@/ai/debug/AIDebugOverlay';
 import PerfOverlay from '@/components/hud/PerfOverlay';
 // side-effect import: registers window.__kkdata and, in development, logs any quest/cast data violation
@@ -321,6 +322,10 @@ export default function GameScreen() {
       <FactionTheme />
       <div className="hud" style={{ zIndex: 12 }}>
         {buildMode && <BuildBar />}
+      </div>
+      {/* G-09 · over the HUD and the build bar, under the panels (15) */}
+      <div className="hud" style={{ zIndex: 14 }}>
+        <Subtitles />
       </div>
       <Panels />
       {/* G-04 · over the panels (15) and under pause (18): a raid's warning

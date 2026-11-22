@@ -226,6 +226,8 @@ export default function OptionsStack() {
                 onChange={(v) => update({ sfxVolume: v })} />
               <Slider label="Ambience" value={settings.musicVolume} min={0} max={1} step={0.05}
                 onChange={(v) => update({ musicVolume: v })} />
+              {/* G-09 · the ambient barks; a lore line asked for in dialogue still speaks */}
+              <Switch label="Mute barks" on={settings.muteBarks} onChange={(v) => update({ muteBarks: v })} />
             </div>
           )}
 

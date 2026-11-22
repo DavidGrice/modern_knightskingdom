@@ -28,6 +28,7 @@ import { useFovEase, placeCamera } from './cameraRig';
 import { relocate, flyPhoto, crewEngine, walk, photoReturn, keepFloorTrack } from '@/game/playerPhysics/locomotion';
 import { newFloorTrack } from '@/game/playerPhysics/vertical';
 import { holdToAct, dropHold } from '@/game/interaction/holdToAct';
+import { courtBarks } from '@/game/courtBarks';
 
 
 export { playerState };
@@ -128,6 +129,8 @@ export default function PlayerController() {
         crewEngine(st, pos, yaw, grounded, vel, crewCooldown, dt);
       } else {
         walk(st, kb, isDown, pos, yaw, vel, grounded, wasOnOpenGround, floorTrack, arenaDamageTimer, stepTimer, dt);
+        // G-09 · the court protests a walk into them and mutters at a player idle beside them (game/courtBarks.ts)
+        courtBarks(st, pos.current.x, pos.current.z, dt);
       }
 
       // CLN-20 · the world's per-frame ticks (the fishing bite cycle, the

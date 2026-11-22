@@ -7,6 +7,7 @@ import { KEEP_SIZE } from '../../data/keep';
 import { BUILDABLE_BY_ID, buildingsInRect } from '../../data/buildables';
 import { STARTER_BLUEPRINT_BY_ID } from '../../data/blueprints';
 import { audio } from '@/lib/audio';
+import { builtUnderRaid } from '../../barks';
 import {
   FILL_REFUND, MAX_WATERWORKS, digCost, setWaterworks, shapeConflict, snapDigRect, terrainConflict, waterworksInRect,
 } from '../../waterworks';
@@ -192,6 +193,7 @@ export const createBuildToolsSlice: SliceCreator<BuildToolsSlice> = (set, get) =
       });
       set({ inventory: inv, buildings: [...st.buildings, ...placed], dirty: true });
       audio.play('brick_link', 0.7);
+      if (!st.destination) builtUnderRaid(); // G-09 · Cedric's taunt, if he leads a raid on
       st.notify(`Blueprint staked out: ${ev.pieces.length} sites marked — now build them!`, true);
       return true;
     },

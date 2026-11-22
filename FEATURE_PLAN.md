@@ -537,6 +537,43 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   walks they hold every cell. ROADMAP: a new fixed entry, the refund entry FIXED, OD-22 decided and built, and three
   "Seen, not fixed": a ruin waiting on its bill holds the builders; the resolver leaves out the ladder, siege time,
   wall charges and engines; away, a raid kept out of a posted-up garrison's reach never ends.
+- **#313 — Wave 74** (G-09): the cast finds its voice. A bark table and one gate (`game/barks.ts`: a cooldown per
+  line, a 4 s gap per speaker, never a line twice in a raid, 'mute barks', a session record of lines barked for
+  G-12a's runner); only the five lines the manifest gives to barks, a test reading every challenge-line id in `src`.
+  Cedric: `c2s01t2a` in place of `greeting_cedric` as a raid he leads comes (and his war party), `c2s02t4a` once a
+  raid when the player builds under it, `c1s03t1a-c` in order (a sequence going on only from a line spoken to its end)
+  on coming within 14 m of his camp, ten minutes' cooldown; the jailed beat gets none (no bark line fits). The raiders
+  take the GenB set (pack hail, a struck thief's grunt, `DEATH_BARK` for the rank and file), the defenders the GenG
+  set the manifest names `villager` (an order answered, one knocked down), a newcomer greets in it; only Cedric's
+  raids sound his war cry. The court's `randomSound`/`collisionSound` (Leo, the Queen, Richard, John, Storm) through
+  `game/courtBarks.ts` in the player's frame: a walk into one (1.1 m), an idle mutter (5 s, 6 m, once a minute).
+  Subtitles (`game/subtitles.ts`, `Subtitles.tsx`) from the voice channel, speaker and transcript, `aria-live`;
+  nothing for a sound with no words. Options > Sound's 'Mute barks' (persisted) silences every bark, never a lore
+  line. Folded in: `preload()` through `load()` and a 404 remembered (ROADMAP's "fetched twice" entry FIXED). Premises
+  held, adapted: a court collision cannot come from `collide.ts` (no actor collision), so the walk-in is a distance in
+  the player's frame; Richard's war cry (snd050) is left unused; the arrival had Weezil's greeting cut the leader's
+  off on the voice channel, now beside it. Golden tests first, on the unchanged base, then changed on purpose: the
+  raid's arrival voices, `DEATH_BARK`, the duel's collision fetch. Measured live (production builds, muted), `main`
+  against the change: the preloaded line asked for at start-up fetched 2 / 1, a missing sound asked for twice 2 / 1;
+  the Cedric-led raid `greeting_cedric, greeting_weezil` with no subtitle / `c2s01t2a` with its subtitle; building in
+  it nothing / `c2s02t4a` once; a bandit's fall `random_weezil` / `random_raider`; into Richard nothing /
+  `collision_richard`; his camp nothing / `c1s03t1a, b, c` once. 38 take-outs each fail (three after a test was
+  tightened); the suite 108 files, 974. ROADMAP: a new fixed entry, the fetch entry FIXED, and one "Seen, not fixed":
+  a dragon's descent sounds Cedric's war cry. Evidence pass (independent): every live number above re-measured the
+  same on base-14 (3101) and the worktree (3102), plus 'mute barks' silencing the raid's taunt but not a lore line; 55
+  take-outs, 44 fail a test, 11 not reached by one (four of them seen live; the thief's grunt, `placeRow`'s and the
+  keep's taunt, the newcomer's greeting, the war party's taunt and the court's wait for a spoken line, neither); 'mute
+  barks' leaves Cedric's war cry (`warcry`, snd053) playing. Own check (before the PR): the reviews' findings fixed,
+  each with a test that fails without it (18 take-outs) — the war cry left sounding as a raid's alarm and the docs
+  corrected, the record of lines heard kept as each begins to be spoken, a fall out of hearing spending nothing, a
+  fall a last word past its speaker's gap, a line loading counted as spoken, the voice channel stopped on travel, the
+  court silent in a fight and not idle in one (Storm's duel), a villager's greeting still muted, a keep part's taunt,
+  the subtitle clear of the toasts at any width (live at 900×600: the replaced CSS overlapped two toasts, the new
+  none; the camp's introduction cut on going home); the suite 108 files, 986; and one "Seen, not fixed": a lore line's
+  subtitle under the dialogue panel. An adversarial check of the own check (cut off once by the usage limit, then run
+  in full) found the rest: the duel's own lines now spend the court's cooldowns, a blueprint or a wall charge taunts,
+  a fall cuts its speaker's own taunt, and the subtitle keeps 280 px on a phone-narrow screen (live at 480×800: 280
+  px, 126 without the floor).
 
 ## Owner decisions
 

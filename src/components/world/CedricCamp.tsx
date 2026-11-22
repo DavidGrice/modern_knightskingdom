@@ -7,13 +7,17 @@
 // "we'll soon have Cedric safely behind bars." Revealed after Knight's Arms
 // (see CEDRIC_REVEAL_QUEST); the fight itself is handled by the enemies' AI
 // (game/enemyAi/, kind 'cedric') and gameStore's markCedricDefeated — this component is the
-// static camp dressing plus the idle boss / jailed-after-defeat figures.
+// static camp dressing plus the idle boss / jailed-after-defeat figures. G-09 · and Cedric's introduction, hailed
+// at a player who comes up to the camp while he stands there (barks.ts's nearCamp). The jailed Cedric has no bark: none
+// of the lines the manifest gives to barks fits a man behind bars.
 import { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore } from '@/game/combat';
 import { CEDRIC_CAMP, CEDRIC_REVEAL_QUEST, CEDRIC_WORLD } from '@/game/data/world';
+import { playerState } from '@/game/playerState';
+import { CAMP_HAIL, nearCamp } from '@/game/barks';
 import { sampleTemplateGroundY } from './TemplateWorld';
 import PropModel from './PropModel';
 import RiggedFigure, { useIdleFidget } from '../character/RiggedFigure';
@@ -57,10 +61,13 @@ export default function CedricCamp() {
   // per frame via a ref: the bake streams in async, so a one-shot sample at
   // mount could land before there's anything to raycast against)
   const group = useRef<THREE.Group>(null);
+  const hailed = useRef(false);
   useFrame(() => {
     if (group.current) {
       group.current.position.y = sampleTemplateGroundY(CEDRIC_CAMP.x, CEDRIC_CAMP.z);
     }
+    const standing = revealed && destination === CEDRIC_WORLD && !defeatedCedric && !cedricAlive;
+    nearCamp(hailed, standing && Math.hypot(playerState.x - CEDRIC_CAMP.x, playerState.z - CEDRIC_CAMP.z) < CAMP_HAIL);
   });
   // drives the idle boss AND the jailed-after-defeat figure below with a
   // local ambient idle-clip cycle rather than a permanent frozen restpose —

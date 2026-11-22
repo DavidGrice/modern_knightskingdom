@@ -39,6 +39,10 @@ export default function App() {
   useEffect(() => {
     audio.setVolumes(settings.masterVolume, settings.sfxVolume);
   }, [settings.masterVolume, settings.sfxVolume]);
+  // G-09 · Options > Sound's 'mute barks'
+  useEffect(() => {
+    audio.barksMuted = settings.muteBarks;
+  }, [settings.muteBarks]);
 
   // one-time audio unlock + preload on first interaction
   useEffect(() => {

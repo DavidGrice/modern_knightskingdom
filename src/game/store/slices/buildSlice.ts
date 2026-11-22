@@ -34,6 +34,7 @@ import {
 import { wallSnap } from '../../walls';
 import { buildingBase, formAt, pieceWorth, repairCost, salvageOf } from '../../repair';
 import { audio } from '@/lib/audio';
+import { builtUnderRaid } from '../../barks';
 import { cartLivePos } from '../../carts';
 import { waterworksInRect } from '../../waterworks';
 import { buildChallengeState, BUILD_CHALLENGE_ID, BUILD_CHALLENGE_TARGET } from '../../buildChallenge';
@@ -397,6 +398,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
         // used to be discarded here, leaving the keep permanently at y:0
         // regardless of what evalPlacement actually said.
         get().foundKeep(x, z, y);
+        if (!st.destination) builtUnderRaid(); // G-09 · Cedric's taunt, if he leads a raid on
         return true;
       }
       // Phase 19 build-then-construct: placement marks the site (materials
@@ -415,6 +417,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       buildUndo.placeHistory = [...buildUndo.placeHistory.slice(-24), [placed.id]];
       set({ inventory: inv, buildings: [...st.buildings, placed], dirty: true });
       audio.play('brick_link', 0.6);
+      if (!st.destination) builtUnderRaid(); // G-09 · Cedric's taunt, if he leads a raid on
       return true;
     },
 
@@ -477,6 +480,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       buildUndo.placeHistory = [...buildUndo.placeHistory.slice(-24), placed.map((p) => p.id)];
       set({ inventory: inv, buildings: [...st.buildings, ...placed], dirty: true });
       audio.play('brick_link', 0.7);
+      if (!world) builtUnderRaid(); // G-09 · Cedric's taunt, if he leads a raid on
       if (placed.length < cells.length) {
         st.notify(`Run laid: ${placed.length} of ${cells.length} — the rest would not fit or was not paid for.`);
       } else {
@@ -519,6 +523,7 @@ export const createBuildSlice: SliceCreator<BuildSlice> = (set, get) => {
       };
       set({ inventory: inv, buildings: [...st.buildings, charge], panel: 'none', menuBuilding: null, dirty: true });
       audio.play('brick_link', 0.8);
+      if (!st.destination) builtUnderRaid(); // G-09 · Cedric's taunt, if he leads a raid on
       st.notify(`${def.name} mounted on the wall — it arms itself when a raider comes close.`, true);
     },
 

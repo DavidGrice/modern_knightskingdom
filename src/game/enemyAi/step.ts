@@ -14,7 +14,8 @@ import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
 import { navReachable } from '@/game/navgrid';
-import { DEATH_BARK } from '@/game/data/enemies';
+import { DEATH_BARK, KIND_LABEL } from '@/game/data/enemies';
+import { bark } from '@/game/barks';
 import { groundUnder, play, stand, type EnemyFrame } from './frame';
 import { haulOf, gotAway } from '@/game/plunder';
 import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, storeFor, tamInReach } from './targeting';
@@ -62,8 +63,9 @@ function fallApart(f: EnemyFrame, dt: number): void {
       // now cull night skeletons while the player is away, which used to
       // rattle bones at full volume on whatever map the player stood on
       audio.playAt(data.kind === 'skeleton' ? 'skeleton' : 'brick_collide', m.x, m.z, 0.8);
-      const bark = DEATH_BARK[data.kind];
-      if (bark) audio.playAt(bark, m.x, m.z, 0.85);
+      // G-09 · through the barks' gate: a cooldown on the line, and never twice in one raid
+      const line = DEATH_BARK[data.kind];
+      if (line) bark('raiderFalls', { line, speaker: KIND_LABEL[data.kind], at: m, raid: data.raid });
     }
     for (const [name, joint] of Object.entries(rig.joints)) {
       const v = scatter.current.get(name)!;
@@ -79,12 +81,14 @@ function fallApart(f: EnemyFrame, dt: number): void {
 /** G-06 · how near a store's footprint (or home's middle, with none) a thief comes to take from it */
 const STORE_REACH = 1.2;
 
-/** G-06 · A thief struck (below his full health) drops the store and runs with what he has; struck with nothing taken
- *  yet, he gives up thieving and fights like the rest. */
+/** G-06 · A thief struck (below his full health) drops the store and runs with what he has — with a grunt in the
+ *  raiders' voice (G-09) — struck with nothing taken yet, he gives up thieving and fights like the rest. */
 function struckThief(data: EnemyFrame['data']): void {
   if (!data.thief || data.mob.fleeing || data.hp >= data.maxHp) return;
-  if (haulOf(data.carried)) data.mob.fleeing = true;
-  else data.thief = false;
+  if (haulOf(data.carried)) {
+    data.mob.fleeing = true;
+    bark('raiderStruck', { at: data.mob, raid: data.raid });
+  } else data.thief = false;
 }
 
 /** The flight, which stands its own figure: a raider at home by the road (escape), battering his way out of the

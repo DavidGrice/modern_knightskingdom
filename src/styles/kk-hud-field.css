@@ -465,6 +465,31 @@
   100% { opacity: 1; transform: translate(-50%, 0); }
 }
 
+/* --- G-09 · the subtitle of the line being spoken, low centre: above the claim/challenge banners' slot (bottom 92px),
+       600px wide at most, and never reaching the toasts' column on the right (22 + 300px, and 16px clear) at any
+       width — on a narrow screen it keeps to the left of the column rather than centred under it --- */
+.kk-subtitles {
+  position: absolute;
+  left: max(16px, calc(50% - 300px));
+  right: max(338px, calc(50% - 300px));
+  /* below about 640px, a phone's width, the column leaves no room beside it: the box keeps a width to be read */
+  min-width: min(280px, calc(100% - 32px));
+  bottom: 204px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.kk-subtitle {
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(8, 10, 14, .82);
+  font: 500 15px/1.4 var(--kk-font);
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+.kk-subtitle .who { color: var(--kk-renown); font-weight: 700; margin-right: 4px; }
+
 /* --- toasts, right-middle --- */
 .kk-toasts {
   position: absolute;

@@ -10645,14 +10645,37 @@ now the one throwing arm that looses in silence. To do: play the same role-keyed
 (`audio.playAt`), from both — G-16b's siege train (wave 78.2), or the first raid wave before it that touches those
 engines.
 
-## Seen, not fixed: a preloaded voice line asked for before the preload ends is fetched twice — logged 2026-11-06 (in the review of wave 66; by the code)
+## Bugfix: a preloaded voice line asked for before the preload ends is fetched twice, and a missing sound on every play — FOUND 2026-11-06 (in the review of wave 66; by the code), FIXED 2026-11-21
 
-`playVoice` (`lib/audio.ts`) loads any line it has not decoded yet through `load()`, which shares an in-flight fetch
-only with other `load()` calls, not with start-up's `preload()`, and does not remember a failure. So a preloaded
-greeting asked for in a session's first moments (Cedric's, from the raid director) is fetched a second time beside the
-preload — it plays, where `main` stayed silent — and in a tree with no assets every call (each duel collision,
-`duel.ts`) fetches again and logs another 404. Harmless where the assets are. To do: let `preload()` register its
-fetches in `load()`'s in-flight map, and remember a missing sound for the session.
+**The fault.** `playVoice` (`lib/audio.ts`) loads any line it has not decoded yet through `load()`, which shared an
+in-flight fetch only with other `load()` calls, not with start-up's `preload()`, and did not remember a failure. So a
+preloaded greeting asked for in a session's first moments was fetched a second time beside the preload, and in a tree
+with no assets every call (each duel's collision line, `duel.ts`) fetched again and logged another 404. Measured on
+`main` (production build of base-14 on port 3101, build `IL7ema_YNNNPVGPaZsW9-`; `scripts/cln-tools/w74_live.mjs`,
+record `w74_main.txt`): `greeting_king` asked for on the voice channel the instant the preload starts (the first
+pointerdown) — its WAV requested 2 times; a missing sound asked for twice, 1.5 s apart — requested 2 times.
+
+**The fix.** `preload()` goes through `load()` (every `SOUNDS` entry), so the two share one in-flight map: a preloaded
+sound asked for first waits for the preload's fetch, and one the preload finds already asked for waits for that. A
+sound of `SOUNDS` that `load()` fetches is kept with the preloaded (`buffers`), not in the on-demand loader's sixteen,
+so a plain `play()` has it however it came in. A 404 is remembered for the session (`missing`) and not asked for again;
+a fetch that failed outright (offline) is tried again next time.
+
+**Verified** (wave 74, G-09). Golden first: `audio.test.ts`'s "the duel's collision line", written and run on the
+unchanged base (with no `collision_storm` file, the preload's fetch and then one per duel: 2 after the preload), then
+changed on purpose (1 in all, the preload's). `audio.test.ts`: "shrugs off a sound that is not there" changed on
+purpose (a 404 asked for once; a failed fetch tried again), and new: a preloaded line asked for before the preload is
+in waits for its fetch and is spoken when it comes; one asked for before the preload began is fetched once and kept
+with the preloaded. Each part taken out alone fails its test (`w74_takeout.py`, A1-A4). Live on production builds,
+muted: `greeting_king` requested 2 times on `main`, 1 on the change; the missing sound 2 and 1. Evidence pass
+(independent, 2026-11-21): re-run on production builds — base-14 (`main`, b91d5a9, build `IL7ema_YNNNPVGPaZsW9-`)
+on 3101 and the worktree (build `-jwOdvn9sB4zY2fTQXNAu`) on 3102, `--headless=new --use-angle=d3d11 --mute-audio`,
+virtual pointer lock (`w74_ev_live.mjs`, records `w74_ev_main.txt` and `w74_ev_change.txt`): `greeting_king.wav` asked
+for as the preload starts, requested 2 times on `main` and 1 on the change; a missing sound asked for twice, 1.5 s
+apart, 2 and 1 (`main`'s console logged two 404s, the change's one). Take-outs (`w74_ev_takeout.py`, the whole suite
+each time): preload not through `load()`, the 404 not remembered, `load()` not checking it, an eager sound loaded on
+demand not kept with the preloaded — each fails a test. Not measured live: the duel's collision fetch, and a fetch that
+fails outright being tried again (unit tests only).
 
 ## Bugfix: the Grand Keep was the game's only socket model, and a blast at a destination still reached it — FOUND 2026-10-31 (FEATURE_PLAN.md's verification, "The keep is a singleton"; G-36, the owner's siege decision OD-18), FIXED 2026-11-06
 
@@ -12489,3 +12512,191 @@ his post — the thieves at a store across the yard, the fighters wandering 20-5
 as measured with no garrison (`w73_measure_main_C.txt`) — are never struck, and the raid runs until the player comes
 home. To do: once the thieves are gone and no raider has struck or been struck for a while, settle the raid as the
 knock-out does.
+
+## Bugfix: the cast had no voice of its own — Cedric silent, the raiders in Weezil's and Cedric's voices, the court mute but for a greeting, and no subtitles — FOUND 2026-10-31 (FEATURE_PLAN.md's G-09: the ideas "Cedric's voice in the world" and "Full voice sets for court, soldiers and raiders"), FIXED 2026-11-21
+
+**The fault.** Wave 66 (G-01) imported the original bank and the challenge voice lines with their transcripts, and
+gave five of the lines to barks (`assetManifest.json`: `use: 'bark'`, owner G-09), but nothing played them. A raid
+borrowed voices: every raid — Gilbert's and the crown's knights' too — came with Cedric's own war cry (snd053), and
+every bandit pack with Weezil's greeting (`raidDirector.ts`), who is in none of them; a fallen bandit cried out in
+Weezil's voice (`data/enemies.ts`'s `DEATH_BARK`), and a newcomer to the homestead greeted in King Leo's
+(`villagerSlice.ts`). Weezil's greeting, asked for on the voice channel straight after the leader's, cut the leader's
+off as it began. The court had only the greeting it says as a conversation opens; `collide.ts` has no actor collision,
+so walking into one of them did nothing. There was no subtitle system: a line's words showed only inside
+`DialoguePanel`'s lore. Measured on `main` (production build of base-14 on port 3101, build `IL7ema_YNNNPVGPaZsW9-`;
+`scripts/cln-tools/w74_live.mjs`, record `w74_main.txt`): a Cedric-led raid forced through the hooks played `horn,
+warcry, horn, greeting_cedric, greeting_weezil`, with no subtitle element on the page; three pieces built during it,
+no voice; a bandit's fall, `random_weezil`; walked into Richard at his lists (W, 1.2 s), steps only; at Cedric's camp,
+away and back, nothing.
+
+**The fix.** *The bark table and its gate* (`game/barks.ts`): `BARKS`, one row per event — {lines, speaker, cooldown,
+channel, raid}; `bark()` the one gate every bark goes through: nothing while 'mute barks' is on (and no cooldown
+spent), nothing spent on a bark heard where its speaker stands when he is out of the player's hearing
+(`audio.audible`), a cooldown per line, a gap per speaker (`SPEAKER_GAP`, 4 s; none for a fall, a last word, which
+cuts its speaker's own line still being said), never the same line twice in one raid (`newRaid()` as a raid comes, in
+`raidArrives` and Cedric's war party), and a session record of every line heard (`barked`, `wasBarked`; a line on the
+voice channel goes in once it begins to be spoken, `playVoice`'s new `onStart`) for the campaign runner (G-12a) to
+leave out a line already heard. A sequence goes on only from a line spoken to its end (`audio.playVoice`'s new
+`onEnd`): cut short or not there, the rest is not said, so `c1s03t1c` never plays alone. Only the five lines the
+manifest gives to barks are used; a test reads every challenge-line id written in `src` and finds no other. *Cedric:*
+`c2s01t2a` in place of his wordless greeting as a raid he leads comes (and as his war party does, `CedricSiege.tsx`),
+with his own war cry for his raids alone; `c2s02t4a` when the player builds at home while he stands in a raid there
+(`buildSlice.ts`'s `placeBuilding`, `placeRow`, the keep's foundation and `mountCharge`, `buildToolsSlice.ts`'s
+`placeBlueprintAt`, and `keepSlice.ts`'s `raiseSitePart`, a part staked on a socket, through `builtUnderRaid`;
+`raidWatch.cedricUp`, which `raidDirector.ts` sets) — once a raid; `c1s03t1a-c` in order when the player comes within
+14 m of his camp while he stands there (`CedricCamp.tsx`'s frame, `nearCamp`: on coming up, not each frame), then not
+for ten minutes; a change of place stops the voice channel (`gameStore.ts`), so no line or sequence follows the player
+to another place. The jailed beat gets no bark: none of the five lines fits a man behind bars. *The raiders* (the
+bank's GenB set, snd070-072): `greeting_raider` as Gilbert's pack comes (beside the voice channel, so Gilbert's
+greeting is heard whole), `collision_raider` from a thief struck who runs with the goods, `random_raider` as any
+raider of the rank and file falls (`DEATH_BARK` for bandit, mounted raider, hedge witch, shieldbearer and siege
+engineer; Gilbert and Cedric keep their own) — through the gate (`enemyAi/step.ts`), positional, loaded on demand
+(`audio.playAt` now loads a voice not preloaded). *The defenders* speak with the GenG set, which the manifest names
+`villager` (snd073-074): `greeting_villager` answering an order given (`giveDefenderOrder`, with a defender to answer)
+and `collision_villager` from one knocked down (`blowAtGuard`); a newcomer greets in it too, beside the voice channel.
+*The court:* `randomSound` and `collisionSound` beside `greetSound` (`data/cast/types.ts`), filled for King Leo, the
+Queen, Richard, John and Storm from the bank (`random_`/`collision_` of each); `game/courtBarks.ts`, called in the
+player's frame, has a figure the player walks into (moving, within 1.1 m of where it stands now, counted once until he
+steps clear) say its collision line, and one he stands idle beside (5 s, within 6 m) mutter its random line, once a
+minute at most and never over a line being spoken or loaded to be spoken; none of them says a word while a fight is on
+in their world (Storm's duel is fought on her own spot), a player standing his ground in one is not idle, and the two
+lines Storm says as her duel ends (`duel.ts`, outside the gate) spend the court's cooldowns for them (`spent`), so
+neither is said again straight after. Richard's war cry (snd050) is not used: no moment of his fits it without
+inventing one. *The subtitles* (`game/subtitles.ts`, `components/hud/Subtitles.tsx`): driven by the voice channel
+(`audio.voiceListener`), a line with words shows its speaker and its manifest transcript (the bark lines', trimmed;
+the lore lines' cast text, which `loreTranscripts.test.ts` checks against theirs) for its length and 0.8 s more, taken
+down by a later line or a stop; low centre, above the claim and challenge banners and clear of the toasts' column (600
+px at most, centred where there is room and to the left of the column where there is not; below about 640 px, a
+phone's width, it keeps 280 px to be read and may meet the column), on a layer under the panels so it shows in build
+mode; an `aria-live` region; white on near-black, the speaker in gold. A sound with no words — a greeting, a grunt, a
+random or collision line — shows nothing. *Mute barks* (Options > Sound, `settings.muteBarks`, persisted with the
+rest): `audio.barksMuted` silences every bark (`audioCatalog.ts`'s `isBark`: greetings — every figure's as a dialogue
+opens, the village's `villager` among them, and the story's beats', Cedric's at a parley, a pledge, a betrayal and his
+camp, Storm's at a duel — random and collision lines, the five taunts) on the voice channel, `playAt` and
+`playOnDemand` — never a lore line, which the player asks for, nor a sound played plainly (`play()`): Cedric's war cry
+(snd053; with the horn as a raid he leads comes, and at the parley's challenge, the final stand, the jailbreak and a
+dragon's descent), and the `villager` word Tam and the merchant answer the player with.
+
+**Verified.** Golden first, written and run on the unchanged base, then changed on purpose: `raidDirector.test.ts`'s
+"the raid's arrival voices" (Cedric-led, Gilbert-led, the crown's knights, away) and `barks.test.ts`'s "the death
+barks". New: `barks.test.ts` (each event resolves to a line the manifest has; every court sound and bank voice
+resolves; no campaign line anywhere; each bark line's words its transcript, trimmed; every bark mutable and no lore
+line; cooldowns, the speaker gap, never twice in a raid, mute spends nothing, the session record; with no audio and no
+file nothing throws; the camp sequence in order, once, cut short never alone; the court's walk-in, idle mutter and
+presence; the subtitles' timing and silence for sounds without words), `raidDirector.test.ts`'s "the raid's voices"
+(the next raid hails again, the build taunt once a raid and only Cedric's, a defender downed, an order answered) and
+`audio.test.ts`'s G-09 block. Each part taken out alone fails a test (`w74_takeout.py`, 38 take-outs; `git diff` and
+the new files' digest the same before and after); not reached by a unit test, checked live instead: the death bark's
+call site, the camp's frame, the player's frame, the subtitle component; not tested: the thief's grunt, the war
+party's taunt, the newcomer's greeting. `tsc` clean; the unit suite 108 files, 974 tests. Live on production builds of
+`main` (3101) and the change (3102), muted (`w74_live.mjs`, records `w74_main.txt` and `w74_change.txt`): the
+Cedric-led raid played `horn, horn, warcry, c2s01t2a` and showed "Cedric the Bull: Haha! Nobody can defy Cedric the
+Bull. Your defences are useless!" 1.5 s in (`main`: `greeting_cedric, greeting_weezil`, no subtitle); three pieces
+built during it, `c2s02t4a` once (`main`: none); a bandit's fall, `random_raider` (`main`: `random_weezil`); walked
+into Richard, `collision_richard` (`main`: nothing); at Cedric's camp, `c1s03t1a, c1s03t1b, c1s03t1c` in order with
+their three subtitles, and nothing on going 30 m off and back (`main`: nothing). A d3d11 screenshot of the subtitle on
+screen: `w74_change_subtitle.png`. Evidence pass (independent, 2026-11-21): `tsc` clean; the unit suite 108 files, 974
+tests; `next build` clean. Live on production builds — base-14 (`main`, b91d5a9, build `IL7ema_YNNNPVGPaZsW9-`) on
+3101 and the worktree (build `-jwOdvn9sB4zY2fTQXNAu`) on 3102, muted, d3d11, virtual pointer lock (`w74_ev_live.mjs`,
+records `w74_ev_main.txt` and `w74_ev_change.txt`): the Cedric-led raid (cedric, bandit, bandit) — `main` `horn,
+warcry, horn, greeting_cedric, greeting_weezil` and no subtitle element; the change `horn, horn, warcry, c2s01t2a`
+and, 1.5 s in, "Cedric the Bull: Haha! Nobody can defy Cedric the Bull. Your defences are useless!" (role status,
+aria-live polite, white on rgba(8,10,14,.82), its box x 342-938, y 559-596 at 1280×800, overlapping none of the three
+toasts on screen); three barrels built during it — `main` nothing, the change `c2s02t4a` once; a bandit's fall —
+`main` `random_weezil`, the change `random_raider`; walked into Richard (ending 1.5 m off) — `main` steps only, the
+change `collision_richard`; Cedric's camp, then 30 m off and back to 6 m, twice — `main` nothing, the change
+`c1s03t1a, c1s03t1b, c1s03t1c` in order with their three subtitles, once; 'mute barks' on and another Cedric-led raid,
+then `lore_leo_castle` asked for — the change `horn, horn, warcry, lore_leo_castle`, no subtitle in the raid, the lore
+line subtitled (`main`, which has no such option, `greeting_cedric, greeting_weezil` as before). A d3d11 screenshot:
+`w74_ev_change_subtitle.png`. Take-outs (`w74_ev_takeout.py`, record `w74_ev_takeout.txt`): 55, one at a time, the
+whole suite each; `git diff --binary` byte-identical to a copy taken before, and its digest with the new files the
+same before and after. 44 fail a test. 11 pass the suite: the player's frame calling `courtBarks`, the camp's frame
+calling `nearCamp`, `App` applying `muteBarks` and its default (each seen working live above); the death bark's call
+site going through the gate (its line seen live, the once-a-raid gate at that site not); and, with neither a test nor
+a live check, the court's mutter waiting for a line being spoken (`!audio.speaking`), the struck thief's grunt, the
+build taunt from `placeRow` and from founding the keep (only `placeBuilding`'s is tested and was seen live), the
+newcomer's `greeting_villager`, and the war party's taunt in `CedricSiege.tsx`. Found: 'mute barks' does not silence
+Cedric's war cry — `isBark` matches `warcry_`, but the raid's war cry is `warcry` (snd053), and the muted raid above
+still played it, where The fix then said the cast's war cries are muted (the own check below corrected The fix, not
+the war cry). Not measured live: the defenders' answer to an order and their cry when downed, the court's idle mutter,
+the subtitle in build mode.
+
+*Own check* (2026-11-22, before the PR): the two reviews' findings fixed, each with a unit test that fails without its
+fix (`scripts/cln-tools/w74_own_takeout.py`, record `w74_own_takeout.txt`: 18 take-outs, seven of them from the
+adversarial check below, each failing 1-2 tests, the tree restored to the same digest). 'Mute barks' and the war cry:
+`isBark` named `warcry_`, which matched only Richard's unused war cry, so "the cast's war cries" was never true of the
+one played (`warcry`, snd053, through a plain `play()`), as the evidence pass found; the war cry is left sounding —
+played plainly as a raid Cedric leads comes (with the horn), at the parley's challenge, the final stand, the jailbreak
+and a dragon's descent, it is an alarm more than a bark, and the wave's brief (greetings, random and collision lines,
+the taunts) does not name it — the dead `warcry_` case is gone, and The fix above says so (the `villager` case, which
+a review called dead, is not: it is the greeting the village's, the settlements' and the interiors' ten people say
+through `playVoice` as a dialogue opens — taken out here at first, it was put back after the adversarial check below,
+with a test over every figure's greeting). The record: every line of a sequence went in as heard when the first was
+asked for, so Cedric's introduction cut after its first line left `c1s03t1b` and `c1s03t1c` marked heard for G-12a,
+and a line cut while it loaded, or missing, was marked heard; a voice line goes in now only as it begins to be spoken.
+A raider falling out of the player's hearing (`playAt`'s 70 m) spent the raid's one `random_raider`, so a raid's falls
+could all go unheard; a bark heard where its speaker stands spends nothing now when he is out of hearing. Cedric
+falling within 4 s of a taunt lost his death line to his own speaker gap (his kind's label is his taunts' speaker); a
+fall is a last word now. `audio.speaking` was false while a line not preloaded was still loading, so a court mutter
+could cut Cedric's taunt as it loaded (its raid slot spent, never heard), and two figures due in one frame (Leo and
+the Queen stand together) cut each other, both cooldowns spent; a line loaded to be spoken counts as speaking now, and
+the court's wait on it, which the evidence pass found untested, is pinned. Nothing stopped the voice channel on
+travel, so a player leaving Cedric's camp as he began (the camp is template-05's arrival spawn) heard `c1s03t1b` and
+`c1s03t1c`, subtitled, at the homestead; a change of place stops it now. Storm's duel is fought on the spot where her
+figure stands, which the court's frame took for a walk into her (and an idle mutter, over the duel's own lines); the
+court says nothing while a fight is on in its world now, and the mutter's idle clock does not run in one (the
+adversarial check's other lead: the line Storm says as her duel ends, straight from `duel.ts`, was muttered again the
+moment it finished; the rest of that fix is below). A part staked on a keep socket during Cedric's raid did not taunt;
+it does now (`raiseSitePart`; and, from the adversarial check, a blueprint stamped and a charge mounted on a wall),
+and one test pins every build path's taunt (the row's and the foundation's were untested); a piece set on the workshop
+bench does not taunt — it builds a set, not the homestead — nor does a piece moved, mended or hammered. The subtitle's
+least width (280 px, centred) reached into the toasts' column below about 924 px of width; it keeps to the left of the
+column now, 600 px at most and centred where there is room (below about 640 px, a phone's width, there is no room
+beside the column: from the adversarial check, it keeps 280 px there, where it had shrunk to nothing). Live, on the
+change's production build (the final code, build `D0WspJjl1lTLLuymy4ur4`, port 3102, `w74_own_live.mjs`, record
+`w74_own_change.txt`; first measured on build `MoDeLG6E35CohiatnEdkf`, before the adversarial check's fixes, the
+same): at 900×600, three notices up and `c2s01t2a` spoken, the subtitle x 150-562 against the toasts' column from 578,
+overlapping none — with the replaced CSS injected over it on the same page, x 310-590, overlapping two; at 1280×800
+both x 342-938, y 559-596, overlapping none (the column from 958); at 480×800, x 16-296, 280 px wide, where with no
+floor it is 126 px; d3d11 screenshots, `w74_own_subtitle_900x600.png` and `w74_own_subtitle_480x800.png`. Travelled to
+Cedric's camp and sent home as `c1s03t1a` began (its subtitle up): no subtitle 0.3 s after getting home, and in the 12
+s after, the horn alone — no `c1s03t1b` or `c1s03t1c` (that the build before carried them home is by the code and its
+take-out, not measured). Not measured live: the record, the fall out of hearing, the last word, the mutter waiting on
+a load, the court in a fight and its idle clock, the duel's lines spending the court's cooldowns, the build taunts of
+a keep part, a blueprint and a charge, and the villager's greeting muted (unit tests only). Left as they are: Cedric's
+introduction is said again on a visit more than ten minutes after the last (the wave's brief: "once, then a long
+cooldown"); a relocation landing within 1.1 m of a court figure would count as a walk into them (none does: a waypoint
+lands 2.4 m off); Cedric's war party and a raid both start a raid's record (`newRaid`), which the arbiter keeps from
+overlapping; a subtitle's hold runs on the wall clock. `tsc` clean; the unit suite 108 files, 986 tests; no import
+cycle added (`import_graph.cjs --diff`: the same 11 as `main`).
+
+*Adversarial check of the own check* (2026-11-22; two read-only lenses, the code with its tests and the docs' claims;
+no file changed: the tree byte-identical to its snapshot after the first run, and the second run's transcripts show no
+write outside its scratch folder). Its first run was cut off by the usage limit before either lens reported; its trail
+held two leads, both real and fixed above (the `villager` case; the idle clock in a fight). Run again in full, it
+confirmed the rest — `speaking` cannot stick, `onStart` fires once and only for a line that starts, nothing a player
+should hear is cut by a change of place (no action plays a line and then travels), the court is never silenced for
+good, and `barks.test.ts` and `raidDirector.test.ts` pass under six shuffled orders — and found, each now fixed with a
+test that fails without it (take-outs N-R): the idle clock only put Storm's repeat off by 5 s, since `duel.ts` said
+her two lines outside the gate and spent no cooldown — they now spend the court's (`spent`), so neither a mutter 5 s
+on nor a walk through her figure straight after says them again; a blueprint stamped and a charge mounted during
+Cedric's raid did not taunt; a fall, a last word past its speaker's gap, talked over that speaker's own taunt (two of
+Cedric's voices at once, the taunt's subtitle still up), and now cuts it (`audio.voiceLine`); and the subtitle shrank
+to nothing on a phone-narrow screen (21 px wide at 375 px) and now keeps 280 px. Its doc findings are corrected above:
+the war cry's wording, the brief's words given as the plan's, the live record's build, and this paragraph's place.
+Left as they are: Tam's and the merchant's `villager` word, a plain play, sounds under 'mute barks' (neither opens a
+dialogue); `audio.test.ts` fails in one of six shuffled orders, an order dependence older than this wave (its one
+shared manager; the default order passes).
+
+## Seen, not fixed: a dragon's descent sounds Cedric's war cry — logged 2026-11-21 (wave 74; by the code)
+
+`DragonSiegeController.tsx` plays `warcry` — snd053, Cedric the Bull's own war cry — as either dragon descends on the
+homestead, with no Cedric in it. Wave 74 stopped the raids that are not his borrowing it; the dragons were left as they
+were (no raid). To do: the horn alone, or a sound of the dragon's own (the bank has none named for it: check
+`sound_map.csv`).
+
+## Seen, not fixed: a lore line's subtitle shows under the dialogue panel that already shows its words — logged 2026-11-22 (wave 74's review; by the code)
+
+The subtitles' layer (z 14, `GameScreen.tsx`) sits under the panels (z 15), so that a subtitle shows in build mode; a
+lore line asked for in `DialoguePanel` is subtitled too, partly hidden behind the panel that already shows its words.
+To do: no subtitle for a line while the panel that asked for it shows its words.

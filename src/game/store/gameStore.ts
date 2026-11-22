@@ -10,6 +10,7 @@ import { freshPersisted, type PersistedState } from './persistence';
 import { playerState } from '../playerState';
 import { stationsInReach } from '../stations';
 import { exposeDebug } from '@/lib/debugHooks';
+import { audio } from '@/lib/audio';
 import { saveEdits } from './storeCounters';
 import type { StoreSet } from './slices/types';
 import { createSessionSlice, type SessionSlice } from './slices/sessionSlice';
@@ -47,6 +48,12 @@ useGameStore.subscribe((s, prev) => {
   if (s.buildings !== prev.buildings && (s.panel === 'crafting' || s.panel === 'stationMenu')) {
     s.setNearStations(stationsInReach(s.buildings, playerState.x, playerState.z));
   }
+});
+
+// G-09 · a voice line is spoken where its speaker stands: going to another place cuts it, and a sequence goes no further
+// (Cedric's introduction, begun as the player arrives at his camp, does not follow him home)
+useGameStore.subscribe((s, prev) => {
+  if (s.destination !== prev.destination) audio.stopVoice();
 });
 
 // debug/testing handle
