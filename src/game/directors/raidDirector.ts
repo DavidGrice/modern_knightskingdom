@@ -8,7 +8,8 @@
 // every other one behind the leader a thief come to strip them (game/plunder.ts); and its end — which waits for the
 // last thief to fall or get away — names the goods lost and the goods taken back. G-07 · a raid the player falls out of
 // is settled as his garrison's fight goes (raidSettle.ts): knocked out, or away with the garrison fallen and raiders
-// on the field, which nothing in the world would end.
+// on the field, which nothing in the world would end. G-09 · the raid's voices are its own: Cedric's war cry and his
+// taunt only when he leads it, the pack's hail in the raiders' own voice, never Weezil's (barks.ts).
 import { useEnemyStore, type EnemyData, type EnemyKind } from '@/game/combat';
 import type { GameState } from '@/game/store/gameStore';
 import { isHomeBuilding, type ItemId } from '@/game/types';
@@ -29,6 +30,7 @@ import { raidDue, raidSize, stockpileValue, thiefSlot, warningLeadTime } from '.
 import { goodsNamed, haulOf, raidHaul, resetRaidHaul } from '@/game/plunder';
 import { raidDowned, raidForce, raidPlan } from './state';
 import { garrisonStands, homeRaiders, settleRaid } from './raidSettle';
+import { bark, newRaid, raidWatch } from '@/game/barks';
 import type { Counter, Flag, Spawn } from './types';
 
 /** Wave 37 (A3 remainder) · rolled once per plain-bandit filler slot in the
@@ -42,6 +44,9 @@ function rollBanditFiller(): EnemyKind {
   if (difficultyState.tier >= SHIELDED_ELITE_TIER && r < 0.18 + 0.16) return 'shieldedElite';
   return 'bandit';
 }
+
+// G-09 · Cedric stands in a raid on the homestead: what his taunt at the player building under it waits on
+raidWatch.cedricUp = () => useEnemyStore.getState().enemies.some((e) => e.raid && e.kind === 'cedric' && !e.world && e.mob.state !== 'dying');
 
 export function pruneLadderClimbers(list: EnemyData[]): void {
   // Wave 58 (H4) addendum #8: a raider that dies or is removed frees its
@@ -170,9 +175,11 @@ function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive:
   raidActive.current = true;
   resetRaidHaul();
   raidDowned.clear(); // G-07 · this raid's own
+  newRaid(); // G-09 · no line heard in it yet
   // G-06 · how many follow the leader: a richer homestead draws a hungrier raid (it was always two)
   const followers = raidSize(stockpileValue(st.inventory));
-  if (!st.destination) { audio.play('warcry', 0.9); audio.play('horn', 0.9); }
+  // G-09 · the horn for every raid; the war cry (Cedric's own, snd053) only for one he leads, below
+  if (!st.destination) audio.play('horn', 0.9);
   // N79 (requested 2026-07-28): raiders arrive by the road instead of
   // popping into existence on a ring around the homestead — spawned
   // loosely clustered around the same road entry point newcomers and
@@ -207,24 +214,30 @@ function raidArrives(st: GameState, list: EnemyData[], spawn: Spawn, raidActive:
     // unsworn or crown-sworn: the bandit threat, exactly as before
     // once his camp is known and he's still at large, Cedric himself
     // occasionally leads the raid in person — a bigger, named wave
-    // instead of another anonymous bandit party (his own real war cry,
-    // snd053, already plays above; his greeting bark makes it unmistakable)
+    // instead of another anonymous bandit party: his own real war cry,
+    // snd053, and (G-09) his taunt, in place of his wordless greeting
     const cedricEligible = st.completedQuests.includes(CEDRIC_REVEAL_QUEST) && !st.defeatedCedric;
     const cedricLed = cedricEligible && Math.random() < 0.35;
     if (cedricLed) {
-      if (!st.destination) audio.playVoice('greeting_cedric', 0.9);
+      if (!st.destination) {
+        audio.play('warcry', 0.9);
+        bark('cedricRaid');
+      }
       st.notify('⚔ Cedric the Bull himself leads the raid on your homestead!', true);
       const [sx, sz] = roadSpawnPos(0);
       spawn('cedric', sx, sz, true, undefined, true, false, 1, false, null);
     } else {
-      // Gilbert the Bad leads the raid, with Weezil somewhere in the pack —
-      // their own real voice lines instead of an anonymous mob (see combat.ts)
-      if (!st.destination) audio.playVoice('greeting_gilbert', 0.85);
+      // Gilbert the Bad leads the raid, in his own real voice, and his pack
+      // hails in theirs (G-09: it was Weezil's, who is not in it; and on the
+      // voice channel it cut Gilbert's greeting off as it began)
+      if (!st.destination) {
+        audio.playVoice('greeting_gilbert', 0.85);
+        bark('raidersCome');
+      }
       st.notify('⚔ Gilbert the Bad leads a raid on your homestead!', true);
       const [sx, sz] = roadSpawnPos(0);
       spawn('gilbert', sx, sz, true, undefined, true, false, 1, false, null);
     }
-    if (!st.destination) audio.playVoice('greeting_weezil', 0.6);
     // Wave 37 (A3 remainder): each plain-bandit filler slot can
     // occasionally roll a caster or a shielded elite instead, once the
     // difficulty curve allows it (rollBanditFiller, above)

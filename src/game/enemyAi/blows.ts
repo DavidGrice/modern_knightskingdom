@@ -23,6 +23,7 @@ import { audio } from '@/lib/audio';
 import { pick } from '@/lib/rng';
 import { GRAB_EVERY, RUN_HAUL, haulOf, nextGrab } from '@/game/plunder';
 import { raidDowned } from '@/game/directors/state';
+import { bark } from '@/game/barks';
 import { RANGED_ATTACK_CD, RANGED_DMG, type RangedProfile } from './engage';
 import type { KeepPiece } from './targeting';
 
@@ -75,6 +76,7 @@ export function blowAtGuard(data: EnemyData, st: GameState, guard: DefenderState
     guard.state = 'downed';
     guard.downedUntil = Date.now() + DOWNED_RECOVER_MS;
     if (data.raid) raidDowned.add(id); // G-07 · for the raid's report, should the raid be settled
+    bark('defenderDown', { at: guard, raid: data.raid }); // G-09 · in the defenders' own voice (GenG)
     const name = st.villagers.find((v) => v.id === id)?.name ?? 'A defender';
     st.notify(`${name} is knocked down defending ${onWall ? 'the battlements' : 'the homestead'}!`);
   }

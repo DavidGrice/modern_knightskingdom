@@ -1,6 +1,6 @@
 // CLN-21 · the NPC and side-quest shapes, moved verbatim out of data/npcs.ts (which re-exports them).
 import type { Alliance, CharacterConfig, ItemId, SkillId } from '../../types';
-import type { SoundName, VoiceName } from '@/lib/audio';
+import type { BarkLine, SoundName, VoiceName } from '@/lib/audio';
 import type { EnemyKind } from '../../combat';
 
 /** Everything about an errand except what it asks for — see `SideQuestGoal`. */
@@ -103,6 +103,10 @@ export interface NpcDef {
   z: number;
   yaw: number;
   greetSound: SoundName;
+  /** G-09 · the bank's own lines for this figure: one muttered now and then while the player stands idle nearby, and
+   *  one when the player walks into them (game/courtBarks.ts) — absent where the bank has none */
+  randomSound?: BarkLine;
+  collisionSound?: BarkLine;
   portrait: string;
   /** flavor lines, one picked at random per conversation */
   lines: string[];

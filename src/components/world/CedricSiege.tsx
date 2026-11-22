@@ -15,6 +15,7 @@ import { useGameStore } from '@/game/store/gameStore';
 import { useEnemyStore, type EnemyKind } from '@/game/combat';
 import { worldEnv } from '@/game/env';
 import { audio } from '@/lib/audio';
+import { bark, newRaid } from '@/game/barks';
 import { isBuilt, isHomeBuilding } from '@/game/types';
 import type { ItemId } from '@/game/types';
 import { KEEP_SOCKETS } from '@/game/data/keep';
@@ -228,7 +229,9 @@ export default function CedricSiege() {
         };
         const [cx, cz] = warPos(0, 6);
         useEnemyStore.getState().spawn('cedric', cx, cz, true, undefined, true);
-        audio.playVoice('greeting_cedric', 0.9);
+        // G-09 · a raid of his: his taunt, in place of his wordless greeting, and none of its lines heard yet
+        newRaid();
+        bark('cedricRaid');
         const [gx, gz] = warPos(1, 6);
         useEnemyStore.getState().spawn('gilbert', gx, gz, true, undefined, true);
         // Wave 36 (A3): once the player has climbed to the game's current

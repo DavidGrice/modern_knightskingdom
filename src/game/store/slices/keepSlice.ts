@@ -10,6 +10,7 @@ import {
 import { ITEMS } from '../../data/items';
 import { repairCost } from '../../repair';
 import { audio } from '@/lib/audio';
+import { builtUnderRaid } from '../../barks';
 import { buildUndo, seq } from '../storeCounters';
 import { sharedActions } from './shared';
 import type { SliceCreator } from './types';
@@ -119,6 +120,7 @@ export const createKeepSlice: SliceCreator<KeepSlice> = (set, get) => {
         dirty: true,
       });
       audio.play('brick_link', 0.7);
+      if (!st.destination) builtUnderRaid(); // G-09 · Cedric's taunt, if he leads a raid on
       st.notify(`${part.name} staked out on ${socket.name} — now build it.`, true);
     },
 

@@ -280,7 +280,9 @@ export const createVillagerSlice: SliceCreator<VillagerSlice> = (set, get) => {
       const entry = roadEntry();
       arriveByRoad(villager.id, entry.x, entry.z);
       set({ villagers: [...st.villagers, villager], dirty: true });
-      audio.playVoice('greeting_king', 0.5);
+      // G-09 · a newcomer's own (GenG) greeting, where it was King Leo's — beside the voice channel, never cutting a
+      // line being spoken
+      audio.playOnDemand('greeting_villager', 0.5);
       st.notify(`${name} has come to join your homestead!`, true);
     },
 

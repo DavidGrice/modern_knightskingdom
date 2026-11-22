@@ -12,6 +12,7 @@ import { navBlocked, navReachable } from '../navgrid';
 import { EYE_HEIGHT } from './world';
 import { HOME_X, HOME_Z } from './villagers';
 import { audio } from '@/lib/audio';
+import { bark } from '../barks';
 
 interface OrderDef {
   id: DefenderOrder;
@@ -82,6 +83,7 @@ export function giveDefenderOrder(index: number) {
   if (def.id === 'scout') scoutReported.clear();
   audio.play('horn', 0.5);
   const n = st.villagers.filter((v) => v.job === 'defender').length;
+  if (n) bark('orderHeard'); // G-09 · answered, in the defenders' own voice (GenG)
   st.notify(n
     ? `Order given: ${def.label}`
     : 'You have no defenders to command — assign one in the Roster (N).');

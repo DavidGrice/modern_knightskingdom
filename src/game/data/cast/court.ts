@@ -26,6 +26,9 @@ export const COURT_NPCS: NpcDef[] = [
     // Wave 53 (E5) · the court holds by day; see NpcDef.courtHours' own doc.
     courtHours: true,
     greetSound: 'greeting_king',
+    // G-09 · the bank's own random and collision lines (snd043, snd017; game/courtBarks.ts)
+    randomSound: 'random_king',
+    collisionSound: 'collision_king',
     portrait: '/assets/minifigs/minifigkingleo00.png',
     lines: [
       'Serve the realm well and you shall be knighted! Your quest log (J) marks the path.',
@@ -78,6 +81,9 @@ export const COURT_NPCS: NpcDef[] = [
     // Wave 53 (E5) · the court holds by day; see NpcDef.courtHours' own doc.
     courtHours: true,
     greetSound: 'greeting_queen',
+    // G-09 · the bank's own random and collision lines (snd035, snd010; game/courtBarks.ts)
+    randomSound: 'random_queen',
+    collisionSound: 'collision_queen',
     portrait: '/assets/minifigs/minifigqueenleonora00.png',
     lines: [
       'A homestead should be beautiful as well as strong, don’t you agree?',
@@ -137,6 +143,9 @@ export const COURT_NPCS: NpcDef[] = [
     ...resolveWorldAnchor(WORLD_ANCHOR.richard), yaw: Math.PI,
     world: 'template-02',
     greetSound: 'greeting_richard',
+    // G-09 · the bank's own random and collision lines (snd037, snd011; game/courtBarks.ts)
+    randomSound: 'random_richard',
+    collisionSound: 'collision_richard',
     portrait: '/assets/minifigs/minifigrichardstrong00.png',
     lines: [
       'A knight trains every day. The quintain never complains!',
@@ -229,6 +238,9 @@ export const COURT_NPCS: NpcDef[] = [
     ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-01'], -40, -426.667), yaw: Math.PI,
     world: 'template-01',
     greetSound: 'greeting_john',
+    // G-09 · the bank's own random and collision lines (snd031, snd007; game/courtBarks.ts)
+    randomSound: 'random_john',
+    collisionSound: 'collision_john',
     portrait: '/assets/minifigs/minifigjohnmayne00.png',
     lines: [
       'The stores always want for more. Wood, stone, fish — bring what you can.',
@@ -307,6 +319,9 @@ export const COURT_NPCS: NpcDef[] = [
     ...resolveDestPoint(WORLD_DESTINATION_BY_ID['template-06'], 0, -324.667), yaw: Math.PI,
     world: 'template-06',
     greetSound: 'greeting_storm',
+    // G-09 · the bank's own random and collision lines (snd048, snd046; game/courtBarks.ts)
+    randomSound: 'random_storm',
+    collisionSound: 'collision_storm',
     portrait: '/assets/minifigs/minifigprincessstorm00.png',
     lines: [
       "My mother talks up my swordplay to every traveler who'll listen. Care to see for yourself?",

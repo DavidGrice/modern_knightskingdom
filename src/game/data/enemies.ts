@@ -2,7 +2,7 @@
 // how hard and how often it hits, and what it may be carrying. Pure data; combat.ts re-exports the public names.
 // CLN-13 · and how hard it batters a wall, what it looks like, and its voice when it falls (were Enemies.tsx's).
 import type { CharacterConfig, ItemId } from '../types';
-import type { SoundName } from '@/lib/audioCatalog';
+import type { BarkLine } from '@/lib/audioCatalog';
 
 // 'royal' = the crown's knights, raiding only players who pledged to Cedric
 // (Phase 19's alliance branch) — sturdier than a bandit, softer than Gilbert.
@@ -248,7 +248,10 @@ export const KIND_FIGURE: Record<EnemyKind, CharacterConfig> = {
   },
 };
 
-/** a distinct voice bark on defeat, where the original bank has one (Deed-worthy antagonists only) */
-export const DEATH_BARK: Partial<Record<EnemyKind, SoundName>> = {
-  bandit: 'random_weezil', gilbert: 'random_gilbert', cedric: 'random_cedric',
+/** a distinct voice bark on defeat, where the original bank has one. G-09 · Gilbert and Cedric fall with their own;
+ *  the raiders of the rank and file with the bank's raider voice (snd072, GenB), where a bandit borrowed Weezil's —
+ *  heard through barks.ts's gate (game/enemyAi/step.ts). The crown's knights, skeletons and Storm have none. */
+export const DEATH_BARK: Partial<Record<EnemyKind, BarkLine>> = {
+  bandit: 'random_raider', mountedRaider: 'random_raider', caster: 'random_raider', shieldedElite: 'random_raider',
+  siegeCrew: 'random_raider', gilbert: 'random_gilbert', cedric: 'random_cedric',
 };
