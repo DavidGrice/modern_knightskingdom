@@ -3,7 +3,10 @@
 // Enemies.tsx wrote out on its own: a guard on the battlements, a guard, Tam, a villager, and the player up on a wall.
 // The player on the ground, a piece of the keep and a siege crew's engine take the swing alone; the foot of the siege
 // ladder and the chase of the player, the closing in alone. The blows themselves are blows.ts's.
+// G-10 · a crossbow's shot and a caster's spell are drawn first: the blow waits for the release of its clip (`draw`).
 import type { EnemyData } from '@/game/combat';
+import { ATTACK_CD } from '@/game/data/enemies';
+import { attackClip, enemyArms, heldSwing, instantSwing, type Swing } from '@/game/combat/fightClips';
 import type { Mob } from './frame';
 
 /** crossbow-armed bandits (`data.ranged`): hold at range and hit-scan
@@ -39,14 +42,62 @@ export function rangedProfileOf(data: EnemyData): RangedProfile {
     : null;
 }
 
+/** G-10 · An enemy's swing, as his figure plays it (game/combat/fightClips.ts): a crossbow's shot and a caster's spell
+ *  held to the clip's release, fitted to their own cooldown (rangedProfileOf's) — against the player; at one of the
+ *  player's side a caster fights hand to hand, his blow at once — every other blow at once, fitted to his kind's. */
+export function swingOf(data: EnemyData): Swing {
+  const clip = attackClip(enemyArms(data));
+  const ranged = rangedProfileOf(data);
+  return ranged ? heldSwing(clip, ranged.cd) : instantSwing(clip, ATTACK_CD[data.kind]);
+}
+
+/** G-10 · a shot drawn: the mark it is drawn at (its kind and id: 'def:g1', 'player') and the seconds until it is
+ *  loosed (swingOf's hit) */
+export interface Draw { mark: string; release: number }
+
 /** The swing: the attack stance, the cooldown running down, the turn to face the mark (`face`; null for one that needs
  *  none — a melee attacker arrives facing its target already), and once the cooldown is out, the blow — which sets the
- *  next cooldown itself. */
-export function swingAt(m: Mob, dt: number, face: { x: number; z: number } | null, blow: () => void): void {
+ *  next cooldown itself. Each swing begun is counted (`m.swings`: his figure plays its clip again on it). G-10 · a shot
+ *  (`draw`) is drawn first: begun as the cooldown runs out, it lands `release` seconds on, if he swings at the same
+ *  mark every frame until then (any other frame lets it go: dropStaleDraw) and is not staggered meanwhile, and the next
+ *  cooldown is taken from the draw's start, so shot follows shot every cooldown as before. */
+export function swingAt(m: Mob, dt: number, face: { x: number; z: number } | null, blow: () => void, draw?: Draw): void {
+  if (m.state !== 'attack') m.stanceSwings = m.swings ?? 0;
   m.state = 'attack';
   m.attackCd -= dt;
   if (face) m.yaw = Math.atan2(-(face.x - m.x), -(face.z - m.z));
-  if (m.attackCd <= 0) blow();
+  if (m.draw && m.draw.mark === draw?.mark && m.attackCd <= 0) {
+    m.draw.held = true;
+    if ((m.draw.t -= dt) > 0) return;
+    const since = draw.release - m.draw.t; // the draw's start, this frame
+    m.draw = undefined;
+    blow();
+    m.attackCd -= since;
+    return;
+  }
+  // drawn at another mark, or staggered while drawing (a finisher or a parry forces the cooldown up — a draw begins at
+  // 0 and only runs it down): let go, and drawn again from its start once the stagger is out
+  m.draw = undefined;
+  if (m.attackCd > 0) return;
+  m.swings = (m.swings ?? 0) + 1;
+  if (draw) m.draw = { mark: draw.mark, t: draw.release, held: true };
+  else blow();
+}
+
+/** G-10 · whether he has begun a swing since he last came into the attack stance: till then — his next swing, at the
+ *  least closeIn's 0.4 s hold on arriving, at most the rest of his cooldown — his figure squares up at rest, rather than
+ *  show a blow that has not come (step.ts's clip). A stagger leaves him in the stance: his last clip holds. */
+export function swungInStance(m: Mob): boolean {
+  return (m.swings ?? 0) > (m.stanceSwings ?? 0);
+}
+
+/** G-10 · A shot drawn and not swung on again the next frame — its striker fell or was felled, ran, closed in, lost his
+ *  sight of it or turned to another mark, or the player went to build — is let go, and never lands. Called at the head
+ *  of every frame (step.ts); swingAt marks the draw it carries on. */
+export function dropStaleDraw(m: Mob): void {
+  if (!m.draw) return;
+  if (m.draw.held) m.draw.held = false;
+  else m.draw = undefined;
 }
 
 /** The closing in: the chase stance, the cooldown run down but held at 0.4 s (so the first blow on arrival is not
@@ -64,16 +115,18 @@ export function closeIn(m: Mob, dt: number, way: () => { nx: number; nz: number 
 }
 
 /** A mark to fight: whether it is in reach (and, for a crossbow, in sight), what to face while swinging, the blow, the
- *  way to close in and the pace to close in at. */
+ *  way to close in and the pace to close in at — and a crossbow's draw. */
 export interface Engagement {
   inReach: boolean;
   face: { x: number; z: number } | null;
   blow: () => void;
   way: () => { nx: number; nz: number };
   pace: number;
+  /** G-10 · a crossbow's shot, drawn before it lands (swingAt) */
+  draw?: Draw;
 }
 
 export function engage(m: Mob, dt: number, e: Engagement): void {
-  if (e.inReach) swingAt(m, dt, e.face, e.blow);
+  if (e.inReach) swingAt(m, dt, e.face, e.blow, e.draw);
   else closeIn(m, dt, e.way, e.pace);
 }

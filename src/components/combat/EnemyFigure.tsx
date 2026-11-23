@@ -2,19 +2,23 @@
 // CLN-13 · an enemy's figure: its minifig (game/data/enemies.ts's KIND_FIGURE) and what it holds, and — for one of
 // Cedric's riders or a siege crew — the horse under it or the engine it mans. Enemies.tsx's Enemy draws it inside the
 // group its frame (game/enemyAi/step.ts) stands and turns. G-06 · and a thief's load on his back, once he has one.
-import { Suspense, useRef } from 'react';
+// G-10 · his attack clip played once a swing, at his swing's timeScale (game/enemyAi/engage.ts's swingOf).
+import { Suspense, useEffect, useRef } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
 import { ArmShield, HeldCrossbow, HeldHalberd, HeldSpear, HeldSword, SpellHandGlow } from '../character/Equipment';
 import { MOUNT_SEAT_Y, type EnemyData } from '@/game/combat';
 import RiggedProp from '../world/RiggedProp';
 import RiggedFigure from '../character/RiggedFigure';
-import type { RiggedMinifig } from '@/lib/minifigRig';
+import { preloadClip, type RiggedMinifig } from '@/lib/minifigRig';
 import { BUILDABLE_BY_ID, heightOf } from '@/game/data/buildables';
 import { haulOf } from '@/game/plunder';
 import PropModel from '../world/PropModel';
 import { labOccupyMode } from '@/game/data/labCapabilities';
 import { KIND_FIGURE } from '@/game/data/enemies';
+import { CLIP_TIMING } from '@/game/combat/fightClips';
+import { swingOf } from '@/game/enemyAi/engage';
+import type { EnemyCue } from '@/game/enemyAi/frame';
 
 /** how far back of its own manned engine's centre a siege crew's figure
  *  stands, so it doesn't render inside the catapult's own mesh — same
@@ -48,15 +52,24 @@ function CarriedLoad({ data }: { data: EnemyData }) {
   );
 }
 
-export default function EnemyFigure({ data, clip, ridePace, rig, onReady }: {
+export default function EnemyFigure({ data, clip, cue, ridePace, rig, onReady }: {
   data: EnemyData;
   clip: string;
+  /** G-10 · the swing his attack clip is played for */
+  cue: EnemyCue;
   /** how fast a mounted raider is really travelling, for its horse's walk */
   ridePace: number;
   /** the figure's rig once it has loaded, for what it holds */
   rig: RiggedMinifig | null;
   onReady: (rig: RiggedMinifig) => void;
 }) {
+  // G-10 · his attack clip, once a swing: from its first frame for a shot drawn to its release, from its hit for a blow
+  // that landed at once (a caster's swing at one of the player's side plays his spell's clip so)
+  const swing = swingOf(data);
+  const attacking = clip === swing.clip;
+  // G-10 · his attack clip fetched as he comes on, not at his first swing: a clip loads on its first play, and he stands
+  // at rest till that swing (step.ts), so nothing else would ask for it sooner
+  useEffect(() => { preloadClip(swing.clip); }, [swing.clip]);
   return (
     <>
       {/* Wave 36 (A3): one of Cedric's own tethered chargers — the same
@@ -113,7 +126,10 @@ export default function EnemyFigure({ data, clip, ridePace, rig, onReady }: {
           // rig data, not assumed.
           keepProps={false}
           clip={clip}
-          timeScale={clip === 'anim_g_swordswish' ? 1.8 : 1.15}
+          loop={!attacking}
+          timeScale={attacking ? swing.timeScale : 1.15}
+          cue={cue.n}
+          from={attacking && !cue.held ? CLIP_TIMING[clip].hit : 0}
           onReady={onReady}
         />
         {/* bandits: a raiding party mixes melee and ranged rather than every

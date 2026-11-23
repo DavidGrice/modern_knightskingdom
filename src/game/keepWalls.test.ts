@@ -254,7 +254,7 @@ describe('a raider at the keep\'s walls', () => {
       const data = raider(0, 8.4);
       const path = { current: { pts: [], i: 0, t: 0.5, tx: 2, tz: 2, siege: true } as Route };
       const f = { data, group: { current: new THREE.Group() }, rigRef: { current: null }, scatter: { current: null }, path,
-        clip: '', setClip: () => {}, pace: { current: { x: 0, z: 0, v: 0 } }, setRidePace: () => {}, remove: () => {},
+        clip: '', setClip: () => {}, cue: { n: 0, held: false }, setCue: () => {}, pace: { current: { x: 0, z: 0, v: 0 } }, setRidePace: () => {}, remove: () => {},
         enemyAtHome: true, speed: 2.7 };
       const frames = (n: number) => { for (let i = 0; i < n; i++) stepEnemy(f, 0.05); };
       frames(30); // past his route's timer: still shut out, so still at it

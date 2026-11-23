@@ -20,7 +20,7 @@
 // this follows, not the mouse gate.
 import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_HELD_TARGET_KINDS, MELEE, activeMelee, cycleWeapon } from '@/game/combat';
+import { combatState, playerAttack, fireBolt, fireArrow, FULL_DRAW_TIME, CLICK_HELD_TARGET_KINDS, MELEE, RANGED_CD, activeMelee, cycleWeapon } from '@/game/combat';
 import { useGameStore } from '@/game/store/gameStore';
 import { crewState } from '@/game/crew';
 import { ridingState } from '@/game/riding';
@@ -69,7 +69,7 @@ function startAttack(st: GameState) {
   if (ranged && bow) {
     combatState.drawStart = performance.now();
   } else if (ranged) {
-    if (rangedCd <= 0 && fireBolt()) rangedCd = 1.1;
+    if (rangedCd <= 0 && fireBolt()) rangedCd = RANGED_CD.crossbow;
   } else if (attackCd <= 0 && playerAttack()) {
     // Wave 7 · the swing cadence is the WEAPON's, not a constant — a
     // halberd is slower than a sword and a spear sits between them
@@ -85,7 +85,7 @@ function releaseAttack() {
   if (combatState.drawStart > 0) {
     const power = Math.min(1, (performance.now() - combatState.drawStart) / (FULL_DRAW_TIME * 1000));
     combatState.drawStart = 0;
-    if (rangedCd <= 0 && fireArrow(power)) rangedCd = 1.3;
+    if (rangedCd <= 0 && fireArrow(power)) rangedCd = RANGED_CD.longbow;
   }
 }
 

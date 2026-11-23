@@ -76,7 +76,7 @@ const raider = (x: number, z: number, o: Partial<EnemyData> = {}, m: Partial<Mob
 const frameOf = (data: EnemyData) => {
   const f = {
     data, group: { current: new THREE.Group() }, rigRef: { current: null }, scatter: { current: null },
-    path: { current: { pts: [], i: 0, t: 0, tx: 0, tz: 0 } as Route }, clip: '', setClip: () => {},
+    path: { current: { pts: [], i: 0, t: 0, tx: 0, tz: 0 } as Route }, clip: '', setClip: () => {}, cue: { n: 0, held: false }, setCue: () => {},
     pace: { current: { x: 0, z: 0, v: 0 } }, setRidePace: () => {}, remove: () => { f.gone = true; },
     enemyAtHome: (data.world ?? null) === null, speed: 2.7, gone: false,
   };
@@ -487,5 +487,35 @@ describe('fleeing from inside a shut keep (wave 70.1\'s "Seen, not fixed")', () 
     expect(siteCovers(site(), data.mob.x, data.mob.z)).toBe(false);
     for (; i < 240 / DT && !f.gone; i++) stepEnemy(f, DT);
     expect(f.gone).toBe(true);
+  });
+
+  // G-10 · own check: escape stands him in a chase each frame; battering on, his figure must go on showing his blows
+  // (before this fix, at rest on every frame but the blow's: 2361 of 2408 frames in the stance). Each stretch at a piece
+  // starts at rest till its first blow (he ran there, his cooldown not yet out), as an arrival does.
+  it('battering his way out, his figure shows his blows — at rest only before the first of each stretch', () => {
+    game().addItems({ stone: 400, plank: 100, wood: 100, iron_bar: 10 });
+    game().foundKeep(0, 0, 0);
+    for (const [s, p] of [['nw', 'corner_turret'], ['ne', 'corner_turret'], ['se', 'corner_turret'], ['sw', 'corner_turret'],
+      ['e', 'wall_crenel'], ['s', 'wall_crenel'], ['w', 'wall_crenel'], ['n', 'gatehouse']]) {
+      game().raiseKeepPart(s, p);
+      game().workKeepPart(s, 1);
+    }
+    game().toggleSiteGate('keep', 'n');
+    rebuildNav(game().buildings);
+    Object.assign(playerState, { x: 0, z: 20 });
+    const data = raider(2, 2, {}, { fleeing: true });
+    const f = frameOf(data);
+    (f as { setClip: (c: string) => void }).setClip = (c) => { f.clip = c; }; // (this file's frame drops clips)
+    const site = () => siteById(game(), KEEP_SITE_ID)!;
+    let stance = 0, restAfterBlow = 0, shown = false;
+    for (let i = 0; i < 120 / DT && siteCovers(site(), data.mob.x, data.mob.z) && !f.gone; i++) {
+      stepEnemy(f, DT);
+      if (data.mob.state !== 'attack') { shown = false; continue; } // a stretch of battering ends as he runs on
+      stance++;
+      if (f.clip !== 'anim_r_restpose') shown = true;
+      else if (shown) restAfterBlow++;
+    }
+    expect(stance).toBeGreaterThan(100);
+    expect(restAfterBlow).toBe(0);
   });
 });

@@ -114,7 +114,7 @@ const raider = (x: number, z: number, o: Partial<EnemyData> = {}, m: Partial<Mob
 /** an enemy's frame (step.ts), at home */
 const frameOf = (data: EnemyData) => ({
   data, group: { current: new THREE.Group() }, rigRef: { current: null }, scatter: { current: null },
-  path: { current: { pts: [], i: 0, t: 0, tx: 0, tz: 0 } as Route }, clip: '', setClip: () => {},
+  path: { current: { pts: [], i: 0, t: 0, tx: 0, tz: 0 } as Route }, clip: '', setClip: () => {}, cue: { n: 0, held: false }, setCue: () => {},
   pace: { current: { x: 0, z: 0, v: 0 } }, setRidePace: () => {}, remove: () => {}, enemyAtHome: (data.world ?? null) === null, speed: 2.7,
 });
 /** inside a keep piece's box grown by `r` */

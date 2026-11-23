@@ -26,7 +26,7 @@ vi.mock('react', async (original) => {
     useState: (init: unknown) => {
       const c = H.inst!;
       const [value, i] = slot(() => init);
-      return [value, (next: unknown) => { c.slots[i] = next; }];
+      return [value, (next: unknown) => { c.slots[i] = typeof next === 'function' ? (next as (v: unknown) => unknown)(c.slots[i]) : next; }];
     },
     useRef: (value: unknown) => slot(() => ({ current: value }))[0],
     useMemo: (make: () => unknown) => slot(make)[0],
@@ -251,6 +251,8 @@ describe('the standing orders, as they were before the rally order', () => {
     `);
   });
 
+  // (G-10 · changed on purpose: the first shot is loosed on its clip's release, 1.19 s on, so two land in these 4 s, not
+  // three — the bow's cadence unchanged)
   it("a bow: shoots from range, and a roster override wins over the fleet's order", () => {
     const g = guard({ loadout: 'bow' });
     g.run(1);
@@ -259,7 +261,7 @@ describe('the standing orders, as they were before the rally order', () => {
     const track = g.run(120);
     expect({ track, hp: e.hp }).toMatchInlineSnapshot(`
       {
-        "hp": 2,
+        "hp": 4,
         "track": [
           "4.99 -0.57",
           "4.99 -0.57",
@@ -272,6 +274,66 @@ describe('the standing orders, as they were before the rally order', () => {
         ],
       }
     `);
+  });
+});
+
+// G-10 · golden, written on the base: a bow guard's shots at a raider 10 m off, frame by frame — the frames on which
+// the raider is struck. Changed on purpose: each shot is drawn as the cooldown runs out (frame 1, then every 48) and
+// loosed on its clip's release 36 frames on (1.19 s), so the first lands on 37 and the cadence is the bow's 1.6 s still
+describe("a bow's shots, frame by frame", () => {
+  it('the frames on which the raider is struck', () => {
+    const g = guard({ loadout: 'bow' });
+    g.run(1);
+    const e = bandit(g.ds().x + 10, g.ds().z + 2);
+    const hits: number[] = [];
+    for (let f = 1; f <= 150; f++) {
+      const hp = e.hp;
+      g.run(1);
+      if (e.hp < hp) hits.push(f);
+    }
+    expect(hits).toMatchInlineSnapshot(`
+      [
+        37,
+        85,
+        133,
+      ]
+    `);
+  });
+});
+
+// G-10 · a bow's shot drawn and not seen through is let go: it never lands
+describe("a bow's shot let go", () => {
+  it('when he is knocked down while drawing it', () => {
+    const g = guard({ loadout: 'bow' });
+    g.run(1);
+    const e = bandit(g.ds().x + 10, g.ds().z + 2);
+    const hits: number[] = [];
+    for (let f = 1; f <= 150; f++) {
+      // drawn on frame 1, to be loosed on 37; downed on 11 (the clock stands still here: he lies there till let up),
+      // back on his feet on 41 — the draw let go while he lay there, his cooldown (1.6 s from the first draw) stood
+      // still too: the next drawn on 79, loosed on 115
+      if (f === 11) Object.assign(g.ds(), { state: 'downed', downedUntil: Date.now() + 60_000 });
+      if (f === 41) g.ds().downedUntil = 0;
+      const hp = e.hp;
+      g.run(1);
+      if (e.hp < hp) hits.push(f);
+    }
+    expect([g.ds().state, hits]).toEqual(['ok', [115]]);
+  });
+
+  it('when the raider he drew on falls to another: none lands on the next, who is drawn on from the start', () => {
+    const g = guard({ loadout: 'bow' });
+    g.run(1);
+    const a = bandit(g.ds().x + 10, g.ds().z + 2);
+    const b = bandit(g.ds().x + 12, g.ds().z - 2);
+    g.run(10); // drawn at the nearer, a
+    a.mob.state = 'dying';
+    let hit = 0;
+    for (let f = 11; f <= 100 && !hit; f++) {
+      g.run(1);
+      if (b.hp < 8) hit = f;
+    }
+    expect([a.hp, hit]).toEqual([8, 85]); // b drawn on as the cooldown allows (frame 49), loosed 36 frames on
   });
 });
 

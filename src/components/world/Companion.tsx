@@ -55,6 +55,8 @@ import { driveIntent, MOVE_CLIPS, strollClip } from '@/ai/core/intentDrive';
 import { COMPANION_ID, TAM_CONFIG } from '@/game/data/companion';
 import { companionMaxHp, registerCompanionCombat } from '@/game/companion';
 import { applyDownedGate } from '@/game/actorDowned';
+import { attackClip, instantSwing, loadoutArms } from '@/game/combat/fightClips';
+import { COMBAT } from '@/ai/config';
 import { destinationGroundY, homeGroundY } from './TemplateWorld';
 
 export default function Companion() {
@@ -134,6 +136,10 @@ export default function Companion() {
   // defender's, less the two things Tam is never drawn with: a crossbow (he
   // fights hand to hand) and a carrier (he hauls nothing).
   const loadout = companion.loadout ?? 'sword_shield';
+  // G-10 · his swing (ai/actions/assistLeader.ts picks its clip by the same loadout): his blow lands as the swing starts
+  // (ai/actions/meleeEngage.ts), so it plays from its hit, fitted to the first half of his cooldown that the clip has
+  // to itself before his guard comes back up
+  const swing = instantSwing(attackClip(loadoutArms(loadout, false)), COMBAT.engageCompanion.swingSeconds * 0.5);
 
   return (
     <group ref={group}>
@@ -142,6 +148,8 @@ export default function Companion() {
         height={1.7}
         clip={clip}
         loop={loop}
+        timeScale={clip === swing.clip ? swing.timeScale : 1}
+        from={clip === swing.clip ? swing.from : 0}
         onClipEnd={() => setClip('anim_r_restpose')}
         onReady={setRig}
       />

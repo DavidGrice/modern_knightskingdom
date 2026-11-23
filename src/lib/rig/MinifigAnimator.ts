@@ -2,7 +2,7 @@
 // CLN-29 · a rigged minifig's animator: the clip it plays, cross-faded, looped or held, applied to the joints as
 // rotation deltas from the rest pose (the SMO axes' signs below).
 import * as THREE from 'three';
-import { loadClip, type AnimClip, type AnimFrame } from './clips';
+import { CLIP_FPS, loadClip, type AnimClip, type AnimFrame } from './clips';
 import { JOINTS, type RigJoint } from './joints';
 
 // Axis mapping from anim rot triples to three.js euler (order YXZ), tuned
@@ -11,7 +11,7 @@ const SIGN_X = -1; // pitch (arm/leg swing)
 const SIGN_Y = -1; // bearing (head turn)
 const SIGN_Z = 1;  // roll
 
-const FPS = 15;
+const FPS = CLIP_FPS;
 const FADE = 0.18;
 
 /** Exported for its tests; built for a figure only by assembleRiggedMinifig. */
@@ -28,6 +28,8 @@ export class MinifigAnimator {
   /** how many play() and stop() calls have been made: each takes its number, and a play() whose clip is still loading
    *  takes effect only if no later call has come in by the time its load is in */
   private calls = 0;
+  /** the cue the playing clip was started on (G-10: see play()) */
+  private cue: number | undefined;
   timeScale = 1;
 
   constructor(
@@ -43,10 +45,11 @@ export class MinifigAnimator {
   /** Plays `name` once its clip is loaded — unless another play() or a stop() has been called meanwhile: only the latest
    *  call counts, so a clip asked for while an earlier one's first load is still out is not overtaken by that one when
    *  it comes back (ROADMAP.md, "a figure's clip asked for before another's load had come back ended on the older
-   *  one"). Asking for the clip it already plays changes nothing, and counts as the latest. */
-  async play(name: string, opts: { loop?: boolean; timeScale?: number; onEnd?: () => void } = {}) {
+   *  one"). Asking for the clip it already plays changes nothing, and counts as the latest — G-10: unless it comes on a
+   *  new `cue`, which plays it again (a swing, swung again); and a clip is started from frame `from` (0 by default). */
+  async play(name: string, opts: { loop?: boolean; timeScale?: number; onEnd?: () => void; cue?: number; from?: number } = {}) {
     const call = ++this.calls;
-    if (this.clipName === name && (opts.loop ?? true) === this.loop) return;
+    if (this.clipName === name && (opts.loop ?? true) === this.loop && opts.cue === this.cue) return;
     const clip = await loadClip(name);
     if (call !== this.calls) return;
     // snapshot current pose for crossfade
@@ -54,7 +57,8 @@ export class MinifigAnimator {
     for (const j of JOINTS) this.blendFrom.set(j, this.joints[j].rotation.clone());
     this.clip = clip;
     this.clipName = name;
-    this.time = 0;
+    this.cue = opts.cue;
+    this.time = (opts.from ?? 0) / FPS;
     this.fade = FADE;
     this.loop = opts.loop ?? true;
     this.timeScale = opts.timeScale ?? 1;
