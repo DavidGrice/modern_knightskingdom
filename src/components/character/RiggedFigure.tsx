@@ -57,6 +57,8 @@ export default function RiggedFigure({
   keepProps = false,
   lodExempt = false,
   seatedLegPose = false,
+  cue,
+  from = 0,
 }: {
   config: CharacterConfig;
   height?: number;
@@ -82,6 +84,10 @@ export default function RiggedFigure({
    *  after the clip has posed everything else. For a rider seated on a
    *  mount — see SEATED_LEG_X/SEATED_LEG_SPLAY's own comment above. */
   seatedLegPose?: boolean;
+  /** G-10 · a change plays the clip again from `from` — a swing, swung again (MinifigAnimator's play) */
+  cue?: number;
+  /** G-10 · the frame the clip is started from: a blow that lands at once shows from its hit (game/combat/fightClips.ts) */
+  from?: number;
 }) {
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
   const endRef = useRef(onClipEnd);
@@ -124,12 +130,12 @@ export default function RiggedFigure({
 
   useEffect(() => {
     if (!rig) return;
-    rig.animator.play(clip, { loop, timeScale, onEnd: () => endRef.current?.() })
+    rig.animator.play(clip, { loop, timeScale, onEnd: () => endRef.current?.(), cue, from })
       .catch((e) => {
         console.error('clip load failed — showing the rig unposed rather than hiding it forever', e);
         posed.current = true;
       });
-  }, [rig, clip, loop, timeScale]);
+  }, [rig, clip, loop, timeScale, cue, from]);
 
   useFrame((_, dt) => {
     if (!rig) return;

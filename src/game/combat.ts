@@ -42,6 +42,6 @@ export { resolveEnemyKill } from './combat/kill';
 export type { KillCause } from './combat/kill';
 export { activeMelee, cycleWeapon, playerAttack, tryDodge } from './combat/melee';
 export {
-  FULL_DRAW_TIME, MIN_DRAW, fireArrow, fireBolt, fireSpellBolt, stepBolt, useBoltStore,
+  FULL_DRAW_TIME, MIN_DRAW, RANGED_CD, fireArrow, fireBolt, fireSpellBolt, stepBolt, useBoltStore,
 } from './combat/projectiles';
 export type { Bolt } from './combat/projectiles';

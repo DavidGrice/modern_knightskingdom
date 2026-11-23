@@ -40,6 +40,8 @@
 //     precedent) — that risk cannot occur for a single dedicated entity, so
 //     omitting these is a reasoned call, not an oversight.
 import { companionStrike, registerCompanionCombat } from '@/game/companion';
+import { attackClip, loadoutArms } from '@/game/combat/fightClips';
+import { useGameStore } from '@/game/store/gameStore';
 import { playerState } from '@/game/playerState';
 import { COMBAT } from '../config';
 import type { Action } from '../core/Reasoner';
@@ -63,6 +65,9 @@ const TAM: MeleeFighter = {
   config: COMBAT.engageCompanion,
   isDowned: (agent) => registerCompanionCombat(agent.id).state === 'downed',
   blow: () => ({ damage: companionStrike(), cause: { by: 'companion' } }),
+  // G-10 · his loadout's swing — sword and shield with none, as Companion.tsx draws him; never the bow's crossbow, which
+  // he is not drawn with
+  swingClip: () => attackClip(loadoutArms(useGameStore.getState().companion.loadout ?? 'sword_shield', false)),
 };
 
 /** Same straight-through ramp engage_threat/engage_threat_villager use: the

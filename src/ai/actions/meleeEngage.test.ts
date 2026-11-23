@@ -120,6 +120,19 @@ describe('the shared melee engage', () => {
     expect([e.mob.state, notes, useGameStore.getState().companion.xp]).toEqual(['dying', ['Tam defeats a raider!'], 15]);
   });
 
+  it("G-10 · a fighter's swing plays his weapon's clip (Tam's loadout's); with none named, the work swing", () => {
+    const clips = (f: MeleeFighter) => {
+      const s = standIn('m9', 30, 30);
+      believe(s.agent, spawn('cedric', 31, 30));
+      const act = new MeleeEngageActivity(f);
+      act.start(s.agent, { target: null, now: 100 });
+      act.update(s.agent, 0.1, 100.1);
+      return s.issued.filter((i) => i?.type === 'PLAY_ANIM').map((i) => (i?.type === 'PLAY_ANIM' ? i.clip : ''));
+    };
+    expect(clips(fighter())).toEqual(['anim_g_swordswish']);
+    expect(clips(fighter({ swingClip: () => 'anim_g_halberdswipe' }))).toEqual(['anim_g_halberdswipe']);
+  });
+
   it('a fighter who cannot strike still swings, and lands nothing', () => {
     const s = standIn('m5', 30, 30);
     const e = spawn('bandit', 31, 30);

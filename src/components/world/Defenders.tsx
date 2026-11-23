@@ -4,7 +4,7 @@
 // other villager. Rendered/driven entirely separately from Villagers.tsx
 // (which explicitly filters defenders out) since their behavior is a real
 // combat AI, not a wander/flee/bed-seek loop.
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/store/gameStore';
@@ -35,9 +35,10 @@ import { isBuilt, isHomeBuilding } from '@/game/types';
 import { POND } from '@/game/data/world';
 import { CAMP_GUARD_RADIUS, MERCHANT_SPOT, MERCHANT_CAMP_STATION } from '@/game/data/trade';
 import { pushOutOfWater } from '@/game/waterworks';
-import type { RiggedMinifig } from '@/lib/minifigRig';
+import { preloadClip, type RiggedMinifig } from '@/lib/minifigRig';
 import type { CharacterConfig, Villager } from '@/game/types';
 import { wrapAngle } from '@/lib/math';
+import { attackClip, heldSwing, instantSwing, loadoutArms, runClip, walkClip } from '@/game/combat/fightClips';
 
 /** how far an archer can reach a circling dragon — generous, because the
  *  beast is large and the shot is a volley rather than a marksman's */
@@ -48,6 +49,10 @@ const ENGAGE_RADIUS = 22; // how far from themselves a patrolling defender spots
 const SCOUT_EYES = 30;    // scout order: base sighting range (Wit adds to it)
 const MELEE_RANGE = 1.8;
 const BOW_RANGE = 16;
+/** a swing's cooldown, a blade's and a bow's — and a bow's at a dragon, a hard, high, moving target */
+const CD = 1.1;
+const BOW_CD = 1.6;
+const AIR_CD = 2.6;
 // Wave 21: the real recovery constant lives in game/defenders.ts now
 // (DOWNED_RECOVER_MS), shared with the new villager-downed path — this file
 // never actually referenced its own former local copy (see that export's
@@ -87,6 +92,13 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
   // portal rendered below, at the weaker "unarmed" damage tier
   const loadout = villager.loadout;
   const level = villager.level ?? 1;
+  // G-10 · the clips his loadout fights and moves in (game/combat/fightClips.ts), and his swing: a bow's shot drawn to
+  // its clip's release, a blade's blow at once — each fitted to its cooldown (CD, BOW_CD)
+  const arms = loadoutArms(loadout);
+  const attack = attackClip(arms), run = runClip(arms), walk = walkClip(arms);
+  const swing = loadout === 'bow' ? heldSwing(attack, BOW_CD) : instantSwing(attack, CD);
+  // G-10 · his attack clip fetched as he takes up his arms, not at his first swing (a clip loads on its first play)
+  useEffect(() => { preloadClip(attack); }, [attack]);
 
   // shared derived-plus-override look, same as every other homestead figure
   const config: CharacterConfig = useMemo(() => villagerConfig(villager), [villager]);
@@ -137,6 +149,10 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
 
   const group = useRef<THREE.Group>(null);
   const [clip, setClip] = useState('anim_r_restpose');
+  // G-10 · swings begun, each played from its start (RiggedFigure's cue); and a bow's shot drawn and not yet loosed:
+  // the raider it is drawn at (or the dragon) and the seconds left to its release
+  const [cue, setCue] = useState(0);
+  const draw = useRef<{ at: number | 'dragon'; t: number } | null>(null);
   const [rig, setRig] = useState<RiggedMinifig | null>(null);
   const yaw = useRef(0);
   // patrol phase seeded from the id so multiple defenders spread around the
@@ -153,6 +169,10 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
     const g = group.current;
     if (!g) return;
     const now = Date.now();
+    // G-10 · a shot drawn lasts only while the frame carries it on: one he does not shoot on at the same mark this frame
+    // — he is downed, has lost it, or turned to another — is let go, and never lands
+    const drawn = draw.current;
+    draw.current = null;
 
     const pc = pace.current;
     const moved = Math.hypot(ds.x - pc.x, ds.z - pc.z) / Math.max(dt, 1 / 240);
@@ -190,7 +210,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       ds.z += step.nz * speed * dt;
       const diff = wrapAngle(Math.atan2(-step.nx, -step.nz) - yaw.current);
       yaw.current += diff * Math.min(1, dt * 3);
-      if (clip !== 'anim_c_run') setClip('anim_c_run');
+      if (clip !== run) setClip(run);
       keepOutOfWater(ds);
       g.position.set(ds.x, homeGroundY(ds.x, ds.z), ds.z);
       g.rotation.y = yaw.current + Math.PI;
@@ -248,7 +268,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
         ds.z += (dzS / dS) * step;
         const diff = wrapAngle(Math.atan2(-dxS, -dzS) - yaw.current);
         yaw.current += diff * Math.min(1, dt * 3);
-        if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+        if (clip !== walk) setClip(walk);
       } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
       keepOutOfWater(ds);
       g.position.set(ds.x, homeGroundY(ds.x, ds.z), ds.z);
@@ -307,7 +327,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           const desired = Math.atan2(-dxR, -dzR);
           const diff = wrapAngle(desired - yaw.current);
           yaw.current += diff * Math.min(1, dt * 3);
-          if (clip !== 'anim_c_walk') setClip('anim_c_walk');
+          if (clip !== walk) setClip(walk);
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
         keepOutOfWater(ds);
         g.position.set(ds.x, hasClaimableBed ? 0 : ds.postY, ds.z);
@@ -328,7 +348,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
           const desired = Math.atan2(-dxF, -dzF);
           const diff = wrapAngle(desired - yaw.current);
           yaw.current += diff * Math.min(1, dt * 4);
-          if (clip !== 'anim_c_run') setClip('anim_c_run');
+          if (clip !== run) setClip(run);
         } else if (clip !== 'anim_r_restpose') setClip('anim_r_restpose');
         keepOutOfWater(ds);
         g.position.set(ds.x, 0, ds.z);
@@ -363,7 +383,7 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       const desired = Math.atan2(-dxP, -dzP);
       const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 3);
-      const wantClip = order === 'scout' ? 'anim_c_run' : 'anim_c_walk';
+      const wantClip = order === 'scout' ? run : walk;
       if (clip !== wantClip) setClip(wantClip);
       keepOutOfWater(ds);
       g.position.set(ds.x, order === 'scout' ? 0 : ds.postY, ds.z);
@@ -384,11 +404,15 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
         const desired = Math.atan2(-dxD, -dzD);
         const diff = wrapAngle(desired - yaw.current);
         yaw.current += diff * Math.min(1, dt * 4);
-        if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
-        if (ds.attackCd <= 0) {
+        if (clip !== attack) setClip(attack);
+        if (drawn?.at === 'dragon') {
+          if ((drawn.t -= dt) > 0) draw.current = drawn;
+          else dragonAir.hit(`${villager.name}'s arrow`);
+        } else if (ds.attackCd <= 0) {
           // slower than a ground shot: it is a hard, high, moving target
-          ds.attackCd = 2.6;
-          dragonAir.hit(`${villager.name}'s arrow`);
+          ds.attackCd = AIR_CD;
+          setCue((c) => c + 1);
+          draw.current = { at: 'dragon', t: swing.hit };
         }
         g.position.set(ds.x, standY, ds.z);
         g.rotation.y = yaw.current + Math.PI;
@@ -427,32 +451,45 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
       const desired = Math.atan2(-step.nx, -step.nz);
       const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 3);
-      if (clip !== 'anim_c_run') setClip('anim_c_run');
+      if (clip !== run) setClip(run);
     } else {
       const desired = Math.atan2(-dxT, -dzT);
       const diff = wrapAngle(desired - yaw.current);
       yaw.current += diff * Math.min(1, dt * 4);
-      if (clip !== 'anim_g_swordswish') setClip('anim_g_swordswish');
-      if (ds.attackCd <= 0) {
-        ds.attackCd = loadout === 'bow' ? 1.6 : 1.1;
-        // Wave 20 · a bow shot needs a real unobstructed sightline — melee is
-        // 1.8m contact range, never behind a wall in practice, so only the
-        // bow case pays the check. (An elevated guard does reach this branch
-        // once he has a target — only his idle watch returns early above —
-        // and shoots from his post's height: eyeY.)
-        if (loadout !== 'bow' || hasLineOfSight(ds.x, eyeY, ds.z, target.mob.x, GROUND_LOS_Y, target.mob.z)) {
-          // Courage (Phase 24A) weights the swing; Riposte trait adds steel;
-          // a bare-fisted defender (no Armory weapon spent on them yet) hits
-          // noticeably softer than one armed with sword/halberd — real reason
-          // to spend that stock rather than leaving the roster unarmed.
-          // Wave 11 · the expression itself moved to `defenderStrike`
-          // (game/defenders.ts), term for term, so the AI reasoner's own
-          // `engage_threat` action swings for exactly this and cannot drift
-          // from it — see that function's comment.
-          const dmg = defenderStrike(villager);
-          target.hp -= dmg;
-          if (target.hp <= 0 && target.mob.state !== 'dying') resolveEnemyKill(target, { by: 'defender', villager });
+      if (clip !== attack) setClip(attack);
+      // Courage (Phase 24A) weights the swing; Riposte trait adds steel;
+      // a bare-fisted defender (no Armory weapon spent on them yet) hits
+      // noticeably softer than one armed with sword/halberd — real reason
+      // to spend that stock rather than leaving the roster unarmed.
+      // Wave 11 · the expression itself moved to `defenderStrike`
+      // (game/defenders.ts), term for term, so the AI reasoner's own
+      // `engage_threat` action swings for exactly this and cannot drift
+      // from it — see that function's comment.
+      const strike = (e: EnemyData) => {
+        e.hp -= defenderStrike(villager);
+        if (e.hp <= 0 && e.mob.state !== 'dying') resolveEnemyKill(e, { by: 'defender', villager });
+      };
+      if (loadout === 'bow') {
+        // Wave 20 · a bow shot needs a real unobstructed sightline (an
+        // elevated guard does reach this branch once he has a target —
+        // only his idle watch returns early above — and shoots from his
+        // post's height: eyeY). G-10 · drawn as the cooldown runs out, it
+        // is loosed on the clip's release, at the raider it was drawn at,
+        // the sightline asked again then; the cooldown runs from the draw.
+        if (drawn?.at === target.id) {
+          if ((drawn.t -= dt) > 0) draw.current = drawn;
+          else if (hasLineOfSight(ds.x, eyeY, ds.z, target.mob.x, GROUND_LOS_Y, target.mob.z)) strike(target);
+        } else if (ds.attackCd <= 0) {
+          ds.attackCd = BOW_CD;
+          setCue((c) => c + 1);
+          draw.current = { at: target.id, t: swing.hit };
         }
+      } else if (ds.attackCd <= 0) {
+        // melee is 1.8m contact range, never behind a wall in practice, so
+        // it pays no sightline check
+        ds.attackCd = CD;
+        setCue((c) => c + 1);
+        strike(target);
       }
     }
 
@@ -518,7 +555,11 @@ function DefenderFigure({ villager, allDefenders }: { villager: Villager; allDef
         </Suspense>
       )}
       <group position-y={mountAsset ? SADDLE_Y : 0}>
-      <RiggedFigure config={config} height={1.7} clip={clip} timeScale={clip === 'anim_g_swordswish' ? 1.6 : 1} onReady={setRig} onClipEnd={() => setClip('anim_r_restpose')} seatedLegPose={!!mountAsset} />
+      <RiggedFigure
+        config={config} height={1.7} clip={clip} onReady={setRig} seatedLegPose={!!mountAsset}
+        // G-10 · his attack clip once a swing (it holds its last frame, the stance at rest, till the next)
+        loop={clip !== attack} timeScale={clip === attack ? swing.timeScale : 1} cue={cue} from={clip === attack ? swing.from : 0}
+      />
       {/* the weapon the Armory armed them with (none while `loadout` is
           undefined), worn armor, and — Wave 9 — a carrier too (any job may
           wear one): same free hips joint, so it never fights the weapon in

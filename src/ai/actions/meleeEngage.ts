@@ -63,6 +63,9 @@ export interface MeleeFighter {
    *  left the roster since the action was chosen). The damage formula is the
    *  one thing that must never be shared between the three. */
   blow: (agent: Agent) => { damage: number; cause: KillCause } | null;
+  /** G-10 · the clip this fighter's swing plays — his weapon's (Tam's loadout, game/combat/fightClips.ts); left out,
+   *  the work swing every villager has always swung */
+  swingClip?: (agent: Agent) => string;
 }
 
 export class MeleeEngageActivity implements Activity {
@@ -159,7 +162,7 @@ export class MeleeEngageActivity implements Activity {
     }
 
     this.swingCd = cfg.swingSeconds;
-    agent.intent = { type: 'PLAY_ANIM', clip: SWING_CLIP, loop: false, anchored: true };
+    agent.intent = { type: 'PLAY_ANIM', clip: this.fighter.swingClip?.(agent) ?? SWING_CLIP, loop: false, anchored: true };
     this.strike(agent, t);
     return 'RUNNING';
   }

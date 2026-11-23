@@ -12700,3 +12700,263 @@ were (no raid). To do: the horn alone, or a sound of the dragon's own (the bank 
 The subtitles' layer (z 14, `GameScreen.tsx`) sits under the panels (z 15), so that a subtitle shows in build mode; a
 lore line asked for in `DialoguePanel` is subtitled too, partly hidden behind the panel that already shows its words.
 To do: no subtitle for a line while the panel that asked for it shows its words.
+
+## Bugfix: every armed figure fought with one sword's swish, and a crossbow's or a bow's shot landed with no draw at all — FOUND 2026-10-31 (FEATURE_PLAN.md's G-10: the idea "Weapon-true combat animation"), FIXED 2026-11-22
+
+**The fault.** Wave 66 (G-01) put every clip the original game has in the manifest — a crossbow's shot, a longbow's,
+the halberd's sweep, the spear's thrust, each with a shield on the other arm, a walk and a run with a shield up or a bow
+carried — but the four places a figure fights still played one: `anim_g_swordswish`. An enemy in the attack stance
+looped it at ×1.8 (`enemyAi/step.ts`, `EnemyFigure.tsx`), its phase tied to nothing, whatever he held; a defender looped
+it at ×1.6 for a blade and a bow alike (`Defenders.tsx`); the player's third-person avatar played it at ×2 for 0.3 s
+after an attack (`PlayerAvatar.tsx`) — its first nine frames, the wind-up, so the cut (frames 25-30) was never shown;
+Tam played it at ×1 for the half of his 1.2 s cooldown the clip has (`ai/actions/meleeEngage.ts`'s `SWING_CLIP`) —
+frames 0-9 again. Everyone walked and ran `anim_c_walk`/`anim_c_run`, shield or not. And a crossbow bandit's shot and a
+defender's bow, hitscan both (`engage.ts`'s `swingAt`, `Defenders.tsx`'s bow branch), landed the frame the cooldown ran
+out, with no draw to show it coming. Measured on `main` (production build of base-14 on port 3101, build
+`8zP2SZI8BYz6iN5fxZy4j`; `scripts/cln-tools/w751_live.mjs`, record `w751_main.txt`; frame-exact, 1/64 s a frame; each
+figure's clip read off its RiggedFigure through React's devtools hook): a crossbow bandit 5 m from a halberd guard —
+`anim_g_swordswish` ×1.8, looping, the guard struck on frames 1, 117, 233, 349 (the swish wherever its clock stood:
+frames 48.5, 97.5, 146.4 of it); a halberd guard against a bandit — the swish ×1.6, the bandit struck on 72, 143, 214,
+285; a bow guard — the swish ×1.6, struck on 1, 104, 207, 310, 413; a shieldbearer — `anim_c_walk` wandering,
+`anim_c_run` in the chase, the swish ×1.8 at the player; the player with a spear and a shield in third person — the
+swish ×2 for 19 frames (to its frame 9), then the rest pose; walking, `anim_c_walk`.
+
+Premises checked against the code, and where they did not hold: the defenders' bow loadout holds a crossbow
+(`LOADOUT_REQUIRES` spends one, `LoadoutGear` draws `HeldCrossbow`), so a defender archer raises and shoots a crossbow
+(`anim_g_crossbowshot`) — the longbow's clip is the player's alone; the plan's `Defenders.tsx` lines had moved
+(`:387`, `:435`, `:521` on the base, not `:337`, `:384`, `:467`); and the balance — wave 72's pinned garrison table and
+wave 73's resolver (`garrisonBalance.ts`'s `garrisonFight`, which `raidResolver.ts` settles a raid on) start every
+fighter's swings at second 0 and repeat them each cooldown: neither models a first strike's timing (nor the 0.4 s a
+raider holds his blow on arriving), and the delay keeps each cadence, so no pinned verdict changes —
+`garrisonBalance.test.ts` and `raidResolver.test.ts` pass unchanged. The plan held the delay to hitscan: a melee blow
+lands the frame its cooldown runs out, as before.
+
+**The fix.** *The clip table* (`game/combat/fightClips.ts`): what a figure holds, as its arms — an enemy's kind
+(`enemyArms`: a ranged bandit's crossbow, a bandit's halberd and shield, Gilbert's halberd, a mounted raider's spear
+and shield, a caster's spell, Storm bare-handed, every other kind sword and shield, as `EnemyFigure.tsx` arms them), a
+defender's loadout or Tam's (`loadoutArms`; Tam never with the crossbow, which he is not drawn with), the player's
+readied weapon and shield (`playerArms`) — picks the attack (`attackClip`: the sword's swish, the halberd's sweep, the
+spear's thrust and the crossbow's shot, each with its shield variant; the longbow's shot; a caster raises his hand and
+looses as a crossbowman does; bare hands swing as a sword) and the walk and run (`walkClip`, `runClip`: with a shield
+up, a bow carried, or both; bare hands and two-handed weapons as before). Each attack clip's hit and the end of its
+motion (`CLIP_TIMING`, read off the tracks: the sword's cut at frame 28 of 46, the halberd's sweep at 29 of 49, the
+spear's thrust at 29 of 51, the crossbow's kick at 41 of 57, the longbow's release at 41 of 96, its last 40 still),
+and two ways to play one, fitted to the cooldown it runs on, its timeScale clamped to 1-2.5: a *held* swing
+(`heldSwing`) plays from its first frame and its blow waits for the hit — a crossbow bandit's shot ×2.04, landing 1.34
+s after he raises it (its 1.8 s cooldown), a caster's spell ×1.41 at 1.94 s (2.6 s), a defender's bow ×2.29 at 1.19 s
+(1.6 s; at a dragon, 2.6 s apart, the same swing); an *instant* swing (`instantSwing`) plays from its hit, so the
+clip's hit is the frame the blow lands — an enemy's melee ×1.0-1.08, a defender's blade ×1.0 and halberd ×1.15, Tam
+×1.78-2.11 in his 0.6 s, the player's sword ×1.94, halberd ×1.33, spear ×2.0, and his crossbow and longbow ×1 from
+frame 41, the release, so the bolt or arrow leaves on the clip's release frame with no wait added to the click — the
+plan's "align a projectile spawn to the release frame" met the other way round, on purpose: the clip is started at its
+release and the shot is not moved (no input lag for a first-person shooter). The ceiling binds nowhere today. *The
+draw* (`enemyAi/engage.ts`): `swingAt` takes a shot's draw (`Draw`: the mark it is drawn at, by kind and id, and its
+release, `swingOf`'s hit) — begun as the cooldown runs out, it lands `release` on if he swings at the same mark every
+frame until then; the next cooldown is taken from the draw's start, so shot follows shot every cooldown as before. At
+the head of every frame (`step.ts`, `dropStaleDraw`) a draw not swung on since is let go and never lands: its striker
+fell or was felled (`dying`), ran (a thief struck, broken morale), closed in, lost his sightline (out of reach),
+turned to another mark (his guard downed by another, Tam or a villager gone from the fight), or the player went to
+build. So `blowAtGuard`'s cry from a downed defender and a struck thief's grunt each come once, at a blow that lands,
+and none at a shot let go (both tested); a raider's last word, said as he falls (`step.ts`'s `fallApart`), comes only
+from a blow that lands, as a shot let go fells no one. `step.ts` draws a crossbow's shot at a guard (on the ground or
+on the wall-walk), Tam, a villager and the player, and a caster's spell at the player (`fireSpellBolt` on the release
+frame); every swing begun is counted (`mob.swings`), and his figure (`EnemyFigure.tsx`) plays its attack clip once a
+swing at the swing's timeScale — from its first frame for a shot drawn, from its hit for a blow that landed at once (a
+caster's swing at one of the player's side) — holding its last frame, the stance at rest, until the next — and, coming
+into the attack stance, he squares up at rest until a swing is begun in it (`swungInStance`; the own check below).
+*Defenders* (`Defenders.tsx`): the loadout's clips for the attack, the walk and the run; a bow's shot drawn as the
+cooldown runs out (`BOW_CD`, from the draw's start) and loosed on the release at the raider it was drawn at, the
+sightline asked again then; a draw is taken up at the head of every frame and put back only by the frame that carries
+it on, so one not seen through — he is downed, the raider falls to another or steps out of range — never lands; the
+dragon volley the same. The figure's `onClipEnd` (it never fired: every clip looped) is gone, so the one-shot attack
+clip holds its last frame. *The player* (`PlayerAvatar.tsx`, `fightClips.ts`'s `avatarClip`): his attack's clip from
+the frame of the click, shown for as long as it moves (the window was 0.3 s); a longbow being drawn plays its clip
+from the start while the button is held; the readied crossbow is in his hand, and any readied ranged weapon takes his
+melee weapon out of it — with a longbow readied his weapon hand is empty (his shield still on his arm), where `main`
+showed his melee weapon: a visible change, on purpose (no longbow is modelled for the rig; the melee weapon is not
+what he fights with then); the walk and run carry his shield and bow; a held-E gather keeps the work swing. *Tam*:
+`meleeEngage.ts`'s fighter names its swing's clip (`swingClip`; left out, the villagers' work swing),
+`assistLeader.ts` his loadout's, and `Companion.tsx` plays it from its hit fitted to the half of his cooldown the clip
+has. *The rig*: `MinifigAnimator.play` plays the clip it already plays again on a new `cue`, starting at `from`
+(`RiggedFigure`'s new props); `CLIP_FPS` (15) is exported from `lib/rig/clips.ts`. Each fighting figure starts
+fetching its attack clip as it appears (`EnemyFigure.tsx`, `Defenders.tsx`, `PlayerAvatar.tsx`: `preloadClip`), not at
+its first swing (the own check below). The rig still drives 7 joints: the clips' hand, foot and weapon tracks drop.
+
+**Verified.** Golden tests first, written and run on the unchanged base (record
+`scripts/cln-tools/w751_golden_on_base.txt`): `fightClips.test.ts`'s pickers (every enemy kind, loadout and player
+weapon: the swish, `anim_c_walk`, `anim_c_run`; an enemy's stance; the avatar's clip), `enemyAi.test.ts`'s crossbow at
+a guard frame by frame (struck on 13, 67, 121 — the arrival's 0.4 s, then every 1.8 s) and `Defenders.test.ts`'s bow
+frame by frame (1, 49, 97, 145). Changed on purpose: each picker to the weapon's clip, the crossbow's shot drawn on 13
+and loosed 41 frames on (54, then 108: the 1.8 s cadence kept), the bow's on 37, 85, 133 (36 frames on, the 1.6 s
+cadence kept), and "a bow: shoots from range" two shots in its 4 s where the base had three (the raider's health 4,
+not 2). New tests: every figure's attack, walk and run a clip in the tracked manifest (never a file on disk: CI has
+none) with its timing; each hit inside its motion; a held swing's delay (hit frames / 15 / timeScale) and an instant
+one's start at its hit, the player's bolt and arrow on the release frame; the clamp at every site (and its ceiling and
+floor at a cooldown too short or too long); the draw — it lands once at its release with the next cooldown from its
+start, a blow with no draw lands at once, it is let go at another mark and on a frame not swung on; in the frame, the
+guard struck on frame 42, a defender felled by it crying out once on that frame, never once the striker flies apart,
+runs (the thief's grunt the one bark), his guard is downed by another or steps out of his reach, and a caster's spell
+loosed on its release; a defender's draw let go when he is knocked down and when his raider falls to another (the next
+drawn on from the start, loosed on frame 85); the animator's cue and start frame; Tam's swing clip. Each part taken
+out alone fails a test (`w751_takeout.py`, record `w751_takeout.txt`: 23 take-outs, 22 failing a test at first, and
+the clamp's ceiling once its own test was added; `git diff` and the new files' digest the same before and after).
+`tsc` clean; the unit suite 109 files, 1013 tests (`main` 108, 986). Live on production builds of `main` (3101) and
+the change (3102, build `dQXhpoh3W7KubzRKfyrui`), same probe (records `w751_main.txt`, `w751_change.txt`): the
+crossbow bandit plays `anim_g_crossbowshot` ×2.04 and strikes on frames 87, 203, 319, at his clip's frames 40.6, 41.1,
+41.1 — the release (41) — 1.34 s after each draw, 116 frames apart as on `main`; the halberd guard
+`anim_g_halberdswipe` ×1.15 from frame 29, the bandit struck on the same frames as `main` (72, 143, 214, 285), the
+clip's hit shown one frame after each (its cue goes through a React commit); the bow guard `anim_g_crossbowshot`
+×2.29, struck on 78, 181, 284, 387, at his clip's frame 41.4 each, 103 frames apart as on `main`; the shieldbearer
+`anim_g_walkwithshield` wandering, `anim_g_runwithshield` in the chase, `anim_g_swordswishwithshield` from frame 28 at
+the player; the player's thrust `anim_g_spearstrikewithshield` ×2 from frame 29.5 for 44 frames (0.69 s, its 0.7 s
+cooldown), his walk `anim_g_walkwithshield`. d3d11 screenshots mid-attack (`out/w751/main_S1-5.png`,
+`change_S1-5.png`; the thrust on the real clock, `*_S5_90ms.png`, as the avatar's gear does not show in the probe's
+held frames): the bandit's crossbow raised and aimed, the guard's halberd mid-sweep, the bow guard's crossbow aimed,
+the shieldbearer's sword raised behind his shield, the player's shield up and lunge — each reads; on `main`, the
+swish's wind-up or recovery in every one. *Evidence pass* (independent, 2026-11-22): `tsc` clean, the unit suite 109
+files, 1013 tests, the change rebuilt (`next build`, build `HK8HVL7SgCaZzpHHi5vEg`). Mutation controls
+(`scripts/cln-tools/w751_ev_mut.py`, record `w751_ev_mut.txt`; each change taken out alone, the whole suite run, the
+file put back from its bytes; sha256 of `git diff --binary` plus the two new files `97060d68…` before and after): 56
+take-outs, 39 fail a test — the clip table (every row: arms, attack, shield variant, walk, run, stance, the avatar's
+longbow draw), the timing (held delay, instant start, ceiling, floor, the crossbow's release frame), the enemy's draw
+(swingOf, the draw begun, same-mark check, held flag, cooldown from the start, dropStaleDraw and its call, the swing
+count, engage passing it on), the guard's and the caster's draws in `step.ts`, the stance clip, the frame's cue and
+its held flag, the defender's bow draw, its per-frame let-go, its raider-only check, its cooldown and held swing, the
+fighter's swing clip, the animator's cue and `from`. 17 pass, so no unit test holds them: the draws at Tam, a villager
+and a guard on the wall-walk (`step.ts`, the same shape as the tested guard's), the clips of a raider running off
+(`runAway`) and of the hold at the walls, the defender's sightline asked again on release, the dragon volley's draw,
+the defender's melee cue and loadout run, `EnemyFigure`'s from/timeScale/cue, `PlayerAvatar`'s window and `from`,
+`Companion`'s `from` and `assistLeader`'s swing clip (render code and Tam: no unit harness); and the "drawn at another
+mark: let go" line, which no reachable case needs while a draw keeps the cooldown at or below 0 — except a crossbow
+bandit turning from a guard to a keep piece or an engine for a frame (a blow with no draw), which no test makes. Live,
+the same probe re-run on production builds of `main` (base-14, 3101, build `8zP2SZI8BYz6iN5fxZy4j`) and the change
+(3102, build `HK8HVL7SgCaZzpHHi5vEg`), plus two scenarios of mine (`w751_ev_live.mjs`, records `w751_ev_main.txt`,
+`w751_ev_change.txt`, `out/w751ev/`; and `w751_ev_walk.mjs` on the real clock, `w751_ev_walk_*.txt`), frame-exact at
+1/64 s, no page errors on either: the crossbow bandit — `main` the swish ×1.8 looping, the guard struck on 1, 117,
+233, 349 (the swish at its frames 46.4, 95.3, 144.3), the change `anim_g_crossbowshot` ×2.04, struck on 87, 203, 319
+at its frames 28.6, 41.1, 41.1 — 116 frames apart on both; the first at 28.6 because the clip's file was first fetched
+then (it played from frame 28 of the probe, not 1: see the entry below); the halberd guard — `main` the swish ×1.6,
+the change `anim_g_halberdswipe` ×1.15 from frame 29.3, the bandit struck on 1, 72, 143, 214, 285 on both; the bow
+guard — `main` the swish ×1.6, struck on 1, 104, 207, 310, 413, the change `anim_g_crossbowshot` ×2.29, struck on 78,
+181, 284, 387, each at his clip's frame 41.4, 103 apart on both; the shieldbearer — `main` `anim_c_run` then the swish
+×1.8 from frame 79, the far one `anim_c_walk`, the change `anim_g_runwithshield` then `anim_g_swordswishwithshield` ×1
+from its frame 28.2 on the same frame 79 (78 the first in the attack stance on both), the far one
+`anim_g_walkwithshield`; the player's spear and shield in third person — `main` the swish ×2 for 19 frames, the change
+`anim_g_spearstrikewithshield` ×2 from frame 29.5 for 44, and walking (W held) `anim_c_walk` on `main`,
+`anim_g_walkwithshield` on the change. Mine: the crossbow bandit felled on frame 40, mid-draw — `main` had struck the
+guard on frame 1 (498.8) and never again, the change never struck him (500 for all 300 frames: the shot let go); a
+caster 8 m from the player — `main` loosed on 1, 168, 335 with the swish at its frames 70.5 and 140.9, the change on
+126 and 293 (167 apart, as on `main`) at his clip's frames 41.0 and 41.3, the release. d3d11 screenshots
+(`out/w751ev/{main,change}_S1-S4.png`, `*_thrust90.png`) judged: the bandit's crossbow raised and levelled at the
+guard, the halberd guard leaning into his sweep, the bow guard's crossbow up, the shieldbearer's sword raised over his
+shield, the player from behind with his shield out and his spear forward in a lunge — each reads; `main`'s swish in
+all. Not measured: Tam's swing, the dragon volley, a mounted raider's thrust, a wall-walk shot, the player's crossbow
+and longbow (that the bolt or arrow leaves on the release frame rests on `instantSwing` starting at its hit, which a
+unit test checks, and on `PlayerAvatar` passing that `from` on, which no test or measurement does), and a villager's
+work swing (left as it was). Since the own check (below), a shieldbearer coming in stands 0.4 s at rest (frames
+79-103) before the cut these runs had on frame 79, and the S4 screenshots, held at probe frame 87 or 88, were taken
+inside what is now that rest: the clip frame they show, 30, is the cut's, shown later now.
+*Review fixes* (2026-11-22): (1) a finisher (or a parry) landed on a crossbow bandit or a caster mid-draw did not stagger
+him — the draw carried on without reading the cooldown, was loosed inside the stagger, and the release's cooldown (less
+the draw's time, about 0.46 s) overwrote the 1.8 s. `swingAt` now carries a draw on only while the cooldown is at or
+below 0 (a draw begins there and only runs it down, so a cooldown above 0 is a stagger forced up): the shot is let go,
+and drawn again from its start once the stagger is out — the same 1.34 s after the stagger that every shot now takes
+after its cooldown, where `main`'s next shot landed as the stagger ran out. New tests: `swingAt` staggered 0.25 s into a
+draw (let go, drawn again after the stagger, one blow) and, in the frame, a finisher on frame 20 of a crossbow's draw
+at a guard (struck on 115 — the stagger out on 74, drawn there, loosed 41 frames on — not 42); both fail with the fix
+taken out. Live (`w751_fix_stagger.mjs`, records `w751_fix_stagger_{main,change}.txt`; S1's bandit and guard, the
+finisher's `max(attackCd, 1.8)` on frame 40 at 1/64 s; `main` base-14 3101 build `8zP2SZI8BYz6iN5fxZy4j`, the change
+rebuilt, 3102 build `1K0PXUhfiyAmUlX0TwrU-`, no page errors): unstaggered, `main` struck on 117, 233, 349 and the change
+on 87, 203, 319; staggered on frame 40, `main` on 156, 272, 388, the change — drawing on 38-40, let go on 41 — on 242
+and 358, at his clip's frame 41.1 (drawn on 156, `main`'s shot, loosed 86 frames on). (2) `Defenders.test.ts`'s "knocked
+down while drawing it" passed with the draw's take-up moved below the downed gate (the draw kept through the knockdown
+and loosed on frame 67 after he rose on 41): it read the raider's health only on 41 and 48. It now records every frame
+he is struck on to frame 150 — `[115]`: back on his feet on 41, the cooldown stood still while he lay there, the next
+drawn on 79 and loosed on 115 (the old comment's "drawn on 49, loosed on 85" was wrong) — and fails `[67, 115]` with
+that variant. (The review's wall-clock worry does not hold: `Date.now` is pinned in that file, so the knockdown lasted
+till it was let up on any machine.) `tsc` clean; the unit suite 109 files, 1015 tests.
+
+*Own check* (2026-11-23, before the PR): the reviews' low findings and notes. (1) The player's avatar: an emote begun
+within an attack's window played at the attack's pace and from its hit frame — the strike's settings, kept in a ref,
+were read as the emote rendered — and an emote no longer than the strike's hit frame (28 for a sword's cut, 29 a
+halberd's or a spear's, 41 a crossbow's or a longbow's shot) would end at once, skipped; it plays from its first frame
+at its own pace now. A cut with a sword and no shield followed by E held to gather within 0.55 s kept the cut's
+one-shot settings — the same clip, `anim_g_swordswish`, so nothing re-rendered — and the gather's swing froze on its
+last frame; a strike's start and end each re-render the figure now (`striking`). No unit harness renders the avatar:
+these two are measured live only (`w751_own_live.mjs`, record `w751_own_change.txt`; the change rebuilt, 3102, build
+`Iq0GrgIFolMstD6kXWTHH`, the final code, and the first run on `tr0QBE-gHUEpQRqTijEYy` the same; frame-exact at 1/64 s;
+no page errors): the gather after a cut loops ×2 from its frame 0 (at its frames 2.3, 9.4, 16.4, 23.4, 35.2 on probe
+frames 30-100, where the bug would have held it at the cut's last), the royal wave after a cut from its frame 0 at ×1.
+(2) An enemy coming into the attack stance while his cooldown still ran (closeIn's 0.4 s hold on arriving, or after a
+chase) showed his attack clip at once, from the last swing's cue — a crossbow's kick with nothing loosed, a blow's
+follow-through with no blow; he squares up at rest now until a swing is begun in the stance (`engage.ts`'s
+`swungInStance`, the count kept as he comes into it; `fightClips.ts`'s `stanceClip`). A frame test (arriving, and
+arriving again after a chase) fails each of its three take-outs (A-C) (`scripts/cln-tools/w751_own_takeout.py`, record
+`w751_own_takeout.txt`; the tree restored to the same digest). Live: a shieldbearer coming in stands at rest on frames
+79-103 (0.4 s), then cuts from his clip's frame 28.2 on frame 104 — on his swing's own frame since (7) below (a frame
+later on the first run, his clip fetched at the swing). (3) The player's ranged cooldowns were written twice
+(`CombatController.tsx`'s literals and a copy in `PlayerAvatar.tsx`): one table now, `RANGED_CD` in
+`combat/projectiles.ts`. (4) `Defenders.tsx` cues a swing from the latest count (`setCue((c) => c + 1)`), not the last
+render's (the test's React stand-in takes a function now, as React does). (5) `step.ts` works out a draw's release
+only for a draw. (6) From the adversarial check below: a raider battering his way out of the keep (`runAway`) stood at
+rest between his blows — `escape` stands him in a chase each frame, so each frame began a new stance; the stance he
+was in is kept while he batters on, and his blows show, at rest only before the first of each stretch at a piece, as
+an arrival is (a test in `plunder.test.ts`: before the fix 2361 of 2408 frames in the stance at rest; take-out D). (7)
+From the same: holding the rest pose until the first swing had moved an enemy's first request for his attack clip to
+the swing itself, where the hold had fetched it before; each fighting figure now fetches its attack clip as it appears
+(`preloadClip` in `EnemyFigure.tsx`, `Defenders.tsx`, `PlayerAvatar.tsx`). Left as they are: a crossbow bandit's blow
+at a keep piece or a store and a caster's hand to hand play at his shot's pace (cosmetic); the defender's sightline
+asked again at the release cannot differ from `aimFor`'s in the same frame, with the same eye and the same raider, so
+the mutation that survived it is equivalent; the draws at Tam, a villager and a guard on the wall-walk keep the tested
+guard's shape untested; Tam's swing now ends at 0.6 s, as `meleeEngage` hands over, so a one-frame twitch is possible
+(not measured); with the animator's 0.18 s fade, a swing at about ×2 passes its hit at under half weight for some five
+frames (the screenshots judge what shows). `tsc` clean; the unit suite 109 files, 1017 tests; no import cycle added
+(`import_graph.cjs --diff`: the same 11 as `main`).
+
+*Adversarial check of the own check* (2026-11-23; two read-only lenses, the code with its tests and the docs' claims;
+the worktree's digest the same after). It confirmed the rest — `swingAt` the only setter of the attack stance, and
+every way out of it reset on the next entry; a stagger leaving him in the stance, his last clip held; the siege crew;
+the avatar's `striking` unable to loop renders, and the gather after a halberd's or a spear's cut; `RANGED_CD` the
+only copy of those cooldowns left, with no import cycle added; the functional `setCue` changing no test; the lazy
+release the same value at every draw — and found (6) and (7) above, and in the docs: the evidence pass's shieldbearer
+and its S4 screenshots read as true of the change after (2) (said in Verified now), the emote's threshold given as the
+sword's alone, "his sword" for whatever melee weapon `main` showed, the plan's words misquoted, an off-by-one in the
+rest's length, the stagger's 87 read as measured (it is the unstaggered hit), and the late first clip's entry (brought
+up to date below). Left as it is: at rest until his next swing — at the least the 0.4 s hold, at most the rest of his
+cooldown (the comments say so now) — a ranged bandit at the edge of his range, against a player walking off, flickers
+between his run and his rest and does not fire; the flicker and the not firing are older than this wave (closeIn holds
+his cooldown at 0.4 or more), where before the own check the flicker showed his attack clip from its hit.
+
+## Seen, not fixed: a figure keeps the old timeScale when the clip it plays is asked for at another — logged 2026-11-22 (wave 75.1; by the code)
+
+`MinifigAnimator.play` returns at once when asked for the clip it already plays (with the same loop and cue), and the
+new `timeScale` with it is never taken up. So a dodge's faster run (`PlayerAvatar.tsx`: ×1.9 while dodging, ×1.3
+otherwise, both `anim_c_run` or now the shield's run) does not show if the player is already running when he rolls.
+To do: take up `opts.timeScale` before that return.
+
+## Seen, not fixed: no longbow is modelled for a figure — logged 2026-11-22 (wave 75.1)
+
+The player's third-person avatar draws and looses a longbow with `anim_g_longbowshot` (wave 75.1) with nothing in his
+hands: `character/gear/held.tsx` has the crossbow, the sword, the halberd and the spear, and the first-person
+`Longbow` (`fps/viewmodelParts/Longbow.tsx`) is a viewmodel, not a rig part. To do: a held longbow, and Tam's bow with it
+(deferred with the War Band).
+
+## Seen, not fixed: Tam walks as a court figure, not with his shield — logged 2026-11-22 (wave 75.1)
+
+Tam's walk comes from `intentDrive.ts`'s `strollClip` (the court's rule: `anim_c_walk`, no run), so with a sword and
+shield he does not walk with his shield up as a defender with the same loadout does (`fightClips.ts`'s `walkClip`).
+Wave 75.1 gave him his weapon's swing only. To do: Tam's own walk and run by his loadout, in `Companion.tsx`.
+
+## Seen, not fixed: a fight clip asked for the first time shows late — logged 2026-11-22 (wave 75.1's evidence pass)
+
+The weapon clips wave 75.1 plays are fetched the first time a figure asks for one (`lib/rig/clips.ts`'s `loadClip`),
+not ahead of time, so the first crossbow shot of a session can start its clip after the shot is drawn: on the evidence
+pass's run (`scripts/cln-tools/w751_ev_change.txt`, S1, the machine busy with a test run) the bandit's
+`anim_g_crossbowshot` began 27 frames (1/64 s each) after his draw, and his first shot landed at its frame 28.6, not
+the release (41); the later shots at 41.1. The blow's timing is the game's and is not moved. To do: `preloadClip` the
+attack clips of the figures in a raid when it is spawned. *Update* (the own check, 2026-11-23): holding the rest pose
+until a first swing had moved every enemy's first request for his attack clip to the swing itself; each fighting
+figure now fetches its attack clip as it appears (`preloadClip` in `EnemyFigure.tsx`, `Defenders.tsx`,
+`PlayerAvatar.tsx`), so a raider coming up the road has it before his first swing (live, the own probe's shieldbearer:
+his first cut on his swing's own frame). A figure that swings within moments of appearing — a spawn already in reach,
+as S1's bandit, drawn on his first frame — can still show his first clip late.

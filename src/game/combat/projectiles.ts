@@ -78,6 +78,10 @@ function muzzleHeight(): number {
   return ridingState.active ? 2.35 : 1.45;
 }
 
+/** the player's ranged cooldowns: a bolt every 1.1 s, an arrow every 1.3 s (CombatController.tsx's rangedCd) — G-10:
+ *  his third-person shot's clip is fitted to them (PlayerAvatar.tsx) */
+export const RANGED_CD = { crossbow: 1.1, longbow: 1.3 } as const;
+
 export function fireBolt(): boolean {
   const st = useGameStore.getState();
   if ((st.inventory.crossbow ?? 0) < 1) return false;

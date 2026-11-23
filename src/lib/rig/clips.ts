@@ -2,6 +2,9 @@
 // CLN-29 · the SMO animation clips (loaded once each, and ahead of time on request) and the rest pose they are
 // played against.
 
+/** the clips' own frame rate: a clip lasts num_frames / CLIP_FPS seconds at timeScale 1 */
+export const CLIP_FPS = 15;
+
 export interface AnimFrame { pos: number[]; rot: number[] }
 interface AnimTrack { name: string; frames: AnimFrame[] }
 export interface AnimClip { file: string; num_frames: number; tracks: AnimTrack[] }

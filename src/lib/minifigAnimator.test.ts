@@ -70,6 +70,27 @@ describe("a figure's animator", () => {
 const frames = (n: number, rot: number[]) => Array.from({ length: n }, () => ({ pos: [0, 0, 0], rot }));
 const EXTRA = ['leftfoot', 'rightfoot', 'lefthand', 'righthand', 'Null', 'sword', 'horsebody'];
 
+// G-10 · a swing swung again: the same clip, played again on a new cue, from the frame it is asked from
+describe("a figure's animator and a swing's cue", () => {
+  // a clip whose right arm's pitch is its frame number: the joint says which frame is posed
+  const ramp = { file: 'cue_ramp', num_frames: 40, tracks: [{ name: 'rightarm', frames: Array.from({ length: 40 }, (_, i) => ({ pos: [0, 0, 0], rot: [0, i, 0] })) }] };
+  it('starts a clip from `from`, and plays it again from there on a new cue — the same cue changes nothing', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve({ json: () => Promise.resolve(ramp) }));
+    const joints = Object.fromEntries(JOINTS.map((j) => [j, new THREE.Group()])) as Record<RigJoint, THREE.Group>;
+    const a = new MinifigAnimator(joints, 1, new Map([['rightarm', { pos: [0, 0, 0], rot: [0, 0, 0] }]]));
+    const frame = () => Math.round(-joints.rightarm.rotation.x * 180 / Math.PI);
+    await a.play('cue_ramp', { loop: false, from: 10, cue: 1 });
+    a.update(0.2); // past the cross-fade: 0.2 s on, 3 frames
+    expect(frame()).toBe(13);
+    await a.play('cue_ramp', { loop: false, from: 10, cue: 1 });
+    a.update(0.2);
+    expect(frame()).toBe(16);
+    await a.play('cue_ramp', { loop: false, from: 10, cue: 2 });
+    a.update(0.2);
+    expect(frame()).toBe(13);
+  });
+});
+
 describe("a figure's animator and a clip's extra tracks", () => {
   it('drives the joints and passes over the tracks that are not one', async () => {
     const tracks = [...JOINTS, ...EXTRA].map((name) => ({ name, frames: frames(3, [0, 10, 0]) }));

@@ -574,6 +574,45 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   in full) found the rest: the duel's own lines now spend the court's cooldowns, a blueprint or a wall charge taunts,
   a fall cuts its speaker's own taunt, and the subtitle keeps 280 px on a phone-narrow screen (live at 480×800: 280
   px, 126 without the floor).
+- **#314 — Wave 75.1** (G-10): weapon-true fighting. A clip table keyed by what a figure holds
+  (`game/combat/fightClips.ts`: an enemy's kind, a defender's or Tam's loadout, the player's readied weapon and
+  shield) picks the attack — the sword's swish, the halberd's sweep, the spear's thrust, the crossbow's shot, each
+  with its shield variant, the longbow's shot — and the walk and run with a shield up or a bow carried, at the four
+  sites (`enemyAi/step.ts` and `EnemyFigure.tsx`, `Defenders.tsx`, `PlayerAvatar.tsx`, Tam through `meleeEngage.ts`'s
+  new `swingClip`). Each attack clip's hit and motion's end (`CLIP_TIMING`, read off the tracks), its timeScale fitted
+  to the cooldown and clamped to 1-2.5 (the ceiling binds nowhere today). A *held* swing plays from its first frame
+  and its blow waits for the hit: a crossbow bandit's shot lands 1.34 s after he raises it (×2.04), a caster's spell
+  1.94 s (×1.41, `fireSpellBolt` on the release), a defender's bow 1.19 s (×2.29) — a draw (`engage.ts`'s `swingAt`,
+  `Draw`), its next cooldown from its start so each cadence holds, let go at the head of any frame he did not swing on
+  at the same mark (`dropStaleDraw`; the defenders' `draw` ref the same), so a shot never lands after its striker
+  falls, runs, closes in or turns, and the downed defender's cry and the struck thief's grunt come once, at a blow
+  that lands (a raider's last word only from a blow that lands: a shot let go fells no one). An *instant* swing (every
+  melee blow, which still lands as its cooldown runs out, and the player's click) plays from its hit: the player's
+  bolt and arrow leave on the clip's release frame with no wait added — the plan's spawn delay met the other way
+  round, on purpose (no input lag). A readied ranged weapon takes his melee weapon out of his hand: with a longbow, an
+  empty weapon hand (none is modelled), where `main` showed his melee weapon. The animator plays a clip again on a new
+  `cue` and from a start frame (`RiggedFigure`'s `cue`, `from`). Premises held but two: the bow loadout holds a
+  crossbow (so a defender archer plays the crossbow's shot; the longbow's is the player's), and the garrison table and
+  the resolver model no first strike (every fighter swings at 0, then each cooldown), so no pinned verdict changed.
+  Golden tests first, on the unchanged base, then changed on purpose: the pickers, the crossbow at a guard (13, 67,
+  121 → 54, 108), the bow (1, 49, 97, 145 → 37, 85, 133), "a bow: shoots from range" (health 2 → 4). Measured live on
+  production builds (frame-exact, `w751_live.mjs`), `main` against the change: the crossbow bandit the swish ×1.8 /
+  `crossbowshot` ×2.04, struck at his clip's frame 41 (the release), 116 frames apart on both; the halberd guard the
+  swish / `halberdswipe` from 29, the same hit frames; the bow guard the swish / `crossbowshot`, struck at its frame
+  41.4, 103 apart on both; the shieldbearer `c_walk`, `c_run`, the swish / `walkwithshield`, `runwithshield`,
+  `swordswishwithshield`; the player's spear thrust the swish's first 9 frames / `spearstrikewithshield` for 0.69 s;
+  d3d11 screenshots mid-attack, each pose reading. 23 take-outs, 22 failing at first and the clamp's ceiling once its
+  test was added; the evidence pass's first crossbow shot showed at clip frame 28.6, the clip fetched on first use
+  (logged); the suite 109 files, 1013. Four "Seen, not fixed": a figure keeps the old timeScale on its playing clip
+  (the dodge's run), no longbow modelled for a figure, Tam walks as a court figure, a fight clip shows late the first
+  time. Reviews: a finisher or a parry landed mid-draw no longer lets the shot through (the draw goes on only at a
+  cooldown of 0; live, a finisher on frame 40: the guard struck on 242 — unstaggered, on 87, where before the fix the
+  draw ran on through the stagger), and the knockdown test now fails its variant. Own check: an emote and a gather
+  after a cut no longer play at the cut's pace or freeze (live), an enemy squares up at rest until his first swing in
+  the stance (live: 0.4 s, frames 79-103, then the cut), one `RANGED_CD`; the suite 109 files, 1017. An adversarial
+  check of the own check found a raider battering his way out at rest between his blows (fixed: his stance kept across
+  `escape`'s chase) and the attack clip's first fetch moved to the swing (fixed: each figure preloads its attack clip
+  as it appears), and seven doc corrections.
 
 ## Owner decisions
 

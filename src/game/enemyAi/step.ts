@@ -8,7 +8,8 @@
 // walk in and the flight are too, G-03: holdToTheWalls). Last, its figure is stood where it is and given its clip.
 // G-06 · a thief's mark is the store (targeting.ts's storeFor), where he loads up (blows.ts's takeFromStore); struck
 // with goods on him, he runs; and a raider at home runs by the road off the map (movement.ts's escape), battering his
-// way out when shut in.
+// way out when shut in. G-10 · his clips are his arms' (game/combat/fightClips.ts), and a crossbow's shot or a caster's
+// spell is drawn before it lands (engage.ts's swingAt): it is let go at the head of a frame he did not swing on at it.
 import * as THREE from 'three';
 import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
@@ -16,10 +17,11 @@ import { playerState } from '@/game/playerState';
 import { navReachable } from '@/game/navgrid';
 import { DEATH_BARK, KIND_LABEL } from '@/game/data/enemies';
 import { bark } from '@/game/barks';
+import { enemyArms, runClip, stanceClip } from '@/game/combat/fightClips';
 import { groundUnder, play, stand, type EnemyFrame } from './frame';
 import { haulOf, gotAway } from '@/game/plunder';
 import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, storeFor, tamInReach } from './targeting';
-import { closeIn, engage, rangedProfileOf, swingAt, RANGED_RANGE } from './engage';
+import { closeIn, dropStaleDraw, engage, rangedProfileOf, swingAt, swingOf, swungInStance, RANGED_RANGE, type Draw } from './engage';
 import { batterKeep, blowAtGuard, blowAtTam, blowAtVillager, fireAtPlayer, fireEngine, leaveTheStore, takeFromStore } from './blows';
 import {
   breaksAndRuns, escape, flank, flee, keepToLand, makePathStep, paceOf, shoulderApart, stopAtKeepWalls, stopAtShutGates, walkIn,
@@ -100,9 +102,15 @@ function runAway(f: EnemyFrame, st: ReturnType<typeof useGameStore.getState>, dt
   const { data, path, enemyAtHome } = f;
   const m = data.mob;
   if (data.raid && enemyAtHome) {
+    const was = m.state;
     const way = escape(m, path.current, dt);
     const piece = way.out && path.current.siege ? keepInReach(data, st, enemyAtHome).target : null;
-    if (piece) swingAt(m, dt, piece, () => batterKeep(data, st, piece));
+    if (piece) {
+      // G-10 · battering on: the stance he was in (escape stands him in a chase each frame), so his figure goes on
+      // showing his blows (engage.ts's swungInStance), not a fresh stance at rest
+      if (was === 'attack') m.state = 'attack';
+      swingAt(m, dt, piece, () => batterKeep(data, st, piece));
+    }
     else if (way.run()) { gotAway(st, data.carried); f.remove(data.id); return true; }
     if (!haulOf(data.carried) && distToPlayer(m.x, m.z) > FLEE_GONE) { f.remove(data.id); return true; }
   } else if (flee(m, dt) > FLEE_GONE) {
@@ -111,7 +119,8 @@ function runAway(f: EnemyFrame, st: ReturnType<typeof useGameStore.getState>, dt
   }
   holdToTheWalls(f, st);
   stand(f.group.current!, m, groundUnder(f));
-  play(f, m.state === 'attack' ? 'anim_g_swordswish' : 'anim_c_run');
+  const arms = enemyArms(data);
+  play(f, m.state === 'attack' ? stanceClip('attack', arms, swungInStance(m)) : runClip(arms));
   return false;
 }
 
@@ -132,6 +141,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
   if (!g) return;
   const m = data.mob;
   if (st.paused) return;
+  dropStaleDraw(m);
 
   if (data.mountAsset) trackRidePace(f, dt);
 
@@ -181,7 +191,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         shoulderApart(data);
         holdToTheWalls(f, st);
         stand(g, m, groundUnder(f));
-        play(f, 'anim_c_run');
+        play(f, runClip(enemyArms(data)));
         return;
       }
     }
@@ -199,6 +209,8 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     const tam = tamInReach(data);
     const fighter = nearestFighter(data, enemyAtHome);
     const ranged = rangedProfileOf(data);
+    // G-10 · a crossbow's shot at a mark (or a caster's spell at the player) is drawn first, to its clip's release
+    const drawn = (mark: string, shoots = !!data.ranged): Draw | undefined => (shoots ? { mark, release: swingOf(data).hit } : undefined);
     const store = storeFor(data, st, enemyAtHome);
     const { mark, blocked } = markFor(data, d, guard, tam, fighter, store);
     const besieger = !!data.raid && enemyAtHome;
@@ -237,6 +249,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
           blow: () => blowAtGuard(data, st, wg, wallGuard.id, true),
           way: () => ({ nx: (wg.x - m.x) / wallGuard.d, nz: (wg.z - m.z) / wallGuard.d }),
           pace: speed,
+          draw: drawn(`def:${wallGuard.id}`),
         });
       } else if (playerReachable < Infinity) {
         engage(m, dt, {
@@ -245,6 +258,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
           blow: () => fireAtPlayer(data, ranged, m.postY ?? 0),
           way: () => ({ nx: (playerState.x - m.x) / (d || 1), nz: (playerState.z - m.z) / (d || 1) }),
           pace: speed,
+          draw: drawn('player', !!ranged),
         });
       } else {
         // nobody left to fight up here right now — hold the battlement
@@ -284,6 +298,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         blow: () => blowAtGuard(data, st, gt, guard.id, false),
         way: () => (blocked || walledIn(gt) ? pathStep(gt.x, gt.z) : { nx: (gt.x - m.x) / guard.d, nz: (gt.z - m.z) / guard.d }),
         pace: paceOf(data, speed, guard.d),
+        draw: drawn(`def:${guard.id}`),
       });
     } else if (tam.target && mark === 'companion') {
       // Wave 25: the guard's shape, one rung weaker — Tam gets fought back
@@ -295,6 +310,7 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         blow: () => blowAtTam(data, st, tt),
         way: () => (blocked || walledIn(tt) ? pathStep(tt.x, tt.z) : { nx: (tt.x - m.x) / tam.d, nz: (tt.z - m.z) / tam.d }),
         pace: paceOf(data, speed, tam.d),
+        draw: drawn('tam'),
       });
     } else if (fighter.target && mark === 'villager') {
       // Wave 21: the same shape again, one rung weaker — a villager who
@@ -306,12 +322,13 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
         blow: () => blowAtVillager(data, st, vt),
         way: () => (blocked || walledIn(vt) ? pathStep(vt.x, vt.z) : { nx: (vt.x - m.x) / fighter.d, nz: (vt.z - m.z) / fighter.d }),
         pace: paceOf(data, speed, fighter.d),
+        draw: drawn(`vil:${vt.id}`),
       });
     } else if (d < (ranged ? ranged.range : 1.8) && !blocked) {
       // held at range rather than closing the last few metres (see the
       // chase just below), so — unlike melee, which already arrives
       // facing its target — a ranged attacker needs its own aim-turn here
-      swingAt(m, dt, ranged ? playerState : null, () => fireAtPlayer(data, ranged, 0));
+      swingAt(m, dt, ranged ? playerState : null, () => fireAtPlayer(data, ranged, 0), drawn('player', !!ranged));
     } else if (data.kind !== 'siegeCrew' && (d < 26 || (m.alertT ?? 0) > 0)) {
       // Route AROUND structures and THROUGH real openings (makePathStep)
       // instead of steering straight at the player and letting the
@@ -382,8 +399,5 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
       : m.state === 'climbing' ? poseOnLadder(m.climbT ?? 0).y
       : groundUnder(f));
 
-  play(f,
-    m.state === 'attack' ? 'anim_g_swordswish'
-      : m.state === 'chase' ? 'anim_c_run'
-      : 'anim_c_walk');
+  play(f, stanceClip(m.state, enemyArms(data), swungInStance(m)));
 }

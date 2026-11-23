@@ -18,6 +18,7 @@ import { nightSkeletonDirector } from '@/game/directors/nightSkeletons';
 import { pruneLadderClimbers, raidDirector } from '@/game/directors/raidDirector';
 import { campGuardTimer, directorTick, raidActive, raidCooldown, raidLost, skelTimer } from '@/game/directors/state';
 import { stepEnemy } from '@/game/enemyAi/step';
+import type { EnemyCue } from '@/game/enemyAi/frame';
 import { newRouteFrame, speedOf } from '@/game/enemyAi/movement';
 import EnemyFigure from './EnemyFigure';
 
@@ -43,6 +44,8 @@ function Enemy({ data }: { data: EnemyData }) {
   // to recompute, and where the target was when we last did
   const path = useRef({ pts: [] as { x: number; z: number }[], i: 0, t: 0, tx: 0, tz: 0 });
   const [clip, setClip] = useState('anim_c_walk');
+  // G-10 · the last swing his figure was cued with (game/enemyAi/frame.ts's play)
+  const [cue, setCue] = useState<EnemyCue>({ n: 0, held: false });
   // Wave 36 (A3): how fast a mounted raider is ACTUALLY travelling, fed to
   // its horse's own walk cycle — measured from real displacement rather than
   // read off any one behaviour branch, same K54 technique Defenders.tsx uses
@@ -67,13 +70,14 @@ function Enemy({ data }: { data: EnemyData }) {
   useEffect(() => () => unregisterHitbox(String(data.id)), [data.id]);
   const speed = speedOf(data);
 
-  useFrame((_, rawDt) => stepEnemy({ data, group, rigRef, scatter, path, clip, setClip, pace, setRidePace, remove, enemyAtHome, speed }, rawDt));
+  useFrame((_, rawDt) => stepEnemy({ data, group, rigRef, scatter, path, clip, setClip, cue, setCue, pace, setRidePace, remove, enemyAtHome, speed }, rawDt));
 
   return (
     <group ref={group} position={mountedAt}>
       <EnemyFigure
         data={data}
         clip={clip}
+        cue={cue}
         ridePace={ridePace}
         rig={rig}
         onReady={(r) => {

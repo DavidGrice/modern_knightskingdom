@@ -14,6 +14,15 @@ interface EnemyMob {
   x: number; z: number; yaw: number;
   state: 'wander' | 'chase' | 'attack' | 'dying' | 'climbing';
   attackCd: number;
+  /** G-10 · swings begun (enemyAi/engage.ts's swingAt): his figure plays its attack clip again on each */
+  swings?: number;
+  /** G-10 · his swings begun when he last came into the attack stance (swingAt): till one more is — his next swing, at
+   *  the least closeIn's 0.4 s hold, at most the rest of his cooldown — his figure stands at rest (engage.ts's
+   *  swungInStance) */
+  stanceSwings?: number;
+  /** G-10 · a shot drawn and not yet loosed: the mark it is drawn at, the seconds left to its release, and whether he
+   *  swung on at it this frame (engage.ts's swingAt, dropStaleDraw) */
+  draw?: { mark: string; t: number; held: boolean };
   wanderT: number;
   homeX: number; homeZ: number;
   dieT: number;
