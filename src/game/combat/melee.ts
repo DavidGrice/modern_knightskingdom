@@ -19,6 +19,7 @@ import {
 import { combatState } from './state';
 import { useEnemyStore, type EnemyData } from './enemyStore';
 import { resolveEnemyKill } from './kill';
+import { knockDown } from './knockdown';
 import { SHIELD_REDUCTION, isFrontalHit } from './shield';
 import { hitRaiderProp, RAIDER_PROPS } from './structures';
 
@@ -151,8 +152,12 @@ function landMeleeHit(e: EnemyData, d: number, dmg: number, finisher = false) {
   e.mob.x += ((e.mob.x - playerState.x) / dd) * kb;
   e.mob.z += ((e.mob.z - playerState.z) / dd) * kb;
   // Wave 40 (A6) · a finisher staggers its target, same "force attackCd up"
-  // trick the parry branch (damagePlayer) uses — no new AI-state machine.
-  if (finisher) e.mob.attackCd = Math.max(e.mob.attackCd, FINISHER_STAGGER_S);
+  // trick the parry branch (damagePlayer) uses — no new AI-state machine. G-11 · and knocks him flat (knockdown.ts):
+  // the stagger runs on inside the knockdown, which holds his next blow longer; just up from one, he is staggered alone
+  if (finisher) {
+    e.mob.attackCd = Math.max(e.mob.attackCd, FINISHER_STAGGER_S);
+    knockDown(e, playerState.x, playerState.z);
+  }
   if (e.hp <= 0 && e.mob.state !== 'dying') resolveEnemyKill(e, { by: 'melee' }); // or, for Storm, the duel won
 }
 

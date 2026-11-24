@@ -10,6 +10,7 @@
 // with goods on him, he runs; and a raider at home runs by the road off the map (movement.ts's escape), battering his
 // way out when shut in. G-10 · his clips are his arms' (game/combat/fightClips.ts), and a crossbow's shot or a caster's
 // spell is drawn before it lands (engage.ts's swingAt): it is let go at the head of a frame he did not swing on at it.
+// G-11 · knocked flat (game/combat/knockdown.ts), he does nothing but lie and get up again till he is up.
 import * as THREE from 'three';
 import { audio } from '@/lib/audio';
 import { useGameStore } from '@/game/store/gameStore';
@@ -18,6 +19,7 @@ import { navReachable } from '@/game/navgrid';
 import { DEATH_BARK, KIND_LABEL } from '@/game/data/enemies';
 import { bark } from '@/game/barks';
 import { enemyArms, runClip, stanceClip } from '@/game/combat/fightClips';
+import { knockClip, knockLift, stillDown } from '@/game/combat/knockdown';
 import { groundUnder, play, stand, type EnemyFrame } from './frame';
 import { haulOf, gotAway } from '@/game/plunder';
 import { distToPlayer, guardOnMyWall, insideKeep, keepInReach, markFor, nearestFighter, nearestGuard, storeFor, tamInReach } from './targeting';
@@ -157,6 +159,17 @@ export function stepEnemy(f: EnemyFrame, rawDt: number): void {
     m.state = 'dying';
     m.dieT = 0;
     return; // next frame's dying branch above scatters the rig from wherever it last rendered
+  }
+
+  // G-11 · knocked flat, he lies and gets up again and does nothing else meanwhile: no blow, no draw (let go as he went
+  // down), no step of his own and no shouldering apart. What moves him is the hit — a blow's knockback, at once; a
+  // blast's throw, through his flight (stillDown) — kept to the land and stopped at the walls as any step of his is.
+  if (stillDown(m, dt)) {
+    if (enemyAtHome) keepToLand(m);
+    holdToTheWalls(f, st);
+    stand(g, m, (m.elevated ? (m.postY ?? 0) : groundUnder(f)) + knockLift(m.knock!));
+    play(f, knockClip(m.knock!, enemyArms(data)));
+    return;
   }
 
   if (!st.buildMode) {

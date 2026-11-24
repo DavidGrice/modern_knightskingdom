@@ -18,6 +18,8 @@ import type { Route } from './enemyAi/frame';
 import { GRAB_EVERY, RUN_HAUL, goodsNamed, gotAway, nextGrab, raidHaul, resetRaidHaul } from './plunder';
 import { storageCapacity } from './storage';
 import { KEEP_SITE_ID, siteById, siteCovers } from './sites/sites';
+import { explodeBall } from './siege';
+import { isKnocked } from './combat/knockdown';
 import { playerState } from './playerState';
 import { useGameStore } from './store/gameStore';
 import type { CharacterConfig, PlacedBuilding } from './types';
@@ -487,6 +489,31 @@ describe('fleeing from inside a shut keep (wave 70.1\'s "Seen, not fixed")', () 
     expect(siteCovers(site(), data.mob.x, data.mob.z)).toBe(false);
     for (; i < 240 / DT && !f.gone; i++) stepEnemy(f, DT);
     expect(f.gone).toBe(true);
+  });
+
+  // G-11 · own check: a blast's throw is a step of his like any, stopped at the keep's walls (the knocked branch's
+  // holdToTheWalls) — never through them
+  it("a blast that throws a raider at the keep's wall leaves him outside it", () => {
+    game().addItems({ stone: 400, plank: 100, wood: 100, iron_bar: 10 });
+    game().foundKeep(0, 0, 0);
+    for (const [s, p] of [['nw', 'corner_turret'], ['ne', 'corner_turret'], ['se', 'corner_turret'], ['sw', 'corner_turret'],
+      ['e', 'wall_crenel'], ['s', 'wall_crenel'], ['w', 'wall_crenel'], ['n', 'gatehouse']]) {
+      game().raiseKeepPart(s, p);
+      game().workKeepPart(s, 1);
+    }
+    rebuildNav(game().buildings);
+    const site = () => siteById(game(), KEEP_SITE_ID)!;
+    let edge = 0;
+    while (siteCovers(site(), 0, edge) && edge < 40) edge += 0.05; // the south wall's line
+    Object.assign(playerState, { x: 0, z: edge + 30 });
+    const data = raider(0, edge + 0.6);
+    data.hp = data.maxHp = 50;
+    useEnemyStore.setState({ enemies: [data] });
+    const f = frameOf(data);
+    explodeBall({ id: 1, pos: { x: 0, y: 0.2, z: edge + 2.6 }, vel: { x: 0, y: 0, z: 0 }, byPlayer: true });
+    expect(isKnocked(data)).toBe(true); // thrown 2.5 m north, at the wall
+    for (let i = 0; i < 1.2 / DT; i++) stepEnemy(f, DT);
+    expect(siteCovers(site(), data.mob.x, data.mob.z)).toBe(false);
   });
 
   // G-10 · own check: escape stands him in a chase each frame; battering on, his figure must go on showing his blows
