@@ -50,6 +50,7 @@ import { HOME_X, HOME_Z } from '@/game/data/villagers';
 import { getNavGridOrNull } from '@/game/navgrid';
 import { useGameStore } from '@/game/store/gameStore';
 import { isBuilt } from '@/game/types';
+import { villagerCombatState } from '@/game/villagerCombat';
 import { COMBAT } from '../config';
 import type { Agent } from '../core/Agent';
 import type { Belief } from '../core/Blackboard';
@@ -455,6 +456,16 @@ export const TAKE_COVER: Action = {
   // right behaviour impossible for N seconds, which is not the same thing.
   cooldown: 0,
   considerations: [
+    {
+      // G-11 (OPEN-019) · engage_threat_villager's own gate: a villager knocked
+      // down (game/villagerCombat.ts) lies where he fell, invisible, until he
+      // recovers — he takes no cover, and his action no longer reads as if he
+      // did. Read, not registered: everyone with an Agent scores this action,
+      // and a record of a villager's health is for villagers alone.
+      name: 'not_downed',
+      input: (agent) => (villagerCombatState[agent.id]?.state === 'downed' ? 0 : 1),
+      curve: BOOL_CURVE,
+    },
     // O(1) and gates almost every agent on almost every tick before the belief
     // scan below is ever reached — scoreAction short-circuits on a zero.
     { name: 'threat_high', input: (agent, ctx) => coverThreatInput(agent, ctx.now), curve: threatCurve },

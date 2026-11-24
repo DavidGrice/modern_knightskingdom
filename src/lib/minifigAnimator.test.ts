@@ -91,6 +91,54 @@ describe("a figure's animator and a swing's cue", () => {
   });
 });
 
+// G-11 · the knock-down clips: a fall ends lying, and the stand from it starts lying. A one-shot clip's hip height is
+// measured from the rest pose's (every one that starts standing starts at it), below it as a share of the figure's own
+// hip height (the clips' units are some five times the rig's: at unitScale a man lying lay under the ground), and
+// cross-faded from where it was.
+describe("a figure's animator and a clip that starts down", () => {
+  /** a clip whose hips stand at `ys[i]` on frame i (the rest pose's at 100); the figure's hips 0.5 up, unitScale 0.01 */
+  const hipsClip = (file: string, ys: number[]) => ({ file, num_frames: ys.length, tracks: [{ name: 'hips', frames: ys.map((y) => ({ pos: [0, y, 0], rot: [0, 0, 0] })) }] });
+  const clips: Record<string, ReturnType<typeof hipsClip>> = {
+    down_fall: hipsClip('down_fall', [100, 60, 20, 20]), // a fall: standing to lying
+    down_stand: hipsClip('down_stand', [20, 20, 20, 20, 20, 20, 60, 100]), // the stand from it: lying, then up
+    down_jump: hipsClip('down_jump', [100, 150, 150, 150, 150, 100]), // a jump: up and down again
+    down_loop: hipsClip('down_loop', [80, 80, 80]), // a cycle held below the rest height
+  };
+  const figure = () => {
+    vi.stubGlobal('fetch', (url: string) => Promise.resolve({ json: () => Promise.resolve(clips[url.split('/').pop()!.replace('.json', '')]) }));
+    const joints = Object.fromEntries(JOINTS.map((j) => [j, new THREE.Group()])) as Record<RigJoint, THREE.Group>;
+    joints.hips.position.y = 0.5;
+    const a = new MinifigAnimator(joints, 0.01, new Map([['hips', { pos: [0, 100, 0], rot: [0, 0, 0] }]]));
+    return { a, hips: () => +joints.hips.position.y.toFixed(6) };
+  };
+  it('plays the stand from a fall lying on the ground at its start, its hips a fifth of their height up', async () => {
+    const { a, hips } = figure();
+    await a.play('down_stand', { loop: false });
+    a.update(0.2); // past the cross-fade, on its frame 3 (from its frame 0 it was 0.5, a standing man's; at unitScale, -0.3)
+    expect(hips()).toBeCloseTo(0.5 * 0.2, 9);
+    a.update(1); // up, held on its last frame
+    expect(hips()).toBeCloseTo(0.5, 9);
+  });
+  it('fades the hips from the height they were at: the fall ends lying, and the stand takes up from there', async () => {
+    const { a, hips } = figure();
+    await a.play('down_fall', { loop: false });
+    a.update(1); // to its last frame, held
+    expect(hips()).toBeCloseTo(0.1, 9);
+    await a.play('down_stand', { loop: false });
+    a.update(0.01); // the cross-fade barely begun (faded from the rest height, the hips stood 0.38 higher)
+    expect(hips()).toBeCloseTo(0.1, 9);
+  });
+  it('above the rest height, and in a loop, at unitScale as ever', async () => {
+    const { a, hips } = figure();
+    await a.play('down_jump', { loop: false });
+    a.update(0.2); // frame 3, past the fade: 50 up
+    expect(hips()).toBeCloseTo(0.5 + 50 * 0.01, 9);
+    await a.play('down_loop');
+    a.update(1); // a loop about its own middle, as ever: at the figure's hip height, not a share of it
+    expect(hips()).toBeCloseTo(0.5, 9);
+  });
+});
+
 describe("a figure's animator and a clip's extra tracks", () => {
   it('drives the joints and passes over the tracks that are not one', async () => {
     const tracks = [...JOINTS, ...EXTRA].map((name) => ({ name, frames: frames(3, [0, 10, 0]) }));

@@ -24,6 +24,8 @@ export class MinifigAnimator {
   private blendFrom = new Map<RigJoint, THREE.Euler>();
   private hipsBaseY: number;
   private hipsRefY = 0;
+  /** the hips' height as the playing clip was taken up, cross-faded from as its rotations are */
+  private hipsFromY = 0;
   private onEnd: (() => void) | null = null;
   /** how many play() and stop() calls have been made: each takes its number, and a play() whose clip is still loading
    *  takes effect only if no later call has come in by the time its load is in */
@@ -55,6 +57,7 @@ export class MinifigAnimator {
     // snapshot current pose for crossfade
     this.blendFrom.clear();
     for (const j of JOINTS) this.blendFrom.set(j, this.joints[j].rotation.clone());
+    this.hipsFromY = this.joints.hips.position.y;
     this.clip = clip;
     this.clipName = name;
     this.cue = opts.cue;
@@ -78,7 +81,11 @@ export class MinifigAnimator {
     } else {
       // one-shot reactions (jump, fall, emotes) should animate away from
       // whatever pose the character is actually in when they start playing.
-      this.hipsRefY = frame0Y;
+      // G-11 · measured from the rest pose's own hip height, which every one
+      // that starts standing starts at: one that starts down (a stand from a
+      // fall, a flight) was measured from its own first frame, and so played
+      // lying at a standing man's hip height and rose a whole stance too high.
+      this.hipsRefY = this.rest.get('hips')?.pos[1] ?? frame0Y;
     }
   }
 
@@ -134,12 +141,25 @@ export class MinifigAnimator {
         joint.rotation.copy(target);
       }
       // hips vertical bob (walk bounce, jumps) — relative to hipsRefY (the
-      // loop's own midpoint for cyclic clips, or frame 0 for one-shots; see
-      // play()) so stance-height offsets between clips don't float the rig
+      // loop's own midpoint for cyclic clips, or the rest pose's height for
+      // one-shots; see play()) so stance-height offsets between clips don't
+      // float the rig. G-11 · cross-faded from the height they were at, as the
+      // rotations are: from the rest height, a man lying at the end of a fall
+      // leapt up to it and sank again as the stand from it came in.
       if (j === 'hips') {
-        const dy = f0.pos[1] + (f1.pos[1] - f0.pos[1]) * a - this.hipsRefY;
-        joint.position.y = this.hipsBaseY + dy * this.unitScale * blend;
+        const y = this.hipsAt(f0.pos[1] + (f1.pos[1] - f0.pos[1]) * a, rest.pos[1]);
+        joint.position.y = this.hipsFromY + (y - this.hipsFromY) * blend;
       }
     }
+  }
+
+  /** G-11 · the hips' height for a clip's hip height `clipY`: as far from hipsRefY as the clip moves them, at the rig's
+   *  unitScale — but a one-shot clip that takes them below the rest pose's own height (`restY`: a fall, lying, a stand
+   *  from it) takes them down as a share of the figure's own hip height. At unitScale, which makes the clips' hip
+   *  heights some five times the rig's (ROADMAP.md, "a figure's hips move five times as far as its clip moves them"), a
+   *  man lying (1825 of the rest pose's 5800) lay a metre under the ground. */
+  private hipsAt(clipY: number, restY: number): number {
+    if (!this.loop && clipY < restY) return this.hipsBaseY * (clipY / restY);
+    return this.hipsBaseY + (clipY - this.hipsRefY) * this.unitScale;
   }
 }

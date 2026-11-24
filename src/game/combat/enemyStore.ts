@@ -23,6 +23,13 @@ interface EnemyMob {
   /** G-10 · a shot drawn and not yet loosed: the mark it is drawn at, the seconds left to its release, and whether he
    *  swung on at it this frame (engage.ts's swingAt, dropStaleDraw) */
   draw?: { mark: string; t: number; held: boolean };
+  /** G-11 · knocked flat (game/combat/knockdown.ts) — beside `state`, which goes on saying what he was doing: how he
+   *  went down, the seconds since, and a blast's throw (m/s, through his flight) */
+  knock?: { how: 'backward' | 'forward' | 'flyingbackward' | 'flyingforward'; t: number; vx: number; vz: number };
+  /** G-11 · knockdowns taken: his figure plays its fall from its start on each */
+  knocks?: number;
+  /** G-11 · the seconds left in which, just up from a knockdown, nothing knocks him down again */
+  knockGuardT?: number;
   wanderT: number;
   homeX: number; homeZ: number;
   dieT: number;

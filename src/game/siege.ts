@@ -13,6 +13,7 @@ import { fireProp } from '@/components/world/RiggedProp';
 import { siteGate, siteSocketWorld, siteSockets, siteStands, sitesIn } from './sites/sites';
 import { isBuilt, isDoorLike, type PlacedBuilding } from './types';
 import { exposeDebug } from '@/lib/debugHooks';
+import { knockDown } from './combat/knockdown';
 
 /** J51 · every finished keep piece within `radius` of (x, z) takes the same
  *  hit an ordinary building would — the keep has no PlacedBuilding entries
@@ -120,7 +121,8 @@ export function fireCannon(cannon: PlacedBuilding, byPlayer: boolean, aimYaw?: n
 exposeDebug('__kkFire', fireCannon);
 
 /** explode a ball: splash damage to enemies AND any building caught in the
- *  blast (the cannon doesn't discriminate — mind where you aim it). */
+ *  blast (the cannon doesn't discriminate — mind where you aim it). G-11 · one
+ *  it leaves standing it throws flat (combat/knockdown.ts), as a charge does. */
 export function explodeBall(ball: Cannonball) {
   audio.play('explosion', 0.85);
   const st = useGameStore.getState();
@@ -136,6 +138,7 @@ export function explodeBall(ball: Cannonball) {
     e.hp -= 6;
     hits++;
     if (e.hp <= 0) resolveEnemyKill(e, { by: ball.byPlayer ? 'cannonball' : 'emplacement' });
+    else knockDown(e, ball.pos.x, ball.pos.z, true);
   }
   if (hits > 0) st.addXp('combat', 5);
   const world = ball.world ?? null;
@@ -179,6 +182,7 @@ export function detonate(charge: PlacedBuilding) {
     if (Math.hypot(e.mob.x - x, e.mob.z - z) > 6.5) continue;
     e.hp -= 14;
     if (e.hp <= 0) resolveEnemyKill(e, { by: 'charge' });
+    else knockDown(e, x, z, true);
   }
   // the charge itself always goes; everything else only if the lab says this
   // charge damages structures
@@ -202,6 +206,41 @@ exposeDebug('__kkDetonate', detonate);
 // ---- the pushable battering ram (see game/carts.ts for the shared
 // push/hitch state both this and the player's step, game/playerPhysics/locomotion.ts, read/write) ----
 let lastRamHitAt = 0;
+let lastRamKnockAt = 0;
+
+/** G-11 · how near the player's ram's head (the place it is carried at) a raider is knocked flat by it, how far it
+ *  shoves him on, and how often it can — a cooldown of its own: the blows on what stands keep theirs */
+const RAM_KNOCK_REACH = 1.5;
+const RAM_SHOVE = 1.2;
+const RAM_KNOCK_MS = 900;
+/** where each ram's head was at its last check, and when (ramCheck runs every frame a ram is pushed): it knocks a man
+ *  flat only run (or swung) into him — a ram parked in a raider's path is no stun-field */
+const ramHeadAt = new Map<string, { x: number; z: number; t: number }>();
+/** how fast the head must be moving to run into someone (m/s: well under a walk, at any frame rate) */
+const RAM_MOVE_SPEED = 0.3;
+/** a head last checked longer ago than this (ms) is none: a ram set down and taken up again elsewhere, or a save
+ *  loaded, has not moved by the distance between */
+const RAM_HEAD_STALE_MS = 100;
+
+/** G-11 · the player's ram run into the enemies of its world: each it reaches, with its head moving his way (the step
+ *  (sx, sz) since its last check), knocked flat and shoved on, away from the player pushing it — not one it is backed
+ *  away from, nor one up on the wall-walk above it. No damage: it is a battering ram, not a blade. */
+function ramIntoEnemies(world: string | null, x: number, z: number, sx: number, sz: number, now: number) {
+  let struck = false;
+  for (const e of useEnemyStore.getState().enemies) {
+    if ((e.world ?? null) !== world || e.mob.elevated) continue;
+    if (Math.hypot(e.mob.x - x, e.mob.z - z) > RAM_KNOCK_REACH) continue;
+    if ((e.mob.x - x) * sx + (e.mob.z - z) * sz <= 0) continue; // backed or turned away from him
+    if (!knockDown(e, playerState.x, playerState.z)) continue;
+    const d = Math.hypot(e.mob.x - playerState.x, e.mob.z - playerState.z) || 1;
+    e.mob.x += ((e.mob.x - playerState.x) / d) * RAM_SHOVE;
+    e.mob.z += ((e.mob.z - playerState.z) / d) * RAM_SHOVE;
+    struck = true;
+  }
+  if (!struck) return;
+  lastRamKnockAt = now;
+  audio.play('thud', 0.9);
+}
 
 /** the battering ram bashes whatever it's shoved into: a shut gate (wave 69:
  *  and the keep's gatehouse) is forced open, anything else takes splash-free
@@ -215,12 +254,19 @@ let lastRamHitAt = 0;
  *  (OD-02), where the player's own ram knocks it down for half its materials. */
 export function ramCheck(rammerId: string, x: number, z: number) {
   const now = performance.now();
-  if (now - lastRamHitAt < 900) return;
   const st = useGameStore.getState();
   // Wave 67 · the sites in the ram's own world: a placed ram's, else home (the raiders' ram is not a PlacedBuilding,
   // and only ever rolls at home — on, while the player is away)
   const rammer = st.buildings.find((b) => b.id === rammerId);
   const world = rammer?.world ?? null;
+  // G-11 · the player's ram (a placed one; the raiders' never knocks down its own raiders) runs into the enemies too —
+  // moving: one parked knocks nobody down
+  const was = ramHeadAt.get(rammerId);
+  ramHeadAt.set(rammerId, { x, z, t: now });
+  const since = was ? now - was.t : Infinity;
+  const moving = since > 0 && since <= RAM_HEAD_STALE_MS && (Math.hypot(x - was!.x, z - was!.z) * 1000) / since > RAM_MOVE_SPEED;
+  if (rammer && moving && now - lastRamKnockAt >= RAM_KNOCK_MS) ramIntoEnemies(world, x, z, x - was!.x, z - was!.z, now);
+  if (now - lastRamHitAt < 900) return;
   for (const site of sitesIn(st, world)) {
     for (const sock of siteSockets(site)) {
       if (!siteStands(site, sock.id)) continue; // nothing standing (a ruin is built 0)

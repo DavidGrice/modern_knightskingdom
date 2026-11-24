@@ -613,6 +613,39 @@ Kept current per PR, newest last, so a fresh session never has to reverse-engine
   check of the own check found a raider battering his way out at rest between his blows (fixed: his stance kept across
   `escape`'s chase) and the attack clip's first fetch moved to the swing (fixed: each figure preloads its attack clip
   as it appears), and seven doc corrections.
+- **#315 — Wave 75.2** (G-11): knockdowns. A knocked state beside `mob.state`, never a value of it
+  (`game/combat/knockdown.ts`: `mob.knock`, `knocks`, `knockGuardT`; every reader of `mob.state` checked, all key on
+  `'dying'`, so the raid's end, its settling, the arena, targeting and perception take a man down for one in the
+  fight), entered on a combo's finisher (`melee.ts`), a cannonball or a charge on every enemy it leaves standing
+  (`siege.ts`) and the player's ram — a placed one; the raiders' never knocks down its own raiders — on whoever its
+  head runs into (1.5 m, shoved 1.2 m, its own 0.9 s cooldown, no damage). By the hit against his facing: on his back
+  from in front, on his face from behind, a blast throwing him through the air away from it (2.5 m, an arc 0.6 m
+  high); a shield's fall and stand where they exist. Down 2 s (the fall or flight 0.7, the stand 1.3), then guarded 3
+  s (longer than the slowest chain, 2.85 s: no run of finishers keeps a man down); while down no blow, no draw (let
+  go), no step of his own, no shouldering apart, his knockback kept; up into his stance at rest, his blow 0.4 s on; a
+  finisher's 1.8 s stagger runs inside the knockdown, and staggers alone while he is down or guarded; killed as he
+  lies, he falls apart at once with one death bark. Not a rider, a siege engineer at his engine, a man on a ladder,
+  the dying, nor Storm. `EnemyFigure.tsx` plays the fall and the stand once each knockdown (cue `knocks`), holding the
+  last frame, fitted into their part of the 2 s (the stand from backward from its frame 60, past a failed sit-up).
+  Premises: the clips could not be played as they stood — the animator measured a one-shot's hips from its first
+  frame, faded them from the rest height, and moved them at a `unitScale` some five times the rig's, so a man lying
+  lay 1.05 m under the ground (live); one-shot hip heights below the rest pose's are now a share of the hip height
+  (lying, 0.142 m), faded from where they were (Richard's story fall lies on the ground too); the run's and jump's
+  exaggerated bob logged, not changed. `take_cover` gains its `not_downed` gate (OPEN-019 closed). The garrison table
+  and the resolver model no finisher, blast or ram: no pinned verdict changed. Golden tests first, on the unchanged
+  base, then changed on purpose: the finisher's cooldown 1.8 → 2.4 and its target down, a blast's survivor down (its
+  damage and skips as they were), the player's ram knocking down and shoving. 27 take-outs, all failing a test (the
+  evidence pass's 55: 10 not caught, the riskiest since pinned); the suite 111 files, 1041. Live on production builds
+  (`w752_live.mjs`), `main` against the change: the finisher — no fall / the fall from frame 40, the stand, up on 166,
+  his next blow 1.81 s / 2.92 s after it; a cannonball among three bandits — 4 blows on the player in 3 s / 1, all
+  three flying; the player's ram (held still) — passed by, 2 blows / down, shoved 2.6 → 3.8 m, none (a knock the own
+  check removed: see below); d3d11 screenshots mid-fall, rising and all but up, each pose reading. One "Seen, not
+  fixed": a figure's hips move five times as far as its clip moves them. Review fix: a siege engineer is never knocked
+  down (his catapult, drawn in his own group, flew and rose with him; live, he stands at his engine). Own check: a
+  raider on a wall-walk knocked flat where he stands, no hover; the ram knocks only run or swung into him (moving his
+  way at 0.3 m/s, its last check fresh; live, held still it knocked no one in 3 s, walked into a bandit it knocked him
+  on frame 17); a hit square to the side counts as from the front; tests for the ram's own cooldown, the stop at the
+  keep's walls and the state kept beside the stance (9 take-outs, after a baseline run); the suite 111 files, 1050.
 
 ## Owner decisions
 

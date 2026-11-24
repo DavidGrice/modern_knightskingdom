@@ -2,7 +2,8 @@
 // CLN-13 · an enemy's figure: its minifig (game/data/enemies.ts's KIND_FIGURE) and what it holds, and — for one of
 // Cedric's riders or a siege crew — the horse under it or the engine it mans. Enemies.tsx's Enemy draws it inside the
 // group its frame (game/enemyAi/step.ts) stands and turns. G-06 · and a thief's load on his back, once he has one.
-// G-10 · his attack clip played once a swing, at his swing's timeScale (game/enemyAi/engage.ts's swingOf).
+// G-10 · his attack clip played once a swing, at his swing's timeScale (game/enemyAi/engage.ts's swingOf). G-11 · and
+// a fall and the stand from it played once each knockdown (game/combat/knockdown.ts).
 import { Suspense, useEffect, useRef } from 'react';
 import { createPortal, useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
@@ -16,7 +17,8 @@ import { haulOf } from '@/game/plunder';
 import PropModel from '../world/PropModel';
 import { labOccupyMode } from '@/game/data/labCapabilities';
 import { KIND_FIGURE } from '@/game/data/enemies';
-import { CLIP_TIMING } from '@/game/combat/fightClips';
+import { CLIP_TIMING, enemyArms } from '@/game/combat/fightClips';
+import { knockClips, knockPlay } from '@/game/combat/knockdown';
 import { swingOf } from '@/game/enemyAi/engage';
 import type { EnemyCue } from '@/game/enemyAi/frame';
 
@@ -70,6 +72,12 @@ export default function EnemyFigure({ data, clip, cue, ridePace, rig, onReady }:
   // G-10 · his attack clip fetched as he comes on, not at his first swing: a clip loads on its first play, and he stands
   // at rest till that swing (step.ts), so nothing else would ask for it sooner
   useEffect(() => { preloadClip(swing.clip); }, [swing.clip]);
+  // G-11 · a fall or a stand from one: once from its start on each knockdown (`knocks`), its last frame held as the
+  // next is asked for — every other clip but the attack loops — and fetched as he comes on, as the attack is. A rider
+  // is never knocked from his saddle.
+  const knock = knockPlay(clip);
+  const shield = enemyArms(data).shield;
+  useEffect(() => { if (!data.mountAsset) for (const c of knockClips(shield)) preloadClip(c); }, [shield, data.mountAsset]);
   return (
     <>
       {/* Wave 36 (A3): one of Cedric's own tethered chargers — the same
@@ -126,10 +134,10 @@ export default function EnemyFigure({ data, clip, cue, ridePace, rig, onReady }:
           // rig data, not assumed.
           keepProps={false}
           clip={clip}
-          loop={!attacking}
-          timeScale={attacking ? swing.timeScale : 1.15}
-          cue={cue.n}
-          from={attacking && !cue.held ? CLIP_TIMING[clip].hit : 0}
+          loop={!attacking && !knock}
+          timeScale={knock ? knock.timeScale : attacking ? swing.timeScale : 1.15}
+          cue={knock ? data.mob.knocks : cue.n}
+          from={knock ? knock.from : attacking && !cue.held ? CLIP_TIMING[clip].hit : 0}
           onReady={onReady}
         />
         {/* bandits: a raiding party mixes melee and ranged rather than every

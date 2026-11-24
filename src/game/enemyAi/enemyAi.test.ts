@@ -27,6 +27,8 @@ import { arenaState, ARENA_ENV_BY_ID } from '@/game/arena';
 import { useGameStore } from '@/game/store/gameStore';
 import * as THREE from 'three';
 import { stepEnemy, type EnemyFrame } from './step';
+import { knockDown } from '@/game/combat/knockdown';
+import { useEnemyStore } from '@/game/combat';
 import { registerDefender, resetDefenders } from '@/game/defenders';
 import { playerState } from '@/game/playerState';
 
@@ -325,6 +327,78 @@ describe('a drawn shot in the frame (stepEnemy)', () => {
     expect(H.spells).toBe(0);
     run(f, 1);
     expect([H.spells, f.clip]).toEqual([1, 'anim_g_crossbowshot']);
+  });
+});
+
+// G-11 · knocked down in the frame (stepEnemy at 1/30 s): a halberd bandit 1.5 m from a sworn guard, or a crossbow
+// bandit drawing on one 8 m off — what he does while he lies, and the clip each frame asks for (frameOf sets f.clip).
+describe('knocked down, in the frame (stepEnemy)', () => {
+  const setUp = (ranged: boolean, gx: number) => {
+    resetDefenders(new Set());
+    useEnemyStore.getState().clear();
+    const g = registerDefender('g1', gx, 0, 0);
+    Object.assign(g, { hp: 100, maxHp: 100 });
+    Object.assign(playerState, { x: 200, y: 0, z: 200 });
+    const data = enemy({ ranged, raid: false }, { state: 'attack', attackCd: 0, yaw: Math.atan2(-gx, 0) }); // facing the guard
+    return { g, data, f: frameOf(data) };
+  };
+  const run = (f: EnemyFrame, n: number, each?: (i: number) => void) => {
+    for (let i = 1; i <= n; i++) { stepEnemy(f, 1 / 30); each?.(i); }
+  };
+  it('strikes no blow and takes no step while he lies; falls and stands, then squares up at rest and strikes 0.4 s on', () => {
+    const { g, data, f } = setUp(false, 1.5);
+    run(f, 1); // his first blow, at once
+    expect([g.hp, data.mob.swings]).toEqual([100 - ATTACK_DMG.bandit, 1]);
+    knockDown(data, 1.5, 0); // struck from the guard's side, which he faces
+    const clips: string[] = [];
+    let struck = 0, lying: number[] = [];
+    run(f, 75, (i) => {
+      clips.push(f.clip);
+      if (!struck && g.hp < 100 - ATTACK_DMG.bandit) struck = i;
+      if (i === 59) lying = [data.mob.x, data.mob.z, data.mob.swings ?? 0];
+    });
+    expect([...new Set(clips.slice(0, 59))]).toEqual(['anim_g_fallbackwardwithshield', 'anim_g_standfromfallbackwardwithshield']);
+    expect(clips.indexOf('anim_g_standfromfallbackwardwithshield')).toBe(20); // KNOCK_FALL_S: 0.7 s, frame 21
+    expect(lying).toEqual([0, 0, 1]); // the last frame down: no step, no swing
+    // up on frame 60 (2 s), at rest; his blow 0.4 s on, on the hold's twelfth frame (71), his attack clip with it
+    expect([clips[59], clips[69], struck, clips[70]]).toEqual(['anim_r_restpose', 'anim_r_restpose', 71, 'anim_g_halberdswipewithshield']);
+  });
+  it("a crossbow's draw is let go as he goes down, and drawn again from its start once he is up", () => {
+    const { g, data, f } = setUp(true, 8);
+    run(f, 20);
+    expect(data.mob.draw?.mark).toBe('def:g1');
+    knockDown(data, 8, 0);
+    expect(data.mob.draw).toBeUndefined();
+    let at = 0;
+    run(f, 150, (i) => { if (!at && g.hp < 100) at = 20 + i; });
+    // up on frame 80, the 0.4 s hold out on its twelfth frame (91) and the shot drawn on it, loosed 41 frames on
+    expect(at).toBe(91 + 41);
+  });
+  it('is not shouldered apart from his pack while he lies, but the knockback of a blow still moves him', () => {
+    const { data, f } = setUp(false, 1.5);
+    useEnemyStore.getState().spawn('bandit', 0.3, 0); // a packmate at his shoulder
+    const up = frameOf(enemy({ raid: false }, { state: 'attack', attackCd: 1, yaw: data.mob.yaw }));
+    run(up, 1);
+    expect(up.data.mob.x).toBeCloseTo(-0.4, 9); // one on his feet in his place is shouldered off it
+    knockDown(data, 1.5, 0);
+    run(f, 10);
+    expect([data.mob.x, data.mob.z]).toEqual([0, 0]);
+    data.mob.x -= 0.9; // a blow's knockback (combat/melee.ts) as he lies
+    run(f, 10);
+    expect([data.mob.x, data.mob.z]).toEqual([-0.9, 0]);
+    run(f, 60); // up: he closes in on the guard again
+    expect(data.mob.x).toBeGreaterThan(-0.9);
+  });
+  it('killed as he lies, he falls apart once, with one cry', () => {
+    const { data, f } = setUp(false, 1.5);
+    f.rigRef.current = { joints: { body: new THREE.Group(), head: new THREE.Group() } } as never;
+    const gone: number[] = [];
+    f.remove = (id) => { gone.push(id); };
+    knockDown(data, 1.5, 0);
+    run(f, 10);
+    Object.assign(data.mob, { state: 'dying', dieT: 0 }); // as combat/kill.ts settles a death
+    run(f, 60);
+    expect([H.barks, gone[0]]).toEqual([['raiderFalls'], 7]); // gone once his pieces have flown (1.1 s)
   });
 });
 

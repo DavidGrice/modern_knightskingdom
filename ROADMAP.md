@@ -135,7 +135,7 @@ Every item below is either genuinely unbuilt (`STILL_OPEN`), partly built (`PART
 | OPEN-016 | CLOSED | M | Raiders don't peel off toward different approach sides | Closed by wave 70.1 (#308, G-03): each raid has its sides — the road's and one flank or both, drawn from the day's seed (`game/directors/approach.ts`, kept in `state.ts`'s `raidPlan`) — and each raider his own point on one of them, on a ring 22 m round home, which he walks to before he closes in ("Bugfix: raiders came at the homestead in one file off the road …"). |
 | OPEN-017 | CLOSED | S | Raider battering ram still spawns on the old 34m ring, not via road entry | Closed by wave 70.1 (#308, G-03): the raid's ram starts 8 m back along the road past `roadEntry()` (`raiderRam.ts`'s `ramSpawn`) and rolls a wide walker's way round what stands to its gate (`rollRaiderRam`), not straight at it. |
 | OPEN-018 | CLOSED | S | Home raid trigger gated to dusk (0.7-0.78) only | Closed by wave 70.2 (#309, G-04): a raid may set out in any hour, by a chance per hour weighted to dusk and the night and drawn from the day's count (`game/directors/raidTiming.ts`), always after a horn, a banner and the minimap's arrow ("Bugfix: raids came only at dusk, with no warning …"). |
-| OPEN-019 | STILL_OPEN | S | Downed villager's debug action-label can still read take_cover | Add a downed-state exit/gate to take_cover (mirroring engageThreatVillager.ts) and/or a debug-label override. |
+| OPEN-019 | CLOSED | S | Downed villager's debug action-label can still read take_cover | Closed by wave 75.2 (#315, G-11): `take_cover` gains `engage_threat_villager`'s `not_downed` gate (`ai/actions/takeCover.ts`), so a villager knocked down scores 0 for it and no longer reads as taking cover. |
 | OPEN-020 | PARTIALLY_DONE | L | Real watch-post that orients toward raid approaches | Wave 70.2 (#309, G-04): a defender posted on a finished Watch Tower or keep Corner Turret lengthens a raid's warning by 15 s each, to a minute (`warningLeadTime`, `game/directors/raidTiming.ts`), and the minimap points at the raid's sides. Left: a post that turns to face the approach and reacts to it (G-26's watchtower). |
 | OPEN-021 | PARTIALLY_DONE | M | Per-world (settlement) autonomous defense doesn't exist | Posted defenders/AI battering ram for settlements still don't exist; only a player-fought raid encounter (settlementRaid.ts) does. |
 | OPEN-024 | STILL_OPEN | S | Seated-rider leg-pose constants need a live screenshot-and-tune pass | SEATED_LEG_X/SEATED_LEG_SPLAY are still starting estimates, never visually tuned against a live mounted defender. |
@@ -12960,3 +12960,212 @@ figure now fetches its attack clip as it appears (`preloadClip` in `EnemyFigure.
 `PlayerAvatar.tsx`), so a raider coming up the road has it before his first swing (live, the own probe's shieldbearer:
 his first cut on his swing's own frame). A figure that swings within moments of appearing — a spawn already in reach,
 as S1's bandit, drawn on his first frame — can still show his first clip late.
+
+## Bugfix: no hit ever knocked an enemy down — a finisher only staggered him, a blast only hurt him, a ram never touched him — and a downed villager went on taking cover — FOUND 2026-10-31 (FEATURE_PLAN.md's G-11: the idea "Weapon-true combat animation"; OPEN-019), FIXED 2026-11-23
+
+**The fault.** The original game's ten knock-down clips (a fall backward and forward, each with a shield, a flight
+through the air on the back and on the face, and the stand from each fall, with a shield too) were all in the manifest
+since wave 66, and one was ever played (`storySlice.ts`'s poke of Richard). A combo's finisher (`combat/melee.ts`'s
+`landMeleeHit`) knocked its target back 1.8 m and raised his cooldown to `FINISHER_STAGGER_S` (1.8 s), and he went on
+running and squaring up through it; a cannonball (`siege.ts`'s `explodeBall`, 4.5 m, 6 damage) and a charge
+(`detonate`, 6.5 m, 14) took his health and nothing else; the ram (`ramCheck`) struck sockets and buildings alone, the
+player's pushed ram and the raiders' alike. And `take_cover` had no `not_downed` gate (OPEN-019): a villager knocked
+down mid-run for cover went on scoring it (his committed run holds it at its commit threat), and his action read
+`take_cover` while he lay invisible. Measured on `main` (production build of base-14 on port 3101, build
+`MnGGOyafIeCZ340tNelqW`; `scripts/cln-tools/w752_live.mjs`, record `w752_main.txt`; frame-exact, 1/64 s a frame, each
+bandit's clip read off his RiggedFigure through React's devtools hook): a sword chain's finisher on frame 38 on a
+halberd bandit — no fall: his run, his rest, his cooldown 1.77 on frame 40 (the stagger), and his first blow after it
+on frame 154, 1.81 s on; a cannonball bursting among three bandits on frame 2 — 6 damage, his run and the crossbow's
+draw went on as they were, and 4 blows landed on the player in the next 3 s (frames 67, 87, 170, 181); the player's
+ram pushed into a bandit — passed him by, and he struck on frames 46 and 149.
+
+Premises checked against the code, and where they did not hold: the finisher's lines had moved (`melee.ts:148-160` on
+the base, its stagger at `:155`); `explodeBall`, `detonate` and `ramCheck` were where the wave's notes put them
+(`siege.ts:124`, `:168`, `:216`), and the player's ram is told from the raiders' as `ramCheck` already tells it (a
+placed building is the player's, `damageBuilding`'s `!rammer`). Every reader of `mob.state` was checked and keys on
+`'dying'` alone, so a state beside it is taken for alive everywhere: the raid's end (`raidDirector.ts`: no raiders
+left in the store), its settling (`raidSettle.ts`'s `homeRaiders`, the resolver's field), the arena (`arena.ts`: its
+live count, and a kill credited only through `resolveEnemyKill`), targeting (`game/targeting.ts`, `Defenders.tsx`,
+`Emplacements.tsx`), perception (`VisionSensor.ts`), the camp's rally (`melee.ts`), the blasts' own loops, the
+compass, minimap, Cedric's camp and the dungeon's rooms. The clips could not be played as they stood: the stand from a
+fall backward (101 frames) tries to sit up and falls back flat (frames 39-57) before it gets up, so it is played from
+frame 60; and the animator measured a one-shot clip's hip height from its own first frame (a stand from a fall, or a
+flight, starts lying: played lying at a standing man's hip height), faded the hips in from the rest height (a man
+lying at the end of a fall leapt up and sank again as the stand came in), and moved them at `unitScale`, which makes
+the clips' hip heights some five times the rig's — a man lying (1825 of the rest pose's 5800) lay 1.05 m under the
+ground (measured live: his hips at y −1.05 with a hip height of 0.45; logged below as its own item for the walks and
+runs). The balance: wave 72's pinned garrison table and wave 73's resolver (`garrisonBalance.ts`'s `garrisonFight`)
+model no finisher, blast or ram (the garrison lands none of them; an emplacement's cannonball now knocks raiders down
+live, and the resolver models no emplacement), so no pinned verdict changes — `garrisonBalance.test.ts` and
+`raidResolver.test.ts` pass unchanged.
+
+**The fix.** *The knocked state* (`game/combat/knockdown.ts`): beside `mob.state`, never a value of it — `mob.knock`
+(how he went down, the seconds since, a blast's throw), `mob.knocks` (his knockdowns, which cue his figure) and
+`mob.knockGuardT`. `knockDown(e, fromX, fromZ, blast)` puts him down by the hit against his facing: from in front, or
+square to his side (to some 8.6° past it, `SIDE_ON`), on his back (`backward`); from behind, on his face (`forward`);
+a blast throws him through the air away from it (`flyingbackward`, `flyingforward`), 2.5 m on an arc 0.6 m high
+through his flight (`BLAST_THROW`, `BLAST_ARC`; not one on a wall-walk). Not one already down or just up, dead or
+dying, on a ladder, in the saddle (a rider's figure sits his horse), at a siege engine (Cedric's engineer: his
+catapult is drawn in his own group and would be thrown and lifted with him), nor Storm. He is down `KNOCK_S` 2 s — the
+fall or the flight 0.7 s (`KNOCK_FALL_S`), the stand 1.3 s — and then guarded `KNOCK_GUARD_S` 3 s, in which nothing
+knocks him down again: longer than the slowest full chain (the halberd's three swings, 2.85 s), so no run of finishers
+keeps a man on the ground (on his feet three seconds in five). Going down, a shot he was drawing is let go (G-10's
+draw), his next blow is held to `KNOCK_HOLD_S` 0.4 s after he is up (closeIn's hold on arriving; his cooldown runs
+down as he lies), and he gets up into his stance at rest, as one just come into it (`swungInStance`): in the attack
+stance, at rest till his next swing. A finisher's 1.8 s stagger runs on inside the knockdown (the knockdown's 2.4 s is
+the longer); a finisher landed while he is down or guarded staggers him alone, 1.8 s from the blow, as before.
+`isKnocked(e)` is exported for G-18a. *The hits*: a finisher knocks its target down (`melee.ts`), a cannonball and a
+charge every enemy they leave standing (`siege.ts`), and the player's ram — a placed one; the raiders' never knocks
+down its own raiders — every enemy within 1.5 m of its head as it runs or swings into him — the head moving his way at
+0.3 m/s or more since its last check, that check fresh (a ram held still, crept, backed away or taken up elsewhere
+knocks no one) — shoved 1.2 m on away from the player, on a cooldown of its own (0.9 s; the blows on what stands keep
+theirs), with no damage (it is a battering ram, not a blade). *The frame* (`enemyAi/step.ts`): knocked, he lies and
+gets up again and does nothing else — no blow, no draw, no step of his own, no shouldering apart; what moves him is
+the hit (a blow's knockback at once, a blast's throw through his flight), kept to the land and stopped at the walls;
+he takes his blows as ever, and one killed as he lies falls apart at once, with his one death bark (the dying branch
+comes first). His clip: the fall or flight, then the stand from it, a shield's variant where there is one
+(`knockClip`). *His figure* (`EnemyFigure.tsx`): a fall and a stand played once from their first frame of motion on
+each knockdown (its cue his `knocks`), their last frame held, fitted into their part of the 2 s (`knockPlay`: the fall
+backward ×4.29, forward ×3.43, a flight ×1.9, the stand from backward ×1.69 from frame 60, from forward ×4.0), and
+fetched as he comes on. *The rig* (`lib/rig/MinifigAnimator.ts`): a one-shot clip's hip height is measured from the
+rest pose's, below it as a share of the figure's own hip height (lying, 0.142 m), and faded from the height the hips
+were at — so Richard's fall in the story lies on the ground now too, and the spear's strike, whose hips dip below the
+rest pose's, dips 0.006 m where it dipped 0.028 m; every clip's hips fade in from the height they were at, not from
+the rest pose's; a one-shot that starts at the rest pose's height (every one played before this wave) moves above it
+as it did, and a loop as it did. *`take_cover`* (`ai/actions/takeCover.ts`) gains `engage_threat_villager`'s
+`not_downed` gate, read rather than registered (everyone with an Agent scores it, and a health record is for villagers
+alone); villagers, defenders and Tam keep their own downed state, invisible as before (`actorDowned.ts`).
+
+**Verified.** Golden tests first, written and run on the unchanged base (`knockdown.test.ts`'s "golden": a sword
+chain's knockbacks 0.9, 0.9, 1.8 and the finisher's 1.8 s stagger; a cannonball's 6 and a charge's 14 at their reach,
+Storm, the dying and those out of reach untouched, no one moved; a ram's blow passing an enemy by). Changed on
+purpose: the finisher's cooldown 1.8 → 2.4 and its target down; a blast's survivor down (cooldown 0 → 2.4), its
+damage, reach and skips as they were; the player's ram knocks the enemy down and shoves him 1.2 m (the base: passed
+him by), the raiders' passes him by as ever. New tests: each hit knocks him down (the finisher on the third landed
+blow alone, a cannonball and a charge flying each away from it, the throw 2.5 m and the arc 0.6 m, the player's ram on
+the man at its head and not one past its reach or on a wall-walk, its cooldown its own, the raiders' ram none of its
+raiders), none of those left out; down 2 s, the fall 0.7 s then the stand, up into his stance at rest with 0.4 s to
+his blow; a finisher's stagger as he lies outlasting his getting up; the guard, and a finisher in it staggering alone;
+the clips by way down and shield (every one of the ten in the tracked manifest, never a file) and their timeScales;
+the raid not ended and its settling counting each man down at his health, the arena counting no kill for a man down
+and one killed as he lies once; in the frame (`enemyAi.test.ts`), no blow and no step while he lies, the fall then the
+stand, at rest, then his blow 0.4 s on; a crossbow's draw let go and drawn again once he is up; not shouldered apart
+while he lies, his knockback kept; killed as he lies, one cry; the animator's hip heights (`minifigAnimator.test.ts`);
+`take_cover` scoring 0 for a villager down (`takeCover.test.ts`). Each part taken out alone fails a test
+(`scripts/cln-tools/w752_takeout.py`, records `w752_takeout.txt`, `w752_takeout_f1.txt`, `w752_takeout_f25.txt`,
+`w752_takeout_anim.txt`: 27 take-outs, all 27 failing; `git diff` the same before and after). `tsc` clean; the unit
+suite 111 files, 1041 tests. Live on production builds of `main` (3101) and the change (3102, build
+`vks1KieoQEyzNHJIFsTNz`), same probe (records `w752_main.txt`, `w752_change.txt`): the finisher — the fall backward
+with his shield from frame 40 (×4.29), the stand from frame 84 (×1.69 from its frame 60), up on frame 166 (2 s) with
+0.4 s to his blow, his first blow after it on frame 225, 2.92 s on (`main`: 154, 1.81 s); the cannonball — all three
+thrown (`flyingforward` for the one with his back to it, thrown 2.5 m toward the player; `flyingbackward` for the two
+facing it, the crossbow bandit's draw let go), standing from frame 48, up on 130, one blow landed on the player in 3 s
+(`main`: 4); the player's ram (held still: a knock the own check below removed, and measured again there) — the bandit
+down on frame 1, shoved from 2.6 to 3.8 m, up on 128, no blow in 3 s (`main`: 2). d3d11 screenshots
+(`out/w752/change_{F,B}_{fall,rise,stand}.png`, `main_*.png` the same moments): the finisher's fall (struck from the
+front: sat down on his way onto his back), the blast's three bandits flying flat with their shadows under them,
+sitting up, all but up — each pose reads; lying, his hips 0.142 m up (they were 1.05 m under the ground before the
+rig's fix). Evidence pass (independent, 2026-11-23): `tsc` clean; the unit suite 111 files, 1041 tests; `next build`
+of the change clean (build `0l0Q5lHANrB09xVtYznRn`). Take-outs (`scripts/cln-tools/w752_ev_mut.py`, records
+`w752_ev_mut.txt` and `w752_ev_mut_part.txt`: each part out alone, the whole suite run, the file put back from its
+bytes; sha256 of `git diff --binary` plus the three new files `36accbd9…` before and after, and of plain `git diff`
+`9f560c6d…` at the pass's start and end): 55 take-outs, 45 caught. Caught: each hit's `knockDown` (finisher,
+cannonball, charge, the player's ram), the ram's `rammer` gate, its cooldown, reach, shove, no damage and wall-walk
+skip; every exclusion (already down, guarded, hp 0, dying, climbing, mounted, Storm); the direction rule, the throw
+and its end, the flight clips, the knock count, the draw let go, the stance reset, the cooldown hold and its running
+down, the guard set and run down, the 2 s; the clip table, the shield variant, the stand from frame 60, the timings;
+the knocked branch in `step.ts`, its clip and its place after the dying branch; the four animator changes;
+`take_cover`'s gate. Not caught by any test: the five props `EnemyFigure.tsx` passes for a knock clip (no loop, its
+timeScale, its cue, its `from`, the preload: no test renders the figure — the live run below shows the timeScales and
+start frames); `keepToLand`, `holdToTheWalls` and the blast's lift in the knocked branch; `knockDown`'s no throw on a
+wall-walk; and the ram's knock test standing before the 0.9 s cooldown of its blows on what stands (put after it, a
+ram that has just struck a gate knocks no one for 0.9 s). Live, frame-exact, on production builds of `main` (base-14,
+`MnGGOyafIeCZ340tNelqW`, port 3101) and the change (`0l0Q5lHANrB09xVtYznRn`, port 3102), muted, d3d11, virtual pointer
+lock (`scripts/cln-tools/w752_ev_live.mjs`, records `w752_ev_main.txt`, `w752_ev_change.txt`): a control bandit struck
+by nothing — the same clips, cooldowns and blows (frames 104, 207) on both builds; the finisher on frame 38 — `main`:
+no fall clip, cooldown 1.784 a frame on, his blow on frame 154; the change: `anim_g_fallbackwardwithshield` ×4.29 from
+frame 40, the stand ×1.69 from its frame 60.4 from frame 84, up on frame 166 with his cooldown at 0.4, his blow on
+frame 225 (one blow in 3 s on each); the cannonball on frame 2 — `main`: 4 blows (frames 67, 87, 170, 182), the
+crossbow's draw going on; the change: `flyingforward` for the bandit with his back to it (thrown 3.42 → 0.92 m from
+the player), `flyingbackward` for the one facing it and for the crossbowman (his draw let go on the burst's frame,
+drawn again on frame 155), up on frame 130, 1 blow (frame 155); a charge (`__kkDetonate`) between two bandits on frame
+2 — `main`: both ran in, 2 blows (160, 168); the change: both thrown, one `flyingforward` and one `flyingbackward` by
+their yaw on that frame (the one side-on to it stood 0.006 rad past square: a hit from dead on the side fell either
+way — since the own check, side-on falls as from the front), up on frame 130, no blow in 3 s; the player's ram —
+`main`: passed him by, blows on frames 46 and 149; the change (the ram held still, as above): down on frame 1, shoved
+2.56 → 3.8 m, up on 128, no blow; killed as he lies (health 1 and a fourth blow on frame 70: on the change he lies, on
+`main` he runs) — dying on frame 70, gone on frame 141, one `random_raider` cry among the sounds, on both builds.
+Mid-fall and mid-rise (0.34 s and 1 s after the hit) his hips stood 0.31 m below his own standing hips on the change
+(a hip height of about 0.45 m: some 0.14 m up); not measured against the ground itself, and the 1.05 m under it before
+the rig's fix not measured again (no build of it). d3d11 screenshots
+(`out/w752ev/{main,change}_{F,B,C}_{fall,rise,stand}.png`): sat down on the way to his back, three bandits flying flat
+with their shadows under them (the near one thrown at the camera), two flying from the charge, sitting up, all but up
+— each pose reads. Not measured: the raiders' ram against its raiders live (unit tests only), a second knockdown after
+the guard, a man knocked on a wall-walk or a ladder, the raid's end, its settling and the arena live (unit tests
+only), Richard's story fall. And the rig's change is wider than "a loop, and a one-shot above the rest height, move as
+they always did": every clip's hips now fade in from where they were rather than from the rest height, and
+`anim_g_spearstrike` (and its shield variant), whose hips dip to 5725 against the rest pose's 5800, dips 0.006 m where
+it dipped 0.028 m (read off the clips; not seen live). Review fix (2026-11-24): `knockDown` left out a rider but not
+Cedric's siege engineer, whose catapult (`siegeAsset`) is drawn in his own group — a blast near him, or the player's
+ram, threw the engine 2.5 m (1.2 m) and lifted it 0.6 m with him; he is now left out as a rider is
+(`knockdown.test.ts`: the exclusions now include a `siegeCrew`, and a cannonball 2 m from one takes his 6 and leaves
+him unknocked where he stood — both fail with the exclusion taken out). `tsc` clean; the unit suite 111 files, 1042
+tests; the change rebuilt (`a3PntqU1ZkUAom8ulseJd`). Live, frame-exact (`scripts/cln-tools/w752_fix_crew.mjs`, records
+`w752_fix_crew_main.txt`, `w752_fix_crew_change.txt`): a siege engineer 4 m ahead, a player's cannonball bursting 1.5
+m to his side on frame 2 — on `main` (3101) and the change (3102) alike he takes 6, is never knocked, and he and his
+drawn engine stay at (0, 22), the engine's group 2.15 m up on every frame for 1.5 s; 0 page errors (screenshot
+`out/w752fix/change_crew.png`: standing at his engine).
+
+*Own check* (2026-11-24, before the PR): the reviews' low findings and three of their notes — each code finding with a
+unit test that fails without its fix, the docs' in the text (`scripts/cln-tools/w752_own_takeout.py`, record
+`w752_own_takeout.txt`: a baseline run of the two test files with every fix in place, 46 passing, then 9 take-outs,
+each failing; the tree restored to the same digest). A raider on a wall-walk caught by a blast got no throw but the
+flight's clip, lifted 0.6 m and dropped back where he was — hovering over the battlement; he is knocked flat where he
+stands now (the fall by the hit's side, no lift). A parked ram knocked down and shoved every raider who walked up to
+the player holding it, and again each time his guard ran out: `ramCheck` runs on every frame a ram is held, and its
+contact test had no motion in it. The ram knocks a man flat now only run or swung into him: its head's step since its
+last check toward him, at 0.3 m/s or more (`RAM_MOVE_SPEED`: a speed, so at any frame rate), that check no more than
+0.1 s old (`RAM_HEAD_STALE_MS`: a ram set down and taken up again elsewhere, or a save loaded, has not moved by the
+distance between) — a ram held still, crept a millimetre a frame, backed away from him or taken up afresh knocks no
+one (the last three found by the adversarial check below in this fix's first form, a head's step per frame kept for
+good). The test that called the ram's cooldown its own passed with the knock put behind the 0.9 s building cooldown
+(no building was ever struck in it); a test now strikes a wall first and runs into a man 0.3 s on. A hit square to a
+man's side fell either way by a sliver of his yaw (in the evidence pass a charge 2 m to a bandit's side threw him on
+his face, his yaw 0.0056 rad past square); side-on counts as from the front now, to some 8.6° past square (`SIDE_ON`,
+0.15, its sine). The knocked branch's stop at the keep's walls had no test, so a blast could have thrown a raider
+through a wall with every test green; a test now throws one at the south wall and finds him outside it. And a test
+pins the design's own rule: a knockdown is a state beside his stance, never a value of it. Live, the player's ram on
+the change rebuilt (build `y0gV2hP1mFG5HyphhYAxO`, port 3102; `scripts/cln-tools/w752_own_live.mjs`, record
+`w752_own_change.txt`; frame-exact; no page errors): the evidence pass's setup as it was — the ram held still 1.8 m
+ahead, a bandit 2.6 m ahead — knocked no one in 3 s (he walked up and struck), where the runs above knocked him on
+frame 1 (they held the ram still: theirs were of the knock this check removed); W held, the ram walked into a bandit
+4.5 m ahead knocked him on frame 17, the player 1.38 m on, and shoved him on, down for the rest of the 1.5 s sample,
+not knocked again. The docs corrected: the take-outs (the implementer's 27, each failing; the evidence pass's 55, 10
+of them not caught, the riskiest since pinned) and the rig's change (The fix above). Not measured live: the wall-walk
+fall, the side-on rule, the ram's own cooldown, the wall stop (unit tests only). Left as they are: a shieldbearer
+struck from the front by a finisher is knocked flat though his shield takes most of the blow (whether a shield should
+hold him up is the owner's call); the knocked branch runs on while the player builds (his timers run where the chain's
+stand still: harmless); the blasts reach enemies with no world filter (older than this wave, and no destination's
+enemies stand near another's blasts). `tsc` clean; the unit suite 111 files, 1050 tests; no import cycle added
+(`import_graph.cjs --diff`: the same 11 as `main`).
+
+*Adversarial check of the own check* (2026-11-24; two read-only lenses, the code with its tests and the docs' claims;
+the worktree's digest the same after). It confirmed the rest — the ram's head exactly still while the player stands
+(`locomotion.ts` takes it off his place and yaw alone), the first grab of a session knocking no one, the raiders' ram
+harmless, the wall-walk fall's clip and lift, every new test failing for its own reason — and found, besides the ram's
+three gaps above (a head left stale by a ram taken up again elsewhere, a slow push at a high frame rate, a ram backed
+away), that every live run of the player's ram had held it still (said above, and measured again), The fix still
+stating the ram's old rule and the old front-or-back rule, the evidence pass's side-on sentence in the present tense,
+the rig sentence wider than the code (a stand, which starts lying, had risen a stance too high), "two" of the reviews'
+notes for three, `SIDE_ON`'s comment calling its sine a cosine, and a baseline the record did not show (it does now).
+
+## Seen, not fixed: a figure's hips move five times as far as its clip moves them — logged 2026-11-23 (wave 75.2; measured live)
+
+`lib/rig/assemble.ts` gives the animator `unitScale = scale / 100` ("100 anim units = 1 OBJ unit"), but the clips'
+hip heights are some 4.8 times the rig's: the rest pose's hips stand at 5800, the rig's at 0.4527 m, so the rig's own
+scale is 0.000078 m a unit against `unitScale`'s 0.000377 (a 1.72 m figure, measured live). Every hip movement the
+animator applies is so exaggerated: a run's (`anim_c_run`, 6100-7850) bobs 0.66 m top to bottom where the rig's scale
+gives 0.14 m, the startled jump (`anim_c_surprisejump`, to 8030) lifts 0.84 m. Wave 75.2 measured hip heights below
+the rest pose's as a share of the figure's hip height (a man lying lay a metre under the ground), which leaves every
+walk, run and jump as it was. To do: look at the run and the jump at the rig's own scale (`hipsBaseY / 5800`) and
+decide whether the bigger bounce is wanted; if not, one scale for all.
